@@ -118,3 +118,24 @@ ask_confirm() {
     read -r -p "$1 [y/N]: " response
     case "$response" in
         [yY][eE][sS]|[yY]) return 0 ;;
+UNBOUND_STATIC_IP="172.${FOUND_OCTET}.0.250"
+log_info "Unbound will use static IP: $UNBOUND_STATIC_IP"
+
+# Unbound recursive DNS configuration
+cat > "$UNBOUND_CONF" <<'UNBOUNDEOF'
+server:
+  interface: 0.0.0.0
+  port: 53
+  do-ip4: yes
+  do-udp: yes
+  do-tcp: yes
+  access-control: 0.0.0.0/0 refuse
+  access-control: 172.16.0.0/12 allow
+  access-control: 192.168.0.0/16 allow
+  access-control: 10.0.0.0/8 allow
+  hide-identity: yes
+  hide-version: yes
+  num-threads: 2
+  msg-cache-size: 50m
+  rrset-cache-size: 100m
+  prefetch: yes
