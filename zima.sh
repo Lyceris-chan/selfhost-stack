@@ -139,3 +139,73 @@ server:
   msg-cache-size: 50m
   rrset-cache-size: 100m
   prefetch: yes
+  prefetch-key: yes
+  auto-trust-anchor-file: "/var/lib/unbound/root.key"
+UNBOUNDEOF
+
+cat > "$AGH_YAML" <<EOF
+schema_version: 29
+bind_host: 0.0.0.0
+bind_port: $PORT_ADGUARD_WEB
+users: [{name: $AGH_USER, password: $AGH_PASS_HASH}]
+auth_attempts: 5
+block_auth_min: 15
+http: {address: 0.0.0.0:$PORT_ADGUARD_WEB}
+dns:
+  bind_hosts: [0.0.0.0]
+  port: 53
+  upstream_dns:
+    - "$UNBOUND_STATIC_IP"
+  bootstrap_dns:
+    - "$UNBOUND_STATIC_IP"
+  protection_enabled: true
+  filtering_enabled: true
+  blocking_mode: default
+querylog:
+  enabled: true
+  file_enabled: true
+  interval: 720h
+  size_memory: 1000
+  ignored: []
+statistics:
+  enabled: true
+  interval: 720h
+  ignored: []
+tls:
+  enabled: true
+  server_name: $DNS_SERVER_NAME
+  force_https: false
+  port_https: 443
+  port_dns_over_tls: 853
+  port_dns_over_quic: 853
+  certificate_path: /opt/adguardhome/conf/ssl.crt
+  private_key_path: /opt/adguardhome/conf/ssl.key
+  allow_unencrypted_doh: false
+user_rules:
+  - "@@||getproton.me^"
+  - "@@||vpn-api.proton.me^"
+  - "@@||protonstatus.com^"
+  - "@@||protonvpn.ch^"
+  - "@@||protonvpn.com^"
+  - "@@||protonvpn.net^"
+  - "@@||dns.desec.io^"
+  - "@@||desec.io^"
+  # Default DNS blocklist powered by Lyceris-chan/dns-blocklist-generator
+filters:
+  - enabled: true
+    url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/refs/heads/main/blocklist.txt
+    name: "Lyceris-chan Blocklist"
+    id: 1
+filters_update_interval: 1
+EOF
+
+if [ -n "$DESEC_DOMAIN" ]; then
+    cat >> "$AGH_YAML" <<EOF
+rewrites:
+  - domain: $DESEC_DOMAIN
+    answer: $LAN_IP
+  - domain: "*.$DESEC_DOMAIN"
+    answer: $LAN_IP
+EOF
+fi
+
