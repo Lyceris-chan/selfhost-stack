@@ -239,6 +239,61 @@ extract_wg_profile_name() {
         fi
         if [ "$in_peer" -eq 1 ] && echo "$stripped" | grep -q '^#'; then
             profile_name=$(echo "$stripped" | sed 's/^#[[:space:]]*//')
+            if [ -n "$profile_name" ]; then
+                echo "$profile_name"
+                return 0
+            fi
+        fi
+        if [ "$in_peer" -eq 1 ] && echo "$stripped" | grep -q '^\['; then
+            break
+        fi
+    done < "$config_file"
+    # Fallback: look for any comment
+    while IFS= read -r line; do
+        stripped=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if echo "$stripped" | grep -q '^#' && ! echo "$stripped" | grep -q '='; then
+            profile_name=$(echo "$stripped" | sed 's/^#[[:space:]]*//')
+            if [ -n "$profile_name" ]; then
+                echo "$profile_name"
+                return 0
+            fi
+        fi
+    done < "$config_file"
+    echo ""
+    return 1
+}
+
+# Initialize profile
+INITIAL_PROFILE_NAME=$(extract_wg_profile_name "$ACTIVE_WG_CONF")
+if [ -z "$INITIAL_PROFILE_NAME" ]; then
+    INITIAL_PROFILE_NAME="Initial-Setup"
+fi
+INITIAL_PROFILE_NAME_SAFE=$(echo "$INITIAL_PROFILE_NAME" | tr -cd 'a-zA-Z0-9-_#')
+if [ -z "$INITIAL_PROFILE_NAME_SAFE" ]; then
+    INITIAL_PROFILE_NAME_SAFE="Initial-Setup"
+fi
+
+cp "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
+chmod 644 "$GLUETUN_ENV_FILE" "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
+echo "$INITIAL_PROFILE_NAME_SAFE" > "$ACTIVE_PROFILE_NAME_FILE"
+
+# --- SECTION 7: CRYPTOGRAPHIC SECRET GENERATION ---
+# Generate high-entropy unique keys for various service-level authentication mechanisms.
+SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64)
+ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
+IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
+
+# --- SECTION 8: PORT MAPPING CONFIGURATION ---
+# Define internal and external port mappings for all infrastructure components.
+PORT_INT_REDLIB=8080; PORT_INT_WIKILESS=8180; PORT_INT_INVIDIOUS=3000
+PORT_INT_LIBREMDB=3001; PORT_INT_RIMGO=3002; PORT_INT_BREEZEWIKI=10416
+PORT_INT_ANONYMOUS=8480; PORT_INT_VERT=80; PORT_INT_VERTD=24153
+PORT_ADGUARD_WEB=8083; PORT_DASHBOARD_WEB=8081
+PORT_PORTAINER=9000; PORT_WG_WEB=51821
+PORT_REDLIB=8080; PORT_WIKILESS=8180; PORT_INVIDIOUS=3000; PORT_LIBREMDB=3001
+PORT_RIMGO=3002; PORT_SCRIBE=8280; PORT_BREEZEWIKI=8380; PORT_ANONYMOUS=8480
+PORT_VERT=5555; PORT_VERTD=24153
 UNBOUND_STATIC_IP="172.${FOUND_OCTET}.0.250"
 log_info "Unbound will use static IP: $UNBOUND_STATIC_IP"
 
