@@ -485,20 +485,55 @@ else
     DNS_SERVER_NAME="$LAN_IP"
 fi
 
-# ADGUARD CONFIG: DESEC UPSTREAM, SECURE ACCESS VIA WIREGUARD ONLY, 6H UPDATES, 30D LOGS
-# Using deSEC's encrypted DNS resolvers as upstream
+# ADGUARD CONFIG: UNBOUND RECURSIVE, SECURE ACCESS VIA WIREGUARD ONLY, 6H UPDATES, 30D LOGS
+# DNS Architecture: Users → AdGuard (filtering) → Unbound (fully recursive to root servers)
+# deSEC is ONLY used for: Domain registration + Let's Encrypt certificates + WireGuard access
+# deSEC is NOT in the DNS resolution chain - Unbound resolves directly from root servers
 # All DNS services (including DoH/DoT/DoQ) accessible only via local network or WireGuard VPN
 # Only WireGuard port exposed to internet - this is the most secure setup
 
-# Using deSEC's secure encrypted DNS resolvers
-# Note: deSEC token is for DNS zone management (optional)
-# The encrypted DNS service itself is public and secure with proper certificates
-UPSTREAM_DNS="https://dns.desec.io/dns-query"
-if [ -n "$DESEC_TOKEN" ]; then
-    log_info "Using deSEC encrypted DNS (token available for zone management)"
+# Allocate static IP for Unbound
+UNBOUND_STATIC_IP="172.${FOUND_OCTET}.0.250"
+log_info "Unbound will use static IP: $UNBOUND_STATIC_IP"
+
+if [ -n "$DESEC_DOMAIN" ]; then
+    log_info "deSEC domain: $DESEC_DOMAIN (used ONLY for certificates and WireGuard access)"
+    log_info "DNS resolution: AdGuard → Unbound → Root servers (no third-party DNS)"
 else
-    log_info "Using deSEC encrypted DNS (no token - token only needed for managing DNS zones)"
+    log_info "No deSEC domain - using self-signed certificates"
+    log_info "DNS resolution: AdGuard → Unbound → Root servers (no third-party DNS)"
 fi
+
+# Generate Unbound configuration - FULLY RECURSIVE (no upstream forwarders)
+log_info "Configuring Unbound as fully recursive resolver..."
+cat > "$UNBOUND_CONF" <<'UNBOUNDEOF'
+server:
+  interface: 0.0.0.0
+  port: 53
+  do-ip4: yes
+  do-udp: yes
+  do-tcp: yes
+  # Allow access from docker networks
+  access-control: 0.0.0.0/0 refuse
+  access-control: 172.16.0.0/12 allow
+  access-control: 192.168.0.0/16 allow
+  access-control: 10.0.0.0/8 allow
+  # Privacy and performance
+  hide-identity: yes
+  hide-version: yes
+  num-threads: 2
+  msg-cache-size: 50m
+  rrset-cache-size: 100m
+  # Enable prefetch for better performance
+  prefetch: yes
+  prefetch-key: yes
+  # DNSSEC validation
+  auto-trust-anchor-file: "/var/lib/unbound/root.key"
+  # NO FORWARDERS - Unbound resolves from root servers directly
+  # This ensures complete DNS privacy - no third-party DNS providers
+UNBOUNDEOF
+
+log_info "Unbound configured for fully recursive resolution (no upstream forwarders)"
 
 cat > "$AGH_YAML" <<EOF
 bind_host: 0.0.0.0
@@ -510,13 +545,13 @@ http: {address: 0.0.0.0:$PORT_ADGUARD_WEB}
 dns:
   bind_hosts: [0.0.0.0]
   port: 53
-  # deSEC secure DNS as upstream (DoH/DoT)
+  # Use Unbound as upstream (Unbound forwards to deSEC with DoT)
+  # Architecture: AdGuard → Unbound → deSEC (encrypted)
   upstream_dns:
-    - "$UPSTREAM_DNS"
-    - "tls://dns.desec.io"
-  # Bootstrap DNS for initial resolution (using deSEC, no Cloudflare)
+    - "$UNBOUND_STATIC_IP"
+  # Bootstrap DNS for initial resolution (use Unbound)
   bootstrap_dns:
-    - "dns.desec.io"
+    - "$UNBOUND_STATIC_IP"
   protection_enabled: true
   filtering_enabled: true
   blocking_mode: default
@@ -920,6 +955,8 @@ services:
     # - DoT/DoQ (853): $LAN_IP only - accessible via WireGuard
     # ONLY WireGuard port (51820) is exposed to internet
     # When connected via WireGuard, access DoH at: https://DESEC_DOMAIN/dns-query
+    # DNS Resolution: AdGuard (filtering) → Unbound (recursive to root servers)
+    # deSEC used ONLY for: domain name + certificates (NOT in DNS chain)
     ports:
       - "$LAN_IP:53:53/udp"
       - "$LAN_IP:53:53/tcp"
@@ -929,6 +966,21 @@ services:
       - "$LAN_IP:853:853/tcp"
       - "$LAN_IP:853:853/udp"
     volumes: ["adguard-work:/opt/adguardhome/work", "$AGH_CONF_DIR:/opt/adguardhome/conf"]
+    depends_on:
+      - unbound
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+
+  unbound:
+    image: klutchell/unbound:latest
+    container_name: unbound
+    networks:
+      frontnet:
+        ipv4_address: $UNBOUND_STATIC_IP
+    volumes:
+      - "$UNBOUND_CONF:/opt/unbound/etc/unbound/unbound.conf:ro"
     restart: unless-stopped
     deploy:
       resources:
@@ -1450,11 +1502,20 @@ else
     echo "  3. You'll see cert warnings (self-signed)"
 fi
 echo ""
+echo "DNS ARCHITECTURE:"
+echo "  Users → AdGuard (ad blocking) → Unbound (recursive) → Root servers"
+if [ -n "$DESEC_DOMAIN" ]; then
+    echo "  deSEC used for: Domain ($DESEC_DOMAIN) + Let's Encrypt certificates"
+else
+    echo "  deSEC: Not configured (using self-signed certificates)"
+fi
+echo "  deSEC NOT in DNS resolution chain - full privacy!"
+echo ""
 echo "SECURITY MODEL:"
 echo "  ✓ ONLY WireGuard (51820/udp) exposed to internet"
 echo "  ✓ All DNS services accessible via local network or VPN"
 echo "  ✓ No direct DNS exposure - requires VPN authentication"
-echo "  ✓ Using deSEC as upstream (encrypted DoH/DoT)"
+echo "  ✓ Fully recursive DNS (no third-party upstream)"
 echo "  ✓ Filter updates every 6 hours"
 echo ""
 # Print auto-generated passwords if -p flag was used
