@@ -119,42 +119,78 @@ clean_environment() {
     # 3. Wipe Data & Volumes (Resets Portainer Login)
     if [ -d "$BASE_DIR" ] || sudo docker volume ls -q | grep -q "portainer"; then
         if ask_confirm "Wipe ALL data (Resets Portainer/AdGuard Logins)?"; then
-            # Remove local files INCLUDING SECRETS
-            if [ -f "$BASE_DIR/.secrets" ]; then
-                log_info "Removing secrets file..."
-                sudo rm -f "$BASE_DIR/.secrets"
+            log_info "Removing all deployment artifacts..."
+            
+            # Remove ALL files in deployment directory
+            if [ -d "$BASE_DIR" ]; then
+                # Remove secrets
+                sudo rm -f "$BASE_DIR/.secrets" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/.current_public_ip" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/.active_profile_name" 2>/dev/null || true
+                
+                # Remove configs
+                sudo rm -rf "$BASE_DIR/config" 2>/dev/null || true
+                
+                # Remove environment files
+                sudo rm -rf "$BASE_DIR/env" 2>/dev/null || true
+                
+                # Remove sources
+                sudo rm -rf "$BASE_DIR/sources" 2>/dev/null || true
+                
+                # Remove WireGuard profiles
+                sudo rm -rf "$BASE_DIR/wg-profiles" 2>/dev/null || true
+                
+                # Remove active WireGuard config
+                sudo rm -f "$BASE_DIR/active-wg.conf" 2>/dev/null || true
+                
+                # Remove scripts
+                sudo rm -f "$BASE_DIR/wg-ip-monitor.sh" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/wg-control.sh" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/wg-api.sh" 2>/dev/null || true
+                
+                # Remove logs
+                sudo rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/wg-ip-monitor.log" 2>/dev/null || true
+                
+                # Remove compose and dashboard
+                sudo rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
+                
+                # Remove docker directory
+                sudo rm -rf "$BASE_DIR/.docker" 2>/dev/null || true
+                
+                # Finally remove entire base directory (catches anything missed)
+                sudo rm -rf "$BASE_DIR" 2>/dev/null || true
             fi
             
-            if [ -f "$BASE_DIR/.current_public_ip" ]; then
-                sudo rm -f "$BASE_DIR/.current_public_ip"
-            fi
-            
-            if [ -f "$BASE_DIR/.active_profile_name" ]; then
-                sudo rm -f "$BASE_DIR/.active_profile_name"
-            fi
-            
-            # Remove entire base directory
-            sudo rm -rf "$BASE_DIR"
-            
-            # Remove Named Volumes (Critical for Portainer Reset)
-            # Finds volumes containing 'portainer-data' or 'adguard' and deletes them
+            # Remove Named Volumes (Critical for complete cleanup)
             sudo docker volume ls -q | grep -E "portainer-data|adguard-work|redis-data|postgresdata|wg-config|companioncache" | xargs -r sudo docker volume rm 2>/dev/null || true
             
-            log_info "Data directory, secrets, and persistent volumes wiped."
+            log_info "All deployment artifacts, configs, env files, and volumes wiped."
         fi
     fi
     
-    # 4. Extra cleanup for -c flag (nuke and pave)
+    # 4. Extra cleanup for -c flag (nuclear option)
     if [ "$FORCE_CLEAN" = true ]; then
-        log_warn "Performing additional cleanup (nuke mode)..."
+        log_warn "NUCLEAR CLEANUP MODE: Removing everything..."
         
-        # Remove any remaining docker volumes related to the stack
+        # Force remove base directory even if not prompted
+        if [ -d "$BASE_DIR" ]; then
+            sudo rm -rf "$BASE_DIR" 2>/dev/null || true
+            log_info "Force removed deployment directory"
+        fi
+        
+        # Remove any remaining docker volumes
         sudo docker volume prune -f 2>/dev/null || true
         
         # Remove any dangling images
         sudo docker image prune -af 2>/dev/null || true
         
-        log_info "Nuclear cleanup complete. All traces removed."
+        # Remove build cache
+        sudo docker builder prune -af 2>/dev/null || true
+        
+        log_info "Nuclear cleanup complete. Environment is pristine."
     fi
 }
 
@@ -478,10 +514,9 @@ dns:
   upstream_dns:
     - "$UPSTREAM_DNS"
     - "tls://dns.desec.io"
-  # Bootstrap DNS for initial resolution
+  # Bootstrap DNS for initial resolution (using deSEC, no Cloudflare)
   bootstrap_dns:
-    - "1.1.1.1:53"
-    - "1.0.0.1:53"
+    - "dns.desec.io"
   protection_enabled: true
   filtering_enabled: true
   blocking_mode: default
