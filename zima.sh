@@ -471,6 +471,7 @@ server:
 UNBOUNDEOF
 
 cat > "$AGH_YAML" <<EOF
+schema_version: 29
 bind_host: 0.0.0.0
 bind_port: $PORT_ADGUARD_WEB
 users: [{name: $AGH_USER, password: $AGH_PASS_HASH}]
@@ -487,10 +488,16 @@ dns:
   protection_enabled: true
   filtering_enabled: true
   blocking_mode: default
-  statistics_interval: 30
-  querylog_enabled: true
-  querylog_file_enabled: true
-  querylog_interval: 720h
+querylog:
+  enabled: true
+  file_enabled: true
+  interval: 720h
+  size_memory: 1000
+  ignored: []
+statistics:
+  enabled: true
+  interval: 720h
+  ignored: []
 tls:
   enabled: true
   server_name: $DNS_SERVER_NAME
@@ -564,7 +571,59 @@ clone_repo() {
 }
 clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless"
 cat > "$SRC_DIR/wikiless/wikiless.config" <<'EOF'
-const config = { domain: process.env.DOMAIN || '', default_lang: 'en', theme: 'dark', http_addr: '0.0.0.0', nonssl_port: 8180, redis_url: 'redis://127.0.0.1:6379', trust_proxy: true, trust_proxy_address: '127.0.0.1' }
+const config = {
+  /**
+  * Set these configs below to suite your environment.
+  */
+  domain: process.env.DOMAIN || '', // Set to your own domain
+  default_lang: process.env.DEFAULT_LANG || 'en', // Set your own language by default
+  theme: process.env.THEME || 'dark', // Set to 'white' or 'dark' by default
+  http_addr: process.env.HTTP_ADDR || '0.0.0.0', // don't touch, unless you know what your doing
+  nonssl_port: process.env.NONSSL_PORT || 8080, // don't touch, unless you know what your doing
+  
+  /**
+  * You can configure redis below if needed.
+  * By default Wikiless uses 'redis://127.0.0.1:6379' as the Redis URL.
+  * Versions before 0.1.1 Wikiless used redis_host and redis_port properties,
+  * but they are not supported anymore.
+  * process.env.REDIS_HOST is still here for backwards compatibility.
+  */
+  redis_url: process.env.REDIS_URL || process.env.REDIS_HOST || 'redis://127.0.0.1:6379',
+  redis_password: process.env.REDIS_PASSWORD,
+  
+  /**
+  * You might need to change these configs below if you host through a reverse
+  * proxy like nginx.
+  */
+  trust_proxy: process.env.TRUST_PROXY === 'true' || true,
+  trust_proxy_address: process.env.TRUST_PROXY_ADDRESS || '127.0.0.1',
+
+  /**
+  * Redis cache expiration values (in seconds).
+  * When the cache expires, new content is fetched from Wikipedia (when the
+  * given URL is revisited).
+  */
+  setexs: {
+    wikipage: process.env.WIKIPAGE_CACHE_EXPIRATION || (60 * 60 * 1), // 1 hour
+  },
+
+  /**
+  * Wikimedia requires a HTTP User-agent header for all Wikimedia related
+  * requests. It's a good idea to change this to something unique.
+  * Read more: https://useragents.me/
+  */
+  wikimedia_useragent: process.env.wikimedia_useragent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+
+  /**
+  * Cache control. Wikiless can automatically remove the cached media files from
+  * the server. Cache control is on by default.
+  * 'cache_control_interval' sets the interval for often the cache directory
+  * is emptied (in hours). Default is every 24 hours.
+  */
+  cache_control: process.env.CACHE_CONTROL !== 'true' || true,
+  cache_control_interval: process.env.CACHE_CONTROL_INTERVAL || 24,
+}
+
 module.exports = config
 EOF
 clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe"
@@ -950,7 +1009,7 @@ services:
           port: 5432
         check_tables: true
         invidious_companion:
-          - private_url: "http://127.0.0.1:8282/companion"
+          - private_url: "http://127.0.0.1:8282"
         invidious_companion_key: "$IV_COMPANION"
         hmac_key: "$IV_HMAC"
     healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || exit 1", interval: 30s, timeout: 5s, retries: 2}
@@ -979,7 +1038,7 @@ services:
     image: quay.io/invidious/invidious-companion:latest
     container_name: companion
     network_mode: "service:gluetun"
-    environment: {SERVER_SECRET_KEY: "$IV_COMPANION"}
+    environment: {SERVER_SECRET_KEY: "$IV_COMPANION", SERVER_PORT: "8282"}
     volumes: ["companioncache:/var/tmp/youtubei.js:rw"]
     restart: unless-stopped
     read_only: true
@@ -1444,4 +1503,3 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo ""
 fi
 echo "=========================================================="
-}
