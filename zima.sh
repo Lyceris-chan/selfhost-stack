@@ -3,12 +3,11 @@
 set -euo pipefail
 
 # ==============================================================================
-# ZIMAOS PRIVACY HUB V3.9: CONNECTION FIX
+# ZIMAOS PRIVACY HUB V3.9.1: HOTFIX
 # ==============================================================================
 # Changes:
-# - FIX: Added --dnssleep 30 to bypass failing DNS connectivity checks
-# - FIX: Rimgo uses 'if_not_present' for local images
-# - OPT: Filter updates set to 1h
+# - FIX: Added Validation for WireGuard Private Key to prevent "illegal base64" errors
+# - FIX: Added sanitization for Windows line endings (\r) in pasted configs
 # ==============================================================================
 
 # --- 0. ARGUMENT PARSING ---
@@ -269,27 +268,53 @@ echo ""
 echo "=========================================================="
 echo " PROTON WIREGUARD CONFIGURATION"
 echo "=========================================================="
-if [ -s "$ACTIVE_WG_CONF" ]; then
-    log_info "Existing WireGuard config found. Skipping paste."
+
+# NEW: Validation Logic
+validate_wg_config() {
+    if [ ! -s "$ACTIVE_WG_CONF" ]; then return 1; fi
+    # Check if PrivateKey exists
+    if ! grep -q "PrivateKey" "$ACTIVE_WG_CONF"; then
+        return 1
+    fi
+    # Check if PrivateKey is just whitespace or empty value
+    local PK_VAL
+    PK_VAL=$(grep "PrivateKey" "$ACTIVE_WG_CONF" | cut -d'=' -f2 | tr -d '[:space:]')
+    if [ -z "$PK_VAL" ]; then
+        return 1
+    fi
+    # If the key is shorter than typical WireGuard keys (approx 44 chars), it's suspicious
+    if [ "${#PK_VAL}" -lt 40 ]; then
+        return 1
+    fi
+    return 0
+}
+
+# Check existing file
+if validate_wg_config; then
+    log_info "Existing WireGuard config found and validated. Skipping paste."
 else
-    echo "PASTE YOUR WIREGUARD .CONF CONTENT BELOW."
-    echo "Press ENTER, then Ctrl+D (Linux/Mac) or Ctrl+Z (Windows) to save."
-    echo "----------------------------------------------------------"
-    cat > "$ACTIVE_WG_CONF"
+    if [ -f "$ACTIVE_WG_CONF" ] && [ -s "$ACTIVE_WG_CONF" ]; then
+        log_warn "Existing WireGuard config was invalid/empty. Removed."
+        rm "$ACTIVE_WG_CONF"
+    fi
+
+    echo "PASTE YOUR WIREGUARD .CONF CONTENT BELOW."
+    echo "Make sure to include the [Interface] block with PrivateKey."
+    echo "Press ENTER, then Ctrl+D (Linux/Mac) or Ctrl+Z (Windows) to save."
+    echo "----------------------------------------------------------"
+    cat > "$ACTIVE_WG_CONF"
+    echo "" >> "$ACTIVE_WG_CONF" 
+    echo "----------------------------------------------------------"
     
-    # --- PATCH: SANITIZE INPUT ---
-    # Removes Windows carriage returns (\r) and BOM that break Base64 keys
+    # Sanitization: Remove Windows Carriage Returns \r to fix base64 errors
     sed -i 's/\r//g' "$ACTIVE_WG_CONF"
-    sed -i '1s/^\xEF\xBB\xBF//' "$ACTIVE_WG_CONF"
-    # -----------------------------
-
-    echo "" >> "$ACTIVE_WG_CONF" 
-    echo "----------------------------------------------------------"
-fi
-
-if [ ! -s "$ACTIVE_WG_CONF" ]; then
-    log_crit "File empty."
-    exit 1
+    
+    if ! validate_wg_config; then
+        log_crit "The pasted WireGuard configuration is invalid (missing PrivateKey or malformed)."
+        log_crit "Please ensure you are pasting the full contents of the .conf file."
+        log_crit "Aborting to prevent container errors."
+        exit 1
+    fi
 fi
 
 # --- 6. SETUP GLUETUN ENV ---
@@ -1411,3 +1436,4 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo ""
 fi
 echo "=========================================================="
+}
