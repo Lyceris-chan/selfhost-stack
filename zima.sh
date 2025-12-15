@@ -17,10 +17,12 @@ set -euo pipefail
 
 # --- 0. ARGUMENT PARSING ---
 FORCE_CLEAN=false
-while getopts "c" opt; do
+AUTO_PASSWORD=false
+while getopts "cp" opt; do
   case ${opt} in
     c) FORCE_CLEAN=true ;;
-    *) echo "Usage: $0 [-c (force cleanup)]"; exit 1 ;;
+    p) AUTO_PASSWORD=true ;;
+    *) echo "Usage: $0 [-c (force cleanup/nuke)] [-p (auto-generate passwords)]"; exit 1 ;;
   esac
 done
 
@@ -117,15 +119,42 @@ clean_environment() {
     # 3. Wipe Data & Volumes (Resets Portainer Login)
     if [ -d "$BASE_DIR" ] || sudo docker volume ls -q | grep -q "portainer"; then
         if ask_confirm "Wipe ALL data (Resets Portainer/AdGuard Logins)?"; then
-            # Remove local files
+            # Remove local files INCLUDING SECRETS
+            if [ -f "$BASE_DIR/.secrets" ]; then
+                log_info "Removing secrets file..."
+                sudo rm -f "$BASE_DIR/.secrets"
+            fi
+            
+            if [ -f "$BASE_DIR/.current_public_ip" ]; then
+                sudo rm -f "$BASE_DIR/.current_public_ip"
+            fi
+            
+            if [ -f "$BASE_DIR/.active_profile_name" ]; then
+                sudo rm -f "$BASE_DIR/.active_profile_name"
+            fi
+            
+            # Remove entire base directory
             sudo rm -rf "$BASE_DIR"
             
             # Remove Named Volumes (Critical for Portainer Reset)
             # Finds volumes containing 'portainer-data' or 'adguard' and deletes them
-            sudo docker volume ls -q | grep -E "portainer-data|adguard-work|redis-data|postgresdata" | xargs -r sudo docker volume rm 2>/dev/null || true
+            sudo docker volume ls -q | grep -E "portainer-data|adguard-work|redis-data|postgresdata|wg-config|companioncache" | xargs -r sudo docker volume rm 2>/dev/null || true
             
-            log_info "Data directory and persistent volumes wiped."
+            log_info "Data directory, secrets, and persistent volumes wiped."
         fi
+    fi
+    
+    # 4. Extra cleanup for -c flag (nuke and pave)
+    if [ "$FORCE_CLEAN" = true ]; then
+        log_warn "Performing additional cleanup (nuke mode)..."
+        
+        # Remove any remaining docker volumes related to the stack
+        sudo docker volume prune -f 2>/dev/null || true
+        
+        # Remove any dangling images
+        sudo docker image prune -af 2>/dev/null || true
+        
+        log_info "Nuclear cleanup complete. All traces removed."
     fi
 }
 
@@ -175,20 +204,34 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     echo "========================================"
     echo " CREDENTIAL SETUP"
     echo "========================================"
-    echo -n "1. Enter password for VPN Web UI: "
-    read -rs VPN_PASS_RAW
-    echo ""
-    echo -n "2. Enter password for AdGuard Home: "
-    read -rs AGH_PASS_RAW
-    echo ""
+    
+    # Auto-generate passwords if -p flag is set
+    if [ "$AUTO_PASSWORD" = true ]; then
+        log_info "Auto-generating secure passwords..."
+        VPN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+        AGH_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+        log_info "Passwords generated (will be displayed at the end)"
+    else
+        echo -n "1. Enter password for VPN Web UI: "
+        read -rs VPN_PASS_RAW
+        echo ""
+        echo -n "2. Enter password for AdGuard Home: "
+        read -rs AGH_PASS_RAW
+        echo ""
+    fi
     
     # deSEC Integration Prompts
     echo "--- deSEC Encrypted DNS Setup ---"
     echo "   (Provides secure DoH/DoT/DoQ DNS access via WireGuard)"
     echo "   Get your token at: https://desec.io/"
-    echo -n "3. deSEC API Token (Press Enter to skip): "
-    read -rs DESEC_TOKEN
-    echo ""
+    if [ "$AUTO_PASSWORD" = true ]; then
+        echo "   Press Enter to skip deSEC token"
+        read -r DESEC_TOKEN
+    else
+        echo -n "3. deSEC API Token (Press Enter to skip): "
+        read -rs DESEC_TOKEN
+        echo ""
+    fi
     
     # Scribe Integration Prompts (Restored)
     echo "--- Scribe (Medium Frontend) GitHub Integration ---"
@@ -286,13 +329,14 @@ log_info "Generating Service Configs..."
 # This provides a secure private inlet accessible via WireGuard tunnel with proper certificates
 # DNS is accessible on: Local network ($LAN_IP) and WireGuard clients (10.8.0.1)
 
-# Determine upstream DNS configuration
+# Using deSEC's secure encrypted DNS resolvers
+# Note: deSEC token is for DNS zone management (optional)
+# The encrypted DNS service itself is public and secure with proper certificates
+UPSTREAM_DNS="https://dns.desec.io/dns-query"
 if [ -n "$DESEC_TOKEN" ]; then
-    UPSTREAM_DNS="https://dns.desec.io/dns-query"
-    log_info "Using deSEC authenticated DNS with token"
+    log_info "Using deSEC encrypted DNS (token available for zone management)"
 else
-    UPSTREAM_DNS="https://dns.desec.io/dns-query"
-    log_info "Using deSEC public DNS (token not provided)"
+    log_info "Using deSEC encrypted DNS (no token - token only needed for managing DNS zones)"
 fi
 
 cat > "$AGH_YAML" <<EOF
@@ -1200,6 +1244,9 @@ echo ""
 echo "ADGUARD HOME (DNS + Web UI):"
 echo "http://$LAN_IP:$PORT_ADGUARD_WEB"
 echo ""
+echo "WIREGUARD VPN (Remote Access):"
+echo "http://$LAN_IP:$PORT_WG_WEB"
+echo ""
 echo "DNS SERVER:"
 echo "  Local: $LAN_IP:53"
 echo "  VPN: Accessible via WireGuard clients at $LAN_IP:53"
@@ -1207,6 +1254,19 @@ echo ""
 echo "SECURITY:"
 echo "  - DNS accessible only on local network and WireGuard VPN"
 echo "  - Using deSEC encrypted DNS (DoH/DoT/DoQ)"
-echo "  - Filter updates every 6.5 hours"
+echo "  - Filter updates every 6 hours"
 echo ""
+# Print auto-generated passwords if -p flag was used
+if [ "$AUTO_PASSWORD" = true ]; then
+    echo "=========================================================="
+    echo "AUTO-GENERATED CREDENTIALS"
+    echo "=========================================================="
+    echo "VPN Web UI Password: $VPN_PASS_RAW"
+    echo "AdGuard Home Password: $AGH_PASS_RAW"
+    echo "AdGuard Home Username: adguard"
+    echo ""
+    echo "IMPORTANT: Save these credentials securely!"
+    echo "They are also stored in: $BASE_DIR/.secrets"
+    echo ""
+fi
 echo "=========================================================="
