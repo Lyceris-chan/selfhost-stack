@@ -394,7 +394,9 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
         -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}]" 2>&1)
     
     # Check for success (empty response or response containing our IP indicates success)
-    if [ -z "$DESEC_RESPONSE" ] || echo "$DESEC_RESPONSE" | grep -qE "($PUBLIC_IP|\[\]|\"records\")" ; then
+    # Escape dots in IP for regex matching
+    PUBLIC_IP_ESCAPED="${PUBLIC_IP//./\\.}"
+    if [ -z "$DESEC_RESPONSE" ] || echo "$DESEC_RESPONSE" | grep -qE "(${PUBLIC_IP_ESCAPED}|\[\]|\"records\")" ; then
         log_info "DNS record updated successfully"
     else
         log_warn "DNS update response: $DESEC_RESPONSE"
@@ -1443,7 +1445,9 @@ if [ "\$NEW_IP" != "\$OLD_IP" ]; then
             -H "Content-Type: application/json" \\
             -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"\$NEW_IP\"]}]" 2>&1)
         
-        if [ -z "\$DESEC_RESPONSE" ] || echo "\$DESEC_RESPONSE" | grep -qE "(\$NEW_IP|\[\]|\"records\")" ; then
+        # Escape dots in IP for regex matching
+        NEW_IP_ESCAPED=\$(echo "\$NEW_IP" | sed 's/\\./\\\\./g')
+        if [ -z "\$DESEC_RESPONSE" ] || echo "\$DESEC_RESPONSE" | grep -qE "(\${NEW_IP_ESCAPED}|\\[\\]|\"records\")" ; then
             echo "\$(date) [INFO] deSEC DNS updated successfully to \$NEW_IP" >> "\$LOG_FILE"
         else
             echo "\$(date) [WARN] deSEC DNS update may have failed: \$DESEC_RESPONSE" >> "\$LOG_FILE"
