@@ -3,11 +3,12 @@
 set -euo pipefail
 
 # ==============================================================================
-# ZIMAOS PRIVACY HUB V3.9.1: HOTFIX
+# ZIMAOS PRIVACY HUB V3.9.2: HOTFIX
 # ==============================================================================
 # Changes:
-# - FIX: Added Validation for WireGuard Private Key to prevent "illegal base64" errors
-# - FIX: Added sanitization for Windows line endings (\r) in pasted configs
+# - FIX: Normalizes "Key = Value" to "Key=Value" to fix Gluetun parser errors
+# - FIX: Enhanced sanitization (strips \r, trailing spaces, blank lines)
+# - FIX: Added validation for WireGuard Private Key
 # ==============================================================================
 
 # --- 0. ARGUMENT PARSING ---
@@ -306,9 +307,16 @@ else
     echo "" >> "$ACTIVE_WG_CONF" 
     echo "----------------------------------------------------------"
     
-    # Sanitization: Remove Windows Carriage Returns \r to fix base64 errors
+    # Sanitization:
+    # 1. Remove Windows Carriage Returns \r (Critical for base64 errors)
     sed -i 's/\r//g' "$ACTIVE_WG_CONF"
-    
+    # 2. Remove trailing spaces/tabs
+    sed -i 's/[ \t]*$//' "$ACTIVE_WG_CONF"
+    # 3. Remove leading blank lines
+    sed -i '/./,$!d' "$ACTIVE_WG_CONF"
+    # 4. Normalize "Key = Value" to "Key=Value" to prevent parser issues with leading spaces
+    sed -i 's/ *= */=/g' "$ACTIVE_WG_CONF"
+
     if ! validate_wg_config; then
         log_crit "The pasted WireGuard configuration is invalid (missing PrivateKey or malformed)."
         log_crit "Please ensure you are pasting the full contents of the .conf file."
