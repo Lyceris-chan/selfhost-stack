@@ -205,12 +205,13 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     echo " CREDENTIAL SETUP"
     echo "========================================"
     
-    # Auto-generate passwords if -p flag is set
+    # Auto-generate passwords if -p flag is set (only VPN and AdGuard passwords)
     if [ "$AUTO_PASSWORD" = true ]; then
-        log_info "Auto-generating secure passwords..."
+        log_info "Auto-generating VPN and AdGuard passwords..."
         VPN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
         AGH_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
         log_info "Passwords generated (will be displayed at the end)"
+        echo ""
     else
         echo -n "1. Enter password for VPN Web UI: "
         read -rs VPN_PASS_RAW
@@ -220,20 +221,15 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo ""
     fi
     
-    # deSEC Integration Prompts
+    # deSEC Integration Prompts (always prompt)
     echo "--- deSEC Encrypted DNS Setup ---"
-    echo "   (Provides secure DoH/DoT/DoQ DNS access via WireGuard)"
+    echo "   (Optional: For managing your own DNS zones)"
     echo "   Get your token at: https://desec.io/"
-    if [ "$AUTO_PASSWORD" = true ]; then
-        echo "   Press Enter to skip deSEC token"
-        read -r DESEC_TOKEN
-    else
-        echo -n "3. deSEC API Token (Press Enter to skip): "
-        read -rs DESEC_TOKEN
-        echo ""
-    fi
+    echo -n "3. deSEC API Token (Press Enter to skip): "
+    read -rs DESEC_TOKEN
+    echo ""
     
-    # Scribe Integration Prompts (Restored)
+    # Scribe Integration Prompts (always prompt - Restored)
     echo "--- Scribe (Medium Frontend) GitHub Integration ---"
     echo "   (Required to bypass reading limits. Press Enter to skip if unwanted)"
     echo -n "4. GitHub Username: "
@@ -324,10 +320,22 @@ PORT_DUMB=5555
 # --- 9. CONFIG GENERATION ---
 log_info "Generating Service Configs..."
 
-# ADGUARD CONFIG: DESEC DNS FOR ENCRYPTED DNS, 6.5H UPDATES, 30D LOGS
-# Using deSEC's authenticated encrypted DNS resolvers for DoH/DoT/DoQ support
-# This provides a secure private inlet accessible via WireGuard tunnel with proper certificates
-# DNS is accessible on: Local network ($LAN_IP) and WireGuard clients (10.8.0.1)
+# Generate Self-Signed Certificate for DoH/DoT/DoQ
+# Using PUBLIC_IP as server name so clients can connect from internet
+log_info "Generating SSL certificate for encrypted DNS (DoH/DoT/DoQ)..."
+sudo docker run --rm -v "$AGH_CONF_DIR:/certs" alpine:latest /bin/sh -c \
+    "apk add --no-cache openssl && \
+     openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
+     -keyout /certs/ssl.key -out /certs/ssl.crt \
+     -subj '/CN=$PUBLIC_IP' \
+     -addext 'subjectAltName=IP:$PUBLIC_IP,IP:$LAN_IP'"
+
+log_info "SSL certificate generated for: $PUBLIC_IP (also valid for $LAN_IP)"
+
+# ADGUARD CONFIG: DESEC UPSTREAM, ENCRYPTED DNS EXPOSED, 6H UPDATES, 30D LOGS
+# Using deSEC's encrypted DNS resolvers as upstream
+# Exposing DoH (443) and DoT/DoQ (853) to internet for your own encrypted DNS service
+# Regular DNS (53) and Web UI (8083) remain local-only
 
 # Using deSEC's secure encrypted DNS resolvers
 # Note: deSEC token is for DNS zone management (optional)
@@ -349,8 +357,7 @@ http: {address: 0.0.0.0:$PORT_ADGUARD_WEB}
 dns:
   bind_hosts: [0.0.0.0]
   port: 53
-  # deSEC secure DNS with proper certificates (DoH, DoT, DoQ support)
-  # Accessible via local network and WireGuard tunnel only
+  # deSEC secure DNS as upstream (DoH/DoT)
   upstream_dns:
     - "$UPSTREAM_DNS"
     - "tls://dns.desec.io"
@@ -366,6 +373,18 @@ dns:
   querylog_enabled: true
   querylog_file_enabled: true
   querylog_interval: 720h
+# TLS Configuration for DoH/DoT/DoQ (exposed to internet)
+tls:
+  enabled: true
+  server_name: $PUBLIC_IP
+  force_https: false
+  port_https: 443
+  port_dns_over_tls: 853
+  port_dns_over_quic: 853
+  certificate_path: /opt/adguardhome/conf/ssl.crt
+  private_key_path: /opt/adguardhome/conf/ssl.key
+  # Allow plain HTTP for local web UI access
+  allow_unencrypted_doh: false
 user_rules:
   - "@@||getproton.me^"
   - "@@||vpn-api.proton.me^"
@@ -741,13 +760,20 @@ services:
     image: adguard/adguardhome:latest
     container_name: adguard
     networks: [frontnet]
-    # Bind to LAN IP only - accessible on local network and via WireGuard tunnel
-    # WireGuard clients route through the host, so they can access $LAN_IP
-    # This prevents external access while allowing local + VPN access
+    # Port Binding Strategy:
+    # - Regular DNS (53): Local network only ($LAN_IP)
+    # - Web UI (8083): Local network only ($LAN_IP)
+    # - DoH (443): Exposed to internet (0.0.0.0) for encrypted DNS access
+    # - DoT/DoQ (853): Exposed to internet (0.0.0.0) for encrypted DNS access
+    # This allows you to use AdGuard's DoH/DoQ/DoT from anywhere without custom certs
     ports:
       - "$LAN_IP:53:53/udp"
       - "$LAN_IP:53:53/tcp"
       - "$LAN_IP:$PORT_ADGUARD_WEB:$PORT_ADGUARD_WEB/tcp"
+      - "0.0.0.0:443:443/tcp"
+      - "0.0.0.0:443:443/udp"
+      - "0.0.0.0:853:853/tcp"
+      - "0.0.0.0:853:853/udp"
     volumes: ["adguard-work:/opt/adguardhome/work", "$AGH_CONF_DIR:/opt/adguardhome/conf"]
     restart: unless-stopped
     deploy:
@@ -1248,12 +1274,23 @@ echo "WIREGUARD VPN (Remote Access):"
 echo "http://$LAN_IP:$PORT_WG_WEB"
 echo ""
 echo "DNS SERVER:"
-echo "  Local: $LAN_IP:53"
-echo "  VPN: Accessible via WireGuard clients at $LAN_IP:53"
+echo "  Regular DNS (Local only): $LAN_IP:53"
+echo "  DoH (Internet): https://$PUBLIC_IP/dns-query"
+echo "  DoT (Internet): tls://$PUBLIC_IP"
+echo "  DoQ (Internet): quic://$PUBLIC_IP"
+echo ""
+echo "ENCRYPTED DNS SETUP:"
+echo "  Configure your devices/apps with:"
+echo "  - DoH URL: https://$PUBLIC_IP/dns-query"
+echo "  - DoT Server: $PUBLIC_IP:853"
+echo "  - DoQ Server: $PUBLIC_IP:853"
+echo "  Note: You'll get a cert warning (self-signed) - accept it"
 echo ""
 echo "SECURITY:"
-echo "  - DNS accessible only on local network and WireGuard VPN"
-echo "  - Using deSEC encrypted DNS (DoH/DoT/DoQ)"
+echo "  - Regular DNS (53): Local network only"
+echo "  - Web UI (8083): Local network only"
+echo "  - Encrypted DNS (443/853): Accessible from internet"
+echo "  - Using deSEC as upstream (encrypted DoH/DoT)"
 echo "  - Filter updates every 6 hours"
 echo ""
 # Print auto-generated passwords if -p flag was used
