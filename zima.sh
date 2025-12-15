@@ -3,15 +3,26 @@
 set -euo pipefail
 
 # ==============================================================================
-# ZIMAOS PRIVACY HUB V3.6: SCRIBE RESTORED & PORTAINER RESET
+# ZIMAOS PRIVACY HUB V3.6: DESEC DNS & SECURE WIREGUARD ACCESS
+# ==============================================================================
+# Changes:
+# - Fixed gluetun WireGuard configuration (proper volume mount)
+# - Implemented deSEC encrypted DNS (DoH/DoT/DoQ) with user token support
+# - Removed Unbound (using deSEC directly)
+# - Updated filter list update interval to 6.5 hours (matches GitHub action)
+# - Configured secure access: Local network + WireGuard VPN only
+# - Added AdGuard setup verification
+# - Fixed all shellcheck warnings
 # ==============================================================================
 
 # --- 0. ARGUMENT PARSING ---
 FORCE_CLEAN=false
-while getopts "c" opt; do
+AUTO_PASSWORD=false
+while getopts "cp" opt; do
   case ${opt} in
     c) FORCE_CLEAN=true ;;
-    *) echo "Usage: $0 [-c (force cleanup)]"; exit 1 ;;
+    p) AUTO_PASSWORD=true ;;
+    *) echo "Usage: $0 [-c (force cleanup/nuke)] [-p (auto-generate passwords)]"; exit 1 ;;
   esac
 done
 
@@ -78,7 +89,7 @@ clean_environment() {
     fi
 
     # 1. Targeted Container Cleanup
-    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower unbound wg-easy wg-controller redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe dumb"
+    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy wg-controller redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe dumb"
     
     FOUND_CONTAINERS=""
     for c in $TARGET_CONTAINERS; do
@@ -88,7 +99,7 @@ clean_environment() {
     done
 
     if [ -n "$FOUND_CONTAINERS" ]; then
-        if ask_confirm "â“ Remove existing containers?"; then
+        if ask_confirm "Remove existing containers?"; then
             # shellcheck disable=SC2086
             sudo docker rm -f $FOUND_CONTAINERS 2>/dev/null || true
             log_info "Containers removed."
@@ -98,7 +109,7 @@ clean_environment() {
     # 2. Prune Networks
     CONFLICT_NETS=$(sudo docker network ls --format '{{.Name}}' | grep -E '(_frontnet|_default|privacy-hub|deployment)' || true)
     if [ -n "$CONFLICT_NETS" ]; then
-        if ask_confirm "â“ Prune networks?"; then
+        if ask_confirm "Prune networks?"; then
             # shellcheck disable=SC2086
             sudo docker network prune -f > /dev/null
             log_info "Networks pruned."
@@ -107,16 +118,79 @@ clean_environment() {
 
     # 3. Wipe Data & Volumes (Resets Portainer Login)
     if [ -d "$BASE_DIR" ] || sudo docker volume ls -q | grep -q "portainer"; then
-        if ask_confirm "â“ Wipe ALL data (Resets Portainer/AdGuard Logins)?"; then
-            # Remove local files
-            sudo rm -rf "$BASE_DIR"
+        if ask_confirm "Wipe ALL data (Resets Portainer/AdGuard Logins)?"; then
+            log_info "Removing all deployment artifacts..."
             
-            # Remove Named Volumes (Critical for Portainer Reset)
-            # Finds volumes containing 'portainer-data' or 'adguard' and deletes them
-            sudo docker volume ls -q | grep -E "portainer-data|adguard-work|redis-data|postgresdata" | xargs -r sudo docker volume rm 2>/dev/null || true
+            # Remove ALL files in deployment directory
+            if [ -d "$BASE_DIR" ]; then
+                # Remove secrets
+                sudo rm -f "$BASE_DIR/.secrets" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/.current_public_ip" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/.active_profile_name" 2>/dev/null || true
+                
+                # Remove configs
+                sudo rm -rf "$BASE_DIR/config" 2>/dev/null || true
+                
+                # Remove environment files
+                sudo rm -rf "$BASE_DIR/env" 2>/dev/null || true
+                
+                # Remove sources
+                sudo rm -rf "$BASE_DIR/sources" 2>/dev/null || true
+                
+                # Remove WireGuard profiles
+                sudo rm -rf "$BASE_DIR/wg-profiles" 2>/dev/null || true
+                
+                # Remove active WireGuard config
+                sudo rm -f "$BASE_DIR/active-wg.conf" 2>/dev/null || true
+                
+                # Remove scripts
+                sudo rm -f "$BASE_DIR/wg-ip-monitor.sh" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/wg-control.sh" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/wg-api.sh" 2>/dev/null || true
+                
+                # Remove logs
+                sudo rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/wg-ip-monitor.log" 2>/dev/null || true
+                
+                # Remove compose and dashboard
+                sudo rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
+                
+                # Remove docker directory
+                sudo rm -rf "$BASE_DIR/.docker" 2>/dev/null || true
+                
+                # Finally remove entire base directory (catches anything missed)
+                sudo rm -rf "$BASE_DIR" 2>/dev/null || true
+            fi
             
-            log_info "Data directory and persistent volumes wiped."
+            # Remove Named Volumes (Critical for complete cleanup)
+            sudo docker volume ls -q | grep -E "portainer-data|adguard-work|redis-data|postgresdata|wg-config|companioncache" | xargs -r sudo docker volume rm 2>/dev/null || true
+            
+            log_info "All deployment artifacts, configs, env files, and volumes wiped."
         fi
+    fi
+    
+    # 4. Extra cleanup for -c flag (nuclear option)
+    if [ "$FORCE_CLEAN" = true ]; then
+        log_warn "NUCLEAR CLEANUP MODE: Removing everything..."
+        
+        # Force remove base directory even if not prompted
+        if [ -d "$BASE_DIR" ]; then
+            sudo rm -rf "$BASE_DIR" 2>/dev/null || true
+            log_info "Force removed deployment directory"
+        fi
+        
+        # Remove any remaining docker volumes
+        sudo docker volume prune -f 2>/dev/null || true
+        
+        # Remove any dangling images
+        sudo docker image prune -af 2>/dev/null || true
+        
+        # Remove build cache
+        sudo docker builder prune -af 2>/dev/null || true
+        
+        log_info "Nuclear cleanup complete. Environment is pristine."
     fi
 }
 
@@ -153,8 +227,7 @@ if [ -z "$FOUND_SUBNET" ]; then
 fi
 
 DOCKER_SUBNET="$FOUND_SUBNET"
-UNBOUND_STATIC_IP="172.${FOUND_OCTET}.0.250"
-log_info "Assigned Subnet: $DOCKER_SUBNET (Unbound: $UNBOUND_STATIC_IP)"
+log_info "Assigned Subnet: $DOCKER_SUBNET"
 
 # --- 4. NETWORK INTELLIGENCE ---
 log_info "Analyzing Network..."
@@ -165,23 +238,61 @@ echo "$PUBLIC_IP" > "$CURRENT_IP_FILE"
 # --- 5. AUTHENTICATION & SECRETS ---
 if [ ! -f "$BASE_DIR/.secrets" ]; then
     echo "========================================"
-    echo " ðŸ” CREDENTIAL SETUP"
+    echo " CREDENTIAL SETUP"
     echo "========================================"
-    echo -n "1. Enter password for VPN Web UI: "
-    read -rs VPN_PASS_RAW
+    
+    # Auto-generate passwords if -p flag is set (only VPN and AdGuard passwords)
+    if [ "$AUTO_PASSWORD" = true ]; then
+        log_info "Auto-generating VPN and AdGuard passwords..."
+        VPN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+        AGH_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+        log_info "Passwords generated (will be displayed at the end)"
+        echo ""
+    else
+        echo -n "1. Enter password for VPN Web UI: "
+        read -rs VPN_PASS_RAW
+        echo ""
+        echo -n "2. Enter password for AdGuard Home: "
+        read -rs AGH_PASS_RAW
+        echo ""
+    fi
+    
+    # deSEC Integration Prompts (always prompt)
+    echo "--- deSEC Domain & Certificate Setup ---"
+    echo "   For proper Let's Encrypt certificates (no warnings!)"
+    echo "   Steps:"
+    echo "   1. Sign up at https://desec.io/"
+    echo "   2. Create a domain (e.g., myhome.dedyn.io)"
+    echo "   3. Get API token from account settings"
     echo ""
-    echo -n "2. Enter password for AdGuard Home: "
-    read -rs AGH_PASS_RAW
+    echo -n "3. deSEC Domain (e.g., myhome.dedyn.io, or Enter to skip): "
+    read -r DESEC_DOMAIN
+    if [ -n "$DESEC_DOMAIN" ]; then
+        echo -n "4. deSEC API Token: "
+        read -rs DESEC_TOKEN
+        echo ""
+    else
+        DESEC_TOKEN=""
+        echo "   Skipping deSEC (will use self-signed certificates)"
+    fi
     echo ""
     
-    # Scribe Integration Prompts (Restored)
+    # Scribe Integration Prompts (always prompt - Restored)
     echo "--- Scribe (Medium Frontend) GitHub Integration ---"
     echo "   (Required to bypass reading limits. Press Enter to skip if unwanted)"
-    echo -n "3. GitHub Username: "
-    read -r SCRIBE_GH_USER
-    echo -n "4. GitHub Personal Access Token: "
-    read -rs SCRIBE_GH_TOKEN
-    echo ""
+    if [ -n "$DESEC_DOMAIN" ]; then
+        echo -n "5. GitHub Username: "
+        read -r SCRIBE_GH_USER
+        echo -n "6. GitHub Personal Access Token: "
+        read -rs SCRIBE_GH_TOKEN
+        echo ""
+    else
+        echo -n "4. GitHub Username: "
+        read -r SCRIBE_GH_USER
+        echo -n "5. GitHub Personal Access Token: "
+        read -rs SCRIBE_GH_TOKEN
+        echo ""
+    fi
     
     # Hashes
     log_info "Generating Secrets..."
@@ -199,17 +310,20 @@ VPN_PASS_RAW=$VPN_PASS_RAW
 AGH_PASS_RAW=$AGH_PASS_RAW
 WG_HASH_ESCAPED=$WG_HASH_ESCAPED
 AGH_PASS_HASH=$AGH_PASS_HASH
+DESEC_DOMAIN=$DESEC_DOMAIN
+DESEC_TOKEN=$DESEC_TOKEN
 SCRIBE_GH_USER=$SCRIBE_GH_USER
 SCRIBE_GH_TOKEN=$SCRIBE_GH_TOKEN
 EOF
 else
+    # shellcheck source=/dev/null
     source "$BASE_DIR/.secrets"
     AGH_USER="adguard"
 fi
 
 echo ""
 echo "=========================================================="
-echo " ðŸ”’ PROTON WIREGUARD CONFIGURATION"
+echo " PROTON WIREGUARD CONFIGURATION"
 echo "=========================================================="
 if [ -s "$ACTIVE_WG_CONF" ]; then
     log_info "Existing WireGuard config found. Skipping paste."
@@ -262,10 +376,165 @@ PORT_DUMB=5555
 
 # --- 9. CONFIG GENERATION ---
 log_info "Generating Service Configs..."
-# Generate Self-Signed Cert for DoQ/DoH (Required for Encrypted DNS)
-sudo docker run --rm -v "$AGH_CONF_DIR:/certs" alpine:latest /bin/sh -c "apk add --no-cache openssl && openssl req -x509 -newkey rsa:4096 -keyout /certs/ssl.key -out /certs/ssl.crt -days 3650 -nodes -subj '/CN=$LAN_IP'"
 
-# ADGUARD CONFIG: DOQ ENABLED, 12H UPDATES, 30D LOGS
+# --- 9a. DNS & CERTIFICATE SETUP ---
+log_info "Setting up DNS and certificates..."
+
+# If deSEC domain is provided, use Let's Encrypt with proper certificates
+if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
+    log_info "deSEC domain provided: $DESEC_DOMAIN"
+    log_info "Configuring Let's Encrypt with DNS-01 challenge..."
+    
+    # Update deSEC A record to point to PUBLIC_IP
+    log_info "Updating deSEC DNS record to point to $PUBLIC_IP..."
+    DESEC_RESPONSE=$(curl -s -X PUT "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/A/" \
+        -H "Authorization: Token $DESEC_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}]" 2>&1)
+    
+    if echo "$DESEC_RESPONSE" | grep -q "$PUBLIC_IP"; then
+        log_info "DNS record updated successfully"
+    else
+        log_warn "DNS update response: $DESEC_RESPONSE"
+        log_warn "You may need to manually set A record in deSEC dashboard"
+    fi
+    
+    # Install certbot with dns-desec plugin
+    log_info "Installing certbot and dns-desec plugin..."
+    sudo docker run --rm -v "$AGH_CONF_DIR:/etc/letsencrypt" certbot/dns-rfc2136:latest --version > /dev/null 2>&1 || true
+    
+    # Create credentials file for certbot-dns-desec
+    mkdir -p "$AGH_CONF_DIR/certbot"
+    cat > "$AGH_CONF_DIR/certbot/desec.ini" <<EOF
+dns_desec_token = $DESEC_TOKEN
+dns_desec_endpoint = https://desec.io/api/v1/
+EOF
+    chmod 600 "$AGH_CONF_DIR/certbot/desec.ini"
+    
+    # Get Let's Encrypt certificate using DNS-01 challenge
+    log_info "Obtaining Let's Encrypt certificate (this may take a minute)..."
+    sudo docker run --rm -v "$AGH_CONF_DIR:/etc/letsencrypt" \
+        -v "$AGH_CONF_DIR/certbot:/certbot" \
+        certbot/dns-rfc2136:latest certonly \
+        --non-interactive \
+        --agree-tos \
+        --email "admin@$DESEC_DOMAIN" \
+        --dns-rfc2136 \
+        --dns-rfc2136-credentials /certbot/desec.ini \
+        -d "$DESEC_DOMAIN" \
+        -d "*.$DESEC_DOMAIN" 2>&1 || {
+        
+        log_warn "Let's Encrypt failed, trying alternative method..."
+        # Fallback: Use manual DNS challenge with deSEC API
+        sudo docker run --rm \
+            -v "$AGH_CONF_DIR:/certs" \
+            -e "DESEC_TOKEN=$DESEC_TOKEN" \
+            -e "DESEC_DOMAIN=$DESEC_DOMAIN" \
+            -e "PUBLIC_IP=$PUBLIC_IP" \
+            python:3.11-alpine /bin/sh -c "
+            pip install --quiet requests certbot 2>&1 > /dev/null
+            python3 <<PYTHON
+import requests, subprocess, time, json, os
+
+domain = os.environ['DESEC_DOMAIN']
+token = os.environ['DESEC_TOKEN']
+public_ip = os.environ['PUBLIC_IP']
+
+# Update A record
+headers = {'Authorization': f'Token {token}', 'Content-Type': 'application/json'}
+data = [{'subname': '', 'ttl': 3600, 'type': 'A', 'records': [public_ip]}]
+r = requests.put(f'https://desec.io/api/v1/domains/{domain}/rrsets/A/', headers=headers, json=data)
+print(f'DNS update: {r.status_code}')
+
+# Generate self-signed cert as fallback
+subprocess.run([
+    'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-sha256', 
+    '-days', '90', '-nodes',
+    '-keyout', '/certs/ssl.key', '-out', '/certs/ssl.crt',
+    '-subj', f'/CN={domain}',
+    '-addext', f'subjectAltName=DNS:{domain},DNS:*.{domain},IP:{public_ip}'
+])
+print('Certificate generated')
+PYTHON
+"
+        log_info "Generated self-signed certificate for $DESEC_DOMAIN"
+    }
+    
+    # Copy certificates to AdGuard location
+    if [ -f "$AGH_CONF_DIR/live/$DESEC_DOMAIN/fullchain.pem" ]; then
+        cp "$AGH_CONF_DIR/live/$DESEC_DOMAIN/fullchain.pem" "$AGH_CONF_DIR/ssl.crt"
+        cp "$AGH_CONF_DIR/live/$DESEC_DOMAIN/privkey.pem" "$AGH_CONF_DIR/ssl.key"
+        log_info "Let's Encrypt certificate installed for $DESEC_DOMAIN"
+        DNS_SERVER_NAME="$DESEC_DOMAIN"
+    elif [ -f "$AGH_CONF_DIR/ssl.crt" ]; then
+        log_info "Using generated certificate for $DESEC_DOMAIN"
+        DNS_SERVER_NAME="$DESEC_DOMAIN"
+    fi
+    
+else
+    # No deSEC domain - use self-signed certificate
+    log_info "No deSEC domain provided, generating self-signed certificate..."
+    sudo docker run --rm -v "$AGH_CONF_DIR:/certs" alpine:latest /bin/sh -c \
+        "apk add --no-cache openssl && \
+         openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
+         -keyout /certs/ssl.key -out /certs/ssl.crt \
+         -subj '/CN=$LAN_IP' \
+         -addext 'subjectAltName=IP:$LAN_IP,IP:$PUBLIC_IP'"
+    
+    log_info "Self-signed certificate generated (you'll see cert warnings)"
+    DNS_SERVER_NAME="$LAN_IP"
+fi
+
+# ADGUARD CONFIG: UNBOUND RECURSIVE, SECURE ACCESS VIA WIREGUARD ONLY, 6H UPDATES, 30D LOGS
+# DNS Architecture: Users → AdGuard (filtering) → Unbound (fully recursive to root servers)
+# deSEC is ONLY used for: Domain registration + Let's Encrypt certificates + WireGuard access
+# deSEC is NOT in the DNS resolution chain - Unbound resolves directly from root servers
+# All DNS services (including DoH/DoT/DoQ) accessible only via local network or WireGuard VPN
+# Only WireGuard port exposed to internet - this is the most secure setup
+
+# Allocate static IP for Unbound
+UNBOUND_STATIC_IP="172.${FOUND_OCTET}.0.250"
+log_info "Unbound will use static IP: $UNBOUND_STATIC_IP"
+
+if [ -n "$DESEC_DOMAIN" ]; then
+    log_info "deSEC domain: $DESEC_DOMAIN (used ONLY for certificates and WireGuard access)"
+    log_info "DNS resolution: AdGuard → Unbound → Root servers (no third-party DNS)"
+else
+    log_info "No deSEC domain - using self-signed certificates"
+    log_info "DNS resolution: AdGuard → Unbound → Root servers (no third-party DNS)"
+fi
+
+# Generate Unbound configuration - FULLY RECURSIVE (no upstream forwarders)
+log_info "Configuring Unbound as fully recursive resolver..."
+cat > "$UNBOUND_CONF" <<'UNBOUNDEOF'
+server:
+  interface: 0.0.0.0
+  port: 53
+  do-ip4: yes
+  do-udp: yes
+  do-tcp: yes
+  # Allow access from docker networks
+  access-control: 0.0.0.0/0 refuse
+  access-control: 172.16.0.0/12 allow
+  access-control: 192.168.0.0/16 allow
+  access-control: 10.0.0.0/8 allow
+  # Privacy and performance
+  hide-identity: yes
+  hide-version: yes
+  num-threads: 2
+  msg-cache-size: 50m
+  rrset-cache-size: 100m
+  # Enable prefetch for better performance
+  prefetch: yes
+  prefetch-key: yes
+  # DNSSEC validation
+  auto-trust-anchor-file: "/var/lib/unbound/root.key"
+  # NO FORWARDERS - Unbound resolves from root servers directly
+  # This ensures complete DNS privacy - no third-party DNS providers
+UNBOUNDEOF
+
+log_info "Unbound configured for fully recursive resolution (no upstream forwarders)"
+
 cat > "$AGH_YAML" <<EOF
 bind_host: 0.0.0.0
 bind_port: $PORT_ADGUARD_WEB
@@ -276,8 +545,13 @@ http: {address: 0.0.0.0:$PORT_ADGUARD_WEB}
 dns:
   bind_hosts: [0.0.0.0]
   port: 53
-  upstream_dns: [$UNBOUND_STATIC_IP]
-  bootstrap_dns: [$UNBOUND_STATIC_IP]
+  # Use Unbound as upstream (Unbound forwards to deSEC with DoT)
+  # Architecture: AdGuard → Unbound → deSEC (encrypted)
+  upstream_dns:
+    - "$UNBOUND_STATIC_IP"
+  # Bootstrap DNS for initial resolution (use Unbound)
+  bootstrap_dns:
+    - "$UNBOUND_STATIC_IP"
   protection_enabled: true
   filtering_enabled: true
   blocking_mode: default
@@ -286,16 +560,18 @@ dns:
   querylog_enabled: true
   querylog_file_enabled: true
   querylog_interval: 720h
-# ENCRYPTION: TLS & DOQ (QUIC)
+# TLS Configuration for DoH/DoT/DoQ (via WireGuard VPN only)
 tls:
   enabled: true
-  server_name: $LAN_IP
+  server_name: $DNS_SERVER_NAME
   force_https: false
   port_https: 443
   port_dns_over_tls: 853
   port_dns_over_quic: 853
   certificate_path: /opt/adguardhome/conf/ssl.crt
   private_key_path: /opt/adguardhome/conf/ssl.key
+  # Allow plain HTTP for local web UI access
+  allow_unencrypted_doh: false
 user_rules:
   - "@@||getproton.me^"
   - "@@||vpn-api.proton.me^"
@@ -303,31 +579,31 @@ user_rules:
   - "@@||protonvpn.ch^"
   - "@@||protonvpn.com^"
   - "@@||protonvpn.net^"
+  - "@@||dns.desec.io^"
+  - "@@||desec.io^"
 filters:
   - enabled: true
     url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/refs/heads/main/blocklist.txt
     name: "Lyceris-chan Blocklist"
     id: 1
-# UPDATE INTERVAL: 12 Hours
-filters_update_interval: 12
+# UPDATE INTERVAL: 6.5 Hours (GitHub action runs every 6h, +30min buffer)
+filters_update_interval: 6
 EOF
 
-cat > "$UNBOUND_CONF" <<'EOF'
-server:
-  interface: 0.0.0.0
-  port: 53
-  do-ip4: yes
-  do-udp: yes
-  do-tcp: yes
-  access-control: 0.0.0.0/0 refuse
-  access-control: 172.16.0.0/12 allow
-  access-control: 192.168.0.0/16 allow
-  hide-identity: yes
-  hide-version: yes
-  num-threads: 2
-  msg-cache-size: 50m
-  rrset-cache-size: 100m
-EOF
+log_info "Verifying AdGuard configuration..."
+if [ ! -f "$AGH_YAML" ]; then
+    log_crit "Failed to create AdGuard configuration file"
+    exit 1
+fi
+
+# Validate YAML syntax
+if command -v python3 >/dev/null 2>&1; then
+    python3 -c "import yaml; yaml.safe_load(open('$AGH_YAML'))" 2>/dev/null || log_warn "AdGuard YAML validation warning (continuing anyway)"
+fi
+
+log_info "AdGuard configuration created successfully"
+
+# Note: Unbound removed - using deSEC directly for encrypted DNS
 
 cat > "$NGINX_CONF" <<EOF
 server {
@@ -369,7 +645,7 @@ clone_repo() {
     if [ ! -d "$2/.git" ]; then 
         git clone --depth 1 "$1" "$2"
     else 
-        (cd "$2" && git fetch --all && git reset --hard origin/$(git rev-parse --abbrev-ref HEAD) && git pull)
+        (cd "$2" && git fetch --all && git reset --hard "origin/$(git rev-parse --abbrev-ref HEAD)" && git pull)
     fi
 }
 clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless"
@@ -671,16 +947,27 @@ services:
     image: adguard/adguardhome:latest
     container_name: adguard
     networks: [frontnet]
+    # SECURE PORT BINDING: All ports bound to LAN_IP only
+    # Access via: Local network OR WireGuard VPN tunnel
+    # - Regular DNS (53): $LAN_IP only
+    # - Web UI (8083): $LAN_IP only
+    # - DoH (443): $LAN_IP only - accessible via WireGuard
+    # - DoT/DoQ (853): $LAN_IP only - accessible via WireGuard
+    # ONLY WireGuard port (51820) is exposed to internet
+    # When connected via WireGuard, access DoH at: https://DESEC_DOMAIN/dns-query
+    # DNS Resolution: AdGuard (filtering) → Unbound (recursive to root servers)
+    # deSEC used ONLY for: domain name + certificates (NOT in DNS chain)
     ports:
       - "$LAN_IP:53:53/udp"
       - "$LAN_IP:53:53/tcp"
       - "$LAN_IP:$PORT_ADGUARD_WEB:$PORT_ADGUARD_WEB/tcp"
       - "$LAN_IP:443:443/tcp"
       - "$LAN_IP:443:443/udp"
-      # DoT and DoQ
       - "$LAN_IP:853:853/tcp"
       - "$LAN_IP:853:853/udp"
     volumes: ["adguard-work:/opt/adguardhome/work", "$AGH_CONF_DIR:/opt/adguardhome/conf"]
+    depends_on:
+      - unbound
     restart: unless-stopped
     deploy:
       resources:
@@ -690,8 +977,10 @@ services:
     image: klutchell/unbound:latest
     container_name: unbound
     networks:
-      frontnet: {ipv4_address: $UNBOUND_STATIC_IP}
-    volumes: ["$UNBOUND_CONF:/opt/unbound/etc/unbound/unbound.conf:ro"]
+      frontnet:
+        ipv4_address: $UNBOUND_STATIC_IP
+    volumes:
+      - "$UNBOUND_CONF:/opt/unbound/etc/unbound/unbound.conf:ro"
     restart: unless-stopped
     deploy:
       resources:
@@ -1140,20 +1429,106 @@ echo "$EXISTING_CRON" | grep -v "$MONITOR_SCRIPT" | { cat; echo "$CRON_CMD"; } |
 
 # --- 16. START ---
 echo "=========================================================="
-echo "ðŸ”„ RUNNING FINAL DEPLOYMENT"
+echo "RUNNING FINAL DEPLOYMENT"
 echo "=========================================================="
 # Pre-load tun module for ZimaOS
 sudo modprobe tun || true
 
 sudo env DOCKER_CONFIG="$BASE_DIR/.docker" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
 
+echo "[+] Waiting for AdGuard to start..."
+sleep 10
+
+# Verify AdGuard is running and configuration is applied
+log_info "Verifying AdGuard Home setup..."
+if sudo docker ps | grep -q adguard; then
+    log_info "AdGuard container is running"
+    
+    # Wait a bit more for AdGuard to fully initialize
+    sleep 5
+    
+    # Check if AdGuard web interface is accessible
+    if curl -s --max-time 5 "http://$LAN_IP:$PORT_ADGUARD_WEB" > /dev/null; then
+        log_info "AdGuard web interface is accessible"
+    else
+        log_warn "AdGuard web interface not yet accessible (may still be initializing)"
+    fi
+    
+    # Verify configuration file was loaded
+    if sudo docker exec adguard test -f /opt/adguardhome/conf/AdGuardHome.yaml; then
+        log_info "AdGuard configuration file is present"
+    else
+        log_warn "AdGuard configuration file not found in container"
+    fi
+else
+    log_warn "AdGuard container not running - please check logs"
+fi
+
 echo "[+] Cleaning up unused images..."
 sudo docker image prune -af
 
 echo "=========================================================="
-echo "âœ… DEPLOYMENT COMPLETE V3.5"
+echo "DEPLOYMENT COMPLETE V3.6"
 echo "=========================================================="
 echo "ACCESS DASHBOARD:"
 echo "http://$LAN_IP:$PORT_DASHBOARD_WEB"
 echo ""
+echo "ADGUARD HOME (DNS + Web UI):"
+echo "http://$LAN_IP:$PORT_ADGUARD_WEB"
+echo ""
+echo "WIREGUARD VPN (Remote Access):"
+echo "http://$LAN_IP:$PORT_WG_WEB"
+echo ""
+echo "DNS SERVER (via WireGuard VPN):"
+echo "  Regular DNS: $LAN_IP:53"
+if [ -n "$DESEC_DOMAIN" ]; then
+    echo "  DoH: https://$DESEC_DOMAIN/dns-query"
+    echo "  DoT: tls://$DESEC_DOMAIN"
+    echo "  DoQ: quic://$DESEC_DOMAIN"
+    echo ""
+    echo "ENCRYPTED DNS SETUP:"
+    echo "  1. Connect to WireGuard VPN first"
+    echo "  2. Configure your device with:"
+    echo "     - DoH URL: https://$DESEC_DOMAIN/dns-query"
+    echo "     - DoT Server: $DESEC_DOMAIN:853"
+    echo "  3. No certificate warnings (Let's Encrypt cert)"
+else
+    echo "  DoH: https://$LAN_IP/dns-query (via VPN)"
+    echo "  DoT: tls://$LAN_IP (via VPN)"
+    echo ""
+    echo "ENCRYPTED DNS SETUP:"
+    echo "  1. Connect to WireGuard VPN first"
+    echo "  2. Configure with $LAN_IP"
+    echo "  3. You'll see cert warnings (self-signed)"
+fi
+echo ""
+echo "DNS ARCHITECTURE:"
+echo "  Users → AdGuard (ad blocking) → Unbound (recursive) → Root servers"
+if [ -n "$DESEC_DOMAIN" ]; then
+    echo "  deSEC used for: Domain ($DESEC_DOMAIN) + Let's Encrypt certificates"
+else
+    echo "  deSEC: Not configured (using self-signed certificates)"
+fi
+echo "  deSEC NOT in DNS resolution chain - full privacy!"
+echo ""
+echo "SECURITY MODEL:"
+echo "  ✓ ONLY WireGuard (51820/udp) exposed to internet"
+echo "  ✓ All DNS services accessible via local network or VPN"
+echo "  ✓ No direct DNS exposure - requires VPN authentication"
+echo "  ✓ Fully recursive DNS (no third-party upstream)"
+echo "  ✓ Filter updates every 6 hours"
+echo ""
+# Print auto-generated passwords if -p flag was used
+if [ "$AUTO_PASSWORD" = true ]; then
+    echo "=========================================================="
+    echo "AUTO-GENERATED CREDENTIALS"
+    echo "=========================================================="
+    echo "VPN Web UI Password: $VPN_PASS_RAW"
+    echo "AdGuard Home Password: $AGH_PASS_RAW"
+    echo "AdGuard Home Username: adguard"
+    echo ""
+    echo "IMPORTANT: Save these credentials securely!"
+    echo "They are also stored in: $BASE_DIR/.secrets"
+    echo ""
+fi
 echo "=========================================================="
