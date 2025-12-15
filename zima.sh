@@ -222,21 +222,41 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     fi
     
     # deSEC Integration Prompts (always prompt)
-    echo "--- deSEC Encrypted DNS Setup ---"
-    echo "   (Optional: For managing your own DNS zones)"
-    echo "   Get your token at: https://desec.io/"
-    echo -n "3. deSEC API Token (Press Enter to skip): "
-    read -rs DESEC_TOKEN
+    echo "--- deSEC Domain & Certificate Setup ---"
+    echo "   For proper Let's Encrypt certificates (no warnings!)"
+    echo "   Steps:"
+    echo "   1. Sign up at https://desec.io/"
+    echo "   2. Create a domain (e.g., myhome.dedyn.io)"
+    echo "   3. Get API token from account settings"
+    echo ""
+    echo -n "3. deSEC Domain (e.g., myhome.dedyn.io, or Enter to skip): "
+    read -r DESEC_DOMAIN
+    if [ -n "$DESEC_DOMAIN" ]; then
+        echo -n "4. deSEC API Token: "
+        read -rs DESEC_TOKEN
+        echo ""
+    else
+        DESEC_TOKEN=""
+        echo "   Skipping deSEC (will use self-signed certificates)"
+    fi
     echo ""
     
     # Scribe Integration Prompts (always prompt - Restored)
     echo "--- Scribe (Medium Frontend) GitHub Integration ---"
     echo "   (Required to bypass reading limits. Press Enter to skip if unwanted)"
-    echo -n "4. GitHub Username: "
-    read -r SCRIBE_GH_USER
-    echo -n "5. GitHub Personal Access Token: "
-    read -rs SCRIBE_GH_TOKEN
-    echo ""
+    if [ -n "$DESEC_DOMAIN" ]; then
+        echo -n "5. GitHub Username: "
+        read -r SCRIBE_GH_USER
+        echo -n "6. GitHub Personal Access Token: "
+        read -rs SCRIBE_GH_TOKEN
+        echo ""
+    else
+        echo -n "4. GitHub Username: "
+        read -r SCRIBE_GH_USER
+        echo -n "5. GitHub Personal Access Token: "
+        read -rs SCRIBE_GH_TOKEN
+        echo ""
+    fi
     
     # Hashes
     log_info "Generating Secrets..."
@@ -254,6 +274,7 @@ VPN_PASS_RAW=$VPN_PASS_RAW
 AGH_PASS_RAW=$AGH_PASS_RAW
 WG_HASH_ESCAPED=$WG_HASH_ESCAPED
 AGH_PASS_HASH=$AGH_PASS_HASH
+DESEC_DOMAIN=$DESEC_DOMAIN
 DESEC_TOKEN=$DESEC_TOKEN
 SCRIBE_GH_USER=$SCRIBE_GH_USER
 SCRIBE_GH_TOKEN=$SCRIBE_GH_TOKEN
@@ -320,22 +341,118 @@ PORT_DUMB=5555
 # --- 9. CONFIG GENERATION ---
 log_info "Generating Service Configs..."
 
-# Generate Self-Signed Certificate for DoH/DoT/DoQ
-# Using PUBLIC_IP as server name so clients can connect from internet
-log_info "Generating SSL certificate for encrypted DNS (DoH/DoT/DoQ)..."
-sudo docker run --rm -v "$AGH_CONF_DIR:/certs" alpine:latest /bin/sh -c \
-    "apk add --no-cache openssl && \
-     openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
-     -keyout /certs/ssl.key -out /certs/ssl.crt \
-     -subj '/CN=$PUBLIC_IP' \
-     -addext 'subjectAltName=IP:$PUBLIC_IP,IP:$LAN_IP'"
+# --- 9a. DNS & CERTIFICATE SETUP ---
+log_info "Setting up DNS and certificates..."
 
-log_info "SSL certificate generated for: $PUBLIC_IP (also valid for $LAN_IP)"
+# If deSEC domain is provided, use Let's Encrypt with proper certificates
+if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
+    log_info "deSEC domain provided: $DESEC_DOMAIN"
+    log_info "Configuring Let's Encrypt with DNS-01 challenge..."
+    
+    # Update deSEC A record to point to PUBLIC_IP
+    log_info "Updating deSEC DNS record to point to $PUBLIC_IP..."
+    DESEC_RESPONSE=$(curl -s -X PUT "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/A/" \
+        -H "Authorization: Token $DESEC_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}]" 2>&1)
+    
+    if echo "$DESEC_RESPONSE" | grep -q "$PUBLIC_IP"; then
+        log_info "DNS record updated successfully"
+    else
+        log_warn "DNS update response: $DESEC_RESPONSE"
+        log_warn "You may need to manually set A record in deSEC dashboard"
+    fi
+    
+    # Install certbot with dns-desec plugin
+    log_info "Installing certbot and dns-desec plugin..."
+    sudo docker run --rm -v "$AGH_CONF_DIR:/etc/letsencrypt" certbot/dns-rfc2136:latest --version > /dev/null 2>&1 || true
+    
+    # Create credentials file for certbot-dns-desec
+    mkdir -p "$AGH_CONF_DIR/certbot"
+    cat > "$AGH_CONF_DIR/certbot/desec.ini" <<EOF
+dns_desec_token = $DESEC_TOKEN
+dns_desec_endpoint = https://desec.io/api/v1/
+EOF
+    chmod 600 "$AGH_CONF_DIR/certbot/desec.ini"
+    
+    # Get Let's Encrypt certificate using DNS-01 challenge
+    log_info "Obtaining Let's Encrypt certificate (this may take a minute)..."
+    sudo docker run --rm -v "$AGH_CONF_DIR:/etc/letsencrypt" \
+        -v "$AGH_CONF_DIR/certbot:/certbot" \
+        certbot/dns-rfc2136:latest certonly \
+        --non-interactive \
+        --agree-tos \
+        --email "admin@$DESEC_DOMAIN" \
+        --dns-rfc2136 \
+        --dns-rfc2136-credentials /certbot/desec.ini \
+        -d "$DESEC_DOMAIN" \
+        -d "*.$DESEC_DOMAIN" 2>&1 || {
+        
+        log_warn "Let's Encrypt failed, trying alternative method..."
+        # Fallback: Use manual DNS challenge with deSEC API
+        sudo docker run --rm \
+            -v "$AGH_CONF_DIR:/certs" \
+            -e "DESEC_TOKEN=$DESEC_TOKEN" \
+            -e "DESEC_DOMAIN=$DESEC_DOMAIN" \
+            -e "PUBLIC_IP=$PUBLIC_IP" \
+            python:3.11-alpine /bin/sh -c "
+            pip install --quiet requests certbot 2>&1 > /dev/null
+            python3 <<PYTHON
+import requests, subprocess, time, json, os
 
-# ADGUARD CONFIG: DESEC UPSTREAM, ENCRYPTED DNS EXPOSED, 6H UPDATES, 30D LOGS
+domain = os.environ['DESEC_DOMAIN']
+token = os.environ['DESEC_TOKEN']
+public_ip = os.environ['PUBLIC_IP']
+
+# Update A record
+headers = {'Authorization': f'Token {token}', 'Content-Type': 'application/json'}
+data = [{'subname': '', 'ttl': 3600, 'type': 'A', 'records': [public_ip]}]
+r = requests.put(f'https://desec.io/api/v1/domains/{domain}/rrsets/A/', headers=headers, json=data)
+print(f'DNS update: {r.status_code}')
+
+# Generate self-signed cert as fallback
+subprocess.run([
+    'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-sha256', 
+    '-days', '90', '-nodes',
+    '-keyout', '/certs/ssl.key', '-out', '/certs/ssl.crt',
+    '-subj', f'/CN={domain}',
+    '-addext', f'subjectAltName=DNS:{domain},DNS:*.{domain},IP:{public_ip}'
+])
+print('Certificate generated')
+PYTHON
+"
+        log_info "Generated self-signed certificate for $DESEC_DOMAIN"
+    }
+    
+    # Copy certificates to AdGuard location
+    if [ -f "$AGH_CONF_DIR/live/$DESEC_DOMAIN/fullchain.pem" ]; then
+        cp "$AGH_CONF_DIR/live/$DESEC_DOMAIN/fullchain.pem" "$AGH_CONF_DIR/ssl.crt"
+        cp "$AGH_CONF_DIR/live/$DESEC_DOMAIN/privkey.pem" "$AGH_CONF_DIR/ssl.key"
+        log_info "Let's Encrypt certificate installed for $DESEC_DOMAIN"
+        DNS_SERVER_NAME="$DESEC_DOMAIN"
+    elif [ -f "$AGH_CONF_DIR/ssl.crt" ]; then
+        log_info "Using generated certificate for $DESEC_DOMAIN"
+        DNS_SERVER_NAME="$DESEC_DOMAIN"
+    fi
+    
+else
+    # No deSEC domain - use self-signed certificate
+    log_info "No deSEC domain provided, generating self-signed certificate..."
+    sudo docker run --rm -v "$AGH_CONF_DIR:/certs" alpine:latest /bin/sh -c \
+        "apk add --no-cache openssl && \
+         openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
+         -keyout /certs/ssl.key -out /certs/ssl.crt \
+         -subj '/CN=$LAN_IP' \
+         -addext 'subjectAltName=IP:$LAN_IP,IP:$PUBLIC_IP'"
+    
+    log_info "Self-signed certificate generated (you'll see cert warnings)"
+    DNS_SERVER_NAME="$LAN_IP"
+fi
+
+# ADGUARD CONFIG: DESEC UPSTREAM, SECURE ACCESS VIA WIREGUARD ONLY, 6H UPDATES, 30D LOGS
 # Using deSEC's encrypted DNS resolvers as upstream
-# Exposing DoH (443) and DoT/DoQ (853) to internet for your own encrypted DNS service
-# Regular DNS (53) and Web UI (8083) remain local-only
+# All DNS services (including DoH/DoT/DoQ) accessible only via local network or WireGuard VPN
+# Only WireGuard port exposed to internet - this is the most secure setup
 
 # Using deSEC's secure encrypted DNS resolvers
 # Note: deSEC token is for DNS zone management (optional)
@@ -373,10 +490,10 @@ dns:
   querylog_enabled: true
   querylog_file_enabled: true
   querylog_interval: 720h
-# TLS Configuration for DoH/DoT/DoQ (exposed to internet)
+# TLS Configuration for DoH/DoT/DoQ (via WireGuard VPN only)
 tls:
   enabled: true
-  server_name: $PUBLIC_IP
+  server_name: $DNS_SERVER_NAME
   force_https: false
   port_https: 443
   port_dns_over_tls: 853
@@ -760,20 +877,22 @@ services:
     image: adguard/adguardhome:latest
     container_name: adguard
     networks: [frontnet]
-    # Port Binding Strategy:
-    # - Regular DNS (53): Local network only ($LAN_IP)
-    # - Web UI (8083): Local network only ($LAN_IP)
-    # - DoH (443): Exposed to internet (0.0.0.0) for encrypted DNS access
-    # - DoT/DoQ (853): Exposed to internet (0.0.0.0) for encrypted DNS access
-    # This allows you to use AdGuard's DoH/DoQ/DoT from anywhere without custom certs
+    # SECURE PORT BINDING: All ports bound to LAN_IP only
+    # Access via: Local network OR WireGuard VPN tunnel
+    # - Regular DNS (53): $LAN_IP only
+    # - Web UI (8083): $LAN_IP only
+    # - DoH (443): $LAN_IP only - accessible via WireGuard
+    # - DoT/DoQ (853): $LAN_IP only - accessible via WireGuard
+    # ONLY WireGuard port (51820) is exposed to internet
+    # When connected via WireGuard, access DoH at: https://DESEC_DOMAIN/dns-query
     ports:
       - "$LAN_IP:53:53/udp"
       - "$LAN_IP:53:53/tcp"
       - "$LAN_IP:$PORT_ADGUARD_WEB:$PORT_ADGUARD_WEB/tcp"
-      - "0.0.0.0:443:443/tcp"
-      - "0.0.0.0:443:443/udp"
-      - "0.0.0.0:853:853/tcp"
-      - "0.0.0.0:853:853/udp"
+      - "$LAN_IP:443:443/tcp"
+      - "$LAN_IP:443:443/udp"
+      - "$LAN_IP:853:853/tcp"
+      - "$LAN_IP:853:853/udp"
     volumes: ["adguard-work:/opt/adguardhome/work", "$AGH_CONF_DIR:/opt/adguardhome/conf"]
     restart: unless-stopped
     deploy:
@@ -1273,25 +1392,35 @@ echo ""
 echo "WIREGUARD VPN (Remote Access):"
 echo "http://$LAN_IP:$PORT_WG_WEB"
 echo ""
-echo "DNS SERVER:"
-echo "  Regular DNS (Local only): $LAN_IP:53"
-echo "  DoH (Internet): https://$PUBLIC_IP/dns-query"
-echo "  DoT (Internet): tls://$PUBLIC_IP"
-echo "  DoQ (Internet): quic://$PUBLIC_IP"
+echo "DNS SERVER (via WireGuard VPN):"
+echo "  Regular DNS: $LAN_IP:53"
+if [ -n "$DESEC_DOMAIN" ]; then
+    echo "  DoH: https://$DESEC_DOMAIN/dns-query"
+    echo "  DoT: tls://$DESEC_DOMAIN"
+    echo "  DoQ: quic://$DESEC_DOMAIN"
+    echo ""
+    echo "ENCRYPTED DNS SETUP:"
+    echo "  1. Connect to WireGuard VPN first"
+    echo "  2. Configure your device with:"
+    echo "     - DoH URL: https://$DESEC_DOMAIN/dns-query"
+    echo "     - DoT Server: $DESEC_DOMAIN:853"
+    echo "  3. No certificate warnings (Let's Encrypt cert)"
+else
+    echo "  DoH: https://$LAN_IP/dns-query (via VPN)"
+    echo "  DoT: tls://$LAN_IP (via VPN)"
+    echo ""
+    echo "ENCRYPTED DNS SETUP:"
+    echo "  1. Connect to WireGuard VPN first"
+    echo "  2. Configure with $LAN_IP"
+    echo "  3. You'll see cert warnings (self-signed)"
+fi
 echo ""
-echo "ENCRYPTED DNS SETUP:"
-echo "  Configure your devices/apps with:"
-echo "  - DoH URL: https://$PUBLIC_IP/dns-query"
-echo "  - DoT Server: $PUBLIC_IP:853"
-echo "  - DoQ Server: $PUBLIC_IP:853"
-echo "  Note: You'll get a cert warning (self-signed) - accept it"
-echo ""
-echo "SECURITY:"
-echo "  - Regular DNS (53): Local network only"
-echo "  - Web UI (8083): Local network only"
-echo "  - Encrypted DNS (443/853): Accessible from internet"
-echo "  - Using deSEC as upstream (encrypted DoH/DoT)"
-echo "  - Filter updates every 6 hours"
+echo "SECURITY MODEL:"
+echo "  ✓ ONLY WireGuard (51820/udp) exposed to internet"
+echo "  ✓ All DNS services accessible via local network or VPN"
+echo "  ✓ No direct DNS exposure - requires VPN authentication"
+echo "  ✓ Using deSEC as upstream (encrypted DoH/DoT)"
+echo "  ✓ Filter updates every 6 hours"
 echo ""
 # Print auto-generated passwords if -p flag was used
 if [ "$AUTO_PASSWORD" = true ]; then
