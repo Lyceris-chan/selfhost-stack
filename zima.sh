@@ -385,90 +385,80 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     log_info "deSEC domain provided: $DESEC_DOMAIN"
     log_info "Configuring Let's Encrypt with DNS-01 challenge..."
     
-    # Update deSEC A record to point to PUBLIC_IP
+    # Update deSEC A record to point to PUBLIC_IP using the correct API format
+    # deSEC API: PATCH /api/v1/domains/{domain}/rrsets/ with array of RRsets
     log_info "Updating deSEC DNS record to point to $PUBLIC_IP..."
-    DESEC_RESPONSE=$(curl -s -X PUT "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/A/" \
+    DESEC_RESPONSE=$(curl -s -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
         -H "Authorization: Token $DESEC_TOKEN" \
         -H "Content-Type: application/json" \
         -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}]" 2>&1)
     
-    if echo "$DESEC_RESPONSE" | grep -q "$PUBLIC_IP"; then
+    # Check for success (empty response or response containing our IP indicates success)
+    if [ -z "$DESEC_RESPONSE" ] || echo "$DESEC_RESPONSE" | grep -qE "($PUBLIC_IP|\[\]|\"records\")" ; then
         log_info "DNS record updated successfully"
     else
         log_warn "DNS update response: $DESEC_RESPONSE"
         log_warn "You may need to manually set A record in deSEC dashboard"
     fi
     
-    # Install certbot with dns-desec plugin
-    log_info "Installing certbot and dns-desec plugin..."
-    sudo docker run --rm -v "$AGH_CONF_DIR:/etc/letsencrypt" certbot/dns-rfc2136:latest --version > /dev/null 2>&1 || true
-    
-    # Create credentials file for certbot-dns-desec
+    # Generate certificates - use dehydrated with deSEC hook for proper DNS-01 challenge
+    # or fall back to self-signed certificates (works well with WireGuard VPN access)
+    log_info "Setting up SSL certificates..."
     mkdir -p "$AGH_CONF_DIR/certbot"
-    cat > "$AGH_CONF_DIR/certbot/desec.ini" <<EOF
-dns_desec_token = $DESEC_TOKEN
-dns_desec_endpoint = https://desec.io/api/v1/
-EOF
-    chmod 600 "$AGH_CONF_DIR/certbot/desec.ini"
     
-    # Get Let's Encrypt certificate using DNS-01 challenge
-    log_info "Obtaining Let's Encrypt certificate (this may take a minute)..."
-    sudo docker run --rm -v "$AGH_CONF_DIR:/etc/letsencrypt" \
-        -v "$AGH_CONF_DIR/certbot:/certbot" \
-        certbot/dns-rfc2136:latest certonly \
-        --non-interactive \
-        --agree-tos \
-        --email "admin@$DESEC_DOMAIN" \
-        --dns-rfc2136 \
-        --dns-rfc2136-credentials /certbot/desec.ini \
+    # Try to get Let's Encrypt certificate using acme.sh with deSEC DNS API
+    log_info "Attempting Let's Encrypt certificate (this may take a few minutes)..."
+    CERT_SUCCESS=false
+    
+    # Use acme.sh with deSEC DNS API - more reliable than certbot for deSEC
+    sudo docker run --rm \
+        -v "$AGH_CONF_DIR:/acme" \
+        -e "DESEC_Token=$DESEC_TOKEN" \
+        -e "DESEC_DOMAIN=$DESEC_DOMAIN" \
+        neilpang/acme.sh:latest \
+        --issue \
+        --dns dns_desec \
         -d "$DESEC_DOMAIN" \
-        -d "*.$DESEC_DOMAIN" 2>&1 || {
-        
-        log_warn "Let's Encrypt failed, trying alternative method..."
-        # Fallback: Use manual DNS challenge with deSEC API
+        -d "*.$DESEC_DOMAIN" \
+        --keylength 4096 \
+        --server letsencrypt \
+        --home /acme \
+        --config-home /acme \
+        --cert-home /acme/certs 2>&1 && CERT_SUCCESS=true || true
+    
+    # Copy certificates if successful
+    if [ "$CERT_SUCCESS" = true ] && [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]; then
+        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
+        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
+        log_info "Let's Encrypt certificate installed successfully!"
+    elif [ "$CERT_SUCCESS" = true ] && [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" ]; then
+        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
+        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
+        log_info "Let's Encrypt certificate installed successfully!"
+    else
+        log_warn "Let's Encrypt failed, generating self-signed certificate..."
+        # Fallback: Generate self-signed cert using alpine with openssl
         sudo docker run --rm \
             -v "$AGH_CONF_DIR:/certs" \
-            -e "DESEC_TOKEN=$DESEC_TOKEN" \
-            -e "DESEC_DOMAIN=$DESEC_DOMAIN" \
-            -e "PUBLIC_IP=$PUBLIC_IP" \
-            python:3.11-alpine /bin/sh -c "
-            pip install --quiet requests certbot 2>&1 > /dev/null
-            python3 <<PYTHON
-import requests, subprocess, time, json, os
-
-domain = os.environ['DESEC_DOMAIN']
-token = os.environ['DESEC_TOKEN']
-public_ip = os.environ['PUBLIC_IP']
-
-# Update A record
-headers = {'Authorization': f'Token {token}', 'Content-Type': 'application/json'}
-data = [{'subname': '', 'ttl': 3600, 'type': 'A', 'records': [public_ip]}]
-r = requests.put(f'https://desec.io/api/v1/domains/{domain}/rrsets/A/', headers=headers, json=data)
-print(f'DNS update: {r.status_code}')
-
-# Generate self-signed cert as fallback
-subprocess.run([
-    'openssl', 'req', '-x509', '-newkey', 'rsa:4096', '-sha256', 
-    '-days', '90', '-nodes',
-    '-keyout', '/certs/ssl.key', '-out', '/certs/ssl.crt',
-    '-subj', f'/CN={domain}',
-    '-addext', f'subjectAltName=DNS:{domain},DNS:*.{domain},IP:{public_ip}'
-])
-print('Certificate generated')
-PYTHON
-"
+            alpine:latest /bin/sh -c "
+            apk add --no-cache openssl > /dev/null 2>&1
+            openssl req -x509 -newkey rsa:4096 -sha256 \
+                -days 365 -nodes \
+                -keyout /certs/ssl.key -out /certs/ssl.crt \
+                -subj '/CN=$DESEC_DOMAIN' \
+                -addext 'subjectAltName=DNS:$DESEC_DOMAIN,DNS:*.$DESEC_DOMAIN,IP:$PUBLIC_IP'
+            "
         log_info "Generated self-signed certificate for $DESEC_DOMAIN"
-    }
+    fi
     
-    # Copy certificates to AdGuard location
-    if [ -f "$AGH_CONF_DIR/live/$DESEC_DOMAIN/fullchain.pem" ]; then
-        cp "$AGH_CONF_DIR/live/$DESEC_DOMAIN/fullchain.pem" "$AGH_CONF_DIR/ssl.crt"
-        cp "$AGH_CONF_DIR/live/$DESEC_DOMAIN/privkey.pem" "$AGH_CONF_DIR/ssl.key"
-        log_info "Let's Encrypt certificate installed for $DESEC_DOMAIN"
-        DNS_SERVER_NAME="$DESEC_DOMAIN"
-    elif [ -f "$AGH_CONF_DIR/ssl.crt" ]; then
-        log_info "Using generated certificate for $DESEC_DOMAIN"
-        DNS_SERVER_NAME="$DESEC_DOMAIN"
+    # Set DNS server name for AdGuard TLS configuration
+    DNS_SERVER_NAME="$DESEC_DOMAIN"
+    
+    # Verify certificate was created
+    if [ -f "$AGH_CONF_DIR/ssl.crt" ] && [ -f "$AGH_CONF_DIR/ssl.key" ]; then
+        log_info "SSL certificate ready for $DESEC_DOMAIN"
+    else
+        log_warn "SSL certificate files not found - AdGuard may not start with TLS"
     fi
     
 else
@@ -1407,19 +1397,65 @@ EOF
 
 # --- 15. IP MONITOR ---
 echo "[+] Generating IP Monitor Script..."
+
+# Store deSEC credentials for the monitor script (if configured)
+if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
+    DESEC_MONITOR_DOMAIN="$DESEC_DOMAIN"
+    DESEC_MONITOR_TOKEN="$DESEC_TOKEN"
+else
+    DESEC_MONITOR_DOMAIN=""
+    DESEC_MONITOR_TOKEN=""
+fi
+
 cat > "$MONITOR_SCRIPT" <<EOF
 #!/usr/bin/env bash
+# WireGuard IP Monitor with deSEC DynDNS Support
+# Automatically updates WG_HOST and deSEC DNS A record when public IP changes
+
 COMPOSE_FILE="$COMPOSE_FILE"
 CURRENT_IP_FILE="$CURRENT_IP_FILE"
 LOG_FILE="$IP_LOG_FILE"
+DESEC_DOMAIN="$DESEC_MONITOR_DOMAIN"
+DESEC_TOKEN="$DESEC_MONITOR_TOKEN"
+
+# Get current public IP
 NEW_IP=\$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ifconfig.me)
-if [[ ! "\$NEW_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\$ ]]; then exit 1; fi
+
+# Validate IP format
+if [[ ! "\$NEW_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\$ ]]; then
+    echo "\$(date) [ERROR] Failed to get valid public IP" >> "\$LOG_FILE"
+    exit 1
+fi
+
+# Get old IP
 OLD_IP=\$(cat "\$CURRENT_IP_FILE" 2>/dev/null || echo "")
+
+# Check if IP changed
 if [ "\$NEW_IP" != "\$OLD_IP" ]; then
-    echo "\$(date) [INFO] IP Change: \$OLD_IP -> \$NEW_IP" >> "\$LOG_FILE"
+    echo "\$(date) [INFO] IP Change detected: \$OLD_IP -> \$NEW_IP" >> "\$LOG_FILE"
     echo "\$NEW_IP" > "\$CURRENT_IP_FILE"
+    
+    # Update deSEC DNS A record (if configured)
+    if [ -n "\$DESEC_DOMAIN" ] && [ -n "\$DESEC_TOKEN" ]; then
+        echo "\$(date) [INFO] Updating deSEC DNS record for \$DESEC_DOMAIN..." >> "\$LOG_FILE"
+        DESEC_RESPONSE=\$(curl -s -X PATCH "https://desec.io/api/v1/domains/\$DESEC_DOMAIN/rrsets/" \\
+            -H "Authorization: Token \$DESEC_TOKEN" \\
+            -H "Content-Type: application/json" \\
+            -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"\$NEW_IP\"]}]" 2>&1)
+        
+        if [ -z "\$DESEC_RESPONSE" ] || echo "\$DESEC_RESPONSE" | grep -qE "(\$NEW_IP|\[\]|\"records\")" ; then
+            echo "\$(date) [INFO] deSEC DNS updated successfully to \$NEW_IP" >> "\$LOG_FILE"
+        else
+            echo "\$(date) [WARN] deSEC DNS update may have failed: \$DESEC_RESPONSE" >> "\$LOG_FILE"
+        fi
+    fi
+    
+    # Update WG_HOST in docker-compose.yml
     sed -i "s|WG_HOST=.*|WG_HOST=\$NEW_IP|g" "\$COMPOSE_FILE"
+    
+    # Recreate wg-easy container with new IP
     docker compose -f "\$COMPOSE_FILE" up -d --no-deps --force-recreate wg-easy
+    echo "\$(date) [INFO] WireGuard container restarted with new IP" >> "\$LOG_FILE"
 fi
 EOF
 chmod +x "$MONITOR_SCRIPT"
