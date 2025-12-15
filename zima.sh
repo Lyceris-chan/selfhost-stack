@@ -118,6 +118,51 @@ ask_confirm() {
     read -r -p "$1 [y/N]: " response
     case "$response" in
         [yY][eE][sS]|[yY]) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+authenticate_registries() {
+    # Export DOCKER_CONFIG globally
+    export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
+    
+    echo ""
+    echo "--- REGISTRY AUTHENTICATION ---"
+    echo "Enter your credentials for dhi.io and Docker Hub."
+    echo "We use the same token for both because you shouldn't have to manage five different passwords for one task."
+    echo ""
+
+    while true; do
+        read -r -p "Username: " REG_USER
+        read -rs -p "Access Token (PAT): " REG_TOKEN
+        echo ""
+        
+        # DHI Login
+        DHI_LOGIN_OK=false
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
+            log_info "dhi.io: Authenticated. You're now pulling hardened images."
+            DHI_LOGIN_OK=true
+        else
+            log_crit "dhi.io: Login failed. Check your token."
+        fi
+
+        # Docker Hub Login
+        HUB_LOGIN_OK=false
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+             log_info "Docker Hub: Authenticated. Pull limits increased."
+             HUB_LOGIN_OK=true
+        else
+             log_warn "Docker Hub: Login failed. You might hit pull limits if this is an anonymous pull."
+        fi
+
+        if [ "$DHI_LOGIN_OK" = true ]; then
+            if [ "$HUB_LOGIN_OK" = false ]; then
+                log_warn "Proceeding with DHI only. Docker Hub might throttle you."
+            fi
+            return 0
+        fi
+
+        if ! ask_confirm "Authentication failed. Want to try again?"; then return 1; fi
 UNBOUND_STATIC_IP="172.${FOUND_OCTET}.0.250"
 log_info "Unbound will use static IP: $UNBOUND_STATIC_IP"
 
