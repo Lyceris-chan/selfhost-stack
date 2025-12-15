@@ -163,6 +163,82 @@ authenticate_registries() {
         fi
 
         if ! ask_confirm "Authentication failed. Want to try again?"; then return 1; fi
+echo "=========================================================="
+
+# WireGuard Configuration Validation
+validate_wg_config() {
+    if [ ! -s "$ACTIVE_WG_CONF" ]; then return 1; fi
+    if ! grep -q "PrivateKey" "$ACTIVE_WG_CONF"; then
+        return 1
+    fi
+    local PK_VAL
+    PK_VAL=$(grep "PrivateKey" "$ACTIVE_WG_CONF" | cut -d'=' -f2 | tr -d '[:space:]')
+    if [ -z "$PK_VAL" ]; then
+        return 1
+    fi
+    # WireGuard private keys are exactly 44 base64 characters
+    if [ "${#PK_VAL}" -lt 40 ]; then
+        return 1
+    fi
+    return 0
+}
+
+# Check existing WireGuard configuration
+if validate_wg_config; then
+    log_info "Existing WireGuard config found and validated. Skipping paste."
+else
+    if [ -f "$ACTIVE_WG_CONF" ] && [ -s "$ACTIVE_WG_CONF" ]; then
+        log_warn "Existing WireGuard config was invalid/empty. Removed."
+        rm "$ACTIVE_WG_CONF"
+    fi
+
+    echo "PASTE YOUR WIREGUARD .CONF CONTENT BELOW."
+    echo "Make sure to include the [Interface] block with PrivateKey."
+    echo "Press ENTER, then Ctrl+D (Linux/Mac) or Ctrl+Z (Windows) to save."
+    echo "----------------------------------------------------------"
+    cat > "$ACTIVE_WG_CONF"
+    echo "" >> "$ACTIVE_WG_CONF" 
+    echo "----------------------------------------------------------"
+    
+    # Sanitize the configuration file
+    sed -i 's/\r//g' "$ACTIVE_WG_CONF"
+    sed -i 's/[ \t]*$//' "$ACTIVE_WG_CONF"
+    sed -i '/./,$!d' "$ACTIVE_WG_CONF"
+    sed -i 's/ *= */=/g' "$ACTIVE_WG_CONF"
+
+    if ! validate_wg_config; then
+        log_crit "The pasted WireGuard configuration is invalid (missing PrivateKey or malformed)."
+        log_crit "Please ensure you are pasting the full contents of the .conf file."
+        log_crit "Aborting to prevent container errors."
+        exit 1
+    fi
+fi
+
+# --- SECTION 6: VPN PROXY CONFIGURATION (GLUETUN) ---
+# Configure the anonymizing VPN gateway for privacy frontends.
+log_info "Configuring Gluetun VPN Client..."
+$DOCKER_CMD pull -q qmcgaw/gluetun:latest > /dev/null
+
+cat > "$GLUETUN_ENV_FILE" <<EOF
+VPN_SERVICE_PROVIDER=custom
+VPN_TYPE=wireguard
+FIREWALL_VPN_INPUT_PORTS=8080,8180,3000,3001,3002,8280,10416,8480
+FIREWALL_OUTBOUND_SUBNETS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+EOF
+
+# Extract profile name from WireGuard config
+extract_wg_profile_name() {
+    local config_file="$1"
+    local in_peer=0
+    local profile_name=""
+    while IFS= read -r line; do
+        stripped=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if echo "$stripped" | grep -qi '^\[peer\]$'; then
+            in_peer=1
+            continue
+        fi
+        if [ "$in_peer" -eq 1 ] && echo "$stripped" | grep -q '^#'; then
+            profile_name=$(echo "$stripped" | sed 's/^#[[:space:]]*//')
 UNBOUND_STATIC_IP="172.${FOUND_OCTET}.0.250"
 log_info "Unbound will use static IP: $UNBOUND_STATIC_IP"
 
