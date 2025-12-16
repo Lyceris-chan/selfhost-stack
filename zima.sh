@@ -1599,7 +1599,7 @@ x-casaos:
   author: Lyceris-chan
   category: Network
   scheme: http
-  hostname: $LAN_IP
+  hostname: ""
   index: /
   port_map: "$PORT_DASHBOARD_WEB"
   title:
@@ -1659,10 +1659,13 @@ cat > "$DASHBOARD_FILE" <<EOF
         .card h2 { margin: 0 0 8px 0; font-size: 1.4rem; font-weight: 400; color: var(--on-surf); }
         .card h3 { margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 500; color: var(--on-surf); }
         .chip-box { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: auto; }
-        .badge { font-size: 0.75rem; padding: 6px 12px; border-radius: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .badge { font-size: 0.75rem; padding: 6px 12px; border-radius: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-decoration: none; transition: 0.2s; }
         .badge.vpn { background: var(--pc); color: var(--on-pc); }
+        .badge.vpn:hover { background: #6b4fa3; box-shadow: 0 2px 8px rgba(79, 55, 139, 0.4); }
         .badge.admin { background: var(--sc); color: var(--on-sc); }
+        .badge.admin:hover { background: #5a5468; box-shadow: 0 2px 8px rgba(74, 68, 88, 0.4); }
         .badge.odido { background: #ff6b35; color: #fff; }
+        a.badge { cursor: pointer; }
         .status-pill {
             display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.06);
             padding: 6px 14px; border-radius: 50px; font-size: 0.85rem; color: var(--s); margin-top: 16px; width: fit-content;
@@ -1716,33 +1719,62 @@ cat > "$DASHBOARD_FILE" <<EOF
         .data-bar-fill { background: linear-gradient(90deg, var(--ok), #4caf50); height: 100%; border-radius: 8px; transition: width 0.3s; }
         .data-bar-fill.low { background: linear-gradient(90deg, var(--warn), #ff9800); }
         .data-bar-fill.critical { background: linear-gradient(90deg, var(--err), #f44336); }
+        /* Privacy toggle styles */
+        .privacy-toggle {
+            display: flex; align-items: center; gap: 12px; background: var(--surf);
+            padding: 10px 16px; border-radius: 50px; margin-left: auto;
+        }
+        .privacy-toggle label { font-size: 0.85rem; color: var(--s); cursor: pointer; user-select: none; }
+        .toggle-switch {
+            position: relative; width: 44px; height: 24px; background: #444; border-radius: 12px;
+            cursor: pointer; transition: 0.3s;
+        }
+        .toggle-switch.active { background: var(--p); }
+        .toggle-switch::after {
+            content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+            background: #fff; border-radius: 50%; transition: 0.3s;
+        }
+        .toggle-switch.active::after { left: 23px; }
+        .sensitive { transition: filter 0.3s, opacity 0.3s; }
+        .privacy-mode .sensitive { filter: blur(8px); opacity: 0.6; user-select: none; }
+        .header-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Privacy Hub</h1>
-            <div class="sub">Secure Self-Hosted Gateway</div>
+            <div class="header-row">
+                <div>
+                    <h1>Privacy Hub</h1>
+                    <div class="sub">Secure Self-Hosted Gateway</div>
+                </div>
+                <div class="privacy-toggle">
+                    <label for="privacy-switch">Hide Sensitive Info</label>
+                    <div class="toggle-switch" id="privacy-switch" onclick="togglePrivacy()" title="Toggle to blur sensitive information like IPs, endpoints, and keys"></div>
+                </div>
+            </div>
         </header>
 
         <div class="section-label">Privacy Services</div>
+        <p style="font-size:0.8rem; color:var(--s); margin:-8px 0 16px 8px;">🔒 Tunneled = Traffic routed through Gluetun VPN &nbsp;|&nbsp; 🏠 LAN Only = Direct local access &nbsp;|&nbsp; <em>Click badges to manage in Portainer</em></p>
         <div class="grid">
-            <a href="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true"><h2>Invidious</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true"><h2>Redlib</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true"><h2>Wikiless</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_LIBREMDB" class="card" data-check="true"><h2>LibremDB</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true"><h2>Rimgo</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true"><h2>Scribe</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_BREEZEWIKI" class="card" data-check="true"><h2>BreezeWiki</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true"><h2>AnonOverflow</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_VERT" class="card" data-check="true"><h2>VERT</h2><div class="chip-box"><span class="badge admin">Local</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true"><h2>Invidious</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#/containers/invidious" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 Tunneled</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true"><h2>Redlib</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#/containers/redlib" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 Tunneled</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true"><h2>Wikiless</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#/containers/wikiless" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 Tunneled</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_LIBREMDB" class="card" data-check="true"><h2>LibremDB</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#/containers/libremdb" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 Tunneled</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true"><h2>Rimgo</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#/containers/rimgo" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 Tunneled</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true"><h2>Scribe</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#/containers/scribe" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 Tunneled</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_BREEZEWIKI" class="card" data-check="true"><h2>BreezeWiki</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#/containers/breezewiki" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 Tunneled</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true"><h2>AnonOverflow</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#/containers/anonymousoverflow" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 Tunneled</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_VERT" class="card" data-check="true"><h2>VERT</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#/containers/vert" class="badge admin" onclick="event.stopPropagation();" title="Manage in Portainer">🏠 LAN Only</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
         </div>
 
         <div class="section-label">Administration</div>
+        <p style="font-size:0.8rem; color:var(--s); margin:-8px 0 16px 8px;">🏠 LAN Only = Accessible only from your local network &nbsp;|&nbsp; <em>Click badges to manage in Portainer</em></p>
         <div class="grid-3">
-            <a href="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card"><h2>AdGuard Home</h2><div class="chip-box"><span class="badge admin">Network</span></div></a>
-            <a href="http://$LAN_IP:$PORT_PORTAINER" class="card"><h2>Portainer</h2><div class="chip-box"><span class="badge admin">System</span></div></a>
-            <a href="http://$LAN_IP:$PORT_WG_WEB" class="card"><h2>WireGuard</h2><div class="chip-box"><span class="badge admin">Remote Access</span></div></a>
+            <a href="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card"><h2>AdGuard Home</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#/containers/adguard" class="badge admin" onclick="event.stopPropagation();" title="Manage in Portainer">🏠 LAN Only</a></div></a>
+            <a href="http://$LAN_IP:$PORT_PORTAINER" class="card"><h2>Portainer</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#/containers/portainer" class="badge admin" onclick="event.stopPropagation();" title="Manage in Portainer">🏠 LAN Only</a></div></a>
+            <a href="http://$LAN_IP:$PORT_WG_WEB" class="card"><h2>WireGuard</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#/containers/wg-easy" class="badge admin" onclick="event.stopPropagation();" title="Manage in Portainer">🏠 LAN Only</a></div></a>
         </div>
 
         <div class="section-label">DNS Configuration</div>
@@ -1751,18 +1783,18 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <h3>Device DNS Settings</h3>
                 <p style="font-size:0.85rem; color:var(--s); margin-bottom:16px;">Configure your devices to use this DNS server:</p>
                 <div class="code-label">Plain DNS</div>
-                <div class="code-block">$LAN_IP:53</div>
+                <div class="code-block sensitive">$LAN_IP:53</div>
 EOF
 if [ -n "$DESEC_DOMAIN" ]; then
     cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="code-label">Domain</div>
-                <div class="code-block">$DESEC_DOMAIN</div>
+                <div class="code-block sensitive">$DESEC_DOMAIN</div>
                 <div class="code-label">DNS-over-HTTPS</div>
-                <div class="code-block">https://$DESEC_DOMAIN/dns-query</div>
+                <div class="code-block sensitive">https://$DESEC_DOMAIN/dns-query</div>
                 <div class="code-label">DNS-over-TLS</div>
-                <div class="code-block">$DESEC_DOMAIN:853</div>
+                <div class="code-block sensitive">$DESEC_DOMAIN:853</div>
                 <div class="code-label">DNS-over-QUIC</div>
-                <div class="code-block">quic://$DESEC_DOMAIN</div>
+                <div class="code-block sensitive">quic://$DESEC_DOMAIN</div>
             </div>
             <div class="card">
                 <h3>Mobile Device Setup</h3>
@@ -1771,16 +1803,16 @@ if [ -n "$DESEC_DOMAIN" ]; then
                     <li>Connect to WireGuard VPN first</li>
                     <li>Set Private DNS to:</li>
                 </ol>
-                <div class="code-block" style="margin-left:20px;">$DESEC_DOMAIN</div>
+                <div class="code-block sensitive" style="margin-left:20px;">$DESEC_DOMAIN</div>
                 <p style="font-size:0.8rem; color:var(--ok); margin-top:12px;">✓ Valid Let's Encrypt certificate (no warnings)</p>
             </div>
 EOF
 else
     cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="code-label">DNS-over-HTTPS</div>
-                <div class="code-block">https://$LAN_IP/dns-query</div>
+                <div class="code-block sensitive">https://$LAN_IP/dns-query</div>
                 <div class="code-label">DNS-over-TLS</div>
-                <div class="code-block">$LAN_IP:853</div>
+                <div class="code-block sensitive">$LAN_IP:853</div>
             </div>
             <div class="card">
                 <h3>Mobile Device Setup</h3>
@@ -1789,7 +1821,7 @@ else
                     <li>Connect to WireGuard VPN first</li>
                     <li>Set DNS server to:</li>
                 </ol>
-                <div class="code-block" style="margin-left:20px;">$LAN_IP</div>
+                <div class="code-block sensitive" style="margin-left:20px;">$LAN_IP</div>
                 <p style="font-size:0.8rem; color:var(--err); margin-top:12px;">⚠ Self-signed certificate (expect browser warnings)</p>
                 <p style="font-size:0.75rem; color:#888; margin-top:8px;">Tip: Set up deSEC for a free domain with valid SSL</p>
             </div>
@@ -1827,8 +1859,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
             </div>
             <div class="card">
                 <h3>Configuration</h3>
-                <input type="text" id="odido-api-key" class="input-field" placeholder="Dashboard API Key" style="margin-bottom:12px;">
-                <input type="password" id="odido-oauth-token" class="input-field" placeholder="Odido OAuth Token (auto-fetches User ID)" style="margin-bottom:12px;">
+                <input type="text" id="odido-api-key" class="input-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;">
+                <input type="password" id="odido-oauth-token" class="input-field sensitive" placeholder="Odido OAuth Token (auto-fetches User ID)" style="margin-bottom:12px;">
                 <input type="text" id="odido-bundle-code-input" class="input-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;">
                 <input type="number" id="odido-threshold-input" class="input-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;">
                 <input type="number" id="odido-lead-time-input" class="input-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;">
@@ -1844,7 +1876,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             <div class="card">
                 <h3>Upload Profile</h3>
                 <input type="text" id="prof-name" class="input-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;">
-                <textarea id="prof-conf" class="input-field" placeholder="Paste .conf content here..."></textarea>
+                <textarea id="prof-conf" class="input-field sensitive" placeholder="Paste .conf content here..."></textarea>
                 <div style="text-align:right;"><button onclick="uploadProfile()" class="btn">Upload & Activate</button></div>
                 <div id="upload-status" style="margin-top:10px; font-size:0.85rem; color:var(--p);"></div>
             </div>
@@ -1861,15 +1893,15 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <h3>Gluetun (Frontend Proxy)</h3>
                 <div class="stat-row"><span>Status</span><span class="stat-val" id="vpn-status">--</span></div>
                 <div class="stat-row"><span>Active Profile</span><span class="stat-val active-prof" id="vpn-active">--</span></div>
-                <div class="stat-row"><span>VPN Endpoint</span><span class="stat-val" id="vpn-endpoint">--</span></div>
-                <div class="stat-row"><span>Public IP</span><span class="stat-val" id="vpn-public-ip">--</span></div>
+                <div class="stat-row"><span>VPN Endpoint</span><span class="stat-val sensitive" id="vpn-endpoint">--</span></div>
+                <div class="stat-row"><span>Public IP</span><span class="stat-val sensitive" id="vpn-public-ip">--</span></div>
                 <div class="stat-row"><span>Last Handshake</span><span class="stat-val" id="vpn-handshake">--</span></div>
                 <div class="stat-row"><span>Data (RX / TX)</span><span class="stat-val"><span id="vpn-rx">0</span> / <span id="vpn-tx">0</span></span></div>
             </div>
             <div class="card">
                 <h3>WG-Easy (External Access)</h3>
                 <div class="stat-row"><span>Service Status</span><span class="stat-val" id="wge-status">--</span></div>
-                <div class="stat-row"><span>External IP</span><span class="stat-val" id="wge-host">--</span></div>
+                <div class="stat-row"><span>External IP</span><span class="stat-val sensitive" id="wge-host">--</span></div>
                 <div class="stat-row"><span>UDP Port</span><span class="stat-val">51820</span></div>
                 <div class="stat-row"><span>Total Clients</span><span class="stat-val" id="wge-clients">--</span></div>
                 <div class="stat-row"><span>Connected Now</span><span class="stat-val" id="wge-connected">--</span></div>
@@ -1878,7 +1910,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         <div class="grid">
             <div class="card full-width">
                 <h3>Deployment History</h3>
-                <div id="log-container" class="log-box"></div>
+                <div id="log-container" class="log-box sensitive"></div>
                 <div id="log-status" style="font-size:0.8rem; color:var(--s); text-align:right; margin-top:5px;">Connecting...</div>
             </div>
         </div>
@@ -2164,7 +2196,30 @@ cat >> "$DASHBOARD_FILE" <<EOF
         
         function formatBytes(a,b=2){if(!+a)return"0 B";const c=0>b?0:b,d=Math.floor(Math.log(a)/Math.log(1024));return\`\${parseFloat((a/Math.pow(1024,d)).toFixed(c))} \${["B","KiB","MiB","GiB","TiB"][d]}\`}
         
+        // Privacy toggle functionality
+        function togglePrivacy() {
+            const toggle = document.getElementById('privacy-switch');
+            const body = document.body;
+            const isPrivate = toggle.classList.toggle('active');
+            if (isPrivate) {
+                body.classList.add('privacy-mode');
+                localStorage.setItem('privacy_mode', 'true');
+            } else {
+                body.classList.remove('privacy-mode');
+                localStorage.setItem('privacy_mode', 'false');
+            }
+        }
+        
+        function initPrivacyMode() {
+            const savedMode = localStorage.getItem('privacy_mode');
+            if (savedMode === 'true') {
+                document.getElementById('privacy-switch').classList.add('active');
+                document.body.classList.add('privacy-mode');
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', () => {
+            initPrivacyMode();
             fetchStatus(); fetchProfiles(); fetchOdidoStatus(); startLogStream();
             setInterval(fetchStatus, 5000);
             setInterval(fetchOdidoStatus, 30000);
