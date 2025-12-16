@@ -252,33 +252,6 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo ""
     fi
     
-    echo ""
-    echo "--- Odido Bundle Booster (Optional) ---"
-    echo "   Automatically top-up your Odido mobile data when running low."
-    echo "   Requires credentials from the Odido app."
-    echo ""
-    echo -n "Odido User ID (or Enter to skip): "
-    read -r ODIDO_USER_ID
-    if [ -n "$ODIDO_USER_ID" ]; then
-        echo -n "Odido Access Token: "
-        read -rs ODIDO_TOKEN
-        echo ""
-        echo -n "Odido Bundle Code (default: A0DAY01 for 2GB): "
-        read -r ODIDO_BUNDLE_CODE
-        if [ -z "$ODIDO_BUNDLE_CODE" ]; then
-            ODIDO_BUNDLE_CODE="A0DAY01"
-        fi
-        echo -n "Odido Threshold MB (default: 350): "
-        read -r ODIDO_THRESHOLD
-        if [ -z "$ODIDO_THRESHOLD" ]; then
-            ODIDO_THRESHOLD="350"
-        fi
-    else
-        ODIDO_TOKEN=""
-        ODIDO_BUNDLE_CODE=""
-        ODIDO_THRESHOLD=""
-    fi
-    
     log_info "Generating Secrets..."
     sudo docker pull -q ghcr.io/wg-easy/wg-easy:latest > /dev/null
     HASH_OUTPUT=$(sudo docker run --rm ghcr.io/wg-easy/wg-easy wgpw "$VPN_PASS_RAW")
@@ -303,10 +276,6 @@ DESEC_DOMAIN=$DESEC_DOMAIN
 DESEC_TOKEN=$DESEC_TOKEN
 SCRIBE_GH_USER=$SCRIBE_GH_USER
 SCRIBE_GH_TOKEN=$SCRIBE_GH_TOKEN
-ODIDO_USER_ID=$ODIDO_USER_ID
-ODIDO_TOKEN=$ODIDO_TOKEN
-ODIDO_BUNDLE_CODE=$ODIDO_BUNDLE_CODE
-ODIDO_THRESHOLD=$ODIDO_THRESHOLD
 EOF
 else
     source "$BASE_DIR/.secrets"
@@ -446,6 +415,7 @@ SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 
 ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
 IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
 IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
+ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
 
 # --- 8. PORT VARS ---
 PORT_INT_REDLIB=8080; PORT_INT_WIKILESS=8180; PORT_INT_INVIDIOUS=3000
@@ -1063,12 +1033,12 @@ services:
 
   odido-booster:
     build:
-      context: https://github.com/Lyceris-chan/odido-bundle-booster.git
+      context: https://github.com/Lyceris-chan/odido-bundle-booster.git#main
     container_name: odido-booster
     networks: [frontnet]
     ports: ["$LAN_IP:8085:80"]
     environment:
-      - API_KEY=\${ODIDO_API_KEY:-changeme}
+      - API_KEY=$ODIDO_API_KEY
       - PORT=80
     volumes:
       - odido-data:/data
@@ -2010,6 +1980,7 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo "AdGuard Home Username: adguard"
     echo "Portainer Password: $PORTAINER_PASS_RAW"
     echo "Portainer Username: admin"
+    echo "Odido Booster API Key: $ODIDO_API_KEY"
     echo ""
     echo "IMPORTANT: Save these credentials securely!"
     echo "They are also stored in: $BASE_DIR/.secrets"
