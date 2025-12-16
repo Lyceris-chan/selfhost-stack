@@ -479,7 +479,8 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     log_info "Attempting Let's Encrypt certificate..."
     CERT_SUCCESS=false
     
-    # FIX: Added --dnssleep 30 to disable broken self-checks and wait for propagation
+    # Use ECC keys (faster, smaller, more compatible) with DNS validation
+    # Added --dnssleep 30 to wait for DNS propagation
     sudo docker run --rm \
         -v "$AGH_CONF_DIR:/acme" \
         -e "DESEC_Token=$DESEC_TOKEN" \
@@ -491,7 +492,7 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
         --dnssleep 30 \
         -d "$DESEC_DOMAIN" \
         -d "*.$DESEC_DOMAIN" \
-        --keylength 4096 \
+        --keylength ec-256 \
         --server letsencrypt \
         --home /acme \
         --config-home /acme \
