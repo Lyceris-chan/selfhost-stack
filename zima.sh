@@ -80,7 +80,7 @@ clean_environment() {
         log_warn "FORCE CLEANUP ENABLED (-c): Wiping ALL data, configs, and volumes..."
     fi
 
-    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy wg-controller odido-booster redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe vert vertd"
+    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe vert vertd"
     
     FOUND_CONTAINERS=""
     for c in $TARGET_CONTAINERS; do
@@ -632,7 +632,7 @@ server {
     root /usr/share/nginx/html;
     index index.html;
     location /api/ {
-        proxy_pass http://wg-controller:55555/;
+        proxy_pass http://hub-api:55555/;
         proxy_set_header Host \$host;
         proxy_buffering off;
         proxy_cache off;
@@ -997,6 +997,37 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
+        elif self.path == '/odido-userid':
+            try:
+                l = int(self.headers['Content-Length'])
+                data = json.loads(self.rfile.read(l).decode('utf-8'))
+                oauth_token = data.get('oauth_token', '').strip()
+                if not oauth_token:
+                    self._send_json({"error": "oauth_token is required"}, 400)
+                    return
+                # Use curl to fetch the User ID from Odido API
+                result = subprocess.run([
+                    'curl', '-sL', '-o', '/dev/null', '-w', '%{url_effective}',
+                    '-H', f'Authorization: Bearer {oauth_token}',
+                    '-H', 'User-Agent: T-Mobile 5.3.28 (Android 10; 10)',
+                    'https://capi.odido.nl/account/current'
+                ], capture_output=True, text=True, timeout=30)
+                redirect_url = result.stdout.strip()
+                # Extract 12-character hex User ID from URL
+                match = re.search(r'capi\.odido\.nl/([0-9a-f]{12})', redirect_url)
+                if match:
+                    user_id = match.group(1)
+                    self._send_json({"success": True, "user_id": user_id})
+                else:
+                    # Fallback: extract first path segment after capi.odido.nl/
+                    match = re.search(r'capi\.odido\.nl/([^/]+)/', redirect_url)
+                    if match and match.group(1) != 'account':
+                        user_id = match.group(1)
+                        self._send_json({"success": True, "user_id": user_id})
+                    else:
+                        self._send_json({"error": "Could not extract User ID from Odido API response", "url": redirect_url}, 400)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
 
 if __name__ == "__main__":
     print(f"Starting API server on port {PORT}...")
@@ -1029,9 +1060,9 @@ volumes:
   odido-data:
 
 services:
-  wg-controller:
+  hub-api:
     image: python:3.11-alpine
-    container_name: wg-controller
+    container_name: hub-api
     networks: [frontnet]
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -1077,7 +1108,7 @@ services:
       --schedule "0 0 3 * * *"
       --cleanup
       --disable-containers watchtower
-      --notification-url "generic://wg-controller:55555/watchtower?template=json&disabletls=yes"
+      --notification-url "generic://hub-api:55555/watchtower?template=json&disabletls=yes"
     restart: unless-stopped
     deploy:
       resources:
@@ -1387,7 +1418,6 @@ services:
 x-casaos:
   architectures:
     - amd64
-    - arm64
   main: dashboard
   author: Lyceris-chan
   category: Network
@@ -1770,47 +1800,30 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 data.api_key = apiKey;
             }
             
-            // If OAuth token provided, fetch User ID automatically via the backend
+            // If OAuth token provided, fetch User ID automatically via hub-api API (uses curl)
             if (oauthToken) {
                 st.textContent = 'Fetching User ID from Odido API...';
                 st.style.color = 'var(--p)';
                 try {
-                    const headers = { 'Content-Type': 'application/json' };
-                    if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                    const res = await fetch(\`\${ODIDO_API}/odido/fetch-user-id\`, {
+                    const res = await fetch(\`\${API}/odido-userid\`, {
                         method: 'POST',
-                        headers,
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ oauth_token: oauthToken })
                     });
-                    if (res.status === 404) {
-                        // Endpoint not available yet - save token directly and instruct user
-                        st.textContent = 'Auto-fetch not available. Please update odido-bundle-booster for this feature.';
-                        st.style.color = 'var(--warn)';
-                        // Still save the token - the user will need to provide the User ID separately
+                    const result = await res.json();
+                    if (result.error) throw new Error(result.error);
+                    if (result.user_id) {
+                        data.odido_user_id = result.user_id;
                         data.odido_token = oauthToken;
+                        st.textContent = \`User ID fetched: \${result.user_id}\`;
+                        st.style.color = 'var(--ok)';
                     } else {
-                        const result = await res.json();
-                        if (result.detail) throw new Error(result.detail);
-                        if (result.user_id) {
-                            data.odido_user_id = result.user_id;
-                            data.odido_token = oauthToken;
-                            st.textContent = \`User ID fetched: \${result.user_id}\`;
-                            st.style.color = 'var(--ok)';
-                        } else {
-                            throw new Error('Could not extract User ID from Odido API response');
-                        }
+                        throw new Error('Could not extract User ID from Odido API response');
                     }
                 } catch(e) {
-                    // If fetch-user-id endpoint doesn't exist, just save the token
-                    if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
-                        data.odido_token = oauthToken;
-                        st.textContent = 'Token saved. User ID auto-fetch requires updated odido-bundle-booster.';
-                        st.style.color = 'var(--warn)';
-                    } else {
-                        st.textContent = \`Failed to fetch User ID: \${e.message}\`;
-                        st.style.color = 'var(--err)';
-                        return;
-                    }
+                    st.textContent = \`Failed to fetch User ID: \${e.message}\`;
+                    st.style.color = 'var(--err)';
+                    return;
                 }
             }
             

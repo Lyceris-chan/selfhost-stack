@@ -492,12 +492,10 @@ Since [odido-aap](https://github.com/ink-splatters/odido-aap) requires an iPhone
 
 After deployment, you can configure the Odido Bundle Booster via the web dashboard:
 - **Dashboard API Key**: The API key shown after deployment (required for authentication)
-- **Odido OAuth Token**: Enter your OAuth token and the dashboard will attempt to automatically fetch your User ID
+- **Odido OAuth Token**: Enter your OAuth token and the dashboard will automatically fetch your User ID using the hub-api service
 - **Bundle Code**: Default is `A0DAY01` (2GB daily bundle), can also use `A0DAY05` (5GB daily)
 - **Threshold**: Minimum MB before auto-renewal triggers (default: 100 MB)
 - **Lead Time**: Minutes before depletion to trigger renewal (default: 30 min)
-
-> **Note**: The dashboard's automatic User ID fetching requires the odido-bundle-booster service to support the `/api/odido/fetch-user-id` endpoint. If this endpoint is not available, you can still save the OAuth token, but you'll need to configure the User ID separately.
 
 ### API Endpoints
 
@@ -506,7 +504,6 @@ The Odido Bundle Booster service is accessible at `http://<LAN_IP>:8085` with th
 - `GET /api/status` - Current status and configuration
 - `GET /api/odido/remaining` - Fetch remaining data from Odido
 - `POST /api/odido/buy-bundle` - Purchase a bundle manually
-- `POST /api/odido/fetch-user-id` - Fetch User ID from OAuth token (pass `{"oauth_token": "..."}`)
 - `GET /docs` - Interactive API documentation
 
 All endpoints require the `X-API-Key` header with the generated API key (shown after deployment).
