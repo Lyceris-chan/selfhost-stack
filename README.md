@@ -335,9 +335,15 @@ Users → AdGuard Home (ad blocking) → Unbound (recursive) → Root DNS Server
 
 ### VERT Service
 
-VERT is included as a local file conversion service with VERTD as the backend daemon. We have a docker-compose.yml configuration available for it. Use `docker compose up` if you want to start the stack, or `docker compose down` to bring it down. You can pass `--build` to `docker compose up` to rebuild the Docker image (useful if you've changed any of the environment variables) as well as `-d` to start it in detached mode. You can read more about [Docker Compose in general here](https://docs.docker.com/compose/).
+VERT is included as a local file conversion service with VERTD as the backend daemon. The stack uses docker-compose configuration for VERT. Use `docker compose up` if you want to start the stack, or `docker compose down` to bring it down. You can pass `--build` to `docker compose up` to rebuild the Docker image (useful if you've changed any of the environment variables) as well as `-d` to start it in detached mode. You can read more about [Docker Compose in general here](https://docs.docker.com/compose/).
 
-The VERT service configuration in docker-compose.yml:
+The VERT service is pre-configured in this stack with:
+- `PUB_HOSTNAME`: Set to your LAN IP and VERT port
+- `PUB_VERTD_URL`: Points to the VERTD backend service
+- `PUB_DISABLE_ALL_EXTERNAL_REQUESTS`: Enabled for privacy
+- External donation/analytics/Stripe features disabled
+
+For reference, here's the VERT project's docker-compose.yml format that you can customize:
 
 ```yaml
 services:

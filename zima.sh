@@ -1400,12 +1400,12 @@ services:
       context: https://github.com/VERT-sh/VERT.git#main
       args:
         PUB_HOSTNAME: $LAN_IP:$PORT_VERT
-        PUB_PLAUSIBLE_URL: 
+        PUB_PLAUSIBLE_URL: ""
         PUB_ENV: production
-        PUB_DISABLE_ALL_EXTERNAL_REQUESTS: true
+        PUB_DISABLE_ALL_EXTERNAL_REQUESTS: "true"
         PUB_VERTD_URL: http://vertd:$PORT_INT_VERTD
-        PUB_DONATION_URL: 
-        PUB_STRIPE_KEY: 
+        PUB_DONATION_URL: ""
+        PUB_STRIPE_KEY: ""
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_VERT:$PORT_INT_VERT"]
     depends_on:
