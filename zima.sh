@@ -745,7 +745,18 @@ EXPOSE 8080
 HEALTHCHECK --interval=1m --timeout=3s CMD wget --spider -q http://localhost:8080/settings || exit 1
 CMD ["redlib"]
 EOF
-chmod -R 777 "$SRC_DIR/invidious" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
+clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert"
+# Patch VERT Dockerfile to add missing PUB_DISABLE_FAILURE_BLOCKS ARG/ENV
+if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_DIR/vert/Dockerfile"; then
+    if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_DIR/vert/Dockerfile" && grep -q "^ENV PUB_STRIPE_KEY=" "$SRC_DIR/vert/Dockerfile"; then
+        sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_FAILURE_BLOCKS' "$SRC_DIR/vert/Dockerfile"
+        sed -i '/^ENV PUB_STRIPE_KEY=\${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_FAILURE_BLOCKS=${PUB_DISABLE_FAILURE_BLOCKS}' "$SRC_DIR/vert/Dockerfile"
+        log_info "Patched VERT Dockerfile to add missing PUB_DISABLE_FAILURE_BLOCKS ARG/ENV"
+    else
+        log_warn "VERT Dockerfile structure changed - could not apply PUB_DISABLE_FAILURE_BLOCKS patch. Build may fail."
+    fi
+fi
+chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
 
 # --- 12. CONTROL SCRIPTS ---
 cat > "$WG_CONTROL_SCRIPT" <<'EOF'
@@ -1398,7 +1409,7 @@ services:
     container_name: vert
     image: ghcr.io/vert-sh/vert:latest
     build:
-      context: https://github.com/VERT-sh/VERT.git#main
+      context: $SRC_DIR/vert
       args:
         PUB_HOSTNAME: $LAN_IP:$PORT_VERT
         PUB_PLAUSIBLE_URL: ""
