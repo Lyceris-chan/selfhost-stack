@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2034,SC2024,SC2086
+# shellcheck disable=SC1091,SC2001,SC2015,SC2034,SC2024,SC2086
 set -euo pipefail
 
 # ==============================================================================
@@ -139,6 +139,10 @@ clean_environment() {
     
     if [ "$FORCE_CLEAN" = true ]; then
         log_warn "NUCLEAR CLEANUP MODE: Removing everything..."
+        # Stop and remove all containers first to release volumes
+        for c in $TARGET_CONTAINERS; do
+            sudo docker rm -f "$c" 2>/dev/null || true
+        done
         if [ -d "$BASE_DIR" ]; then
             sudo rm -rf "$BASE_DIR" 2>/dev/null || true
         fi
@@ -475,7 +479,8 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     log_info "Attempting Let's Encrypt certificate..."
     CERT_SUCCESS=false
     
-    # FIX: Added --dnssleep 30 to disable broken self-checks and wait for propagation
+    # Use ECC keys (faster, smaller, more compatible) with DNS validation
+    # Added --dnssleep 30 to wait for DNS propagation
     sudo docker run --rm \
         -v "$AGH_CONF_DIR:/acme" \
         -e "DESEC_Token=$DESEC_TOKEN" \
@@ -487,7 +492,7 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
         --dnssleep 30 \
         -d "$DESEC_DOMAIN" \
         -d "*.$DESEC_DOMAIN" \
-        --keylength 4096 \
+        --keylength ec-256 \
         --server letsencrypt \
         --home /acme \
         --config-home /acme \
@@ -859,6 +864,7 @@ import http.server
 import socketserver
 import json
 import os
+import re
 import subprocess
 import time
 import urllib.request
@@ -1015,9 +1021,12 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             try:
                 result = subprocess.run([CONTROL_SCRIPT, "status"], capture_output=True, text=True, timeout=30)
                 output = result.stdout.strip()
+                # Remove any control characters that may break JSON parsing
+                output = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', output)
                 json_start = output.find('{')
-                if json_start != -1:
-                    output = output[json_start:]
+                json_end = output.rfind('}')
+                if json_start != -1 and json_end != -1:
+                    output = output[json_start:json_end+1]
                 self._send_json(json.loads(output))
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -1394,6 +1403,10 @@ services:
             invidious_companion_key: "$IV_COMPANION"
         hmac_key: "$IV_HMAC"
     healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || exit 1", interval: 30s, timeout: 5s, retries: 2}
+    logging:
+      options:
+        max-size: "1G"
+        max-file: "4"
     depends_on: {invidious-db: {condition: service_healthy}, gluetun: {condition: service_healthy}}
     restart: unless-stopped
     deploy:
@@ -1421,6 +1434,12 @@ services:
     network_mode: "service:gluetun"
     environment: {SERVER_SECRET_KEY: "$IV_COMPANION", SERVER_PORT: "8282"}
     volumes: ["companioncache:/var/tmp/youtubei.js:rw"]
+    logging:
+      options:
+        max-size: "1G"
+        max-file: "4"
+    cap_drop:
+      - ALL
     restart: unless-stopped
     read_only: true
     security_opt: ["no-new-privileges:true"]
@@ -1534,9 +1553,9 @@ cat > "$DASHBOARD_FILE" <<EOF
             color: var(--p); font-size: 0.9rem; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
             margin: 48px 0 16px 8px;
         }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
         @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
         .card {
             background: var(--surf); border-radius: var(--radius); padding: 24px;
