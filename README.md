@@ -14,6 +14,7 @@ A comprehensive self-hosted privacy stack for ZimaOS with WireGuard VPN access, 
 - [deSEC DynDNS Setup](#desec-dyndns-setup)
 - [Architecture](#architecture)
 - [Troubleshooting](#troubleshooting)
+- [Odido Bundle Booster](#odido-bundle-booster)
 
 ## Features
 
@@ -404,3 +405,87 @@ Users → AdGuard Home (ad blocking) → Unbound (recursive) → Root DNS Server
 ## License
 
 MIT License - See LICENSE file for details.
+
+## Odido Bundle Booster
+
+The Odido Bundle Booster is an optional service for Dutch Odido mobile customers that automatically manages data bundles.
+
+### Obtaining Odido Credentials
+
+The stack requires two credentials:
+- **ODIDO_USER_ID**: Your Odido account user ID
+- **ODIDO_TOKEN**: Your OAuth access token
+
+#### Using Odido.Authenticator (Recommended - Works on Any Platform)
+
+Since [odido-aap](https://github.com/ink-splatters/odido-aap) requires an iPhone or Apple Silicon Mac, you can use [Odido.Authenticator](https://github.com/GuusBackup/Odido.Authenticator) instead, which works on any platform with .NET.
+
+**Step-by-Step Guide:**
+
+1. **Clone and build the Authenticator**:
+   ```bash
+   git clone --recursive https://github.com/GuusBackup/Odido.Authenticator.git
+   cd Odido.Authenticator
+   dotnet run --project Odido.Authenticator
+   ```
+
+2. **Follow the login flow**:
+   - The tool will display a login URL
+   - Open the URL in your browser and log in with 2FA
+   - After login, you'll be redirected to a blank page
+   - Copy the URL from your browser's address bar (looks like: `https://www.odido.nl/loginappresult?token=XXXXXXXX`)
+
+3. **Get your tokens**:
+   - Paste the URL when prompted
+   - The tool will show your **Refresh Token** (one-time use, ignore this)
+   - Press Y to generate the **OAuth Token** - **THIS is your ODIDO_TOKEN**
+
+4. **Get your User ID**:
+   The User ID is your Odido account identifier. To find it:
+   
+   ```bash
+   # Using curl with your OAuth token:
+   curl -H "Authorization: Bearer YOUR_OAUTH_TOKEN" \
+        -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
+        "https://capi.odido.nl/account/current"
+   ```
+   
+   > **Note**: The User-Agent mimics the official Odido/T-Mobile app. If requests fail, 
+   > check the [TMobile.Api](https://github.com/GuusBackup/TMobile.Api) for current values.
+   
+   This will redirect to a URL containing your User ID in the path like:
+   `https://capi.odido.nl/{YOUR_USER_ID}/...`
+   
+   Extract the User ID from that path.
+
+5. **Enter credentials during setup**:
+   - When running `./zima.sh`, you'll be prompted for:
+     - **Odido User ID**: The ID extracted from step 4
+     - **Odido Access Token**: The OAuth Token from step 3
+
+### Which Token to Use?
+
+The Odido.Authenticator provides two values - here's what each is for:
+
+| Token Type | Description | Where to Use |
+|------------|-------------|--------------|
+| **Refresh Token** | Temporary authorization code from login redirect | Used once by the Authenticator tool to generate OAuth token. **Do not use this.** |
+| **OAuth Token** | Long-lived access token (Bearer token) | This is your **ODIDO_TOKEN** - use this for the bundle booster |
+
+### Configuration via Dashboard
+
+After deployment, you can configure the Odido Bundle Booster via the web dashboard:
+- **Bundle Code**: Default is `A0DAY01` (2GB daily bundle), can also use `A0DAY05` (5GB daily)
+- **Threshold**: Minimum MB before auto-renewal triggers (default: 100 MB)
+- **Lead Time**: Minutes before depletion to trigger renewal (default: 30 min)
+
+### API Endpoints
+
+The Odido Bundle Booster service is accessible at `http://<LAN_IP>:8085` with the following endpoints:
+
+- `GET /api/status` - Current status and configuration
+- `GET /api/odido/remaining` - Fetch remaining data from Odido
+- `POST /api/odido/buy-bundle` - Purchase a bundle manually
+- `GET /docs` - Interactive API documentation
+
+All endpoints require the `X-API-Key` header with the generated API key (shown after deployment).
