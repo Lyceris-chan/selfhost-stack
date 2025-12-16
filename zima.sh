@@ -127,28 +127,165 @@ clean_environment() {
                 sudo rm -rf "$BASE_DIR/.docker" 2>/dev/null || true
                 sudo rm -rf "$BASE_DIR" 2>/dev/null || true
             fi
+            # Remove volumes - try both unprefixed and prefixed names (docker-compose uses project prefix)
             for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
                 sudo docker volume rm -f "$vol" 2>/dev/null || true
+                sudo docker volume rm -f "${APP_NAME}_${vol}" 2>/dev/null || true
             done
             log_info "All deployment artifacts, configs, env files, and volumes wiped."
         fi
     fi
     
     if [ "$FORCE_CLEAN" = true ]; then
-        log_warn "NUCLEAR CLEANUP MODE: Removing everything..."
+        log_warn "NUCLEAR CLEANUP MODE: Restoring system to pre-deployment state..."
+        echo ""
+        
+        # ============================================================
+        # PHASE 1: Stop all containers to release locks
+        # ============================================================
+        log_info "Phase 1: Stopping all deployment containers..."
         for c in $TARGET_CONTAINERS; do
-            sudo docker rm -f "$c" 2>/dev/null || true
+            if sudo docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${c}$"; then
+                log_info "  Stopping: $c"
+                sudo docker stop "$c" 2>/dev/null || true
+            fi
         done
+        sleep 3
+        
+        # ============================================================
+        # PHASE 2: Remove all containers
+        # ============================================================
+        log_info "Phase 2: Removing all deployment containers..."
+        for c in $TARGET_CONTAINERS; do
+            if sudo docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${c}$"; then
+                log_info "  Removing container: $c"
+                sudo docker rm -f "$c" 2>/dev/null || true
+            fi
+        done
+        
+        # ============================================================
+        # PHASE 3: Remove ALL volumes (list everything, match patterns)
+        # ============================================================
+        log_info "Phase 3: Removing all deployment volumes..."
+        ALL_VOLUMES=$(sudo docker volume ls -q 2>/dev/null || echo "")
+        for vol in $ALL_VOLUMES; do
+            case "$vol" in
+                # Match exact names
+                portainer-data|adguard-work|redis-data|postgresdata|wg-config|companioncache|odido-data)
+                    log_info "  Removing volume: $vol"
+                    sudo docker volume rm -f "$vol" 2>/dev/null || true
+                    ;;
+                # Match prefixed names (docker-compose project prefix)
+                privacy-hub_*|privacyhub_*)
+                    log_info "  Removing volume: $vol"
+                    sudo docker volume rm -f "$vol" 2>/dev/null || true
+                    ;;
+                # Match any volume containing our identifiers
+                *portainer*|*adguard*|*redis*|*postgres*|*wg-config*|*companion*|*odido*)
+                    log_info "  Removing volume: $vol"
+                    sudo docker volume rm -f "$vol" 2>/dev/null || true
+                    ;;
+            esac
+        done
+        
+        # ============================================================
+        # PHASE 4: Remove ALL networks created by this deployment
+        # ============================================================
+        log_info "Phase 4: Removing deployment networks..."
+        ALL_NETWORKS=$(sudo docker network ls --format '{{.Name}}' 2>/dev/null || echo "")
+        for net in $ALL_NETWORKS; do
+            case "$net" in
+                # Skip default Docker networks
+                bridge|host|none) continue ;;
+                # Match our networks
+                privacy-hub_*|privacyhub_*|*frontnet*|*_default)
+                    log_info "  Removing network: $net"
+                    sudo docker network rm "$net" 2>/dev/null || true
+                    ;;
+            esac
+        done
+        
+        # ============================================================
+        # PHASE 5: Remove ALL images built/pulled by this deployment
+        # ============================================================
+        log_info "Phase 5: Removing deployment images..."
+        # Remove images by known names
+        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome nginx:alpine portainer/portainer-ce containrrr/watchtower python:3.11-alpine ghcr.io/wg-easy/wg-easy redis:8-alpine quay.io/invidious/invidious quay.io/invidious/invidious-companion docker.io/library/postgres:14 ghcr.io/zyachel/libremdb codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine alpine:latest neilpang/acme.sh"
+        for img in $KNOWN_IMAGES; do
+            if sudo docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -q "$img"; then
+                log_info "  Removing image: $img"
+                sudo docker rmi -f "$img" 2>/dev/null || true
+            fi
+        done
+        # Remove locally built images
+        ALL_IMAGES=$(sudo docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' 2>/dev/null || echo "")
+        echo "$ALL_IMAGES" | while read -r img_info; do
+            img_name=$(echo "$img_info" | awk '{print $1}')
+            img_id=$(echo "$img_info" | awk '{print $2}')
+            case "$img_name" in
+                *privacy-hub*|*privacyhub*|*odido*|*redlib*|*wikiless*|*scribe*|*vert*|*invidious*|*sources_*)
+                    log_info "  Removing image: $img_name"
+                    sudo docker rmi -f "$img_id" 2>/dev/null || true
+                    ;;
+                "<none>:<none>")
+                    # Remove dangling images
+                    sudo docker rmi -f "$img_id" 2>/dev/null || true
+                    ;;
+            esac
+        done
+        
+        # ============================================================
+        # PHASE 6: Remove ALL data directories and files
+        # ============================================================
+        log_info "Phase 6: Removing all data directories and files..."
+        
+        # Main data directory
         if [ -d "$BASE_DIR" ]; then
-            sudo rm -rf "$BASE_DIR" 2>/dev/null || true
+            log_info "  Removing: $BASE_DIR"
+            sudo rm -rf "$BASE_DIR"
         fi
-        for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
-            sudo docker volume rm -f "$vol" 2>/dev/null || true
-        done
+        
+        # Alternative locations that might have been created
+        if [ -d "/DATA/AppData/privacy-hub" ]; then
+            log_info "  Removing: /DATA/AppData/privacy-hub"
+            sudo rm -rf "/DATA/AppData/privacy-hub"
+        fi
+        
+        # ============================================================
+        # PHASE 7: Remove cron jobs added by this script
+        # ============================================================
+        log_info "Phase 7: Removing cron jobs..."
+        EXISTING_CRON=$(crontab -l 2>/dev/null || true)
+        if echo "$EXISTING_CRON" | grep -q "wg-ip-monitor"; then
+            log_info "  Removing wg-ip-monitor cron job"
+            echo "$EXISTING_CRON" | grep -v "wg-ip-monitor" | grep -v "privacy-hub" | crontab - 2>/dev/null || true
+        fi
+        
+        # ============================================================
+        # PHASE 8: Clean up Docker system
+        # ============================================================
+        log_info "Phase 8: Final Docker cleanup..."
         sudo docker volume prune -f 2>/dev/null || true
+        sudo docker network prune -f 2>/dev/null || true
         sudo docker image prune -af 2>/dev/null || true
         sudo docker builder prune -af 2>/dev/null || true
-        log_info "Nuclear cleanup complete."
+        sudo docker system prune -f 2>/dev/null || true
+        
+        echo ""
+        log_info "============================================================"
+        log_info "NUCLEAR CLEANUP COMPLETE"
+        log_info "============================================================"
+        log_info "The following have been removed:"
+        log_info "  ✓ All deployment containers ($TARGET_CONTAINERS)"
+        log_info "  ✓ All deployment volumes (portainer-data, adguard-work, etc.)"
+        log_info "  ✓ All deployment networks (frontnet, etc.)"
+        log_info "  ✓ All deployment images"
+        log_info "  ✓ All configuration files and secrets"
+        log_info "  ✓ All data directories ($BASE_DIR)"
+        log_info "  ✓ All cron jobs (wg-ip-monitor)"
+        log_info ""
+        log_info "System restored to pre-deployment state."
+        log_info "============================================================"
     fi
 }
 
@@ -798,40 +935,61 @@ elif [ "$ACTION" = "status" ]; then
     GLUETUN_STATUS="down"
     GLUETUN_HEALTHY="false"
     HANDSHAKE="0"
-    HANDSHAKE_AGO="Never"
+    HANDSHAKE_AGO="N/A"
     RX="0"
     TX="0"
     ENDPOINT="--"
     PUBLIC_IP="--"
+    VPN_TYPE="--"
     
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^gluetun$"; then
+        # Check container health status
         HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
         if [ "$HEALTH" = "healthy" ]; then
             GLUETUN_HEALTHY="true"
         fi
-        WG_OUT=$(docker exec gluetun wg show wg0 dump 2>/dev/null | head -n 2 | tail -n 1 || echo "")
-        if [ -n "$WG_OUT" ]; then
+        
+        # Use gluetun's HTTP control server API (port 8000) for status
+        # API docs: https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
+        
+        # Get VPN status from control server
+        VPN_STATUS_RESPONSE=$(docker exec gluetun wget -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
+        if [ -n "$VPN_STATUS_RESPONSE" ]; then
+            # Extract status from {"status":"running"} or {"status":"stopped"}
+            VPN_RUNNING=$(echo "$VPN_STATUS_RESPONSE" | grep -o '"status":"running"' || echo "")
+            if [ -n "$VPN_RUNNING" ]; then
+                GLUETUN_STATUS="up"
+                HANDSHAKE_AGO="Connected"
+            else
+                GLUETUN_STATUS="down"
+                HANDSHAKE_AGO="Disconnected"
+            fi
+        elif [ "$GLUETUN_HEALTHY" = "true" ]; then
+            # Fallback: if container is healthy, assume VPN is up
             GLUETUN_STATUS="up"
-            HANDSHAKE=$(echo "$WG_OUT" | awk '{print $5}' 2>/dev/null || echo "0")
-            RX=$(echo "$WG_OUT" | awk '{print $6}' 2>/dev/null || echo "0")
-            TX=$(echo "$WG_OUT" | awk '{print $7}' 2>/dev/null || echo "0")
-            ENDPOINT=$(docker exec gluetun wg show wg0 endpoints 2>/dev/null | awk '{print $2}' 2>/dev/null || echo "--")
-            case "$HANDSHAKE" in ''|*[!0-9]*) HANDSHAKE="0" ;; esac
-            case "$RX" in ''|*[!0-9]*) RX="0" ;; esac
-            case "$TX" in ''|*[!0-9]*) TX="0" ;; esac
-            if [ "$HANDSHAKE" != "0" ] && [ "$HANDSHAKE" -gt 0 ] 2>/dev/null; then
-                NOW=$(date +%s)
-                DIFF=$((NOW - HANDSHAKE))
-                if [ "$DIFF" -lt 60 ]; then
-                    HANDSHAKE_AGO="${DIFF}s ago"
-                elif [ "$DIFF" -lt 3600 ]; then
-                    HANDSHAKE_AGO="$((DIFF / 60))m ago"
-                else
-                    HANDSHAKE_AGO="$((DIFF / 3600))h ago"
-                fi
+            HANDSHAKE_AGO="Connected (API unavailable)"
+        fi
+        
+        # Get public IP from control server
+        PUBLIC_IP_RESPONSE=$(docker exec gluetun wget -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
+        if [ -n "$PUBLIC_IP_RESPONSE" ]; then
+            # Extract IP from {"public_ip":"x.x.x.x"}
+            EXTRACTED_IP=$(echo "$PUBLIC_IP_RESPONSE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+            if [ -n "$EXTRACTED_IP" ]; then
+                PUBLIC_IP="$EXTRACTED_IP"
             fi
         fi
-        PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
+        
+        # Fallback to external IP check if control server didn't return an IP
+        if [ -z "$PUBLIC_IP" ] || [ "$PUBLIC_IP" = "--" ]; then
+            PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
+        fi
+        
+        # Try to get endpoint from WireGuard config if available
+        WG_CONF_ENDPOINT=$(docker exec gluetun cat /gluetun/wireguard/wg0.conf 2>/dev/null | grep -i "^Endpoint" | cut -d'=' -f2 | tr -d ' ' | head -1 || echo "")
+        if [ -n "$WG_CONF_ENDPOINT" ]; then
+            ENDPOINT="$WG_CONF_ENDPOINT"
+        fi
     fi
     
     ACTIVE_NAME=$(cat "$NAME_FILE" 2>/dev/null | tr -d '\n\r' || echo "Unknown")
@@ -1285,7 +1443,7 @@ services:
           port: 5432
         check_tables: true
         invidious_companion:
-          - private_url: "http://127.0.0.1:8282"
+          - private_url: "http://127.0.0.1:8282/companion"
         invidious_companion_key: "$IV_COMPANION"
         hmac_key: "$IV_HMAC"
     healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || exit 1", interval: 30s, timeout: 5s, retries: 2}
@@ -1293,7 +1451,7 @@ services:
       options:
         max-size: "1G"
         max-file: "4"
-    depends_on: {invidious-db: {condition: service_healthy}, gluetun: {condition: service_healthy}}
+    depends_on: {invidious-db: {condition: service_healthy}, gluetun: {condition: service_healthy}, companion: {condition: service_started}}
     restart: unless-stopped
     deploy:
       resources:
@@ -1326,6 +1484,7 @@ services:
         max-file: "4"
     cap_drop:
       - ALL
+    depends_on: {gluetun: {condition: service_healthy}}
     restart: unless-stopped
     read_only: true
     security_opt: ["no-new-privileges:true"]
@@ -1420,7 +1579,7 @@ services:
         PUB_PLAUSIBLE_URL: ""
         PUB_ENV: production
         PUB_DISABLE_ALL_EXTERNAL_REQUESTS: "true"
-        PUB_DISABLE_FAILURE_BLOCKS: "false"
+        PUB_DISABLE_FAILURE_BLOCKS: "true"
         PUB_VERTD_URL: http://vertd:$PORT_INT_VERTD
         PUB_DONATION_URL: ""
         PUB_STRIPE_KEY: ""
@@ -1500,10 +1659,13 @@ cat > "$DASHBOARD_FILE" <<EOF
         .card h2 { margin: 0 0 8px 0; font-size: 1.4rem; font-weight: 400; color: var(--on-surf); }
         .card h3 { margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 500; color: var(--on-surf); }
         .chip-box { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: auto; }
-        .badge { font-size: 0.75rem; padding: 6px 12px; border-radius: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .badge { font-size: 0.75rem; padding: 6px 12px; border-radius: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-decoration: none; transition: 0.2s; }
         .badge.vpn { background: var(--pc); color: var(--on-pc); }
+        .badge.vpn:hover { background: #6b4fa3; box-shadow: 0 2px 8px rgba(79, 55, 139, 0.4); }
         .badge.admin { background: var(--sc); color: var(--on-sc); }
+        .badge.admin:hover { background: #5a5468; box-shadow: 0 2px 8px rgba(74, 68, 88, 0.4); }
         .badge.odido { background: #ff6b35; color: #fff; }
+        a.badge { cursor: pointer; }
         .status-pill {
             display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.06);
             padding: 6px 14px; border-radius: 50px; font-size: 0.85rem; color: var(--s); margin-top: 16px; width: fit-content;
@@ -1557,33 +1719,62 @@ cat > "$DASHBOARD_FILE" <<EOF
         .data-bar-fill { background: linear-gradient(90deg, var(--ok), #4caf50); height: 100%; border-radius: 8px; transition: width 0.3s; }
         .data-bar-fill.low { background: linear-gradient(90deg, var(--warn), #ff9800); }
         .data-bar-fill.critical { background: linear-gradient(90deg, var(--err), #f44336); }
+        /* Privacy toggle styles */
+        .privacy-toggle {
+            display: flex; align-items: center; gap: 12px; background: var(--surf);
+            padding: 10px 16px; border-radius: 50px; margin-left: auto;
+        }
+        .privacy-toggle label { font-size: 0.85rem; color: var(--s); cursor: pointer; user-select: none; }
+        .toggle-switch {
+            position: relative; width: 44px; height: 24px; background: #444; border-radius: 12px;
+            cursor: pointer; transition: 0.3s;
+        }
+        .toggle-switch.active { background: var(--p); }
+        .toggle-switch::after {
+            content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+            background: #fff; border-radius: 50%; transition: 0.3s;
+        }
+        .toggle-switch.active::after { left: 23px; }
+        .sensitive { transition: filter 0.3s, opacity 0.3s; }
+        .privacy-mode .sensitive { filter: blur(8px); opacity: 0.6; user-select: none; }
+        .header-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Privacy Hub</h1>
-            <div class="sub">Secure Self-Hosted Gateway</div>
+            <div class="header-row">
+                <div>
+                    <h1>Privacy Hub</h1>
+                    <div class="sub">Secure Self-Hosted Gateway</div>
+                </div>
+                <div class="privacy-toggle">
+                    <label for="privacy-switch">Hide Sensitive Info</label>
+                    <div class="toggle-switch" id="privacy-switch" onclick="togglePrivacy()" title="Toggle to blur sensitive information like IPs, endpoints, and keys"></div>
+                </div>
+            </div>
         </header>
 
         <div class="section-label">Privacy Services</div>
+        <p style="font-size:0.8rem; color:var(--s); margin:-8px 0 16px 8px;">🔒 = Outbound traffic routed through VPN &nbsp;|&nbsp; 📍 = Direct connection &nbsp;|&nbsp; <em>All services accessible via LAN or WG-Easy</em></p>
         <div class="grid">
-            <a href="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true"><h2>Invidious</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true"><h2>Redlib</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true"><h2>Wikiless</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_LIBREMDB" class="card" data-check="true"><h2>LibremDB</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true"><h2>Rimgo</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true"><h2>Scribe</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_BREEZEWIKI" class="card" data-check="true"><h2>BreezeWiki</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true"><h2>AnonOverflow</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_VERT" class="card" data-check="true"><h2>VERT</h2><div class="chip-box"><span class="badge admin">Local</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true"><h2>Invidious</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true"><h2>Redlib</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true"><h2>Wikiless</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_LIBREMDB" class="card" data-check="true"><h2>LibremDB</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true"><h2>Rimgo</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true"><h2>Scribe</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_BREEZEWIKI" class="card" data-check="true"><h2>BreezeWiki</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true"><h2>AnonOverflow</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_VERT" class="card" data-check="true"><h2>VERT</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge admin" onclick="event.stopPropagation();" title="Manage in Portainer">📍 Direct</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
         </div>
 
         <div class="section-label">Administration</div>
+        <p style="font-size:0.8rem; color:var(--s); margin:-8px 0 16px 8px;"><em>Accessible via LAN or WG-Easy remote connection</em></p>
         <div class="grid-3">
-            <a href="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card"><h2>AdGuard Home</h2><div class="chip-box"><span class="badge admin">Network</span></div></a>
-            <a href="http://$LAN_IP:$PORT_PORTAINER" class="card"><h2>Portainer</h2><div class="chip-box"><span class="badge admin">System</span></div></a>
-            <a href="http://$LAN_IP:$PORT_WG_WEB" class="card"><h2>WireGuard</h2><div class="chip-box"><span class="badge admin">Remote Access</span></div></a>
+            <a href="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card"><h2>AdGuard Home</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge admin" onclick="event.stopPropagation();" title="Manage in Portainer">📍 Direct</a></div></a>
+            <a href="http://$LAN_IP:$PORT_PORTAINER" class="card"><h2>Portainer</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge admin" onclick="event.stopPropagation();" title="Manage in Portainer">📍 Direct</a></div></a>
+            <a href="http://$LAN_IP:$PORT_WG_WEB" class="card"><h2>WireGuard</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge admin" onclick="event.stopPropagation();" title="Manage in Portainer">📍 Direct</a></div></a>
         </div>
 
         <div class="section-label">DNS Configuration</div>
@@ -1592,18 +1783,18 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <h3>Device DNS Settings</h3>
                 <p style="font-size:0.85rem; color:var(--s); margin-bottom:16px;">Configure your devices to use this DNS server:</p>
                 <div class="code-label">Plain DNS</div>
-                <div class="code-block">$LAN_IP:53</div>
+                <div class="code-block sensitive">$LAN_IP:53</div>
 EOF
 if [ -n "$DESEC_DOMAIN" ]; then
     cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="code-label">Domain</div>
-                <div class="code-block">$DESEC_DOMAIN</div>
+                <div class="code-block sensitive">$DESEC_DOMAIN</div>
                 <div class="code-label">DNS-over-HTTPS</div>
-                <div class="code-block">https://$DESEC_DOMAIN/dns-query</div>
+                <div class="code-block sensitive">https://$DESEC_DOMAIN/dns-query</div>
                 <div class="code-label">DNS-over-TLS</div>
-                <div class="code-block">$DESEC_DOMAIN:853</div>
+                <div class="code-block sensitive">$DESEC_DOMAIN:853</div>
                 <div class="code-label">DNS-over-QUIC</div>
-                <div class="code-block">quic://$DESEC_DOMAIN</div>
+                <div class="code-block sensitive">quic://$DESEC_DOMAIN</div>
             </div>
             <div class="card">
                 <h3>Mobile Device Setup</h3>
@@ -1612,16 +1803,16 @@ if [ -n "$DESEC_DOMAIN" ]; then
                     <li>Connect to WireGuard VPN first</li>
                     <li>Set Private DNS to:</li>
                 </ol>
-                <div class="code-block" style="margin-left:20px;">$DESEC_DOMAIN</div>
+                <div class="code-block sensitive" style="margin-left:20px;">$DESEC_DOMAIN</div>
                 <p style="font-size:0.8rem; color:var(--ok); margin-top:12px;">✓ Valid Let's Encrypt certificate (no warnings)</p>
             </div>
 EOF
 else
     cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="code-label">DNS-over-HTTPS</div>
-                <div class="code-block">https://$LAN_IP/dns-query</div>
+                <div class="code-block sensitive">https://$LAN_IP/dns-query</div>
                 <div class="code-label">DNS-over-TLS</div>
-                <div class="code-block">$LAN_IP:853</div>
+                <div class="code-block sensitive">$LAN_IP:853</div>
             </div>
             <div class="card">
                 <h3>Mobile Device Setup</h3>
@@ -1630,7 +1821,7 @@ else
                     <li>Connect to WireGuard VPN first</li>
                     <li>Set DNS server to:</li>
                 </ol>
-                <div class="code-block" style="margin-left:20px;">$LAN_IP</div>
+                <div class="code-block sensitive" style="margin-left:20px;">$LAN_IP</div>
                 <p style="font-size:0.8rem; color:var(--err); margin-top:12px;">⚠ Self-signed certificate (expect browser warnings)</p>
                 <p style="font-size:0.75rem; color:#888; margin-top:8px;">Tip: Set up deSEC for a free domain with valid SSL</p>
             </div>
@@ -1668,8 +1859,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
             </div>
             <div class="card">
                 <h3>Configuration</h3>
-                <input type="text" id="odido-api-key" class="input-field" placeholder="Dashboard API Key" style="margin-bottom:12px;">
-                <input type="password" id="odido-oauth-token" class="input-field" placeholder="Odido OAuth Token (auto-fetches User ID)" style="margin-bottom:12px;">
+                <input type="text" id="odido-api-key" class="input-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;">
+                <input type="password" id="odido-oauth-token" class="input-field sensitive" placeholder="Odido OAuth Token (auto-fetches User ID)" style="margin-bottom:12px;">
                 <input type="text" id="odido-bundle-code-input" class="input-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;">
                 <input type="number" id="odido-threshold-input" class="input-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;">
                 <input type="number" id="odido-lead-time-input" class="input-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;">
@@ -1685,7 +1876,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             <div class="card">
                 <h3>Upload Profile</h3>
                 <input type="text" id="prof-name" class="input-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;">
-                <textarea id="prof-conf" class="input-field" placeholder="Paste .conf content here..."></textarea>
+                <textarea id="prof-conf" class="input-field sensitive" placeholder="Paste .conf content here..."></textarea>
                 <div style="text-align:right;"><button onclick="uploadProfile()" class="btn">Upload & Activate</button></div>
                 <div id="upload-status" style="margin-top:10px; font-size:0.85rem; color:var(--p);"></div>
             </div>
@@ -1702,15 +1893,15 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <h3>Gluetun (Frontend Proxy)</h3>
                 <div class="stat-row"><span>Status</span><span class="stat-val" id="vpn-status">--</span></div>
                 <div class="stat-row"><span>Active Profile</span><span class="stat-val active-prof" id="vpn-active">--</span></div>
-                <div class="stat-row"><span>VPN Endpoint</span><span class="stat-val" id="vpn-endpoint">--</span></div>
-                <div class="stat-row"><span>Public IP</span><span class="stat-val" id="vpn-public-ip">--</span></div>
+                <div class="stat-row"><span>VPN Endpoint</span><span class="stat-val sensitive" id="vpn-endpoint">--</span></div>
+                <div class="stat-row"><span>Public IP</span><span class="stat-val sensitive" id="vpn-public-ip">--</span></div>
                 <div class="stat-row"><span>Last Handshake</span><span class="stat-val" id="vpn-handshake">--</span></div>
                 <div class="stat-row"><span>Data (RX / TX)</span><span class="stat-val"><span id="vpn-rx">0</span> / <span id="vpn-tx">0</span></span></div>
             </div>
             <div class="card">
                 <h3>WG-Easy (External Access)</h3>
                 <div class="stat-row"><span>Service Status</span><span class="stat-val" id="wge-status">--</span></div>
-                <div class="stat-row"><span>External IP</span><span class="stat-val" id="wge-host">--</span></div>
+                <div class="stat-row"><span>External IP</span><span class="stat-val sensitive" id="wge-host">--</span></div>
                 <div class="stat-row"><span>UDP Port</span><span class="stat-val">51820</span></div>
                 <div class="stat-row"><span>Total Clients</span><span class="stat-val" id="wge-clients">--</span></div>
                 <div class="stat-row"><span>Connected Now</span><span class="stat-val" id="wge-connected">--</span></div>
@@ -1719,7 +1910,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         <div class="grid">
             <div class="card full-width">
                 <h3>Deployment History</h3>
-                <div id="log-container" class="log-box"></div>
+                <div id="log-container" class="log-box sensitive"></div>
                 <div id="log-status" style="font-size:0.8rem; color:var(--s); text-align:right; margin-top:5px;">Connecting...</div>
             </div>
         </div>
@@ -1769,7 +1960,21 @@ cat >> "$DASHBOARD_FILE" <<EOF
             try {
                 const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
                 const res = await fetch(\`\${ODIDO_API}/status\`, { headers });
-                if (!res.ok) throw new Error('API unavailable');
+                if (!res.ok) {
+                    // Show configured panel but indicate API error
+                    document.getElementById('odido-loading').style.display = 'none';
+                    document.getElementById('odido-not-configured').style.display = 'none';
+                    document.getElementById('odido-configured').style.display = 'block';
+                    document.getElementById('odido-remaining').textContent = '--';
+                    document.getElementById('odido-bundle-code').textContent = '--';
+                    document.getElementById('odido-threshold').textContent = '--';
+                    document.getElementById('odido-auto-renew').textContent = '--';
+                    document.getElementById('odido-rate').textContent = '--';
+                    const apiStatus = document.getElementById('odido-api-status');
+                    apiStatus.textContent = \`Error: \${res.status}\`;
+                    apiStatus.style.color = 'var(--err)';
+                    return;
+                }
                 const data = await res.json();
                 document.getElementById('odido-loading').style.display = 'none';
                 document.getElementById('odido-not-configured').style.display = 'none';
@@ -1797,9 +2002,11 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 if (remaining < threshold) bar.classList.add('critical');
                 else if (remaining < threshold * 2) bar.classList.add('low');
             } catch(e) {
+                // Network error or service unavailable - show not-configured with error info
                 document.getElementById('odido-loading').style.display = 'none';
                 document.getElementById('odido-not-configured').style.display = 'block';
                 document.getElementById('odido-configured').style.display = 'none';
+                console.error('Odido status error:', e);
             }
         }
         
@@ -1989,7 +2196,30 @@ cat >> "$DASHBOARD_FILE" <<EOF
         
         function formatBytes(a,b=2){if(!+a)return"0 B";const c=0>b?0:b,d=Math.floor(Math.log(a)/Math.log(1024));return\`\${parseFloat((a/Math.pow(1024,d)).toFixed(c))} \${["B","KiB","MiB","GiB","TiB"][d]}\`}
         
+        // Privacy toggle functionality
+        function togglePrivacy() {
+            const toggle = document.getElementById('privacy-switch');
+            const body = document.body;
+            const isPrivate = toggle.classList.toggle('active');
+            if (isPrivate) {
+                body.classList.add('privacy-mode');
+                localStorage.setItem('privacy_mode', 'true');
+            } else {
+                body.classList.remove('privacy-mode');
+                localStorage.setItem('privacy_mode', 'false');
+            }
+        }
+        
+        function initPrivacyMode() {
+            const savedMode = localStorage.getItem('privacy_mode');
+            if (savedMode === 'true') {
+                document.getElementById('privacy-switch').classList.add('active');
+                document.body.classList.add('privacy-mode');
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', () => {
+            initPrivacyMode();
             fetchStatus(); fetchProfiles(); fetchOdidoStatus(); startLogStream();
             setInterval(fetchStatus, 5000);
             setInterval(fetchOdidoStatus, 30000);
