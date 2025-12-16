@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2034,SC2024,SC2086
+# shellcheck disable=SC1091,SC2001,SC2015,SC2034,SC2024,SC2086
 set -euo pipefail
 
 # ==============================================================================
@@ -139,6 +139,10 @@ clean_environment() {
     
     if [ "$FORCE_CLEAN" = true ]; then
         log_warn "NUCLEAR CLEANUP MODE: Removing everything..."
+        # Stop and remove all containers first to release volumes
+        for c in $TARGET_CONTAINERS; do
+            sudo docker rm -f "$c" 2>/dev/null || true
+        done
         if [ -d "$BASE_DIR" ]; then
             sudo rm -rf "$BASE_DIR" 2>/dev/null || true
         fi
@@ -859,6 +863,7 @@ import http.server
 import socketserver
 import json
 import os
+import re
 import subprocess
 import time
 import urllib.request
@@ -1015,9 +1020,12 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             try:
                 result = subprocess.run([CONTROL_SCRIPT, "status"], capture_output=True, text=True, timeout=30)
                 output = result.stdout.strip()
+                # Remove any control characters that may break JSON parsing
+                output = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', output)
                 json_start = output.find('{')
-                if json_start != -1:
-                    output = output[json_start:]
+                json_end = output.rfind('}')
+                if json_start != -1 and json_end != -1:
+                    output = output[json_start:json_end+1]
                 self._send_json(json.loads(output))
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -1534,9 +1542,9 @@ cat > "$DASHBOARD_FILE" <<EOF
             color: var(--p); font-size: 0.9rem; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
             margin: 48px 0 16px 8px;
         }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
         @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
         .card {
             background: var(--surf); border-radius: var(--radius); padding: 24px;
