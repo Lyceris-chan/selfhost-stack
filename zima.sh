@@ -304,7 +304,7 @@ validate_wg_config() {
     if [ -z "$PK_VAL" ]; then
         return 1
     fi
-    # WireGuard keys are typically 44 characters
+    # WireGuard private keys are exactly 44 base64 characters
     if [ "${#PK_VAL}" -lt 40 ]; then
         return 1
     fi
