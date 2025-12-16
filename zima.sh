@@ -733,6 +733,11 @@ if grep -q "setcap 'cap_net_bind_service=+ep' /usr/local/bin/python3" "$SRC_DIR/
     sed -i "s|setcap 'cap_net_bind_service=+ep' /usr/local/bin/python3|setcap 'cap_net_bind_service=+ep' \$(readlink -f /usr/local/bin/python3)|g" "$SRC_DIR/odido-bundle-booster/Dockerfile"
     log_info "Patched odido-bundle-booster Dockerfile to fix setcap on symlinked Python binary"
 fi
+# Fix entrypoint.sh path - Dockerfile copies to /app/entrypoint.sh but ENTRYPOINT expects /entrypoint.sh
+if grep -q "COPY entrypoint.sh ./" "$SRC_DIR/odido-bundle-booster/Dockerfile"; then
+    sed -i "s|COPY entrypoint.sh ./|COPY entrypoint.sh /entrypoint.sh|g" "$SRC_DIR/odido-bundle-booster/Dockerfile"
+    log_info "Patched odido-bundle-booster Dockerfile to fix entrypoint.sh path"
+fi
 mkdir -p "$SRC_DIR/redlib"
 cat > "$SRC_DIR/redlib/Dockerfile" <<EOF
 FROM alpine:3.19
