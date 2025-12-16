@@ -1402,6 +1402,10 @@ services:
             invidious_companion_key: "$IV_COMPANION"
         hmac_key: "$IV_HMAC"
     healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || exit 1", interval: 30s, timeout: 5s, retries: 2}
+    logging:
+      options:
+        max-size: "1G"
+        max-file: "4"
     depends_on: {invidious-db: {condition: service_healthy}, gluetun: {condition: service_healthy}}
     restart: unless-stopped
     deploy:
@@ -1429,6 +1433,12 @@ services:
     network_mode: "service:gluetun"
     environment: {SERVER_SECRET_KEY: "$IV_COMPANION", SERVER_PORT: "8282"}
     volumes: ["companioncache:/var/tmp/youtubei.js:rw"]
+    logging:
+      options:
+        max-size: "1G"
+        max-file: "4"
+    cap_drop:
+      - ALL
     restart: unless-stopped
     read_only: true
     security_opt: ["no-new-privileges:true"]
