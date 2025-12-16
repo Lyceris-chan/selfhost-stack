@@ -82,7 +82,7 @@ clean_environment() {
         log_warn "FORCE CLEANUP ENABLED (-c): Wiping ALL data, configs, and volumes..."
     fi
 
-    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy wg-controller odido-booster redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe dumb"
+    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy wg-controller odido-booster redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe vert vertd"
     
     FOUND_CONTAINERS=""
     for c in $TARGET_CONTAINERS; do
@@ -343,7 +343,7 @@ sudo docker pull -q qmcgaw/gluetun:latest > /dev/null
 cat > "$GLUETUN_ENV_FILE" <<EOF
 VPN_SERVICE_PROVIDER=custom
 VPN_TYPE=wireguard
-FIREWALL_VPN_INPUT_PORTS=8080,8180,3000,3001,3002,8280,10416,8480,5555
+FIREWALL_VPN_INPUT_PORTS=8080,8180,3000,3001,3002,8280,10416,8480,80,24153
 FIREWALL_OUTBOUND_SUBNETS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 EOF
 
@@ -414,11 +414,12 @@ ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 
 # --- 8. PORT VARS ---
 PORT_INT_REDLIB=8080; PORT_INT_WIKILESS=8180; PORT_INT_INVIDIOUS=3000
 PORT_INT_LIBREMDB=3001; PORT_INT_RIMGO=3002; PORT_INT_BREEZEWIKI=10416
-PORT_INT_ANONYMOUS=8480; PORT_ADGUARD_WEB=8083; PORT_DASHBOARD_WEB=8081
+PORT_INT_ANONYMOUS=8480; PORT_INT_VERT=80; PORT_INT_VERTD=24153
+PORT_ADGUARD_WEB=8083; PORT_DASHBOARD_WEB=8081
 PORT_PORTAINER=9000; PORT_WG_WEB=51821; PORT_WG_UDP=51820
 PORT_REDLIB=8080; PORT_WIKILESS=8180; PORT_INVIDIOUS=3000; PORT_LIBREMDB=3001
 PORT_RIMGO=3002; PORT_SCRIBE=8280; PORT_BREEZEWIKI=8380; PORT_ANONYMOUS=8480
-PORT_DUMB=5555
+PORT_VERT=5555; PORT_VERTD=24153
 
 # --- 9. CONFIG GENERATION ---
 log_info "Generating Service Configs..."
@@ -730,7 +731,7 @@ if [ "$ACTION" = "activate" ]; then
     if [ -f "$PROFILES_DIR/$PROFILE_NAME.conf" ]; then
         ln -sf "$PROFILES_DIR/$PROFILE_NAME.conf" "$ACTIVE_CONF"
         echo "$PROFILE_NAME" > "$NAME_FILE"
-        DEPENDENTS="redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe dumb"
+        DEPENDENTS="redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe vert vertd"
         docker stop $DEPENDENTS 2>/dev/null || true
         docker-compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
         sleep 5
@@ -1077,7 +1078,8 @@ services:
       - "$LAN_IP:$PORT_SCRIBE:$PORT_SCRIBE/tcp"
       - "$LAN_IP:$PORT_BREEZEWIKI:$PORT_INT_BREEZEWIKI/tcp"
       - "$LAN_IP:$PORT_ANONYMOUS:$PORT_INT_ANONYMOUS/tcp"
-      - "$LAN_IP:$PORT_DUMB:5555/tcp"
+      - "$LAN_IP:$PORT_VERT:$PORT_INT_VERT/tcp"
+      - "$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD/tcp"
     volumes:
       - "$ACTIVE_WG_CONF:/gluetun/wireguard/wg0.conf:ro"
     env_file:
@@ -1334,11 +1336,35 @@ services:
       resources:
         limits: {cpus: '0.5', memory: 256M}
 
-  dumb:
-    image: ghcr.io/rramiachraf/dumb:latest
-    container_name: dumb
+  vertd:
+    build:
+      context: https://github.com/VERT-sh/vertd.git#main
+    container_name: vertd
     network_mode: "service:gluetun"
+    devices:
+      - /dev/dri:/dev/dri
     depends_on: {gluetun: {condition: service_healthy}}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '2.0', memory: 1024M}
+
+  vert:
+    build:
+      context: https://github.com/VERT-sh/VERT.git#main
+      args:
+        - PUB_ENV=production
+        - PUB_HOSTNAME=$LAN_IP:$PORT_VERT
+        - PUB_VERTD_URL=http://127.0.0.1:$PORT_INT_VERTD
+        - PUB_DISABLE_ALL_EXTERNAL_REQUESTS=true
+        - PUB_PLAUSIBLE_URL=
+        - PUB_DONATION_URL=
+        - PUB_STRIPE_KEY=
+    container_name: vert
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun: {condition: service_healthy}
+      vertd: {condition: service_started}
     restart: unless-stopped
     deploy:
       resources:
@@ -1466,7 +1492,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             <a href="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true"><h2>Scribe</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
             <a href="http://$LAN_IP:$PORT_BREEZEWIKI" class="card" data-check="true"><h2>BreezeWiki</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
             <a href="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true"><h2>AnonOverflow</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_DUMB" class="card" data-check="true"><h2>Dumb</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_VERT" class="card" data-check="true"><h2>VERT</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
         </div>
 
         <div class="section-label">Administration</div>
