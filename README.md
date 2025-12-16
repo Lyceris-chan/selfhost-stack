@@ -333,47 +333,6 @@ Users → AdGuard Home (ad blocking) → Unbound (recursive) → Root DNS Server
 | Portainer | 9000 | LAN/VPN | Docker container management |
 | Odido Booster | 8085 | LAN/VPN | Odido bundle management (optional) |
 
-### VERT Service
-
-VERT is included as a local file conversion service with VERTD as the backend daemon. The stack uses docker-compose configuration for VERT. Use `docker compose up` if you want to start the stack, or `docker compose down` to bring it down. You can pass `--build` to `docker compose up` to rebuild the Docker image (useful if you've changed any of the environment variables) as well as `-d` to start it in detached mode. You can read more about [Docker Compose in general here](https://docs.docker.com/compose/).
-
-The VERT service is pre-configured in this stack with:
-- `PUB_HOSTNAME`: Set to your LAN IP and VERT port
-- `PUB_VERTD_URL`: Points to the VERTD backend service
-- `PUB_DISABLE_ALL_EXTERNAL_REQUESTS`: Enabled for privacy
-- External donation/analytics/Stripe features disabled
-
-For reference, here's the VERT project's docker-compose.yml format that you can customize:
-
-```yaml
-services:
-  vertd:
-    image: ghcr.io/vert-sh/vertd:latest
-    container_name: vertd
-    devices:
-      - /dev/dri:/dev/dri
-    restart: unless-stopped
-
-  vert:
-    container_name: vert
-    image: ghcr.io/vert-sh/vert:latest
-    build:
-      context: .
-      args:
-        PUB_HOSTNAME: ${PUB_HOSTNAME:-localhost:5173}
-        PUB_PLAUSIBLE_URL: ${PUB_PLAUSIBLE_URL:-}
-        PUB_ENV: ${PUB_ENV:-production}
-        PUB_DISABLE_ALL_EXTERNAL_REQUESTS: ${PUB_DISABLE_ALL_EXTERNAL_REQUESTS:-false}
-        PUB_VERTD_URL: ${PUB_VERTD_URL:-}
-        PUB_DONATION_URL: ${PUB_DONATION_URL:-https://donations.vert.sh}
-        PUB_STRIPE_KEY: ${PUB_STRIPE_KEY:-}
-    restart: unless-stopped
-    ports:
-      - ${PORT:-3000}:80
-    depends_on:
-      - vertd
-```
-
 ### Security Model
 
 - **Only WireGuard (51820/UDP) is exposed to the internet**

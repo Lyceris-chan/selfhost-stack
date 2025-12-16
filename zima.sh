@@ -271,7 +271,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         
         # Extract User ID from URL path - it's a 12-character hex string after capi.odido.nl/
         # Format: https://capi.odido.nl/{12-char-hex-userid}/account/...
-        ODIDO_USER_ID=$(echo "$ODIDO_REDIRECT_URL" | grep -oE 'capi\.odido\.nl/[0-9a-f]{12}' | sed 's|capi\.odido\.nl/||' | head -1)
+        ODIDO_USER_ID=$(echo "$ODIDO_REDIRECT_URL" | grep -oiE 'capi\.odido\.nl/[0-9a-f]{12}' | sed 's|capi\.odido\.nl/||i' | head -1)
         
         # Fallback: try to extract first path segment if hex pattern doesn't match
         if [ -z "$ODIDO_USER_ID" ]; then
@@ -1013,15 +1013,15 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     'https://capi.odido.nl/account/current'
                 ], capture_output=True, text=True, timeout=30)
                 redirect_url = result.stdout.strip()
-                # Extract 12-character hex User ID from URL
-                match = re.search(r'capi\.odido\.nl/([0-9a-f]{12})', redirect_url)
+                # Extract 12-character hex User ID from URL (case-insensitive)
+                match = re.search(r'capi\.odido\.nl/([0-9a-fA-F]{12})', redirect_url, re.IGNORECASE)
                 if match:
                     user_id = match.group(1)
                     self._send_json({"success": True, "user_id": user_id})
                 else:
                     # Fallback: extract first path segment after capi.odido.nl/
-                    match = re.search(r'capi\.odido\.nl/([^/]+)/', redirect_url)
-                    if match and match.group(1) != 'account':
+                    match = re.search(r'capi\.odido\.nl/([^/]+)/', redirect_url, re.IGNORECASE)
+                    if match and match.group(1).lower() != 'account':
                         user_id = match.group(1)
                         self._send_json({"success": True, "user_id": user_id})
                     else:
