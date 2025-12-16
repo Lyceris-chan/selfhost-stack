@@ -586,3 +586,584 @@ services:
     image: ghcr.io/wg-easy/wg-easy:latest
     container_name: wg-easy
     network_mode: "host"
+
+# --- SECTION 14: DASHBOARD & UI GENERATION ---
+# Generate the Material Design 3 management dashboard.
+log_info "Compiling Management Dashboard UI..."
+cat > "$DASHBOARD_FILE" <<EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZimaOS Privacy Hub</title>
+    <!-- Local privacy friendly fonts (Hosted Locally) -->
+    <link href="fonts/gs.css" rel="stylesheet">
+    <link href="fonts/cc.css" rel="stylesheet">
+    <link href="fonts/ms.css" rel="stylesheet">
+    <style>
+        /* ============================================
+           Material 3 Dark Theme - Strict Implementation
+           Reference: https://m3.material.io/
+           ============================================ */
+        
+        :root {
+            /* M3 Dark Theme Color Tokens */
+            --md-sys-color-primary: #D0BCFF;
+            --md-sys-color-on-primary: #381E72;
+            --md-sys-color-primary-container: #4F378B;
+            --md-sys-color-on-primary-container: #EADDFF;
+            /* Secondary */
+            --md-sys-color-secondary: #CCC2DC;
+            --md-sys-color-on-secondary: #332D41;
+            --md-sys-color-secondary-container: #4A4458;
+            --md-sys-color-on-secondary-container: #E8DEF8;
+            /* Tertiary */
+            --md-sys-color-tertiary: #EFB8C8;
+            --md-sys-color-on-tertiary: #492532;
+            --md-sys-color-tertiary-container: #633B48;
+            --md-sys-color-on-tertiary-container: #FFD8E4;
+            /* Error */
+            --md-sys-color-error: #F2B8B5;
+            --md-sys-color-on-error: #601410;
+            --md-sys-color-error-container: #8C1D18;
+            --md-sys-color-on-error-container: #F9DEDC;
+            /* Surface */
+            --md-sys-color-surface: #141218;
+            --md-sys-color-on-surface: #E6E1E5;
+            --md-sys-color-surface-variant: #49454F;
+            --md-sys-color-on-surface-variant: #CAC4D0;
+            --md-sys-color-surface-container-low: #1D1B20;
+            --md-sys-color-surface-container: #211F26;
+            --md-sys-color-surface-container-high: #2B2930;
+            --md-sys-color-surface-container-highest: #36343B;
+            --md-sys-color-surface-bright: #3B383E;
+            /* Outline */
+            --md-sys-color-outline: #938F99;
+            --md-sys-color-outline-variant: #49454F;
+            /* Inverse */
+            --md-sys-color-inverse-surface: #E6E1E5;
+            --md-sys-color-inverse-on-surface: #313033;
+            /* Custom success */
+            --md-sys-color-success: #A8DAB5;
+            --md-sys-color-on-success: #003912;
+            --md-sys-color-success-container: #00522B;
+            /* Custom warning */
+            --md-sys-color-warning: #FFCC80;
+            --md-sys-color-on-warning: #4A2800;
+
+            /* MD3 Expressive Motion */
+            --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0.0, 0, 1.0);
+            --md-sys-motion-duration-short: 150ms;
+            --md-sys-motion-duration-medium: 300ms;
+            
+            /* MD3 Expressive Shapes */
+            --md-sys-shape-corner-extra-large: 28px;
+            --md-sys-shape-corner-large: 16px;
+            --md-sys-shape-corner-medium: 12px;
+            --md-sys-shape-corner-small: 8px;
+            --md-sys-shape-corner-full: 100px;
+
+            /* Elevation */
+            --md-sys-elevation-1: 0 1px 3px 1px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.3);
+            --md-sys-elevation-2: 0 2px 6px 2px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.3);
+            
+            /* State Opacities */
+            --md-sys-state-hover-opacity: 0.08;
+            --md-sys-state-focus-opacity: 0.12;
+            --md-sys-state-pressed-opacity: 0.12;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            background: var(--md-sys-color-surface);
+            color: var(--md-sys-color-on-surface);
+            font-family: 'Google Sans Flex', 'Google Sans', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .code-block, .log-container, .text-field, .stat-value, .monospace {
+            font-family: 'Cascadia Code', 'Consolas', monospace;
+        }
+        
+        .material-symbols-rounded {
+            font-family: 'Material Symbols Rounded';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container { max-width: 1280px; width: 100%; margin: 0 auto; position: relative; }
+        
+        /* Header */
+        header {
+            margin-bottom: 56px;
+            padding: 16px 0;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 24px;
+        }
+        
+        h1 {
+            font-family: 'Google Sans Flex', 'Google Sans', sans-serif;
+            font-weight: 400;
+            font-size: 45px; /* Display Medium */
+            line-height: 52px;
+            margin: 0;
+            color: var(--md-sys-color-primary);
+            letter-spacing: 0;
+        }
+        
+        .subtitle {
+            font-size: 22px; /* Title Large */
+            color: var(--md-sys-color-on-surface-variant);
+            margin-top: 12px;
+            font-weight: 400;
+            letter-spacing: 0;
+        }
+        
+        /* Section Labels */
+        .section-label {
+            color: var(--md-sys-color-primary);
+            font-size: 14px; /* Title Small */
+            font-weight: 500;
+            letter-spacing: 0.1px;
+            margin: 48px 0 12px 4px;
+            text-transform: none;
+        }
+        
+        .section-label:first-of-type {
+            margin-top: 24px;
+        }
+        
+        .section-hint {
+            font-size: 14px; /* Body Medium */
+            color: var(--md-sys-color-on-surface-variant);
+            margin: 0 0 24px 4px;
+            letter-spacing: 0.25px;
+        }
+        
+        /* Grid Layouts */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+        @media (max-width: 1100px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+        
+        /* MD3 Component Refinements - Elevated Cards */
+        .card {
+            background: var(--md-sys-color-surface-container-low);
+            border-radius: var(--md-sys-shape-corner-extra-large);
+            padding: 24px;
+            text-decoration: none;
+            color: inherit;
+            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            min-height: 180px;
+            border: none;
+            overflow: visible; 
+            box-sizing: border-box;
+            box-shadow: var(--md-sys-elevation-1);
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: var(--md-sys-color-on-surface);
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .card:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        .card:hover { 
+            background: var(--md-sys-color-surface-container);
+            box-shadow: var(--md-sys-elevation-2);
+            transform: translateY(-2px);
+        }
+        
+        .card:active::before { opacity: var(--md-sys-state-pressed-opacity); }
+        .card.full-width { grid-column: 1 / -1; }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .card h2 {
+            margin: 0;
+            font-size: 22px; /* Title Large */
+            font-weight: 400;
+            color: var(--md-sys-color-on-surface);
+            line-height: 28px;
+            flex: 1;
+        }
+
+        .card .description {
+            font-size: 14px; /* Body Medium */
+            color: var(--md-sys-color-on-surface-variant);
+            margin-bottom: 16px;
+            line-height: 20px;
+            flex-grow: 1;
+        }
+        
+        .card h3 {
+            margin: 0 0 16px 0;
+            font-size: 16px; /* Title Medium */
+            font-weight: 500;
+            color: var(--md-sys-color-on-surface);
+            line-height: 24px;
+            letter-spacing: 0.15px;
+        }
+        
+        /* MD3 Assist Chips */
+        .chip-box { 
+            display: flex; 
+            gap: 8px; 
+            flex-wrap: wrap; 
+            padding-top: 12px;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            height: 32px;
+            padding: 0 16px;
+            border-radius: 8px;
+            font-size: 14px; /* Label Large */
+            font-weight: 500;
+            letter-spacing: 0.1px;
+            text-decoration: none;
+            transition: all var(--md-sys-motion-duration-short) linear;
+            border: 1px solid var(--md-sys-color-outline);
+            background: transparent;
+            color: var(--md-sys-color-on-surface);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .chip::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: currentColor;
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
+        }
+        
+        .chip:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        
+        .chip.vpn { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border: none; }
+        .chip.admin { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border: none; }
+        .chip.tertiary { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); border: none; }
+        
+        /* Status Indicator */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--md-sys-color-surface-container-highest);
+            padding: 6px 12px;
+            border-radius: var(--md-sys-shape-corner-full);
+            font-size: 12px;
+            color: var(--md-sys-color-on-surface-variant);
+            width: fit-content;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--md-sys-color-outline);
+        }
+        
+        .status-dot.up { background: var(--md-sys-color-success); box-shadow: 0 0 8px var(--md-sys-color-success); }
+        .status-dot.down { background: var(--md-sys-color-error); box-shadow: 0 0 8px var(--md-sys-color-error); }
+        
+        /* MD3 Text Fields */
+        .text-field {
+            width: 100%;
+            background: var(--md-sys-color-surface-container-highest);
+            border: none;
+            border-bottom: 1px solid var(--md-sys-color-on-surface-variant);
+            color: var(--md-sys-color-on-surface);
+            padding: 16px;
+            border-radius: 4px 4px 0 0;
+            font-size: 16px;
+            box-sizing: border-box;
+            outline: none;
+            transition: all var(--md-sys-motion-duration-short) linear;
+        }
+        
+        .text-field:focus {
+            border-bottom: 2px solid var(--md-sys-color-primary);
+            background: var(--md-sys-color-surface-container-highest);
+        }
+        
+        textarea.text-field { min-height: 120px; resize: vertical; }
+        
+        /* MD3 Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0 24px;
+            height: 40px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.1px;
+            cursor: pointer;
+            transition: all var(--md-sys-motion-duration-short) linear;
+            border: none;
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+            font-family: inherit;
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: currentColor;
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
+        }
+        
+        .btn:hover::before { opacity: 0.08; }
+        
+        .btn-filled { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); box-shadow: var(--md-sys-elevation-1); }
+        .btn-tonal { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+        .btn-outlined { background: transparent; color: var(--md-sys-color-primary); border: 1px solid var(--md-sys-color-outline); }
+        .btn-tertiary { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+        
+        .btn-icon:hover {
+            background: rgba(202, 196, 208, 0.08);
+            border-color: var(--md-sys-color-outline);
+        }
+        
+        .portainer-link {
+            text-decoration: none;
+            cursor: pointer;
+            transition: all var(--md-sys-motion-duration-short) linear;
+            position: relative;
+            padding-right: 28px; /* Space for the icon */
+        }
+        .portainer-link:hover {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            border-color: transparent;
+        }
+        /* External link icon for Portainer chips */
+        .portainer-link::after {
+            content: '\e895'; /* Material Symbol 'open_in_new' */
+            font-family: 'Material Symbols Rounded';
+            position: absolute;
+            right: 8px;
+            font-size: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .btn-action {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            border-radius: var(--md-sys-shape-corner-medium);
+            box-shadow: var(--md-sys-elevation-1);
+        }
+        
+        .btn-icon { width: 40px; height: 40px; padding: 0; border-radius: 20px; }
+        .btn-icon svg { width: 24px; height: 24px; fill: currentColor; }
+        
+        /* MD3 Switch */
+        .switch-container {
+            display: inline-flex;
+            align-items: center;
+            gap: 16px;
+            cursor: pointer;
+            padding: 8px 0;
+        }
+
+        .switch-track {
+            width: 52px;
+            height: 32px;
+            background: var(--md-sys-color-surface-container-highest);
+            border: 2px solid var(--md-sys-color-outline);
+            border-radius: 16px;
+            position: relative;
+            transition: all var(--md-sys-motion-duration-short) linear;
+        }
+
+        .switch-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--md-sys-color-outline);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 6px;
+            transform: translateY(-50%);
+            transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .switch-container.active .switch-track { background: var(--md-sys-color-primary); border-color: var(--md-sys-color-primary); }
+        .switch-container.active .switch-thumb { width: 24px; height: 24px; left: 24px; background: var(--md-sys-color-on-primary); }
+
+        /* Tooltips */
+        [data-tooltip] { 
+            position: relative; 
+        }
+        [data-tooltip]::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-8px);
+            background: var(--md-sys-color-inverse-surface);
+            color: var(--md-sys-color-inverse-on-surface);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: pre;
+            opacity: 0;
+            pointer-events: none;
+            transition: all var(--md-sys-motion-duration-short) ease;
+            z-index: 9999;
+            box-shadow: var(--md-sys-elevation-2);
+        }
+        [data-tooltip]:hover::after { 
+            opacity: 1; 
+            transform: translateX(-50%) translateY(-12px);
+        }
+
+        /* Ensure parent elements don't clip tooltips */
+        .card, .chip, .status-indicator, li, span, div {
+            /* Tooltip container safety */
+        }
+        
+        .card {
+            /* ... existing ... */
+            overflow: visible; /* Changed from hidden to allow tooltips to escape */
+        }
+        
+        /* Prevent card content overlapping */
+        .card > * {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .card::before {
+            /* ... existing ... */
+            z-index: 1;
+        }
+
+        .portainer-link {
+            text-decoration: none;
+            cursor: pointer;
+            transition: all var(--md-sys-motion-duration-short) linear;
+            position: relative;
+            padding-right: 28px; /* Space for the icon */
+        }
+        .portainer-link:hover {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            border-color: transparent;
+        }
+        /* External link icon for Portainer chips */
+        .portainer-link::after {
+            content: '\e895'; /* Material Symbol 'open_in_new' */
+            font-family: 'Material Symbols Rounded';
+            position: absolute;
+            right: 8px;
+            font-size: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .portainer-link {
+            text-decoration: none;
+            cursor: pointer;
+            transition: all var(--md-sys-motion-duration-short) linear;
+            position: relative;
+            padding-right: 28px; /* Space for the icon */
+        }
+        .portainer-link:hover {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            border-color: transparent;
+        }
+        /* External link icon for Portainer chips */
+        .portainer-link::after {
+            content: '\e895'; /* Material Symbol 'open_in_new' */
+            font-family: 'Material Symbols Rounded';
+            position: absolute;
+            right: 8px;
+            font-size: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .log-container {
+            background: #0D0D0D;
+            border-radius: var(--md-sys-shape-corner-large);
+            padding: 16px;
+            height: 320px;
+            overflow-y: auto;
+            font-size: 13px;
+            color: var(--md-sys-color-on-surface-variant);
+        }
+        
+        .code-block {
+            background: #0D0D0D;
+            border-radius: var(--md-sys-shape-corner-small);
+            padding: 14px 16px;
+            font-size: 13px;
+            color: var(--md-sys-color-primary);
+            margin: 8px 0;
+            overflow-x: auto;
+        }
+        
+        .sensitive { transition: filter 400ms var(--md-sys-motion-easing-emphasized); }
+        .privacy-mode .sensitive { filter: blur(6px); opacity: 0.4; }
+        
+        .text-success { color: var(--md-sys-color-success); }
+        .stat-row { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            margin-bottom: 12px; 
