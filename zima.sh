@@ -80,7 +80,7 @@ clean_environment() {
         log_warn "FORCE CLEANUP ENABLED (-c): Wiping ALL data, configs, and volumes..."
     fi
 
-    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy wg-controller odido-booster redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe vert vertd"
+    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe vert vertd"
     
     FOUND_CONTAINERS=""
     for c in $TARGET_CONTAINERS; do
@@ -249,24 +249,49 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     
     echo ""
     echo "--- Odido Bundle Booster (Optional) ---"
-    echo "   Obtain credentials using https://github.com/GuusBackup/Odido.Authenticator"
+    echo "   Obtain the OAuth Token using https://github.com/GuusBackup/Odido.Authenticator"
     echo "   (works on any platform with .NET, no Apple device needed)"
     echo ""
-    echo "   The Authenticator provides two values:"
-    echo "   1. Refresh Token (one-time use) - used internally to generate OAuth token"
-    echo "   2. OAuth Token - this is your ODIDO_TOKEN (enter it below)"
+    echo "   Steps:"
+    echo "   1. Clone and run: git clone --recursive https://github.com/GuusBackup/Odido.Authenticator.git"
+    echo "   2. Run: dotnet run --project Odido.Authenticator"
+    echo "   3. Follow the login flow and get the OAuth Token"
+    echo "   4. Enter the OAuth Token below - the script will fetch your User ID automatically"
     echo ""
-    echo "   For User ID: After authentication, call the subscriptions API"
-    echo "   and extract from URL path like: capi.odido.nl/{USER_ID}/linkedsubscriptions"
+    echo -n "Odido Access Token (OAuth Token from Authenticator, or Enter to skip): "
+    read -rs ODIDO_TOKEN
     echo ""
-    echo -n "Odido User ID (or Enter to skip): "
-    read -r ODIDO_USER_ID
-    if [ -n "$ODIDO_USER_ID" ]; then
-        echo -n "Odido Access Token (OAuth Token from Authenticator): "
-        read -rs ODIDO_TOKEN
-        echo ""
+    if [ -n "$ODIDO_TOKEN" ]; then
+        log_info "Fetching Odido User ID automatically..."
+        # Use curl with -L to follow redirects and capture the final URL
+        ODIDO_REDIRECT_URL=$(curl -sL -o /dev/null -w '%{url_effective}' \
+            -H "Authorization: Bearer $ODIDO_TOKEN" \
+            -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
+            "https://capi.odido.nl/account/current" 2>/dev/null)
+        
+        # Extract User ID from URL path - it's a 12-character hex string after capi.odido.nl/
+        # Format: https://capi.odido.nl/{12-char-hex-userid}/account/...
+        ODIDO_USER_ID=$(echo "$ODIDO_REDIRECT_URL" | grep -oiE 'capi\.odido\.nl/[0-9a-f]{12}' | sed 's|capi\.odido\.nl/||i' | head -1)
+        
+        # Fallback: try to extract first path segment if hex pattern doesn't match
+        if [ -z "$ODIDO_USER_ID" ]; then
+            ODIDO_USER_ID=$(echo "$ODIDO_REDIRECT_URL" | sed -n 's|https://capi.odido.nl/\([^/]*\)/.*|\1|p')
+        fi
+        
+        if [ -n "$ODIDO_USER_ID" ] && [ "$ODIDO_USER_ID" != "account" ]; then
+            log_info "Successfully retrieved Odido User ID: $ODIDO_USER_ID"
+        else
+            log_warn "Could not automatically retrieve User ID from Odido API"
+            log_warn "The API may be temporarily unavailable or the token may be invalid"
+            echo -n "   Enter Odido User ID manually (or Enter to skip): "
+            read -r ODIDO_USER_ID
+            if [ -z "$ODIDO_USER_ID" ]; then
+                log_warn "No User ID provided, skipping Odido integration"
+                ODIDO_TOKEN=""
+            fi
+        fi
     else
-        ODIDO_TOKEN=""
+        ODIDO_USER_ID=""
         echo "   Skipping Odido API integration (manual mode only)"
     fi
     
@@ -607,7 +632,7 @@ server {
     root /usr/share/nginx/html;
     index index.html;
     location /api/ {
-        proxy_pass http://wg-controller:55555/;
+        proxy_pass http://hub-api:55555/;
         proxy_set_header Host \$host;
         proxy_buffering off;
         proxy_cache off;
@@ -972,6 +997,37 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
+        elif self.path == '/odido-userid':
+            try:
+                l = int(self.headers['Content-Length'])
+                data = json.loads(self.rfile.read(l).decode('utf-8'))
+                oauth_token = data.get('oauth_token', '').strip()
+                if not oauth_token:
+                    self._send_json({"error": "oauth_token is required"}, 400)
+                    return
+                # Use curl to fetch the User ID from Odido API
+                result = subprocess.run([
+                    'curl', '-sL', '-o', '/dev/null', '-w', '%{url_effective}',
+                    '-H', f'Authorization: Bearer {oauth_token}',
+                    '-H', 'User-Agent: T-Mobile 5.3.28 (Android 10; 10)',
+                    'https://capi.odido.nl/account/current'
+                ], capture_output=True, text=True, timeout=30)
+                redirect_url = result.stdout.strip()
+                # Extract 12-character hex User ID from URL (case-insensitive)
+                match = re.search(r'capi\.odido\.nl/([0-9a-fA-F]{12})', redirect_url, re.IGNORECASE)
+                if match:
+                    user_id = match.group(1)
+                    self._send_json({"success": True, "user_id": user_id})
+                else:
+                    # Fallback: extract first path segment after capi.odido.nl/
+                    match = re.search(r'capi\.odido\.nl/([^/]+)/', redirect_url, re.IGNORECASE)
+                    if match and match.group(1).lower() != 'account':
+                        user_id = match.group(1)
+                        self._send_json({"success": True, "user_id": user_id})
+                    else:
+                        self._send_json({"error": "Could not extract User ID from Odido API response", "url": redirect_url}, 400)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
 
 if __name__ == "__main__":
     print(f"Starting API server on port {PORT}...")
@@ -1004,9 +1060,9 @@ volumes:
   odido-data:
 
 services:
-  wg-controller:
+  hub-api:
     image: python:3.11-alpine
-    container_name: wg-controller
+    container_name: hub-api
     networks: [frontnet]
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -1052,7 +1108,7 @@ services:
       --schedule "0 0 3 * * *"
       --cleanup
       --disable-containers watchtower
-      --notification-url "generic://wg-controller:55555/watchtower?template=json&disabletls=yes"
+      --notification-url "generic://hub-api:55555/watchtower?template=json&disabletls=yes"
     restart: unless-stopped
     deploy:
       resources:
@@ -1095,15 +1151,6 @@ services:
       - "$DASHBOARD_FILE:/usr/share/nginx/html/index.html:ro"
       - "$NGINX_CONF:/etc/nginx/conf.d/default.conf:ro"
     restart: unless-stopped
-    x-casaos:
-      author: "self"
-      category: "Network"
-      icon: "https://raw.githubusercontent.com/IceWhaleTech/CasaOS-AppStore/main/Apps/NginxProxyManager/icon.png"
-      index: "/"
-      main: "dashboard"
-      port_map: "$PORT_DASHBOARD_WEB"
-      title:
-        en_US: "Privacy Hub"
     deploy:
       resources:
         limits: {cpus: '0.3', memory: 128M}
@@ -1336,29 +1383,30 @@ services:
 
   # VERT: Local file conversion service
   vertd:
-    build:
-      context: https://github.com/VERT-sh/vertd.git#main
     container_name: vertd
+    image: ghcr.io/vert-sh/vertd:latest
     networks: [frontnet]
+    # Intel GPU support
     devices:
-      - /dev/dri:/dev/dri
+      - /dev/dri
     restart: unless-stopped
     deploy:
       resources:
         limits: {cpus: '2.0', memory: 1024M}
 
   vert:
+    container_name: vert
+    image: ghcr.io/vert-sh/vert:latest
     build:
       context: https://github.com/VERT-sh/VERT.git#main
       args:
-        - PUB_ENV=production
-        - PUB_HOSTNAME=$LAN_IP:$PORT_VERT
-        - PUB_VERTD_URL=http://vertd:$PORT_INT_VERTD
-        - PUB_DISABLE_ALL_EXTERNAL_REQUESTS=true
-        - PUB_PLAUSIBLE_URL=
-        - PUB_DONATION_URL=
-        - PUB_STRIPE_KEY=
-    container_name: vert
+        PUB_HOSTNAME: $LAN_IP:$PORT_VERT
+        PUB_PLAUSIBLE_URL: ""
+        PUB_ENV: production
+        PUB_DISABLE_ALL_EXTERNAL_REQUESTS: "true"
+        PUB_VERTD_URL: http://vertd:$PORT_INT_VERTD
+        PUB_DONATION_URL: ""
+        PUB_STRIPE_KEY: ""
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_VERT:$PORT_INT_VERT"]
     depends_on:
@@ -1367,6 +1415,27 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
+
+x-casaos:
+  architectures:
+    - amd64
+  main: dashboard
+  author: Lyceris-chan
+  category: Network
+  scheme: http
+  hostname: ""
+  index: /
+  port_map: "$PORT_DASHBOARD_WEB"
+  title:
+    en_us: Privacy Hub
+  tagline:
+    en_us: Self-hosted privacy stack with VPN, DNS filtering, and privacy frontends
+  description:
+    en_us: |
+      A comprehensive self-hosted privacy stack with WireGuard VPN access, 
+      AdGuard Home DNS filtering, and various privacy-respecting frontend services
+      including Invidious, Redlib, Wikiless, and more.
+  icon: https://raw.githubusercontent.com/AdrienPoupa/docker-compose-nas/master/images/adguard.png
 EOF
 
 # --- 14. DASHBOARD GENERATION ---
@@ -1583,6 +1652,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             <div class="card">
                 <h3>Configuration</h3>
                 <input type="text" id="odido-api-key" class="input-field" placeholder="Dashboard API Key" style="margin-bottom:12px;">
+                <input type="password" id="odido-oauth-token" class="input-field" placeholder="Odido OAuth Token (auto-fetches User ID)" style="margin-bottom:12px;">
                 <input type="text" id="odido-bundle-code-input" class="input-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;">
                 <input type="number" id="odido-threshold-input" class="input-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;">
                 <input type="number" id="odido-lead-time-input" class="input-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;">
@@ -1720,6 +1790,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const st = document.getElementById('odido-config-status');
             const data = {};
             const apiKey = document.getElementById('odido-api-key').value.trim();
+            const oauthToken = document.getElementById('odido-oauth-token').value.trim();
             const bundleCode = document.getElementById('odido-bundle-code-input').value.trim();
             const threshold = document.getElementById('odido-threshold-input').value.trim();
             const leadTime = document.getElementById('odido-lead-time-input').value.trim();
@@ -1729,6 +1800,34 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 localStorage.setItem('odido_api_key', apiKey);
                 data.api_key = apiKey;
             }
+            
+            // If OAuth token provided, fetch User ID automatically via hub-api API (uses curl)
+            if (oauthToken) {
+                st.textContent = 'Fetching User ID from Odido API...';
+                st.style.color = 'var(--p)';
+                try {
+                    const res = await fetch(\`\${API}/odido-userid\`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ oauth_token: oauthToken })
+                    });
+                    const result = await res.json();
+                    if (result.error) throw new Error(result.error);
+                    if (result.user_id) {
+                        data.odido_user_id = result.user_id;
+                        data.odido_token = oauthToken;
+                        st.textContent = \`User ID fetched: \${result.user_id}\`;
+                        st.style.color = 'var(--ok)';
+                    } else {
+                        throw new Error('Could not extract User ID from Odido API response');
+                    }
+                } catch(e) {
+                    st.textContent = \`Failed to fetch User ID: \${e.message}\`;
+                    st.style.color = 'var(--err)';
+                    return;
+                }
+            }
+            
             if (bundleCode) data.bundle_code = bundleCode;
             if (threshold) data.absolute_min_threshold_mb = parseInt(threshold);
             if (leadTime) data.lead_time_minutes = parseInt(leadTime);
@@ -1738,7 +1837,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 st.style.color = 'var(--err)';
                 return;
             }
-            st.textContent = 'Saving...';
+            st.textContent = 'Saving configuration...';
             st.style.color = 'var(--p)';
             try {
                 const headers = { 'Content-Type': 'application/json' };
@@ -1753,6 +1852,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 st.textContent = 'Configuration saved!';
                 st.style.color = 'var(--ok)';
                 document.getElementById('odido-api-key').value = '';
+                document.getElementById('odido-oauth-token').value = '';
                 document.getElementById('odido-bundle-code-input').value = '';
                 document.getElementById('odido-threshold-input').value = '';
                 document.getElementById('odido-lead-time-input').value = '';
