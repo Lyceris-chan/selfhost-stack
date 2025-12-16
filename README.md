@@ -324,6 +324,49 @@ Users → AdGuard Home (ad blocking) → Unbound (recursive) → Root DNS Server
 | Invidious | 3000 | LAN/VPN | YouTube frontend |
 | Redlib | 8080 | LAN/VPN | Reddit frontend |
 | Wikiless | 8180 | LAN/VPN | Wikipedia frontend |
+| LibremDB | 3001 | LAN/VPN | IMDb frontend |
+| Rimgo | 3002 | LAN/VPN | Imgur frontend |
+| Scribe | 8280 | LAN/VPN | Medium frontend |
+| BreezeWiki | 8380 | LAN/VPN | Fandom wiki frontend |
+| AnonymousOverflow | 8480 | LAN/VPN | StackOverflow frontend |
+| VERT | 5555 | LAN/VPN | Local file conversion service |
+| Portainer | 9000 | LAN/VPN | Docker container management |
+| Odido Booster | 8085 | LAN/VPN | Odido bundle management (optional) |
+
+### VERT Service
+
+VERT is included as a local file conversion service with VERTD as the backend daemon. We have a docker-compose.yml configuration available for it. Use `docker compose up` if you want to start the stack, or `docker compose down` to bring it down. You can pass `--build` to `docker compose up` to rebuild the Docker image (useful if you've changed any of the environment variables) as well as `-d` to start it in detached mode. You can read more about [Docker Compose in general here](https://docs.docker.com/compose/).
+
+The VERT service configuration in docker-compose.yml:
+
+```yaml
+services:
+  vertd:
+    image: ghcr.io/vert-sh/vertd:latest
+    container_name: vertd
+    devices:
+      - /dev/dri:/dev/dri
+    restart: unless-stopped
+
+  vert:
+    container_name: vert
+    image: ghcr.io/vert-sh/vert:latest
+    build:
+      context: .
+      args:
+        PUB_HOSTNAME: ${PUB_HOSTNAME:-localhost:5173}
+        PUB_PLAUSIBLE_URL: ${PUB_PLAUSIBLE_URL:-}
+        PUB_ENV: ${PUB_ENV:-production}
+        PUB_DISABLE_ALL_EXTERNAL_REQUESTS: ${PUB_DISABLE_ALL_EXTERNAL_REQUESTS:-false}
+        PUB_VERTD_URL: ${PUB_VERTD_URL:-}
+        PUB_DONATION_URL: ${PUB_DONATION_URL:-https://donations.vert.sh}
+        PUB_STRIPE_KEY: ${PUB_STRIPE_KEY:-}
+    restart: unless-stopped
+    ports:
+      - ${PORT:-3000}:80
+    depends_on:
+      - vertd
+```
 
 ### Security Model
 
@@ -412,9 +455,7 @@ The Odido Bundle Booster is an optional service for Dutch Odido mobile customers
 
 ### Obtaining Odido Credentials
 
-The stack requires two credentials:
-- **ODIDO_USER_ID**: Your Odido account user ID
-- **ODIDO_TOKEN**: Your OAuth access token
+The Odido Bundle Booster requires an OAuth Token to function. The script will automatically fetch your User ID once you provide the token.
 
 #### Using Odido.Authenticator (Recommended - Works on Any Platform)
 
@@ -435,49 +476,28 @@ Since [odido-aap](https://github.com/ink-splatters/odido-aap) requires an iPhone
    - After login, you'll be redirected to a blank page
    - Copy the URL from your browser's address bar (looks like: `https://www.odido.nl/loginappresult?token=XXXXXXXX`)
 
-3. **Get your tokens**:
+3. **Get your OAuth Token**:
    - Paste the URL when prompted
    - The tool will show your **Refresh Token** (one-time use, ignore this)
-   - Press Y to generate the **OAuth Token** - **THIS is your ODIDO_TOKEN**
+   - Press Y to generate the **OAuth Token** - **THIS is what you need**
 
-4. **Get your User ID**:
-   The User ID is your Odido account identifier. To find it:
-   
-   ```bash
-   # Using curl with your OAuth token:
-   curl -H "Authorization: Bearer YOUR_OAUTH_TOKEN" \
-        -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
-        "https://capi.odido.nl/account/current"
-   ```
-   
-   > **Note**: The User-Agent mimics the official Odido/T-Mobile app. If requests fail, 
-   > check the [TMobile.Api](https://github.com/GuusBackup/TMobile.Api) for current values.
-   
-   This will redirect to a URL containing your User ID in the path like:
-   `https://capi.odido.nl/{YOUR_USER_ID}/...`
-   
-   Extract the User ID from that path.
+4. **Run the setup script**:
+   - When running `./zima.sh`, enter the OAuth Token when prompted
+   - The script will **automatically fetch your User ID** using the Odido API
+   - No manual User ID entry required!
 
-5. **Enter credentials during setup**:
-   - When running `./zima.sh`, you'll be prompted for:
-     - **Odido User ID**: The ID extracted from step 4
-     - **Odido Access Token**: The OAuth Token from step 3
-
-### Which Token to Use?
-
-The Odido.Authenticator provides two values - here's what each is for:
-
-| Token Type | Description | Where to Use |
-|------------|-------------|--------------|
-| **Refresh Token** | Temporary authorization code from login redirect | Used once by the Authenticator tool to generate OAuth token. **Do not use this.** |
-| **OAuth Token** | Long-lived access token (Bearer token) | This is your **ODIDO_TOKEN** - use this for the bundle booster |
+> **Note**: The User ID is a 12-character hexadecimal string that the script extracts from the Odido API response URL (format: `https://capi.odido.nl/{12-char-hex-userid}/...`).
 
 ### Configuration via Dashboard
 
 After deployment, you can configure the Odido Bundle Booster via the web dashboard:
+- **Dashboard API Key**: The API key shown after deployment (required for authentication)
+- **Odido OAuth Token**: Enter your OAuth token and the dashboard will attempt to automatically fetch your User ID
 - **Bundle Code**: Default is `A0DAY01` (2GB daily bundle), can also use `A0DAY05` (5GB daily)
 - **Threshold**: Minimum MB before auto-renewal triggers (default: 100 MB)
 - **Lead Time**: Minutes before depletion to trigger renewal (default: 30 min)
+
+> **Note**: The dashboard's automatic User ID fetching requires the odido-bundle-booster service to support the `/api/odido/fetch-user-id` endpoint. If this endpoint is not available, you can still save the OAuth token, but you'll need to configure the User ID separately.
 
 ### API Endpoints
 
@@ -486,6 +506,7 @@ The Odido Bundle Booster service is accessible at `http://<LAN_IP>:8085` with th
 - `GET /api/status` - Current status and configuration
 - `GET /api/odido/remaining` - Fetch remaining data from Odido
 - `POST /api/odido/buy-bundle` - Purchase a bundle manually
+- `POST /api/odido/fetch-user-id` - Fetch User ID from OAuth token (pass `{"oauth_token": "..."}`)
 - `GET /docs` - Interactive API documentation
 
 All endpoints require the `X-API-Key` header with the generated API key (shown after deployment).
