@@ -1404,6 +1404,7 @@ services:
         PUB_PLAUSIBLE_URL: ""
         PUB_ENV: production
         PUB_DISABLE_ALL_EXTERNAL_REQUESTS: "true"
+        PUB_DISABLE_FAILURE_BLOCKS: "false"
         PUB_VERTD_URL: http://vertd:$PORT_INT_VERTD
         PUB_DONATION_URL: ""
         PUB_STRIPE_KEY: ""
