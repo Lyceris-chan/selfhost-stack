@@ -1397,18 +1397,10 @@ services:
   vert:
     container_name: vert
     image: ghcr.io/vert-sh/vert:latest
-    build:
-      context: https://github.com/VERT-sh/VERT.git#main
-      args:
-        PUB_HOSTNAME: $LAN_IP:$PORT_VERT
-        PUB_PLAUSIBLE_URL: ""
-        PUB_ENV: production
-        PUB_DISABLE_ALL_EXTERNAL_REQUESTS: "true"
-        PUB_VERTD_URL: http://vertd:$PORT_INT_VERTD
-        PUB_DONATION_URL: ""
-        PUB_STRIPE_KEY: ""
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_VERT:$PORT_INT_VERT"]
+    environment:
+      - PUBLIC_VERTD_URL=http://vertd:$PORT_INT_VERTD
     depends_on:
       vertd: {condition: service_started}
     restart: unless-stopped
