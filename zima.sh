@@ -3,12 +3,10 @@
 set -euo pipefail
 
 # ==============================================================================
-# ZIMAOS PRIVACY HUB V3.9.2: HOTFIX
+# ZIMAOS PRIVACY HUB v3.9.2
 # ==============================================================================
-# Changes:
-# - FIX: Normalizes "Key = Value" to "Key=Value" to fix Gluetun parser errors
-# - FIX: Enhanced sanitization (strips \r, trailing spaces, blank lines)
-# - FIX: Added validation for WireGuard Private Key
+# Self-hosted privacy stack with WireGuard VPN, AdGuard Home DNS filtering,
+# and privacy-respecting frontend services.
 # ==============================================================================
 
 # --- 0. ARGUMENT PARSING ---
@@ -29,7 +27,7 @@ BASE_DIR="/DATA/AppData/$APP_NAME"
 mkdir -p "$BASE_DIR/.docker"
 sudo chown -R "$(whoami)" "$BASE_DIR/.docker"
 
-# PATHS
+# Paths
 SRC_DIR="$BASE_DIR/sources"
 ENV_DIR="$BASE_DIR/env"
 CONFIG_DIR="$BASE_DIR/config"
@@ -38,32 +36,32 @@ DASHBOARD_FILE="$BASE_DIR/dashboard.html"
 GLUETUN_ENV_FILE="$BASE_DIR/gluetun.env"
 HISTORY_LOG="$BASE_DIR/deployment.log"
 
-# WIREGUARD
+# WireGuard Profiles
 WG_PROFILES_DIR="$BASE_DIR/wg-profiles"
 ACTIVE_WG_CONF="$BASE_DIR/active-wg.conf"
 ACTIVE_PROFILE_NAME_FILE="$BASE_DIR/.active_profile_name"
 mkdir -p "$WG_PROFILES_DIR"
 
-# SUB-CONFIGS
+# Service Configurations
 NGINX_CONF_DIR="$CONFIG_DIR/nginx"
 NGINX_CONF="$NGINX_CONF_DIR/default.conf"
 UNBOUND_CONF="$CONFIG_DIR/unbound/unbound.conf"
 AGH_CONF_DIR="$CONFIG_DIR/adguard"
 AGH_YAML="$AGH_CONF_DIR/AdGuardHome.yaml"
 
-# SCRIPTS
+# Scripts
 MONITOR_SCRIPT="$BASE_DIR/wg-ip-monitor.sh"
 IP_LOG_FILE="$BASE_DIR/wg-ip-monitor.log"
 CURRENT_IP_FILE="$BASE_DIR/.current_public_ip"
 WG_CONTROL_SCRIPT="$BASE_DIR/wg-control.sh"
 WG_API_SCRIPT="$BASE_DIR/wg-api.sh"
 
-# LOGGING
+# Logging Functions
 log_info() { echo -e "\e[34m[INFO]\e[0m $1"; }
 log_warn() { echo -e "\e[33m[WARN]\e[0m $1"; }
 log_crit() { echo -e "\e[31m[CRIT]\e[0m $1"; }
 
-# --- 2. CLEANUP FUNCTION (Force Support) ---
+# --- 2. CLEANUP FUNCTION ---
 ask_confirm() {
     if [ "$FORCE_CLEAN" = true ]; then return 0; fi
     read -r -p "$1 [y/N]: " response
@@ -129,7 +127,6 @@ clean_environment() {
                 sudo rm -rf "$BASE_DIR/.docker" 2>/dev/null || true
                 sudo rm -rf "$BASE_DIR" 2>/dev/null || true
             fi
-            # Force remove volumes by stopping any containers that might be using them first
             for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
                 sudo docker volume rm -f "$vol" 2>/dev/null || true
             done
@@ -139,14 +136,12 @@ clean_environment() {
     
     if [ "$FORCE_CLEAN" = true ]; then
         log_warn "NUCLEAR CLEANUP MODE: Removing everything..."
-        # Stop and remove all containers first to release volumes
         for c in $TARGET_CONTAINERS; do
             sudo docker rm -f "$c" 2>/dev/null || true
         done
         if [ -d "$BASE_DIR" ]; then
             sudo rm -rf "$BASE_DIR" 2>/dev/null || true
         fi
-        # Explicitly remove named volumes used by the stack (force flag)
         for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
             sudo docker volume rm -f "$vol" 2>/dev/null || true
         done
@@ -157,12 +152,12 @@ clean_environment() {
     fi
 }
 
-# RUN CLEANUP
+# Run cleanup
 clean_environment
 
 mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR/unbound" "$AGH_CONF_DIR" "$NGINX_CONF_DIR" "$WG_PROFILES_DIR"
 
-# Init Logs
+# Initialize log files
 touch "$HISTORY_LOG" "$ACTIVE_WG_CONF"
 if [ ! -f "$ACTIVE_PROFILE_NAME_FILE" ]; then echo "Initial-Setup" > "$ACTIVE_PROFILE_NAME_FILE"; fi
 chmod 666 "$ACTIVE_PROFILE_NAME_FILE" "$HISTORY_LOG"
@@ -298,27 +293,25 @@ echo "=========================================================="
 echo " PROTON WIREGUARD CONFIGURATION"
 echo "=========================================================="
 
-# NEW: Validation Logic
+# WireGuard Configuration Validation
 validate_wg_config() {
     if [ ! -s "$ACTIVE_WG_CONF" ]; then return 1; fi
-    # Check if PrivateKey exists
     if ! grep -q "PrivateKey" "$ACTIVE_WG_CONF"; then
         return 1
     fi
-    # Check if PrivateKey is just whitespace or empty value
     local PK_VAL
     PK_VAL=$(grep "PrivateKey" "$ACTIVE_WG_CONF" | cut -d'=' -f2 | tr -d '[:space:]')
     if [ -z "$PK_VAL" ]; then
         return 1
     fi
-    # If the key is shorter than typical WireGuard keys (approx 44 chars), it's suspicious
+    # WireGuard private keys are exactly 44 base64 characters
     if [ "${#PK_VAL}" -lt 40 ]; then
         return 1
     fi
     return 0
 }
 
-# Check existing file
+# Check existing WireGuard configuration
 if validate_wg_config; then
     log_info "Existing WireGuard config found and validated. Skipping paste."
 else
@@ -335,14 +328,10 @@ else
     echo "" >> "$ACTIVE_WG_CONF" 
     echo "----------------------------------------------------------"
     
-    # Sanitization:
-    # 1. Remove Windows Carriage Returns \r (Critical for base64 errors)
+    # Sanitize the configuration file
     sed -i 's/\r//g' "$ACTIVE_WG_CONF"
-    # 2. Remove trailing spaces/tabs
     sed -i 's/[ \t]*$//' "$ACTIVE_WG_CONF"
-    # 3. Remove leading blank lines
     sed -i '/./,$!d' "$ACTIVE_WG_CONF"
-    # 4. Normalize "Key = Value" to "Key=Value" to prevent parser issues with leading spaces
     sed -i 's/ *= */=/g' "$ACTIVE_WG_CONF"
 
     if ! validate_wg_config; then
@@ -353,7 +342,7 @@ else
     fi
 fi
 
-# --- 6. SETUP GLUETUN ENV ---
+# --- 6. GLUETUN VPN CONFIGURATION ---
 log_info "Configuring Gluetun..."
 sudo docker pull -q qmcgaw/gluetun:latest > /dev/null
 
@@ -364,19 +353,17 @@ FIREWALL_VPN_INPUT_PORTS=8080,8180,3000,3001,3002,8280,10416,8480
 FIREWALL_OUTBOUND_SUBNETS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 EOF
 
-# Extract profile name from WireGuard config (look for comment in [Peer] section like "# NL-FREE#231")
+# Extract profile name from WireGuard config
 extract_wg_profile_name() {
     local config_file="$1"
     local in_peer=0
     local profile_name=""
     while IFS= read -r line; do
         stripped=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-        # Check for [Peer] section start
         if echo "$stripped" | grep -qi '^\[peer\]$'; then
             in_peer=1
             continue
         fi
-        # If in [Peer] section and found a comment, extract it as profile name
         if [ "$in_peer" -eq 1 ] && echo "$stripped" | grep -q '^#'; then
             profile_name=$(echo "$stripped" | sed 's/^#[[:space:]]*//')
             if [ -n "$profile_name" ]; then
@@ -384,12 +371,11 @@ extract_wg_profile_name() {
                 return 0
             fi
         fi
-        # If hit another section, stop looking
         if [ "$in_peer" -eq 1 ] && echo "$stripped" | grep -q '^\['; then
             break
         fi
     done < "$config_file"
-    # Fallback: look for any comment that doesn't look like "Key = Value"
+    # Fallback: look for any comment
     while IFS= read -r line; do
         stripped=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         if echo "$stripped" | grep -q '^#' && ! echo "$stripped" | grep -q '='; then
@@ -404,12 +390,11 @@ extract_wg_profile_name() {
     return 1
 }
 
-# Get initial profile name from WireGuard config
+# Initialize profile
 INITIAL_PROFILE_NAME=$(extract_wg_profile_name "$ACTIVE_WG_CONF")
 if [ -z "$INITIAL_PROFILE_NAME" ]; then
     INITIAL_PROFILE_NAME="Initial-Setup"
 fi
-# Sanitize the profile name (keep only alphanumeric, dash, underscore, hash)
 INITIAL_PROFILE_NAME_SAFE=$(echo "$INITIAL_PROFILE_NAME" | tr -cd 'a-zA-Z0-9-_#')
 if [ -z "$INITIAL_PROFILE_NAME_SAFE" ]; then
     INITIAL_PROFILE_NAME_SAFE="Initial-Setup"
@@ -417,18 +402,16 @@ fi
 
 cp "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
 chmod 644 "$GLUETUN_ENV_FILE" "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
-
-# Update the active profile name file with the extracted name
 echo "$INITIAL_PROFILE_NAME_SAFE" > "$ACTIVE_PROFILE_NAME_FILE"
 
-# Secrets Gen
+# --- 7. SECRET GENERATION ---
 SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64)
 ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
 IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
 IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
 ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
 
-# --- 8. PORT VARS ---
+# --- 8. PORT CONFIGURATION ---
 PORT_INT_REDLIB=8080; PORT_INT_WIKILESS=8180; PORT_INT_INVIDIOUS=3000
 PORT_INT_LIBREMDB=3001; PORT_INT_RIMGO=3002; PORT_INT_BREEZEWIKI=10416
 PORT_INT_ANONYMOUS=8480; PORT_INT_VERT=80; PORT_INT_VERTD=24153
@@ -438,10 +421,10 @@ PORT_REDLIB=8080; PORT_WIKILESS=8180; PORT_INVIDIOUS=3000; PORT_LIBREMDB=3001
 PORT_RIMGO=3002; PORT_SCRIBE=8280; PORT_BREEZEWIKI=8380; PORT_ANONYMOUS=8480
 PORT_VERT=5555; PORT_VERTD=24153
 
-# --- 9. CONFIG GENERATION ---
+# --- 9. SERVICE CONFIGURATION ---
 log_info "Generating Service Configs..."
 
-# --- 9a. DNS & CERTIFICATE SETUP ---
+# DNS & Certificate Setup
 log_info "Setting up DNS and certificates..."
 
 if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
@@ -467,9 +450,7 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     log_info "Attempting Let's Encrypt certificate..."
     CERT_SUCCESS=false
     
-    # Use ECC keys (faster, smaller, more compatible) with DNS validation
-    # Increased --dnssleep to 120 seconds to allow more time for DNS propagation
-    # Added --debug 2 for detailed output to help diagnose issues
+    # Request Let's Encrypt certificate via DNS-01 challenge
     sudo docker run --rm \
         -v "$AGH_CONF_DIR:/acme" \
         -e "DESEC_Token=$DESEC_TOKEN" \
@@ -535,7 +516,7 @@ fi
 UNBOUND_STATIC_IP="172.${FOUND_OCTET}.0.250"
 log_info "Unbound will use static IP: $UNBOUND_STATIC_IP"
 
-# Generate Unbound configuration - FULLY RECURSIVE
+# Unbound recursive DNS configuration
 cat > "$UNBOUND_CONF" <<'UNBOUNDEOF'
 server:
   interface: 0.0.0.0
@@ -609,7 +590,6 @@ filters:
     url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/refs/heads/main/blocklist.txt
     name: "Lyceris-chan Blocklist"
     id: 1
-# OPTIMIZATION: Check for updates every 1 hour (negligible resource usage, better sync)
 filters_update_interval: 1
 EOF
 
@@ -627,7 +607,7 @@ server {
 }
 EOF
 
-# --- 10. ENV FILES ---
+# --- 10. ENVIRONMENT FILES ---
 cat > "$ENV_DIR/libremdb.env" <<EOF
 NEXT_PUBLIC_URL=http://$LAN_IP:$PORT_LIBREMDB
 AXIOS_USERAGENT=Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0
@@ -647,7 +627,7 @@ GITHUB_USERNAME="$SCRIBE_GH_USER"
 GITHUB_PERSONAL_ACCESS_TOKEN="$SCRIBE_GH_TOKEN"
 EOF
 
-# --- 11. REPOS ---
+# --- 11. REPOSITORY SETUP ---
 log_info "Cloning Repositories..."
 clone_repo() { 
     if [ ! -d "$2/.git" ]; then 
@@ -729,7 +709,7 @@ CMD ["redlib"]
 EOF
 chmod -R 777 "$SRC_DIR/invidious" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
 
-# --- 12. BACKEND CONTROL SCRIPTS ---
+# --- 12. CONTROL SCRIPTS ---
 cat > "$WG_CONTROL_SCRIPT" <<'EOF'
 #!/bin/sh
 ACTION=$1
@@ -739,7 +719,6 @@ ACTIVE_CONF="/active-wg.conf"
 NAME_FILE="/app/.active_profile_name"
 LOG_FILE="/app/deployment.log"
 
-# Helper function to sanitize strings for JSON (remove control chars, escape quotes)
 sanitize_json_string() {
     printf '%s' "$1" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\n\r'
 }
@@ -772,7 +751,6 @@ elif [ "$ACTION" = "status" ]; then
     PUBLIC_IP="--"
     
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^gluetun$"; then
-        # Check container health
         HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
         if [ "$HEALTH" = "healthy" ]; then
             GLUETUN_HEALTHY="true"
@@ -784,11 +762,9 @@ elif [ "$ACTION" = "status" ]; then
             RX=$(echo "$WG_OUT" | awk '{print $6}' 2>/dev/null || echo "0")
             TX=$(echo "$WG_OUT" | awk '{print $7}' 2>/dev/null || echo "0")
             ENDPOINT=$(docker exec gluetun wg show wg0 endpoints 2>/dev/null | awk '{print $2}' 2>/dev/null || echo "--")
-            # Ensure numeric values
             case "$HANDSHAKE" in ''|*[!0-9]*) HANDSHAKE="0" ;; esac
             case "$RX" in ''|*[!0-9]*) RX="0" ;; esac
             case "$TX" in ''|*[!0-9]*) TX="0" ;; esac
-            # Calculate time since last handshake
             if [ "$HANDSHAKE" != "0" ] && [ "$HANDSHAKE" -gt 0 ] 2>/dev/null; then
                 NOW=$(date +%s)
                 DIFF=$((NOW - HANDSHAKE))
@@ -801,7 +777,6 @@ elif [ "$ACTION" = "status" ]; then
                 fi
             fi
         fi
-        # Get public IP from gluetun
         PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
     fi
     
@@ -817,12 +792,9 @@ elif [ "$ACTION" = "status" ]; then
         WGE_STATUS="up"
         WGE_HOST=$(docker exec wg-easy printenv WG_HOST 2>/dev/null | tr -d '\n\r' || echo "Unknown")
         if [ -z "$WGE_HOST" ]; then WGE_HOST="Unknown"; fi
-        # Try to get client count from wg-easy (via wg show)
         WG_PEER_DATA=$(docker exec wg-easy wg show wg0 2>/dev/null || echo "")
         if [ -n "$WG_PEER_DATA" ]; then
-            # Count total peers
             WGE_CLIENTS=$(echo "$WG_PEER_DATA" | grep -c "^peer:" 2>/dev/null || echo "0")
-            # Count peers with recent handshake (within last 3 minutes = 180 seconds)
             CONNECTED_COUNT=0
             for hs in $(echo "$WG_PEER_DATA" | grep "latest handshake:" | sed 's/.*latest handshake: //' | sed 's/ seconds.*//' | grep -E '^[0-9]+' 2>/dev/null || echo ""); do
                 if [ -n "$hs" ] && [ "$hs" -lt 180 ] 2>/dev/null; then
@@ -833,14 +805,12 @@ elif [ "$ACTION" = "status" ]; then
         fi
     fi
     
-    # Sanitize all string values
     ACTIVE_NAME=$(sanitize_json_string "$ACTIVE_NAME")
     ENDPOINT=$(sanitize_json_string "$ENDPOINT")
     PUBLIC_IP=$(sanitize_json_string "$PUBLIC_IP")
     HANDSHAKE_AGO=$(sanitize_json_string "$HANDSHAKE_AGO")
     WGE_HOST=$(sanitize_json_string "$WGE_HOST")
     
-    # Output clean JSON
     printf '{"gluetun":{"status":"%s","healthy":%s,"active_profile":"%s","endpoint":"%s","public_ip":"%s","handshake":"%s","handshake_ago":"%s","rx":"%s","tx":"%s"},"wgeasy":{"status":"%s","host":"%s","clients":"%s","connected":"%s"}}' \
         "$GLUETUN_STATUS" "$GLUETUN_HEALTHY" "$ACTIVE_NAME" "$ENDPOINT" "$PUBLIC_IP" "$HANDSHAKE" "$HANDSHAKE_AGO" "$RX" "$TX" \
         "$WGE_STATUS" "$WGE_HOST" "$WGE_CLIENTS" "$WGE_CONNECTED"
@@ -915,7 +885,6 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             try:
                 result = subprocess.run([CONTROL_SCRIPT, "status"], capture_output=True, text=True, timeout=30)
                 output = result.stdout.strip()
-                # Remove any control characters that may break JSON parsing
                 output = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', output)
                 json_start = output.find('{')
                 json_end = output.rfind('}')
@@ -937,7 +906,6 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             try:
-                # Wait for log file to exist
                 for _ in range(10):
                     if os.path.exists(LOG_FILE):
                         break
@@ -994,7 +962,6 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"Starting API server on port {PORT}...")
-    # Ensure log file exists
     if not os.path.exists(LOG_FILE):
         os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
         open(LOG_FILE, 'a').close()
@@ -1004,7 +971,7 @@ if __name__ == "__main__":
 APIEOF
 chmod +x "$WG_API_SCRIPT"
 
-# --- 13. DOCKER COMPOSE WITH RESOURCE TUNING ---
+# --- 13. DOCKER COMPOSE CONFIGURATION ---
 log_info "Writing docker-compose.yml..."
 cat > "$COMPOSE_FILE" <<EOF
 networks:
@@ -1174,9 +1141,6 @@ services:
         limits: {cpus: '0.5', memory: 256M}
 
   # WG-Easy: Remote access VPN server (only 51820/UDP exposed to internet)
-  # Split tunneling: WG_ALLOWED_IPS routes only private IPs (LAN + Docker networks)
-  # This preserves bandwidth by NOT routing internet traffic through the tunnel
-  # DNS is routed to AdGuard via WG_DEFAULT_DNS for ad-blocking on mobile devices
   wg-easy:
     image: ghcr.io/wg-easy/wg-easy:latest
     container_name: wg-easy
@@ -1184,10 +1148,7 @@ services:
     environment:
       - WG_HOST=$PUBLIC_IP
       - PASSWORD_HASH=$WG_HASH_ESCAPED
-      # Route DNS to AdGuard for ad-blocking
       - WG_DEFAULT_DNS=$LAN_IP
-      # Split tunneling: only route private networks, not internet (0.0.0.0/0)
-      # This includes LAN (192.168.x.x), Docker networks (172.x.x.x), and other private ranges
       - WG_ALLOWED_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       - WG_PERSISTENT_KEEPALIVE=0
       - WG_PORT=51820
@@ -1360,8 +1321,7 @@ services:
       resources:
         limits: {cpus: '0.5', memory: 256M}
 
-  # VERT: Local file conversion service (no VPN needed, runs on frontnet)
-  # Accessible via LAN and through wg-easy tunnel (WG_ALLOWED_IPS includes 172.16.0.0/12)
+  # VERT: Local file conversion service
   vertd:
     build:
       context: https://github.com/VERT-sh/vertd.git#main
@@ -1396,7 +1356,7 @@ services:
         limits: {cpus: '0.5', memory: 256M}
 EOF
 
-# --- 14. DASHBOARD HTML ---
+# --- 14. DASHBOARD GENERATION ---
 echo "[+] Generating Dashboard..."
 cat > "$DASHBOARD_FILE" <<EOF
 <!DOCTYPE html>
@@ -1915,7 +1875,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
 </html>
 EOF
 
-# --- 15. IP MONITOR ---
+# --- 15. IP MONITORING ---
 echo "[+] Generating IP Monitor Script..."
 
 if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
@@ -1972,7 +1932,7 @@ CRON_CMD="*/5 * * * * $MONITOR_SCRIPT"
 EXISTING_CRON=$(crontab -l 2>/dev/null || true)
 echo "$EXISTING_CRON" | grep -v "$MONITOR_SCRIPT" | { cat; echo "$CRON_CMD"; } | crontab -
 
-# --- 16. START ---
+# --- 16. DEPLOYMENT ---
 echo "=========================================================="
 echo "RUNNING FINAL DEPLOYMENT"
 echo "=========================================================="
