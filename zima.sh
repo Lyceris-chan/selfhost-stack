@@ -1173,6 +1173,10 @@ services:
       resources:
         limits: {cpus: '0.5', memory: 256M}
 
+  # WG-Easy: Remote access VPN server (only 51820/UDP exposed to internet)
+  # Split tunneling: WG_ALLOWED_IPS routes only private IPs (LAN + Docker networks)
+  # This preserves bandwidth by NOT routing internet traffic through the tunnel
+  # DNS is routed to AdGuard via WG_DEFAULT_DNS for ad-blocking on mobile devices
   wg-easy:
     image: ghcr.io/wg-easy/wg-easy:latest
     container_name: wg-easy
@@ -1180,7 +1184,10 @@ services:
     environment:
       - WG_HOST=$PUBLIC_IP
       - PASSWORD_HASH=$WG_HASH_ESCAPED
+      # Route DNS to AdGuard for ad-blocking
       - WG_DEFAULT_DNS=$LAN_IP
+      # Split tunneling: only route private networks, not internet (0.0.0.0/0)
+      # This includes LAN (192.168.x.x), Docker networks (172.x.x.x), and other private ranges
       - WG_ALLOWED_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       - WG_PERSISTENT_KEEPALIVE=0
       - WG_PORT=51820
@@ -1353,6 +1360,8 @@ services:
       resources:
         limits: {cpus: '0.5', memory: 256M}
 
+  # VERT: Local file conversion service (no VPN needed, runs on frontnet)
+  # Accessible via LAN and through wg-easy tunnel (WG_ALLOWED_IPS includes 172.16.0.0/12)
   vertd:
     build:
       context: https://github.com/VERT-sh/vertd.git#main
@@ -2031,10 +2040,16 @@ fi
 echo ""
 echo "SECURITY MODEL:"
 echo "  ✓ ONLY WireGuard (51820/udp) exposed to internet"
-echo "  ✓ All DNS services accessible via local network or VPN"
+echo "  ✓ All services bound to LAN IP (not 0.0.0.0)"
+echo "  ✓ WireGuard controls access - valid config required"
 echo "  ✓ No direct DNS exposure - requires VPN authentication"
 echo "  ✓ Fully recursive DNS (no third-party upstream)"
-echo "  ✓ Filter updates every 6 hours"
+echo ""
+echo "SPLIT TUNNELING (bandwidth optimized):"
+echo "  ✓ Only private IPs routed through VPN (LAN + Docker networks)"
+echo "  ✓ Internet traffic goes direct (not through tunnel)"
+echo "  ✓ DNS routed to AdGuard for ad-blocking on mobile"
+echo "  ✓ All services (including VERT) accessible via VPN tunnel"
 echo ""
 if [ "$AUTO_PASSWORD" = true ]; then
     echo "=========================================================="
