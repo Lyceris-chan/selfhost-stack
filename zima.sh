@@ -127,36 +127,165 @@ clean_environment() {
                 sudo rm -rf "$BASE_DIR/.docker" 2>/dev/null || true
                 sudo rm -rf "$BASE_DIR" 2>/dev/null || true
             fi
+            # Remove volumes - try both unprefixed and prefixed names (docker-compose uses project prefix)
             for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
                 sudo docker volume rm -f "$vol" 2>/dev/null || true
+                sudo docker volume rm -f "${APP_NAME}_${vol}" 2>/dev/null || true
             done
             log_info "All deployment artifacts, configs, env files, and volumes wiped."
         fi
     fi
     
     if [ "$FORCE_CLEAN" = true ]; then
-        log_warn "NUCLEAR CLEANUP MODE: Removing everything..."
-        # Stop all containers first to release volume locks
+        log_warn "NUCLEAR CLEANUP MODE: Restoring system to pre-deployment state..."
+        echo ""
+        
+        # ============================================================
+        # PHASE 1: Stop all containers to release locks
+        # ============================================================
+        log_info "Phase 1: Stopping all deployment containers..."
         for c in $TARGET_CONTAINERS; do
-            sudo docker stop "$c" 2>/dev/null || true
+            if sudo docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${c}$"; then
+                log_info "  Stopping: $c"
+                sudo docker stop "$c" 2>/dev/null || true
+            fi
         done
-        # Small delay to ensure containers fully stop
-        sleep 2
-        # Now remove containers
+        sleep 3
+        
+        # ============================================================
+        # PHASE 2: Remove all containers
+        # ============================================================
+        log_info "Phase 2: Removing all deployment containers..."
         for c in $TARGET_CONTAINERS; do
-            sudo docker rm -f "$c" 2>/dev/null || true
+            if sudo docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${c}$"; then
+                log_info "  Removing container: $c"
+                sudo docker rm -f "$c" 2>/dev/null || true
+            fi
         done
+        
+        # ============================================================
+        # PHASE 3: Remove ALL volumes (list everything, match patterns)
+        # ============================================================
+        log_info "Phase 3: Removing all deployment volumes..."
+        ALL_VOLUMES=$(sudo docker volume ls -q 2>/dev/null || echo "")
+        for vol in $ALL_VOLUMES; do
+            case "$vol" in
+                # Match exact names
+                portainer-data|adguard-work|redis-data|postgresdata|wg-config|companioncache|odido-data)
+                    log_info "  Removing volume: $vol"
+                    sudo docker volume rm -f "$vol" 2>/dev/null || true
+                    ;;
+                # Match prefixed names (docker-compose project prefix)
+                privacy-hub_*|privacyhub_*)
+                    log_info "  Removing volume: $vol"
+                    sudo docker volume rm -f "$vol" 2>/dev/null || true
+                    ;;
+                # Match any volume containing our identifiers
+                *portainer*|*adguard*|*redis*|*postgres*|*wg-config*|*companion*|*odido*)
+                    log_info "  Removing volume: $vol"
+                    sudo docker volume rm -f "$vol" 2>/dev/null || true
+                    ;;
+            esac
+        done
+        
+        # ============================================================
+        # PHASE 4: Remove ALL networks created by this deployment
+        # ============================================================
+        log_info "Phase 4: Removing deployment networks..."
+        ALL_NETWORKS=$(sudo docker network ls --format '{{.Name}}' 2>/dev/null || echo "")
+        for net in $ALL_NETWORKS; do
+            case "$net" in
+                # Skip default Docker networks
+                bridge|host|none) continue ;;
+                # Match our networks
+                privacy-hub_*|privacyhub_*|*frontnet*|*_default)
+                    log_info "  Removing network: $net"
+                    sudo docker network rm "$net" 2>/dev/null || true
+                    ;;
+            esac
+        done
+        
+        # ============================================================
+        # PHASE 5: Remove ALL images built/pulled by this deployment
+        # ============================================================
+        log_info "Phase 5: Removing deployment images..."
+        # Remove images by known names
+        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome nginx:alpine portainer/portainer-ce containrrr/watchtower python:3.11-alpine ghcr.io/wg-easy/wg-easy redis:8-alpine quay.io/invidious/invidious quay.io/invidious/invidious-companion docker.io/library/postgres:14 ghcr.io/zyachel/libremdb codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine alpine:latest neilpang/acme.sh"
+        for img in $KNOWN_IMAGES; do
+            if sudo docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -q "$img"; then
+                log_info "  Removing image: $img"
+                sudo docker rmi -f "$img" 2>/dev/null || true
+            fi
+        done
+        # Remove locally built images
+        ALL_IMAGES=$(sudo docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' 2>/dev/null || echo "")
+        echo "$ALL_IMAGES" | while read -r img_info; do
+            img_name=$(echo "$img_info" | awk '{print $1}')
+            img_id=$(echo "$img_info" | awk '{print $2}')
+            case "$img_name" in
+                *privacy-hub*|*privacyhub*|*odido*|*redlib*|*wikiless*|*scribe*|*vert*|*invidious*|*sources_*)
+                    log_info "  Removing image: $img_name"
+                    sudo docker rmi -f "$img_id" 2>/dev/null || true
+                    ;;
+                "<none>:<none>")
+                    # Remove dangling images
+                    sudo docker rmi -f "$img_id" 2>/dev/null || true
+                    ;;
+            esac
+        done
+        
+        # ============================================================
+        # PHASE 6: Remove ALL data directories and files
+        # ============================================================
+        log_info "Phase 6: Removing all data directories and files..."
+        
+        # Main data directory
         if [ -d "$BASE_DIR" ]; then
-            sudo rm -rf "$BASE_DIR" 2>/dev/null || true
+            log_info "  Removing: $BASE_DIR"
+            sudo rm -rf "$BASE_DIR"
         fi
-        # Remove volumes (now that containers are stopped)
-        for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
-            sudo docker volume rm -f "$vol" 2>/dev/null || true
-        done
+        
+        # Alternative locations that might have been created
+        if [ -d "/DATA/AppData/privacy-hub" ]; then
+            log_info "  Removing: /DATA/AppData/privacy-hub"
+            sudo rm -rf "/DATA/AppData/privacy-hub"
+        fi
+        
+        # ============================================================
+        # PHASE 7: Remove cron jobs added by this script
+        # ============================================================
+        log_info "Phase 7: Removing cron jobs..."
+        EXISTING_CRON=$(crontab -l 2>/dev/null || true)
+        if echo "$EXISTING_CRON" | grep -q "wg-ip-monitor"; then
+            log_info "  Removing wg-ip-monitor cron job"
+            echo "$EXISTING_CRON" | grep -v "wg-ip-monitor" | grep -v "privacy-hub" | crontab - 2>/dev/null || true
+        fi
+        
+        # ============================================================
+        # PHASE 8: Clean up Docker system
+        # ============================================================
+        log_info "Phase 8: Final Docker cleanup..."
         sudo docker volume prune -f 2>/dev/null || true
+        sudo docker network prune -f 2>/dev/null || true
         sudo docker image prune -af 2>/dev/null || true
         sudo docker builder prune -af 2>/dev/null || true
-        log_info "Nuclear cleanup complete."
+        sudo docker system prune -f 2>/dev/null || true
+        
+        echo ""
+        log_info "============================================================"
+        log_info "NUCLEAR CLEANUP COMPLETE"
+        log_info "============================================================"
+        log_info "The following have been removed:"
+        log_info "  ✓ All deployment containers ($TARGET_CONTAINERS)"
+        log_info "  ✓ All deployment volumes (portainer-data, adguard-work, etc.)"
+        log_info "  ✓ All deployment networks (frontnet, etc.)"
+        log_info "  ✓ All deployment images"
+        log_info "  ✓ All configuration files and secrets"
+        log_info "  ✓ All data directories ($BASE_DIR)"
+        log_info "  ✓ All cron jobs (wg-ip-monitor)"
+        log_info ""
+        log_info "System restored to pre-deployment state."
+        log_info "============================================================"
     fi
 }
 
@@ -806,56 +935,60 @@ elif [ "$ACTION" = "status" ]; then
     GLUETUN_STATUS="down"
     GLUETUN_HEALTHY="false"
     HANDSHAKE="0"
-    HANDSHAKE_AGO="Never"
+    HANDSHAKE_AGO="N/A"
     RX="0"
     TX="0"
     ENDPOINT="--"
     PUBLIC_IP="--"
+    VPN_TYPE="--"
     
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^gluetun$"; then
+        # Check container health status
         HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
         if [ "$HEALTH" = "healthy" ]; then
             GLUETUN_HEALTHY="true"
-            GLUETUN_STATUS="up"
         fi
         
-        # Try to get WireGuard stats via wg command (may not be available in all gluetun versions)
-        WG_OUT=$(docker exec gluetun wg show wg0 dump 2>/dev/null | head -n 2 | tail -n 1 || echo "")
-        if [ -n "$WG_OUT" ]; then
-            GLUETUN_STATUS="up"
-            HANDSHAKE=$(echo "$WG_OUT" | awk '{print $5}' 2>/dev/null || echo "0")
-            RX=$(echo "$WG_OUT" | awk '{print $6}' 2>/dev/null || echo "0")
-            TX=$(echo "$WG_OUT" | awk '{print $7}' 2>/dev/null || echo "0")
-            ENDPOINT=$(docker exec gluetun wg show wg0 endpoints 2>/dev/null | awk '{print $2}' 2>/dev/null || echo "--")
-            case "$HANDSHAKE" in ''|*[!0-9]*) HANDSHAKE="0" ;; esac
-            case "$RX" in ''|*[!0-9]*) RX="0" ;; esac
-            case "$TX" in ''|*[!0-9]*) TX="0" ;; esac
-            if [ "$HANDSHAKE" != "0" ] && [ "$HANDSHAKE" -gt 0 ] 2>/dev/null; then
-                NOW=$(date +%s)
-                DIFF=$((NOW - HANDSHAKE))
-                if [ "$DIFF" -lt 60 ]; then
-                    HANDSHAKE_AGO="${DIFF}s ago"
-                elif [ "$DIFF" -lt 3600 ]; then
-                    HANDSHAKE_AGO="$((DIFF / 60))m ago"
-                else
-                    HANDSHAKE_AGO="$((DIFF / 3600))h ago"
-                fi
+        # Use gluetun's HTTP control server API (port 8000) for status
+        # API docs: https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
+        
+        # Get VPN status from control server
+        VPN_STATUS_RESPONSE=$(docker exec gluetun wget -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
+        if [ -n "$VPN_STATUS_RESPONSE" ]; then
+            # Extract status from {"status":"running"} or {"status":"stopped"}
+            VPN_RUNNING=$(echo "$VPN_STATUS_RESPONSE" | grep -o '"status":"running"' || echo "")
+            if [ -n "$VPN_RUNNING" ]; then
+                GLUETUN_STATUS="up"
+                HANDSHAKE_AGO="Connected"
+            else
+                GLUETUN_STATUS="down"
+                HANDSHAKE_AGO="Disconnected"
             fi
-        else
-            # wg command not available - if gluetun is healthy, show N/A for stats
-            if [ "$GLUETUN_HEALTHY" = "true" ]; then
-                HANDSHAKE_AGO="N/A (WireGuard stats unavailable)"
+        elif [ "$GLUETUN_HEALTHY" = "true" ]; then
+            # Fallback: if container is healthy, assume VPN is up
+            GLUETUN_STATUS="up"
+            HANDSHAKE_AGO="Connected (API unavailable)"
+        fi
+        
+        # Get public IP from control server
+        PUBLIC_IP_RESPONSE=$(docker exec gluetun wget -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
+        if [ -n "$PUBLIC_IP_RESPONSE" ]; then
+            # Extract IP from {"public_ip":"x.x.x.x"}
+            EXTRACTED_IP=$(echo "$PUBLIC_IP_RESPONSE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+            if [ -n "$EXTRACTED_IP" ]; then
+                PUBLIC_IP="$EXTRACTED_IP"
             fi
         fi
         
-        # Try gluetun's HTTP control server API first (port 8000), then fall back to external check
-        API_RESPONSE=$(docker exec gluetun wget -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
-        if [ -n "$API_RESPONSE" ]; then
-            # Extract public_ip from JSON response, handling various formats
-            PUBLIC_IP=$(echo "$API_RESPONSE" | grep -oE '"public_ip"\s*:\s*"[^"]+"' | sed 's/.*"\([^"]*\)"$/\1/' || echo "")
-        fi
-        if [ -z "$PUBLIC_IP" ] || [ "$PUBLIC_IP" = "{}" ] || [ "$PUBLIC_IP" = "null" ]; then
+        # Fallback to external IP check if control server didn't return an IP
+        if [ -z "$PUBLIC_IP" ] || [ "$PUBLIC_IP" = "--" ]; then
             PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
+        fi
+        
+        # Try to get endpoint from WireGuard config if available
+        WG_CONF_ENDPOINT=$(docker exec gluetun cat /gluetun/wireguard/wg0.conf 2>/dev/null | grep -i "^Endpoint" | cut -d'=' -f2 | tr -d ' ' | head -1 || echo "")
+        if [ -n "$WG_CONF_ENDPOINT" ]; then
+            ENDPOINT="$WG_CONF_ENDPOINT"
         fi
     fi
     
@@ -1795,7 +1928,21 @@ cat >> "$DASHBOARD_FILE" <<EOF
             try {
                 const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
                 const res = await fetch(\`\${ODIDO_API}/status\`, { headers });
-                if (!res.ok) throw new Error('API unavailable');
+                if (!res.ok) {
+                    // Show configured panel but indicate API error
+                    document.getElementById('odido-loading').style.display = 'none';
+                    document.getElementById('odido-not-configured').style.display = 'none';
+                    document.getElementById('odido-configured').style.display = 'block';
+                    document.getElementById('odido-remaining').textContent = '--';
+                    document.getElementById('odido-bundle-code').textContent = '--';
+                    document.getElementById('odido-threshold').textContent = '--';
+                    document.getElementById('odido-auto-renew').textContent = '--';
+                    document.getElementById('odido-rate').textContent = '--';
+                    const apiStatus = document.getElementById('odido-api-status');
+                    apiStatus.textContent = \`Error: \${res.status}\`;
+                    apiStatus.style.color = 'var(--err)';
+                    return;
+                }
                 const data = await res.json();
                 document.getElementById('odido-loading').style.display = 'none';
                 document.getElementById('odido-not-configured').style.display = 'none';
@@ -1823,9 +1970,11 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 if (remaining < threshold) bar.classList.add('critical');
                 else if (remaining < threshold * 2) bar.classList.add('low');
             } catch(e) {
+                // Network error or service unavailable - show not-configured with error info
                 document.getElementById('odido-loading').style.display = 'none';
                 document.getElementById('odido-not-configured').style.display = 'block';
                 document.getElementById('odido-configured').style.display = 'none';
+                console.error('Odido status error:', e);
             }
         }
         
