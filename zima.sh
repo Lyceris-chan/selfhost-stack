@@ -385,3 +385,204 @@ rewrites:
 EOF
 fi
 
+cat > "$COMPOSE_FILE" <<EOF
+networks:
+  frontnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: $DOCKER_SUBNET
+
+volumes:
+  postgresdata:
+  companioncache:
+  redis-data:
+  wg-config:
+  adguard-work:
+  portainer-data:
+  odido-data:
+
+services:
+  hub-api:
+    build:
+      context: $SRC_DIR/hub-api
+    container_name: hub-api
+    labels:
+      - "casaos.skip=true"
+    networks: [frontnet]
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "$WG_PROFILES_DIR:/profiles"
+      - "$ACTIVE_WG_CONF:/active-wg.conf"
+      - "$ACTIVE_PROFILE_NAME_FILE:/app/.active_profile_name"
+      - "$WG_CONTROL_SCRIPT:/usr/local/bin/wg-control.sh"
+      - "$CERT_MONITOR_SCRIPT:/usr/local/bin/cert-monitor.sh"
+      - "$WG_API_SCRIPT:/app/server.py"
+      - "$GLUETUN_ENV_FILE:/app/gluetun.env"
+      - "$COMPOSE_FILE:/app/docker-compose.yml"
+      - "$HISTORY_LOG:/app/deployment.log"
+      - "$BASE_DIR/.data_usage:/app/.data_usage"
+      - "$BASE_DIR/.wge_data_usage:/app/.wge_data_usage"
+      - "$AGH_CONF_DIR:/etc/adguard/conf"
+      - "$DOCKER_AUTH_DIR:/root/.docker:ro"
+    environment:
+      - HUB_API_KEY=$ODIDO_API_KEY
+      - DOCKER_CONFIG=/root/.docker
+    entrypoint: ["/bin/sh", "-c", "touch /app/.data_usage /app/.wge_data_usage && python -u /app/server.py"]
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "55555"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+
+  odido-booster:
+    build:
+      context: $SRC_DIR/odido-bundle-booster
+    container_name: odido-booster
+    networks: [frontnet]
+    ports: ["$LAN_IP:8085:80"]
+    environment:
+      - API_KEY=$ODIDO_API_KEY
+      - ODIDO_USER_ID=$ODIDO_USER_ID
+      - ODIDO_TOKEN=$ODIDO_TOKEN
+      - PORT=80
+    volumes:
+      - odido-data:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.3', memory: 128M}
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    labels:
+      - "casaos.skip=true"
+    networks: [frontnet]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: >
+      --schedule "0 0 3 * * *"
+      --cleanup
+      --include-stopped
+      --disable-containers watchtower
+      --notification-url "generic://hub-api:55555/watchtower?template=json&disabletls=yes"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.2', memory: 128M}
+
+  gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    labels:
+      - "casaos.skip=true"
+    cap_add: [NET_ADMIN]
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv4.ip_forward=1
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks: [frontnet]
+    ports:
+      - "$LAN_IP:$PORT_REDLIB:$PORT_INT_REDLIB/tcp"
+      - "$LAN_IP:$PORT_WIKILESS:$PORT_INT_WIKILESS/tcp"
+      - "$LAN_IP:$PORT_INVIDIOUS:$PORT_INT_INVIDIOUS/tcp"
+      - "$LAN_IP:$PORT_LIBREMDB:$PORT_INT_LIBREMDB/tcp"
+      - "$LAN_IP:$PORT_RIMGO:$PORT_INT_RIMGO/tcp"
+      - "$LAN_IP:$PORT_SCRIBE:$PORT_SCRIBE/tcp"
+      - "$LAN_IP:$PORT_BREEZEWIKI:$PORT_INT_BREEZEWIKI/tcp"
+      - "$LAN_IP:$PORT_ANONYMOUS:$PORT_INT_ANONYMOUS/tcp"
+    volumes:
+      - "$ACTIVE_WG_CONF:/gluetun/wireguard/wg0.conf:ro"
+    env_file:
+      - "$GLUETUN_ENV_FILE"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '2.0', memory: 512M}
+
+  dashboard:
+    image: dhi.io/nginx:alpine-slim
+    container_name: dashboard
+    networks: [frontnet]
+    ports:
+      - "$LAN_IP:$PORT_DASHBOARD_WEB:$PORT_DASHBOARD_WEB"
+      - "$LAN_IP:8443:8443"
+    volumes:
+      - "$FONTS_DIR:/usr/share/nginx/html/fonts:ro"
+      - "$DASHBOARD_FILE:/usr/share/nginx/html/index.html:ro"
+      - "$NGINX_CONF:/etc/nginx/conf.d/default.conf:ro"
+      - "$AGH_CONF_DIR:/etc/adguard/conf:ro"
+    labels:
+      - "dev.casaos.app.ui.protocol=http"
+      - "dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB"
+      - "dev.casaos.app.ui.hostname=$LAN_IP"
+    depends_on:
+      hub-api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.3', memory: 128M}
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    command: -H unix:///var/run/docker.sock
+    networks: [frontnet]
+    ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock", "portainer-data:/data"]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 512M}
+
+  adguard:
+    image: adguard/adguardhome:latest
+    container_name: adguard
+    networks: [frontnet]
+    ports:
+      - "$LAN_IP:53:53/udp"
+      - "$LAN_IP:53:53/tcp"
+      - "$LAN_IP:$PORT_ADGUARD_WEB:$PORT_ADGUARD_WEB/tcp"
+      - "$LAN_IP:443:443/tcp"
+      - "$LAN_IP:443:443/udp"
+      - "$LAN_IP:853:853/tcp"
+      - "$LAN_IP:853:853/udp"
+    volumes: ["adguard-work:/opt/adguardhome/work", "$AGH_CONF_DIR:/opt/adguardhome/conf"]
+    depends_on:
+      - unbound
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+
+  unbound:
+    image: klutchell/unbound:latest
+    container_name: unbound
+    labels:
+      - "casaos.skip=true"
+    networks:
+      frontnet:
+        ipv4_address: $UNBOUND_STATIC_IP
+    volumes:
+      - "$UNBOUND_CONF:/opt/unbound/etc/unbound/unbound.conf:ro"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+
+  # WG-Easy: Remote access VPN server (only 51820/UDP exposed to internet)
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy:latest
+    container_name: wg-easy
+    network_mode: "host"
