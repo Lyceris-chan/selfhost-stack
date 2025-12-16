@@ -139,6 +139,10 @@ clean_environment() {
         if [ -d "$BASE_DIR" ]; then
             sudo rm -rf "$BASE_DIR" 2>/dev/null || true
         fi
+        # Explicitly remove named volumes used by the stack
+        for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache; do
+            sudo docker volume rm "$vol" 2>/dev/null || true
+        done
         sudo docker volume prune -f 2>/dev/null || true
         sudo docker image prune -af 2>/dev/null || true
         sudo docker builder prune -af 2>/dev/null || true
@@ -724,7 +728,7 @@ elif [ "$ACTION" = "delete" ]; then
         rm "$PROFILES_DIR/$PROFILE_NAME.conf"
     fi
 elif [ "$ACTION" = "status" ]; then
-    get_env() { docker exec "$1" printenv "$2" 2>/dev/null; }
+    get_env() { docker exec "$1" printenv "$2" 2>/dev/null || echo ""; }
     GLUETUN_STATUS="down"
     GLUETUN_HEALTHY="false"
     HANDSHAKE="0"
@@ -733,21 +737,25 @@ elif [ "$ACTION" = "status" ]; then
     TX="0"
     ENDPOINT="--"
     PUBLIC_IP="--"
-    if docker ps | grep -q gluetun; then
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^gluetun$"; then
         # Check container health
         HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
         if [ "$HEALTH" = "healthy" ]; then
             GLUETUN_HEALTHY="true"
         fi
-        WG_OUT=$(docker exec gluetun wg show wg0 dump 2>/dev/null | head -n 2 | tail -n 1)
+        WG_OUT=$(docker exec gluetun wg show wg0 dump 2>/dev/null | head -n 2 | tail -n 1 || echo "")
         if [ -n "$WG_OUT" ]; then
              GLUETUN_STATUS="up"
-             HANDSHAKE=$(echo "$WG_OUT" | awk '{print $5}')
-             RX=$(echo "$WG_OUT" | awk '{print $6}')
-             TX=$(echo "$WG_OUT" | awk '{print $7}')
-             ENDPOINT=$(docker exec gluetun wg show wg0 endpoints | awk '{print $2}')
+             HANDSHAKE=$(echo "$WG_OUT" | awk '{print $5}' || echo "0")
+             RX=$(echo "$WG_OUT" | awk '{print $6}' || echo "0")
+             TX=$(echo "$WG_OUT" | awk '{print $7}' || echo "0")
+             ENDPOINT=$(docker exec gluetun wg show wg0 endpoints 2>/dev/null | awk '{print $2}' || echo "--")
+             # Ensure numeric values
+             case "$HANDSHAKE" in ''|*[!0-9]*) HANDSHAKE="0" ;; esac
+             case "$RX" in ''|*[!0-9]*) RX="0" ;; esac
+             case "$TX" in ''|*[!0-9]*) TX="0" ;; esac
              # Calculate time since last handshake
-             if [ "$HANDSHAKE" != "0" ]; then
+             if [ "$HANDSHAKE" != "0" ] && [ "$HANDSHAKE" -gt 0 ] 2>/dev/null; then
                  NOW=$(date +%s)
                  DIFF=$((NOW - HANDSHAKE))
                  if [ "$DIFF" -lt 60 ]; then
@@ -767,19 +775,20 @@ elif [ "$ACTION" = "status" ]; then
     WGE_HOST="Unknown"
     WGE_CLIENTS="0"
     WGE_CONNECTED="0"
-    if docker ps | grep -q wg-easy; then
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^wg-easy$"; then
         WGE_STATUS="up"
         WGE_HOST=$(get_env wg-easy WG_HOST)
+        if [ -z "$WGE_HOST" ]; then WGE_HOST="Unknown"; fi
         # Try to get client count from wg-easy (via wg show)
-        WG_PEER_DATA=$(docker exec wg-easy wg show wg0 2>/dev/null || true)
+        WG_PEER_DATA=$(docker exec wg-easy wg show wg0 2>/dev/null || echo "")
         if [ -n "$WG_PEER_DATA" ]; then
             # Count total peers
-            WGE_CLIENTS=$(echo "$WG_PEER_DATA" | grep -c "^peer:" || echo "0")
+            WGE_CLIENTS=$(echo "$WG_PEER_DATA" | grep -c "^peer:" 2>/dev/null || echo "0")
             # Count peers with recent handshake (within last 3 minutes = 180 seconds)
             NOW=$(date +%s)
             CONNECTED_COUNT=0
-            for hs in $(echo "$WG_PEER_DATA" | grep "latest handshake:" | sed 's/.*latest handshake: //' | sed 's/ seconds.*//' | grep -E '^[0-9]+' || true); do
-                if [ "$hs" -lt 180 ] 2>/dev/null; then
+            for hs in $(echo "$WG_PEER_DATA" | grep "latest handshake:" | sed 's/.*latest handshake: //' | sed 's/ seconds.*//' | grep -E '^[0-9]+' 2>/dev/null || echo ""); do
+                if [ -n "$hs" ] && [ "$hs" -lt 180 ] 2>/dev/null; then
                     CONNECTED_COUNT=$((CONNECTED_COUNT + 1))
                 fi
             done
@@ -1131,8 +1140,8 @@ services:
           port: 5432
         check_tables: true
         invidious_companion:
-          - private_url: "http://127.0.0.1:8282"
-        invidious_companion_key: "$IV_COMPANION"
+          - private_url: "http://127.0.0.1:8282/companion"
+            invidious_companion_key: "$IV_COMPANION"
         hmac_key: "$IV_HMAC"
     healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || exit 1", interval: 30s, timeout: 5s, retries: 2}
     depends_on: {invidious-db: {condition: service_healthy}, gluetun: {condition: service_healthy}}
