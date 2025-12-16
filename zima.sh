@@ -336,8 +336,62 @@ FIREWALL_VPN_INPUT_PORTS=8080,8180,3000,3001,3002,8280,10416,8480,5555
 FIREWALL_OUTBOUND_SUBNETS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 EOF
 
-cp "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/Initial-Setup.conf"
-chmod 644 "$GLUETUN_ENV_FILE" "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/Initial-Setup.conf"
+# Extract profile name from WireGuard config (look for comment in [Peer] section like "# NL-FREE#231")
+extract_wg_profile_name() {
+    local config_file="$1"
+    local in_peer=0
+    local profile_name=""
+    while IFS= read -r line; do
+        stripped=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        # Check for [Peer] section start
+        if echo "$stripped" | grep -qi '^\[peer\]$'; then
+            in_peer=1
+            continue
+        fi
+        # If in [Peer] section and found a comment, extract it as profile name
+        if [ "$in_peer" -eq 1 ] && echo "$stripped" | grep -q '^#'; then
+            profile_name=$(echo "$stripped" | sed 's/^#[[:space:]]*//')
+            if [ -n "$profile_name" ]; then
+                echo "$profile_name"
+                return 0
+            fi
+        fi
+        # If hit another section, stop looking
+        if [ "$in_peer" -eq 1 ] && echo "$stripped" | grep -q '^\['; then
+            break
+        fi
+    done < "$config_file"
+    # Fallback: look for any comment that doesn't look like "Key = Value"
+    while IFS= read -r line; do
+        stripped=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if echo "$stripped" | grep -q '^#' && ! echo "$stripped" | grep -q '='; then
+            profile_name=$(echo "$stripped" | sed 's/^#[[:space:]]*//')
+            if [ -n "$profile_name" ]; then
+                echo "$profile_name"
+                return 0
+            fi
+        fi
+    done < "$config_file"
+    echo ""
+    return 1
+}
+
+# Get initial profile name from WireGuard config
+INITIAL_PROFILE_NAME=$(extract_wg_profile_name "$ACTIVE_WG_CONF")
+if [ -z "$INITIAL_PROFILE_NAME" ]; then
+    INITIAL_PROFILE_NAME="Initial-Setup"
+fi
+# Sanitize the profile name (keep only alphanumeric, dash, underscore, hash)
+INITIAL_PROFILE_NAME_SAFE=$(echo "$INITIAL_PROFILE_NAME" | tr -cd 'a-zA-Z0-9-_#')
+if [ -z "$INITIAL_PROFILE_NAME_SAFE" ]; then
+    INITIAL_PROFILE_NAME_SAFE="Initial-Setup"
+fi
+
+cp "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
+chmod 644 "$GLUETUN_ENV_FILE" "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
+
+# Update the active profile name file with the extracted name
+echo "$INITIAL_PROFILE_NAME_SAFE" > "$ACTIVE_PROFILE_NAME_FILE"
 
 # Secrets Gen
 SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64)
@@ -672,11 +726,19 @@ elif [ "$ACTION" = "delete" ]; then
 elif [ "$ACTION" = "status" ]; then
     get_env() { docker exec "$1" printenv "$2" 2>/dev/null; }
     GLUETUN_STATUS="down"
+    GLUETUN_HEALTHY="false"
     HANDSHAKE="0"
+    HANDSHAKE_AGO="Never"
     RX="0"
     TX="0"
     ENDPOINT="--"
+    PUBLIC_IP="--"
     if docker ps | grep -q gluetun; then
+        # Check container health
+        HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
+        if [ "$HEALTH" = "healthy" ]; then
+            GLUETUN_HEALTHY="true"
+        fi
         WG_OUT=$(docker exec gluetun wg show wg0 dump 2>/dev/null | head -n 2 | tail -n 1)
         if [ -n "$WG_OUT" ]; then
              GLUETUN_STATUS="up"
@@ -684,16 +746,47 @@ elif [ "$ACTION" = "status" ]; then
              RX=$(echo "$WG_OUT" | awk '{print $6}')
              TX=$(echo "$WG_OUT" | awk '{print $7}')
              ENDPOINT=$(docker exec gluetun wg show wg0 endpoints | awk '{print $2}')
+             # Calculate time since last handshake
+             if [ "$HANDSHAKE" != "0" ]; then
+                 NOW=$(date +%s)
+                 DIFF=$((NOW - HANDSHAKE))
+                 if [ "$DIFF" -lt 60 ]; then
+                     HANDSHAKE_AGO="${DIFF}s ago"
+                 elif [ "$DIFF" -lt 3600 ]; then
+                     HANDSHAKE_AGO="$((DIFF / 60))m ago"
+                 else
+                     HANDSHAKE_AGO="$((DIFF / 3600))h ago"
+                 fi
+             fi
         fi
+        # Get public IP from gluetun
+        PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
     fi
     ACTIVE_NAME=$(cat "$NAME_FILE" 2>/dev/null || echo "Unknown")
     WGE_STATUS="down"
     WGE_HOST="Unknown"
+    WGE_CLIENTS="0"
+    WGE_CONNECTED="0"
     if docker ps | grep -q wg-easy; then
         WGE_STATUS="up"
         WGE_HOST=$(get_env wg-easy WG_HOST)
+        # Try to get client count from wg-easy (via wg show)
+        WG_PEER_DATA=$(docker exec wg-easy wg show wg0 2>/dev/null || true)
+        if [ -n "$WG_PEER_DATA" ]; then
+            # Count total peers
+            WGE_CLIENTS=$(echo "$WG_PEER_DATA" | grep -c "^peer:" || echo "0")
+            # Count peers with recent handshake (within last 3 minutes = 180 seconds)
+            NOW=$(date +%s)
+            CONNECTED_COUNT=0
+            for hs in $(echo "$WG_PEER_DATA" | grep "latest handshake:" | sed 's/.*latest handshake: //' | sed 's/ seconds.*//' | grep -E '^[0-9]+' || true); do
+                if [ "$hs" -lt 180 ] 2>/dev/null; then
+                    CONNECTED_COUNT=$((CONNECTED_COUNT + 1))
+                fi
+            done
+            WGE_CONNECTED="$CONNECTED_COUNT"
+        fi
     fi
-    echo "{\"gluetun\": { \"status\": \"$GLUETUN_STATUS\", \"active_profile\": \"$ACTIVE_NAME\", \"endpoint\": \"$ENDPOINT\", \"handshake\": \"$HANDSHAKE\", \"rx\": \"$RX\", \"tx\": \"$TX\" }, \"wgeasy\": { \"status\": \"$WGE_STATUS\", \"host\": \"$WGE_HOST\" }}"
+    echo "{\"gluetun\": { \"status\": \"$GLUETUN_STATUS\", \"healthy\": $GLUETUN_HEALTHY, \"active_profile\": \"$ACTIVE_NAME\", \"endpoint\": \"$ENDPOINT\", \"public_ip\": \"$PUBLIC_IP\", \"handshake\": \"$HANDSHAKE\", \"handshake_ago\": \"$HANDSHAKE_AGO\", \"rx\": \"$RX\", \"tx\": \"$TX\" }, \"wgeasy\": { \"status\": \"$WGE_STATUS\", \"host\": \"$WGE_HOST\", \"clients\": \"$WGE_CLIENTS\", \"connected\": \"$WGE_CONNECTED\" }}"
 fi
 EOF
 chmod +x "$WG_CONTROL_SCRIPT"
@@ -712,6 +805,35 @@ PORT = 55555
 PROFILES_DIR = "/profiles"
 CONTROL_SCRIPT = "/usr/local/bin/wg-control.sh"
 LOG_FILE = "/app/deployment.log"
+
+def extract_profile_name(config):
+    """Extract profile name from WireGuard config.
+    Looks for comment in [Peer] section (e.g., '# NL-FREE#231').
+    Falls back to first comment if no [Peer] comment found.
+    """
+    lines = config.split('\n')
+    in_peer = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.lower() == '[peer]':
+            in_peer = True
+            continue
+        if in_peer and stripped.startswith('#'):
+            # Found comment in [Peer] section
+            name = stripped.lstrip('#').strip()
+            if name:
+                return name
+        if in_peer and stripped.startswith('['):
+            # Hit another section, stop looking
+            break
+    # Fallback: look for any comment line
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            name = stripped.lstrip('#').strip()
+            if name and not '=' in name:  # Skip comments like "# Key = Value"
+                return name
+    return None
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
@@ -762,8 +884,8 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 raw_name = data.get('name', '').strip()
                 config = data.get('config')
                 if not raw_name:
-                    match = re.search(r'^#\s*(.+)$', config, re.MULTILINE)
-                    raw_name = match.group(1).strip() if match else f"Imported_{int(time.time())}"
+                    extracted = extract_profile_name(config)
+                    raw_name = extracted if extracted else f"Imported_{int(time.time())}"
                 safe = "".join([c for c in raw_name if c.isalnum() or c in ('-','_','#')])
                 with open(os.path.join(PROFILES_DIR, f"{safe}.conf"), "w") as f: f.write(config.replace('\r', ''))
                 self._send_json({"success": True, "name": safe})
@@ -1232,6 +1354,51 @@ cat > "$DASHBOARD_FILE" <<EOF
             <a href="http://$LAN_IP:$PORT_WG_WEB" class="card"><h2>WireGuard</h2><div class="chip-box"><span class="badge admin">Remote Access</span></div></a>
         </div>
 
+        <div class="section-label">DNS Configuration</div>
+        <div class="grid">
+            <div class="card">
+                <h3 style="margin-top:0; margin-bottom:16px; color:var(--on-surf);">Device DNS Settings</h3>
+                <p style="font-size:0.85rem; color:var(--s); margin-bottom:16px;">Configure other devices to use this DNS server:</p>
+                <div class="stat-row"><span>Plain DNS</span><span class="stat-val">$LAN_IP:53</span></div>
+EOF
+if [ -n "$DESEC_DOMAIN" ]; then
+    cat >> "$DASHBOARD_FILE" <<EOF
+                <div class="stat-row"><span>Domain</span><span class="stat-val">$DESEC_DOMAIN</span></div>
+                <div class="stat-row"><span>DoH URL</span><span class="stat-val" style="font-size:0.8rem;">https://$DESEC_DOMAIN/dns-query</span></div>
+                <div class="stat-row"><span>DoT Server</span><span class="stat-val">$DESEC_DOMAIN:853</span></div>
+                <div class="stat-row"><span>DoQ Server</span><span class="stat-val">quic://$DESEC_DOMAIN</span></div>
+            </div>
+            <div class="card">
+                <h3 style="margin-top:0; margin-bottom:16px; color:var(--on-surf);">Mobile Device Setup</h3>
+                <p style="font-size:0.85rem; color:var(--s); margin-bottom:12px;">To use encrypted DNS on your devices:</p>
+                <ol style="margin:0; padding-left:20px; font-size:0.9rem; color:var(--on-surf); line-height:1.6;">
+                    <li>Connect to WireGuard VPN first</li>
+                    <li>Set DNS server to: <code style="background:#2b2930; padding:2px 6px; border-radius:4px;">$DESEC_DOMAIN</code></li>
+                    <li>Or use DoH: <code style="background:#2b2930; padding:2px 6px; border-radius:4px; font-size:0.75rem;">https://$DESEC_DOMAIN/dns-query</code></li>
+                </ol>
+                <p style="font-size:0.8rem; color:var(--ok); margin-top:12px;">✓ Valid Let's Encrypt certificate (no warnings)</p>
+            </div>
+EOF
+else
+    cat >> "$DASHBOARD_FILE" <<EOF
+                <div class="stat-row"><span>DoH URL</span><span class="stat-val" style="font-size:0.8rem;">https://$LAN_IP/dns-query</span></div>
+                <div class="stat-row"><span>DoT Server</span><span class="stat-val">$LAN_IP:853</span></div>
+            </div>
+            <div class="card">
+                <h3 style="margin-top:0; margin-bottom:16px; color:var(--on-surf);">Mobile Device Setup</h3>
+                <p style="font-size:0.85rem; color:var(--s); margin-bottom:12px;">To use DNS on your devices:</p>
+                <ol style="margin:0; padding-left:20px; font-size:0.9rem; color:var(--on-surf); line-height:1.6;">
+                    <li>Connect to WireGuard VPN first</li>
+                    <li>Set DNS server to: <code style="background:#2b2930; padding:2px 6px; border-radius:4px;">$LAN_IP</code></li>
+                </ol>
+                <p style="font-size:0.8rem; color:var(--err); margin-top:12px;">⚠ Self-signed certificate (expect browser warnings)</p>
+                <p style="font-size:0.75rem; color:#888; margin-top:8px;">Tip: Set up deSEC for a free domain with valid SSL</p>
+            </div>
+EOF
+fi
+cat >> "$DASHBOARD_FILE" <<EOF
+        </div>
+
         <div class="section-label">WireGuard Profiles</div>
         <div class="grid">
             <div class="card">
@@ -1252,15 +1419,20 @@ cat > "$DASHBOARD_FILE" <<EOF
         <div class="grid">
             <div class="card">
                 <h3 style="margin-top:0; margin-bottom:16px; color:var(--on-surf);">Gluetun (Frontend Proxy)</h3>
+                <div class="stat-row"><span>Status</span><span class="stat-val" id="vpn-status">--</span></div>
                 <div class="stat-row"><span>Active Profile</span><span class="stat-val active-prof" id="vpn-active">--</span></div>
-                <div class="stat-row"><span>Endpoint IP</span><span class="stat-val" id="vpn-endpoint">--</span></div>
-                <div class="stat-row"><span>Live Traffic</span><span class="stat-val"><span id="vpn-rx">0</span> / <span id="vpn-tx">0</span></span></div>
+                <div class="stat-row"><span>VPN Endpoint</span><span class="stat-val" id="vpn-endpoint">--</span></div>
+                <div class="stat-row"><span>Public IP</span><span class="stat-val" id="vpn-public-ip">--</span></div>
+                <div class="stat-row"><span>Last Handshake</span><span class="stat-val" id="vpn-handshake">--</span></div>
+                <div class="stat-row"><span>Data (RX / TX)</span><span class="stat-val"><span id="vpn-rx">0</span> / <span id="vpn-tx">0</span></span></div>
             </div>
             <div class="card">
                 <h3 style="margin-top:0; margin-bottom:16px; color:var(--on-surf);">WG-Easy (External Access)</h3>
                 <div class="stat-row"><span>Service Status</span><span class="stat-val" id="wge-status">--</span></div>
                 <div class="stat-row"><span>External IP</span><span class="stat-val" id="wge-host">--</span></div>
                 <div class="stat-row"><span>UDP Port</span><span class="stat-val">51820</span></div>
+                <div class="stat-row"><span>Total Clients</span><span class="stat-val" id="wge-clients">--</span></div>
+                <div class="stat-row"><span>Connected Now</span><span class="stat-val" id="wge-connected">--</span></div>
             </div>
             <div class="card" style="grid-column: span 2;">
                 <h3 style="margin-top:0;">Deployment History</h3>
@@ -1277,15 +1449,35 @@ cat > "$DASHBOARD_FILE" <<EOF
                 const res = await fetch(\`\${API}/status\`);
                 const data = await res.json();
                 const g = data.gluetun;
+                // Gluetun status
+                const vpnStatus = document.getElementById('vpn-status');
+                if (g.status === "up" && g.healthy) {
+                    vpnStatus.textContent = "Connected (Healthy)";
+                    vpnStatus.style.color = "var(--ok)";
+                } else if (g.status === "up") {
+                    vpnStatus.textContent = "Connected";
+                    vpnStatus.style.color = "var(--ok)";
+                } else {
+                    vpnStatus.textContent = "Disconnected";
+                    vpnStatus.style.color = "var(--err)";
+                }
                 document.getElementById('vpn-active').textContent = g.active_profile || "Unknown";
-                document.getElementById('vpn-endpoint').textContent = g.endpoint || "Unknown";
+                document.getElementById('vpn-endpoint').textContent = g.endpoint || "--";
+                document.getElementById('vpn-public-ip').textContent = g.public_ip || "--";
+                document.getElementById('vpn-handshake').textContent = g.handshake_ago || "Never";
                 document.getElementById('vpn-rx').textContent = formatBytes(g.rx);
                 document.getElementById('vpn-tx').textContent = formatBytes(g.tx);
+                // WG-Easy status
                 const w = data.wgeasy;
                 const wgeStat = document.getElementById('wge-status');
                 wgeStat.textContent = (w.status === "up") ? "Running" : "Stopped";
                 wgeStat.style.color = (w.status === "up") ? "var(--ok)" : "var(--err)";
                 document.getElementById('wge-host').textContent = w.host || "--";
+                document.getElementById('wge-clients').textContent = w.clients || "0";
+                const wgeConnected = document.getElementById('wge-connected');
+                const connectedCount = parseInt(w.connected) || 0;
+                wgeConnected.textContent = connectedCount > 0 ? \`\${connectedCount} active\` : "None";
+                wgeConnected.style.color = connectedCount > 0 ? "var(--ok)" : "var(--s)";
             } catch(e) {}
         }
         async function fetchProfiles() {
