@@ -136,12 +136,20 @@ clean_environment() {
     
     if [ "$FORCE_CLEAN" = true ]; then
         log_warn "NUCLEAR CLEANUP MODE: Removing everything..."
+        # Stop all containers first to release volume locks
+        for c in $TARGET_CONTAINERS; do
+            sudo docker stop "$c" 2>/dev/null || true
+        done
+        # Small delay to ensure containers fully stop
+        sleep 2
+        # Now remove containers
         for c in $TARGET_CONTAINERS; do
             sudo docker rm -f "$c" 2>/dev/null || true
         done
         if [ -d "$BASE_DIR" ]; then
             sudo rm -rf "$BASE_DIR" 2>/dev/null || true
         fi
+        # Remove volumes (now that containers are stopped)
         for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
             sudo docker volume rm -f "$vol" 2>/dev/null || true
         done
@@ -808,7 +816,10 @@ elif [ "$ACTION" = "status" ]; then
         HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
         if [ "$HEALTH" = "healthy" ]; then
             GLUETUN_HEALTHY="true"
+            GLUETUN_STATUS="up"
         fi
+        
+        # Try to get WireGuard stats via wg command (may not be available in all gluetun versions)
         WG_OUT=$(docker exec gluetun wg show wg0 dump 2>/dev/null | head -n 2 | tail -n 1 || echo "")
         if [ -n "$WG_OUT" ]; then
             GLUETUN_STATUS="up"
@@ -830,8 +841,22 @@ elif [ "$ACTION" = "status" ]; then
                     HANDSHAKE_AGO="$((DIFF / 3600))h ago"
                 fi
             fi
+        else
+            # wg command not available - if gluetun is healthy, show N/A for stats
+            if [ "$GLUETUN_HEALTHY" = "true" ]; then
+                HANDSHAKE_AGO="N/A (WireGuard stats unavailable)"
+            fi
         fi
-        PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
+        
+        # Try gluetun's HTTP control server API first (port 8000), then fall back to external check
+        API_RESPONSE=$(docker exec gluetun wget -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
+        if [ -n "$API_RESPONSE" ]; then
+            # Extract public_ip from JSON response, handling various formats
+            PUBLIC_IP=$(echo "$API_RESPONSE" | grep -oE '"public_ip"\s*:\s*"[^"]+"' | sed 's/.*"\([^"]*\)"$/\1/' || echo "")
+        fi
+        if [ -z "$PUBLIC_IP" ] || [ "$PUBLIC_IP" = "{}" ] || [ "$PUBLIC_IP" = "null" ]; then
+            PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
+        fi
     fi
     
     ACTIVE_NAME=$(cat "$NAME_FILE" 2>/dev/null | tr -d '\n\r' || echo "Unknown")
@@ -1285,7 +1310,7 @@ services:
           port: 5432
         check_tables: true
         invidious_companion:
-          - private_url: "http://127.0.0.1:8282"
+          - private_url: "http://127.0.0.1:8282/companion"
         invidious_companion_key: "$IV_COMPANION"
         hmac_key: "$IV_HMAC"
     healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || exit 1", interval: 30s, timeout: 5s, retries: 2}
@@ -1293,7 +1318,7 @@ services:
       options:
         max-size: "1G"
         max-file: "4"
-    depends_on: {invidious-db: {condition: service_healthy}, gluetun: {condition: service_healthy}}
+    depends_on: {invidious-db: {condition: service_healthy}, gluetun: {condition: service_healthy}, companion: {condition: service_started}}
     restart: unless-stopped
     deploy:
       resources:
@@ -1326,6 +1351,7 @@ services:
         max-file: "4"
     cap_drop:
       - ALL
+    depends_on: {gluetun: {condition: service_healthy}}
     restart: unless-stopped
     read_only: true
     security_opt: ["no-new-privileges:true"]
@@ -1440,7 +1466,7 @@ x-casaos:
   author: Lyceris-chan
   category: Network
   scheme: http
-  hostname: ""
+  hostname: $LAN_IP
   index: /
   port_map: "$PORT_DASHBOARD_WEB"
   title:
