@@ -86,7 +86,7 @@ clean_environment() {
     
     FOUND_CONTAINERS=""
     for c in $TARGET_CONTAINERS; do
-        if sudo docker ps -a --format '{{.Names}}' | grep -q "^\\${c}$"; then
+        if sudo docker ps -a --format '{{.Names}}' | grep -q "^${c}$"; then
             FOUND_CONTAINERS="$FOUND_CONTAINERS $c"
         fi
     done
@@ -915,6 +915,8 @@ class OdidoAPI:
             subs = self.get_subscriptions()
             if "error" in subs:
                 return subs
+            if not subs.get("subscriptions"):
+                return {"error": "No subscriptions found"}
             subscription_url = subs["subscriptions"][0]["SubscriptionURL"]
             bundles = self.get_roaming_bundles(subscription_url)
             if "error" in bundles:
@@ -944,7 +946,10 @@ def load_odido_config():
     user_id = os.environ.get("ODIDO_USER_ID", "")
     token = os.environ.get("ODIDO_TOKEN", "")
     bundle_code = os.environ.get("ODIDO_BUNDLE_CODE", "A0DAY01")
-    threshold = int(os.environ.get("ODIDO_THRESHOLD", "350"))
+    try:
+        threshold = int(os.environ.get("ODIDO_THRESHOLD", "350"))
+    except ValueError:
+        threshold = 350
     return {
         "user_id": user_id,
         "token": token,
@@ -957,6 +962,7 @@ def save_odido_config(config):
     """Save Odido configuration to file"""
     with open(ODIDO_CONFIG_FILE, 'w') as f:
         json.dump(config, f)
+
 
 def extract_profile_name(config):
     """Extract profile name from WireGuard config."""
@@ -1119,7 +1125,10 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 if "bundle_code" in data:
                     config["bundle_code"] = data["bundle_code"]
                 if "threshold" in data:
-                    config["threshold"] = int(data["threshold"])
+                    try:
+                        config["threshold"] = int(data["threshold"])
+                    except (ValueError, TypeError):
+                        config["threshold"] = 350
                 config["enabled"] = bool(config.get("user_id") and config.get("token"))
                 save_odido_config(config)
                 self._send_json({"success": True, "enabled": config["enabled"]})
@@ -1762,7 +1771,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         
         async function fetchStatus() {
             try {
-                const res = await fetch(\`\\${API}/status\`);
+                const res = await fetch(\`\${API}/status\`);
                 const data = await res.json();
                 const g = data.gluetun;
                 const vpnStatus = document.getElementById('vpn-status');
@@ -1790,14 +1799,14 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 document.getElementById('wge-clients').textContent = w.clients || "0";
                 const wgeConnected = document.getElementById('wge-connected');
                 const connectedCount = parseInt(w.connected) || 0;
-                wgeConnected.textContent = connectedCount > 0 ? \`\\\${connectedCount} active\` : "None";
+                wgeConnected.textContent = connectedCount > 0 ? \`\${connectedCount} active\` : "None";
                 wgeConnected.style.color = connectedCount > 0 ? "var(--ok)" : "var(--s)";
             } catch(e) { console.error('Status fetch error:', e); }
         }
         
         async function fetchOdidoStatus() {
             try {
-                const res = await fetch(\`\\${API}/odido/status\`);
+                const res = await fetch(\`\${API}/odido/status\`);
                 const data = await res.json();
                 document.getElementById('odido-loading').style.display = 'none';
                 if (!data.enabled || !data.configured) {
@@ -1808,13 +1817,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     document.getElementById('odido-configured').style.display = 'block';
                     const remaining = data.remaining_mb || 0;
                     const threshold = data.threshold || 350;
-                    document.getElementById('odido-remaining').textContent = \`\\${remaining} MB\`;
-                    document.getElementById('odido-threshold').textContent = \`\\${threshold} MB\`;
+                    document.getElementById('odido-remaining').textContent = \`\${remaining} MB\`;
+                    document.getElementById('odido-threshold').textContent = \`\${threshold} MB\`;
                     document.getElementById('odido-bundle-code').textContent = data.bundle_code || 'A0DAY01';
                     const maxData = 2048;
                     const percent = Math.min(100, (remaining / maxData) * 100);
                     const bar = document.getElementById('odido-bar');
-                    bar.style.width = \`\\\${percent}%\`;
+                    bar.style.width = \`\${percent}%\`;
                     bar.className = 'data-bar-fill';
                     if (remaining < threshold) bar.classList.add('critical');
                     else if (remaining < threshold * 2) bar.classList.add('low');
@@ -1843,7 +1852,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             st.textContent = 'Saving...';
             st.style.color = 'var(--p)';
             try {
-                const res = await fetch(\`\\${API}/odido/config\`, {
+                const res = await fetch(\`\${API}/odido/config\`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
@@ -1868,7 +1877,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             st.textContent = 'Purchasing bundle...';
             st.style.color = 'var(--p)';
             try {
-                const res = await fetch(\`\\${API}/odido/buy\`, {
+                const res = await fetch(\`\${API}/odido/buy\`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({})
@@ -1887,7 +1896,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         
         async function fetchProfiles() {
             try {
-                const res = await fetch(\`\\${API}/profiles\`);
+                const res = await fetch(\`\${API}/profiles\`);
                 const data = await res.json();
                 const el = document.getElementById('profile-list');
                 el.innerHTML = '';
@@ -1895,8 +1904,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     const row = document.createElement('div');
                     row.className = 'profile-row';
                     row.innerHTML = \`
-                        <span class="profile-name" onclick="activateProfile('\\${p}')">\\${p}</span>
-                        <button class="btn del" onclick="deleteProfile('\\${p}')" title="Delete">
+                        <span class="profile-name" onclick="activateProfile('\${p}')">\${p}</span>
+                        <button class="btn del" onclick="deleteProfile('\${p}')" title="Delete">
                            <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                         </button>\`;
                     el.appendChild(row);
@@ -1911,31 +1920,31 @@ cat >> "$DASHBOARD_FILE" <<EOF
             if(!config) { st.textContent="Error: Config content missing"; return; }
             st.textContent = "Uploading...";
             try {
-                const upRes = await fetch(\`\\${API}/upload\`, { method:'POST', body:JSON.stringify({name: nameInput, config}) });
+                const upRes = await fetch(\`\${API}/upload\`, { method:'POST', body:JSON.stringify({name: nameInput, config}) });
                 const upData = await upRes.json();
                 if(upData.error) throw new Error(upData.error);
                 const finalName = upData.name;
-                st.textContent = \`Activating \\${finalName}...\`;
-                await fetch(\`\\${API}/activate\`, { method:'POST', body:JSON.stringify({name: finalName}) });
+                st.textContent = \`Activating \${finalName}...\`;
+                await fetch(\`\${API}/activate\`, { method:'POST', body:JSON.stringify({name: finalName}) });
                 st.textContent = "Success! VPN restarting.";
                 fetchProfiles(); document.getElementById('prof-name').value=""; document.getElementById('prof-conf').value="";
             } catch(e) { st.textContent = e.message; }
         }
         
         async function activateProfile(name) {
-            if(!confirm(\`Switch to \\${name}?\`)) return;
-            try { await fetch(\`\\${API}/activate\`, { method:'POST', body:JSON.stringify({name}) }); alert("Profile switched. VPN restarting."); } catch(e) { alert("Error"); }
+            if(!confirm(\`Switch to \${name}?\`)) return;
+            try { await fetch(\`\${API}/activate\`, { method:'POST', body:JSON.stringify({name}) }); alert("Profile switched. VPN restarting."); } catch(e) { alert("Error"); }
         }
         
         async function deleteProfile(name) {
-            if(!confirm(\`Delete \\${name}?\`)) return;
-            try { await fetch(\`\\${API}/delete\`, { method:'POST', body:JSON.stringify({name}) }); fetchProfiles(); } catch(e) { alert("Error"); }
+            if(!confirm(\`Delete \${name}?\`)) return;
+            try { await fetch(\`\${API}/delete\`, { method:'POST', body:JSON.stringify({name}) }); fetchProfiles(); } catch(e) { alert("Error"); }
         }
         
         function startLogStream() {
             const el = document.getElementById('log-container');
             const status = document.getElementById('log-status');
-            const evtSource = new EventSource(\`\\${API}/events\`);
+            const evtSource = new EventSource(\`\${API}/events\`);
             evtSource.onmessage = function(e) {
                 const div = document.createElement('div');
                 div.className = 'log-line';
@@ -1947,7 +1956,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             evtSource.onerror = function() { status.textContent = "Reconnecting..."; status.style.color = "var(--err)"; evtSource.close(); setTimeout(startLogStream, 3000); };
         }
         
-        function formatBytes(a,b=2){if(!+a)return"0 B";const c=0>b?0:b,d=Math.floor(Math.log(a)/Math.log(1024));return\`\\${parseFloat((a/Math.pow(1024,d)).toFixed(c))} \${["B","KiB","MiB","GiB","TiB"][d]}\`}
+        function formatBytes(a,b=2){if(!+a)return"0 B";const c=0>b?0:b,d=Math.floor(Math.log(a)/Math.log(1024));return\`\${parseFloat((a/Math.pow(1024,d)).toFixed(c))} \${["B","KiB","MiB","GiB","TiB"][d]}\`}
         
         document.addEventListener('DOMContentLoaded', () => {
             fetchStatus(); fetchProfiles(); fetchOdidoStatus(); startLogStream();
