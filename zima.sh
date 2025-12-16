@@ -163,6 +163,51 @@ authenticate_registries() {
         fi
 
         if ! ask_confirm "Authentication failed. Want to try again?"; then return 1; fi
+    done
+}
+
+setup_fonts() {
+    log_info "Setting up local fonts so Google doesn't track your dashboard visits..."
+    mkdir -p "$FONTS_DIR"
+    
+    # Check if fonts are already set up
+    if [ -f "$FONTS_DIR/gs.css" ] && [ -f "$FONTS_DIR/cc.css" ] && [ -f "$FONTS_DIR/ms.css" ]; then
+        log_info "Local fonts are already here."
+        return 0
+    fi
+
+    # URLs
+    URL_GS="https://api.fonts.coollabs.io/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
+    URL_CC="https://api.fonts.coollabs.io/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
+    URL_MS="https://api.fonts.coollabs.io/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+
+    # Download CSS
+    curl -s "$URL_GS" > "$FONTS_DIR/gs.css"
+    curl -s "$URL_CC" > "$FONTS_DIR/cc.css"
+    curl -s "$URL_MS" > "$FONTS_DIR/ms.css"
+
+    # Parse and download woff2 files for each CSS file
+    cd "$FONTS_DIR"
+    for css_file in gs.css cc.css ms.css; do
+        # Extract URLs from url(...) - handle optional quotes
+        grep -o "url([^)]*)" "$css_file" | sed 's/url(//;s/)//' | tr -d "'\"" | sort | uniq | while read -r url; do
+            if [ -z "$url" ]; then continue; fi
+            filename=$(basename "$url")
+            # Strip everything after ?
+            clean_name="${filename%%\?*}"
+            
+            if [ ! -f "$clean_name" ]; then
+                # log_info "Downloading font: $clean_name"
+                curl -sL "$url" -o "$clean_name"
+            fi
+            
+            # Escape URL for sed: escape / and &
+            escaped_url=$(echo "$url" | sed 's/[\/&]/\\&/g')
+            # Replace the URL in the CSS file
+            sed -i "s|url(['\"]\{0,1\}$escaped_url['\"]\{0,1\})|url($clean_name)|g" "$css_file"
+        done
+    done
+    cd - >/dev/null
 echo "=========================================================="
 
 # WireGuard Configuration Validation
