@@ -86,7 +86,7 @@ clean_environment() {
     
     FOUND_CONTAINERS=""
     for c in $TARGET_CONTAINERS; do
-        if sudo docker ps -a --format '{{.Names}}' | grep -q "^${c}$"; then
+        if sudo docker ps -a --format '{{.Names}}' | grep -q "^\\${c}$"; then
             FOUND_CONTAINERS="$FOUND_CONTAINERS $c"
         fi
     done
@@ -129,7 +129,10 @@ clean_environment() {
                 sudo rm -rf "$BASE_DIR/.docker" 2>/dev/null || true
                 sudo rm -rf "$BASE_DIR" 2>/dev/null || true
             fi
-            sudo docker volume ls -q | grep -E "portainer-data|adguard-work|redis-data|postgresdata|wg-config|companioncache" | xargs -r sudo docker volume rm 2>/dev/null || true
+            # Force remove volumes by stopping any containers that might be using them first
+            for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache; do
+                sudo docker volume rm -f "$vol" 2>/dev/null || true
+            done
             log_info "All deployment artifacts, configs, env files, and volumes wiped."
         fi
     fi
@@ -139,9 +142,9 @@ clean_environment() {
         if [ -d "$BASE_DIR" ]; then
             sudo rm -rf "$BASE_DIR" 2>/dev/null || true
         fi
-        # Explicitly remove named volumes used by the stack
+        # Explicitly remove named volumes used by the stack (force flag)
         for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache; do
-            sudo docker volume rm "$vol" 2>/dev/null || true
+            sudo docker volume rm -f "$vol" 2>/dev/null || true
         done
         sudo docker volume prune -f 2>/dev/null || true
         sudo docker image prune -af 2>/dev/null || true
@@ -245,6 +248,33 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo ""
     fi
     
+    echo ""
+    echo "--- Odido Bundle Booster (Optional) ---"
+    echo "   Automatically top-up your Odido mobile data when running low."
+    echo "   Requires credentials from the Odido app."
+    echo ""
+    echo -n "Odido User ID (or Enter to skip): "
+    read -r ODIDO_USER_ID
+    if [ -n "$ODIDO_USER_ID" ]; then
+        echo -n "Odido Access Token: "
+        read -rs ODIDO_TOKEN
+        echo ""
+        echo -n "Odido Bundle Code (default: A0DAY01 for 2GB): "
+        read -r ODIDO_BUNDLE_CODE
+        if [ -z "$ODIDO_BUNDLE_CODE" ]; then
+            ODIDO_BUNDLE_CODE="A0DAY01"
+        fi
+        echo -n "Odido Threshold MB (default: 350): "
+        read -r ODIDO_THRESHOLD
+        if [ -z "$ODIDO_THRESHOLD" ]; then
+            ODIDO_THRESHOLD="350"
+        fi
+    else
+        ODIDO_TOKEN=""
+        ODIDO_BUNDLE_CODE=""
+        ODIDO_THRESHOLD=""
+    fi
+    
     log_info "Generating Secrets..."
     sudo docker pull -q ghcr.io/wg-easy/wg-easy:latest > /dev/null
     HASH_OUTPUT=$(sudo docker run --rm ghcr.io/wg-easy/wg-easy wgpw "$VPN_PASS_RAW")
@@ -263,6 +293,10 @@ DESEC_DOMAIN=$DESEC_DOMAIN
 DESEC_TOKEN=$DESEC_TOKEN
 SCRIBE_GH_USER=$SCRIBE_GH_USER
 SCRIBE_GH_TOKEN=$SCRIBE_GH_TOKEN
+ODIDO_USER_ID=$ODIDO_USER_ID
+ODIDO_TOKEN=$ODIDO_TOKEN
+ODIDO_BUNDLE_CODE=$ODIDO_BUNDLE_CODE
+ODIDO_THRESHOLD=$ODIDO_THRESHOLD
 EOF
 else
     source "$BASE_DIR/.secrets"
@@ -710,15 +744,20 @@ ACTIVE_CONF="/active-wg.conf"
 NAME_FILE="/app/.active_profile_name"
 LOG_FILE="/app/deployment.log"
 
+# Helper function to sanitize strings for JSON (remove control chars, escape quotes)
+sanitize_json_string() {
+    printf '%s' "$1" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\n\r'
+}
+
 if [ "$ACTION" = "activate" ]; then
     if [ -f "$PROFILES_DIR/$PROFILE_NAME.conf" ]; then
         ln -sf "$PROFILES_DIR/$PROFILE_NAME.conf" "$ACTIVE_CONF"
         echo "$PROFILE_NAME" > "$NAME_FILE"
         DEPENDENTS="redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe dumb"
-        docker stop $DEPENDENTS
-        docker-compose -f /app/docker-compose.yml up -d --force-recreate gluetun
+        docker stop $DEPENDENTS 2>/dev/null || true
+        docker-compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
         sleep 5
-        docker start $DEPENDENTS
+        docker start $DEPENDENTS 2>/dev/null || true
     else
         echo "Error: Profile not found"
         exit 1
@@ -728,7 +767,6 @@ elif [ "$ACTION" = "delete" ]; then
         rm "$PROFILES_DIR/$PROFILE_NAME.conf"
     fi
 elif [ "$ACTION" = "status" ]; then
-    get_env() { docker exec "$1" printenv "$2" 2>/dev/null || echo ""; }
     GLUETUN_STATUS="down"
     GLUETUN_HEALTHY="false"
     HANDSHAKE="0"
@@ -737,6 +775,7 @@ elif [ "$ACTION" = "status" ]; then
     TX="0"
     ENDPOINT="--"
     PUBLIC_IP="--"
+    
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^gluetun$"; then
         # Check container health
         HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
@@ -745,39 +784,43 @@ elif [ "$ACTION" = "status" ]; then
         fi
         WG_OUT=$(docker exec gluetun wg show wg0 dump 2>/dev/null | head -n 2 | tail -n 1 || echo "")
         if [ -n "$WG_OUT" ]; then
-             GLUETUN_STATUS="up"
-             HANDSHAKE=$(echo "$WG_OUT" | awk '{print $5}' || echo "0")
-             RX=$(echo "$WG_OUT" | awk '{print $6}' || echo "0")
-             TX=$(echo "$WG_OUT" | awk '{print $7}' || echo "0")
-             ENDPOINT=$(docker exec gluetun wg show wg0 endpoints 2>/dev/null | awk '{print $2}' || echo "--")
-             # Ensure numeric values
-             case "$HANDSHAKE" in ''|*[!0-9]*) HANDSHAKE="0" ;; esac
-             case "$RX" in ''|*[!0-9]*) RX="0" ;; esac
-             case "$TX" in ''|*[!0-9]*) TX="0" ;; esac
-             # Calculate time since last handshake
-             if [ "$HANDSHAKE" != "0" ] && [ "$HANDSHAKE" -gt 0 ] 2>/dev/null; then
-                 NOW=$(date +%s)
-                 DIFF=$((NOW - HANDSHAKE))
-                 if [ "$DIFF" -lt 60 ]; then
-                     HANDSHAKE_AGO="${DIFF}s ago"
-                 elif [ "$DIFF" -lt 3600 ]; then
-                     HANDSHAKE_AGO="$((DIFF / 60))m ago"
-                 else
-                     HANDSHAKE_AGO="$((DIFF / 3600))h ago"
-                 fi
-             fi
+            GLUETUN_STATUS="up"
+            HANDSHAKE=$(echo "$WG_OUT" | awk '{print $5}' 2>/dev/null || echo "0")
+            RX=$(echo "$WG_OUT" | awk '{print $6}' 2>/dev/null || echo "0")
+            TX=$(echo "$WG_OUT" | awk '{print $7}' 2>/dev/null || echo "0")
+            ENDPOINT=$(docker exec gluetun wg show wg0 endpoints 2>/dev/null | awk '{print $2}' 2>/dev/null || echo "--")
+            # Ensure numeric values
+            case "$HANDSHAKE" in ''|*[!0-9]*) HANDSHAKE="0" ;; esac
+            case "$RX" in ''|*[!0-9]*) RX="0" ;; esac
+            case "$TX" in ''|*[!0-9]*) TX="0" ;; esac
+            # Calculate time since last handshake
+            if [ "$HANDSHAKE" != "0" ] && [ "$HANDSHAKE" -gt 0 ] 2>/dev/null; then
+                NOW=$(date +%s)
+                DIFF=$((NOW - HANDSHAKE))
+                if [ "$DIFF" -lt 60 ]; then
+                    HANDSHAKE_AGO="${DIFF}s ago"
+                elif [ "$DIFF" -lt 3600 ]; then
+                    HANDSHAKE_AGO="$((DIFF / 60))m ago"
+                else
+                    HANDSHAKE_AGO="$((DIFF / 3600))h ago"
+                fi
+            fi
         fi
         # Get public IP from gluetun
         PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
     fi
-    ACTIVE_NAME=$(cat "$NAME_FILE" 2>/dev/null || echo "Unknown")
+    
+    ACTIVE_NAME=$(cat "$NAME_FILE" 2>/dev/null | tr -d '\n\r' || echo "Unknown")
+    if [ -z "$ACTIVE_NAME" ]; then ACTIVE_NAME="Unknown"; fi
+    
     WGE_STATUS="down"
     WGE_HOST="Unknown"
     WGE_CLIENTS="0"
     WGE_CONNECTED="0"
+    
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^wg-easy$"; then
         WGE_STATUS="up"
-        WGE_HOST=$(get_env wg-easy WG_HOST)
+        WGE_HOST=$(docker exec wg-easy printenv WG_HOST 2>/dev/null | tr -d '\n\r' || echo "Unknown")
         if [ -z "$WGE_HOST" ]; then WGE_HOST="Unknown"; fi
         # Try to get client count from wg-easy (via wg show)
         WG_PEER_DATA=$(docker exec wg-easy wg show wg0 2>/dev/null || echo "")
@@ -785,7 +828,6 @@ elif [ "$ACTION" = "status" ]; then
             # Count total peers
             WGE_CLIENTS=$(echo "$WG_PEER_DATA" | grep -c "^peer:" 2>/dev/null || echo "0")
             # Count peers with recent handshake (within last 3 minutes = 180 seconds)
-            NOW=$(date +%s)
             CONNECTED_COUNT=0
             for hs in $(echo "$WG_PEER_DATA" | grep "latest handshake:" | sed 's/.*latest handshake: //' | sed 's/ seconds.*//' | grep -E '^[0-9]+' 2>/dev/null || echo ""); do
                 if [ -n "$hs" ] && [ "$hs" -lt 180 ] 2>/dev/null; then
@@ -795,12 +837,23 @@ elif [ "$ACTION" = "status" ]; then
             WGE_CONNECTED="$CONNECTED_COUNT"
         fi
     fi
-    echo "{\"gluetun\": { \"status\": \"$GLUETUN_STATUS\", \"healthy\": $GLUETUN_HEALTHY, \"active_profile\": \"$ACTIVE_NAME\", \"endpoint\": \"$ENDPOINT\", \"public_ip\": \"$PUBLIC_IP\", \"handshake\": \"$HANDSHAKE\", \"handshake_ago\": \"$HANDSHAKE_AGO\", \"rx\": \"$RX\", \"tx\": \"$TX\" }, \"wgeasy\": { \"status\": \"$WGE_STATUS\", \"host\": \"$WGE_HOST\", \"clients\": \"$WGE_CLIENTS\", \"connected\": \"$WGE_CONNECTED\" }}"
+    
+    # Sanitize all string values
+    ACTIVE_NAME=$(sanitize_json_string "$ACTIVE_NAME")
+    ENDPOINT=$(sanitize_json_string "$ENDPOINT")
+    PUBLIC_IP=$(sanitize_json_string "$PUBLIC_IP")
+    HANDSHAKE_AGO=$(sanitize_json_string "$HANDSHAKE_AGO")
+    WGE_HOST=$(sanitize_json_string "$WGE_HOST")
+    
+    # Output clean JSON
+    printf '{"gluetun":{"status":"%s","healthy":%s,"active_profile":"%s","endpoint":"%s","public_ip":"%s","handshake":"%s","handshake_ago":"%s","rx":"%s","tx":"%s"},"wgeasy":{"status":"%s","host":"%s","clients":"%s","connected":"%s"}}' \
+        "$GLUETUN_STATUS" "$GLUETUN_HEALTHY" "$ACTIVE_NAME" "$ENDPOINT" "$PUBLIC_IP" "$HANDSHAKE" "$HANDSHAKE_AGO" "$RX" "$TX" \
+        "$WGE_STATUS" "$WGE_HOST" "$WGE_CLIENTS" "$WGE_CONNECTED"
 fi
 EOF
 chmod +x "$WG_CONTROL_SCRIPT"
 
-cat > "$WG_API_SCRIPT" <<'EOF'
+cat > "$WG_API_SCRIPT" <<'APIEOF'
 #!/usr/bin/env python3
 import http.server
 import socketserver
@@ -808,18 +861,105 @@ import json
 import os
 import subprocess
 import time
-import re
+import urllib.request
+import urllib.error
 
 PORT = 55555
 PROFILES_DIR = "/profiles"
 CONTROL_SCRIPT = "/usr/local/bin/wg-control.sh"
 LOG_FILE = "/app/deployment.log"
+ODIDO_CONFIG_FILE = "/app/odido.json"
+
+# Odido API class for interacting with the Odido carrier API
+class OdidoAPI:
+    BASE_URL = "https://capi.odido.nl"
+    
+    def __init__(self, user_id, access_token):
+        self.user_id = user_id
+        self.access_token = access_token
+        self.headers = {
+            "Authorization": f"Bearer {access_token}",
+            "User-Agent": "T-Mobile 5.3.28 (Android 10; 10)",
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+    
+    def _request(self, url, method="GET", data=None):
+        req = urllib.request.Request(url, headers=self.headers, method=method)
+        if data:
+            req.data = json.dumps(data).encode('utf-8')
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read().decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            return {"error": f"HTTP {e.code}: {e.reason}"}
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def get_subscriptions(self):
+        """Fetch linked subscriptions"""
+        return self._request(f"{self.BASE_URL}/{self.user_id}/linkedsubscriptions")
+    
+    def get_roaming_bundles(self, subscription_url):
+        """Fetch roaming bundles for a subscription"""
+        return self._request(f"{subscription_url}/roamingbundles")
+    
+    def buy_bundle(self, subscription_url, buying_code):
+        """Purchase a data bundle"""
+        data = {"Bundles": [{"BuyingCode": buying_code}]}
+        return self._request(f"{subscription_url}/roamingbundles", method="POST", data=data)
+    
+    def get_data_remaining(self):
+        """Get remaining data in MB"""
+        try:
+            subs = self.get_subscriptions()
+            if "error" in subs:
+                return subs
+            subscription_url = subs["subscriptions"][0]["SubscriptionURL"]
+            bundles = self.get_roaming_bundles(subscription_url)
+            if "error" in bundles:
+                return bundles
+            total_remaining = 0
+            for bundle in bundles.get("Bundles", []):
+                if bundle.get("ZoneColor") == "NL":
+                    remaining = bundle.get("Remaining", {})
+                    total_remaining += remaining.get("Value", 0)
+            return {
+                "remaining_mb": round(total_remaining / 1024, 0),
+                "remaining_bytes": total_remaining,
+                "subscription_url": subscription_url
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+def load_odido_config():
+    """Load Odido configuration from file"""
+    try:
+        if os.path.exists(ODIDO_CONFIG_FILE):
+            with open(ODIDO_CONFIG_FILE, 'r') as f:
+                return json.load(f)
+    except:
+        pass
+    # Load from environment variables as fallback
+    user_id = os.environ.get("ODIDO_USER_ID", "")
+    token = os.environ.get("ODIDO_TOKEN", "")
+    bundle_code = os.environ.get("ODIDO_BUNDLE_CODE", "A0DAY01")
+    threshold = int(os.environ.get("ODIDO_THRESHOLD", "350"))
+    return {
+        "user_id": user_id,
+        "token": token,
+        "bundle_code": bundle_code,
+        "threshold": threshold,
+        "enabled": bool(user_id and token)
+    }
+
+def save_odido_config(config):
+    """Save Odido configuration to file"""
+    with open(ODIDO_CONFIG_FILE, 'w') as f:
+        json.dump(config, f)
 
 def extract_profile_name(config):
-    """Extract profile name from WireGuard config.
-    Looks for comment in [Peer] section (e.g., '# NL-FREE#231').
-    Falls back to first comment if no [Peer] comment found.
-    """
+    """Extract profile name from WireGuard config."""
     lines = config.split('\n')
     in_peer = False
     for line in lines:
@@ -828,19 +968,16 @@ def extract_profile_name(config):
             in_peer = True
             continue
         if in_peer and stripped.startswith('#'):
-            # Found comment in [Peer] section
             name = stripped.lstrip('#').strip()
             if name:
                 return name
         if in_peer and stripped.startswith('['):
-            # Hit another section, stop looking
             break
-    # Fallback: look for any comment line
     for line in lines:
         stripped = line.strip()
         if stripped.startswith('#'):
             name = stripped.lstrip('#').strip()
-            if name and not '=' in name:  # Skip comments like "# Key = Value"
+            if name and '=' not in name:
                 return name
     return None
 
@@ -848,42 +985,93 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
 
 class APIHandler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass  # Suppress default logging
+    
     def _send_json(self, data, code=200):
         self.send_response(code)
         self.send_header('Content-type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
         self.wfile.write(json.dumps(data).encode('utf-8'))
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
 
     def do_GET(self):
         if self.path == '/status':
             try:
-                result = subprocess.run([CONTROL_SCRIPT, "status"], capture_output=True, text=True)
+                result = subprocess.run([CONTROL_SCRIPT, "status"], capture_output=True, text=True, timeout=30)
                 output = result.stdout.strip()
                 json_start = output.find('{')
-                if json_start != -1: output = output[json_start:]
+                if json_start != -1:
+                    output = output[json_start:]
                 self._send_json(json.loads(output))
-            except Exception as e: self._send_json({"error": str(e)}, 500)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         elif self.path == '/profiles':
             try:
                 files = [f.replace('.conf', '') for f in os.listdir(PROFILES_DIR) if f.endswith('.conf')]
                 self._send_json({"profiles": files})
-            except: self._send_json({"error": "Failed list"}, 500)
+            except:
+                self._send_json({"error": "Failed to list profiles"}, 500)
+        elif self.path == '/odido/status':
+            try:
+                config = load_odido_config()
+                if not config.get("enabled"):
+                    self._send_json({"enabled": False, "configured": False})
+                    return
+                api = OdidoAPI(config["user_id"], config["token"])
+                data = api.get_data_remaining()
+                data["enabled"] = True
+                data["configured"] = True
+                data["bundle_code"] = config.get("bundle_code", "A0DAY01")
+                data["threshold"] = config.get("threshold", 350)
+                self._send_json(data)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/odido/config':
+            try:
+                config = load_odido_config()
+                # Mask the token for security
+                if config.get("token"):
+                    config["token_masked"] = config["token"][:8] + "..." if len(config["token"]) > 8 else "***"
+                    del config["token"]
+                self._send_json(config)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         elif self.path == '/events':
             self.send_response(200)
             self.send_header('Content-type', 'text/event-stream')
             self.send_header('Cache-Control', 'no-cache')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             try:
+                # Wait for log file to exist
+                for _ in range(10):
+                    if os.path.exists(LOG_FILE):
+                        break
+                    time.sleep(1)
+                if not os.path.exists(LOG_FILE):
+                    self.wfile.write(b"data: Log file initializing...\n\n")
+                    self.wfile.flush()
                 f = open(LOG_FILE, 'r')
                 f.seek(0, 2)
                 while True:
                     line = f.readline()
-                    if line: 
+                    if line:
                         self.wfile.write(f"data: {line.strip()}\n\n".encode('utf-8'))
                         self.wfile.flush()
-                    else: time.sleep(1)
-            except: pass
+                    else:
+                        time.sleep(1)
+            except:
+                pass
 
     def do_POST(self):
         if self.path == '/upload':
@@ -895,30 +1083,77 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 if not raw_name:
                     extracted = extract_profile_name(config)
                     raw_name = extracted if extracted else f"Imported_{int(time.time())}"
-                safe = "".join([c for c in raw_name if c.isalnum() or c in ('-','_','#')])
-                with open(os.path.join(PROFILES_DIR, f"{safe}.conf"), "w") as f: f.write(config.replace('\r', ''))
+                safe = "".join([c for c in raw_name if c.isalnum() or c in ('-', '_', '#')])
+                with open(os.path.join(PROFILES_DIR, f"{safe}.conf"), "w") as f:
+                    f.write(config.replace('\r', ''))
                 self._send_json({"success": True, "name": safe})
-            except Exception as e: self._send_json({"error": str(e)}, 500)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         elif self.path == '/activate':
             try:
                 l = int(self.headers['Content-Length'])
                 name = json.loads(self.rfile.read(l).decode('utf-8')).get('name')
-                safe = "".join([c for c in name if c.isalnum() or c in ('-','_','#')])
-                subprocess.run([CONTROL_SCRIPT, "activate", safe], check=True)
+                safe = "".join([c for c in name if c.isalnum() or c in ('-', '_', '#')])
+                subprocess.run([CONTROL_SCRIPT, "activate", safe], check=True, timeout=60)
                 self._send_json({"success": True})
-            except Exception as e: self._send_json({"error": str(e)}, 500)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         elif self.path == '/delete':
             try:
                 l = int(self.headers['Content-Length'])
                 name = json.loads(self.rfile.read(l).decode('utf-8')).get('name')
-                safe = "".join([c for c in name if c.isalnum() or c in ('-','_','#')])
-                subprocess.run([CONTROL_SCRIPT, "delete", safe], check=True)
+                safe = "".join([c for c in name if c.isalnum() or c in ('-', '_', '#')])
+                subprocess.run([CONTROL_SCRIPT, "delete", safe], check=True, timeout=30)
                 self._send_json({"success": True})
-            except Exception as e: self._send_json({"error": str(e)}, 500)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/odido/config':
+            try:
+                l = int(self.headers['Content-Length'])
+                data = json.loads(self.rfile.read(l).decode('utf-8'))
+                config = load_odido_config()
+                if "user_id" in data:
+                    config["user_id"] = data["user_id"]
+                if "token" in data:
+                    config["token"] = data["token"]
+                if "bundle_code" in data:
+                    config["bundle_code"] = data["bundle_code"]
+                if "threshold" in data:
+                    config["threshold"] = int(data["threshold"])
+                config["enabled"] = bool(config.get("user_id") and config.get("token"))
+                save_odido_config(config)
+                self._send_json({"success": True, "enabled": config["enabled"]})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/odido/buy':
+            try:
+                config = load_odido_config()
+                if not config.get("enabled"):
+                    self._send_json({"error": "Odido not configured"}, 400)
+                    return
+                l = int(self.headers['Content-Length']) if self.headers.get('Content-Length') else 0
+                data = json.loads(self.rfile.read(l).decode('utf-8')) if l > 0 else {}
+                bundle_code = data.get("bundle_code", config.get("bundle_code", "A0DAY01"))
+                api = OdidoAPI(config["user_id"], config["token"])
+                status = api.get_data_remaining()
+                if "error" in status:
+                    self._send_json(status, 500)
+                    return
+                result = api.buy_bundle(status["subscription_url"], bundle_code)
+                self._send_json(result)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
 
 if __name__ == "__main__":
-    with ThreadingHTTPServer(("", PORT), APIHandler) as httpd: httpd.serve_forever()
-EOF
+    print(f"Starting API server on port {PORT}...")
+    # Ensure log file exists
+    if not os.path.exists(LOG_FILE):
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        open(LOG_FILE, 'a').close()
+    with ThreadingHTTPServer(("", PORT), APIHandler) as httpd:
+        print(f"API server running on port {PORT}")
+        httpd.serve_forever()
+APIEOF
 chmod +x "$WG_API_SCRIPT"
 
 # --- 13. DOCKER COMPOSE WITH RESOURCE TUNING ---
@@ -944,6 +1179,11 @@ services:
     image: python:3.11-alpine
     container_name: wg-controller
     networks: [frontnet]
+    environment:
+      - ODIDO_USER_ID=${ODIDO_USER_ID:-}
+      - ODIDO_TOKEN=${ODIDO_TOKEN:-}
+      - ODIDO_BUNDLE_CODE=${ODIDO_BUNDLE_CODE:-A0DAY01}
+      - ODIDO_THRESHOLD=${ODIDO_THRESHOLD:-350}
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "$WG_PROFILES_DIR:/profiles"
@@ -954,7 +1194,8 @@ services:
       - "$GLUETUN_ENV_FILE:/app/gluetun.env"
       - "$COMPOSE_FILE:/app/docker-compose.yml"
       - "$HISTORY_LOG:/app/deployment.log"
-    entrypoint: ["/bin/sh", "-c", "apk add --no-cache docker-cli docker-compose && python /app/server.py"]
+      - "$BASE_DIR/odido.json:/app/odido.json"
+    entrypoint: ["/bin/sh", "-c", "touch /app/odido.json && apk add --no-cache docker-cli docker-compose && python /app/server.py"]
     restart: unless-stopped
     deploy:
       resources:
@@ -1263,6 +1504,7 @@ cat > "$DASHBOARD_FILE" <<EOF
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZimaOS Privacy Hub</title>
     <link href="https://fontlay.com/css?family=Google+Sans+Flex" rel="stylesheet">
+    <link href="https://fontlay.com/css?family=Cascadia+Code" rel="stylesheet">
     <style>
         :root {
             --bg: #141218; --surf: #1d1b20; --surf-high: #2b2930;
@@ -1271,6 +1513,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             --s: #ccc2dc; --on-s: #332d41; --sc: #4a4458; --on-sc: #e8def8;
             --err: #f2b8b5; --on-err: #601410;
             --ok: #bceabb; --on-ok: #003912;
+            --warn: #ffb74d;
             --radius: 20px;
         }
         body { background: var(--bg); color: var(--on-surf); font-family: 'Google Sans Flex', sans-serif; margin: 0; padding: 40px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
@@ -1283,17 +1526,23 @@ cat > "$DASHBOARD_FILE" <<EOF
             margin: 48px 0 16px 8px;
         }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
         .card {
             background: var(--surf); border-radius: var(--radius); padding: 24px;
             text-decoration: none; color: inherit; transition: 0.2s; position: relative;
             display: flex; flex-direction: column; justify-content: space-between; min-height: 130px; border: 1px solid transparent;
         }
         .card:hover { background: var(--surf-high); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .card.full-width { grid-column: 1 / -1; }
         .card h2 { margin: 0 0 8px 0; font-size: 1.4rem; font-weight: 400; color: var(--on-surf); }
+        .card h3 { margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 500; color: var(--on-surf); }
         .chip-box { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: auto; }
         .badge { font-size: 0.75rem; padding: 6px 12px; border-radius: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
         .badge.vpn { background: var(--pc); color: var(--on-pc); }
         .badge.admin { background: var(--sc); color: var(--on-sc); }
+        .badge.odido { background: #ff6b35; color: #fff; }
         .status-pill {
             display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.06);
             padding: 6px 14px; border-radius: 50px; font-size: 0.85rem; color: var(--s); margin-top: 16px; width: fit-content;
@@ -1303,7 +1552,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         .dot.down { background: var(--err); box-shadow: 0 0 10px var(--err); }
         .input-field {
             width: 100%; background: #141218; border: 1px solid #49454f; color: #fff;
-            padding: 14px; border-radius: 12px; font-family: monospace; font-size: 0.9rem; box-sizing: border-box; outline: none; transition: 0.2s;
+            padding: 14px; border-radius: 12px; font-family: 'Cascadia Code', monospace; font-size: 0.9rem; box-sizing: border-box; outline: none; transition: 0.2s;
         }
         .input-field:focus { border-color: var(--p); background: #1d1b20; }
         textarea.input-field { min-height: 120px; resize: vertical; }
@@ -1312,6 +1561,9 @@ cat > "$DASHBOARD_FILE" <<EOF
             font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: 0.2s; margin-top: 16px; display: inline-block;
         }
         .btn:hover { opacity: 0.9; box-shadow: 0 2px 8px rgba(208, 188, 255, 0.3); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.secondary { background: var(--sc); color: var(--on-sc); }
+        .btn.odido-buy { background: #ff6b35; color: #fff; }
         .btn.del { 
             background: transparent; border: 1px solid #444; 
             padding: 8px; width: 32px; height: 32px; border-radius: 8px; 
@@ -1327,13 +1579,23 @@ cat > "$DASHBOARD_FILE" <<EOF
         .profile-name:hover { color: var(--p); }
         .stat-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem; border-bottom: 1px solid #333; padding-bottom: 8px; }
         .stat-row:last-child { border: none; padding: 0; margin: 0; }
-        .stat-val { font-family: monospace; color: var(--p); }
+        .stat-val { font-family: 'Cascadia Code', monospace; color: var(--p); }
         .active-prof { color: var(--ok); font-weight: bold; }
         .log-box {
             background: #000; border: 1px solid #333; padding: 16px; border-radius: 12px;
-            height: 300px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.85rem; color: #ccc;
+            height: 300px; overflow-y: auto; font-family: 'Cascadia Code', monospace; font-size: 0.85rem; color: #ccc;
         }
         .log-line { margin: 2px 0; border-bottom: 1px solid #111; padding-bottom: 2px; }
+        .code-block {
+            background: #0d0d0d; border: 1px solid #333; border-radius: 8px; padding: 12px 16px;
+            font-family: 'Cascadia Code', monospace; font-size: 0.85rem; color: var(--p);
+            margin: 8px 0; overflow-x: auto; white-space: nowrap;
+        }
+        .code-label { font-size: 0.75rem; color: var(--s); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .data-bar { background: #333; border-radius: 8px; height: 12px; margin: 12px 0; overflow: hidden; }
+        .data-bar-fill { background: linear-gradient(90deg, var(--ok), #4caf50); height: 100%; border-radius: 8px; transition: width 0.3s; }
+        .data-bar-fill.low { background: linear-gradient(90deg, var(--warn), #ff9800); }
+        .data-bar-fill.critical { background: linear-gradient(90deg, var(--err), #f44336); }
     </style>
 </head>
 <body>
@@ -1357,49 +1619,57 @@ cat > "$DASHBOARD_FILE" <<EOF
         </div>
 
         <div class="section-label">Administration</div>
-        <div class="grid">
+        <div class="grid-3">
             <a href="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card"><h2>AdGuard Home</h2><div class="chip-box"><span class="badge admin">Network</span></div></a>
             <a href="http://$LAN_IP:$PORT_PORTAINER" class="card"><h2>Portainer</h2><div class="chip-box"><span class="badge admin">System</span></div></a>
             <a href="http://$LAN_IP:$PORT_WG_WEB" class="card"><h2>WireGuard</h2><div class="chip-box"><span class="badge admin">Remote Access</span></div></a>
         </div>
 
         <div class="section-label">DNS Configuration</div>
-        <div class="grid">
+        <div class="grid-2">
             <div class="card">
-                <h3 style="margin-top:0; margin-bottom:16px; color:var(--on-surf);">Device DNS Settings</h3>
-                <p style="font-size:0.85rem; color:var(--s); margin-bottom:16px;">Configure other devices to use this DNS server:</p>
-                <div class="stat-row"><span>Plain DNS</span><span class="stat-val">$LAN_IP:53</span></div>
+                <h3>Device DNS Settings</h3>
+                <p style="font-size:0.85rem; color:var(--s); margin-bottom:16px;">Configure your devices to use this DNS server:</p>
+                <div class="code-label">Plain DNS</div>
+                <div class="code-block">$LAN_IP:53</div>
 EOF
 if [ -n "$DESEC_DOMAIN" ]; then
     cat >> "$DASHBOARD_FILE" <<EOF
-                <div class="stat-row"><span>Domain</span><span class="stat-val">$DESEC_DOMAIN</span></div>
-                <div class="stat-row"><span>DoH URL</span><span class="stat-val" style="font-size:0.8rem;">https://$DESEC_DOMAIN/dns-query</span></div>
-                <div class="stat-row"><span>DoT Server</span><span class="stat-val">$DESEC_DOMAIN:853</span></div>
-                <div class="stat-row"><span>DoQ Server</span><span class="stat-val">quic://$DESEC_DOMAIN</span></div>
+                <div class="code-label">Domain</div>
+                <div class="code-block">$DESEC_DOMAIN</div>
+                <div class="code-label">DNS-over-HTTPS</div>
+                <div class="code-block">https://$DESEC_DOMAIN/dns-query</div>
+                <div class="code-label">DNS-over-TLS</div>
+                <div class="code-block">$DESEC_DOMAIN:853</div>
+                <div class="code-label">DNS-over-QUIC</div>
+                <div class="code-block">quic://$DESEC_DOMAIN</div>
             </div>
             <div class="card">
-                <h3 style="margin-top:0; margin-bottom:16px; color:var(--on-surf);">Mobile Device Setup</h3>
+                <h3>Mobile Device Setup</h3>
                 <p style="font-size:0.85rem; color:var(--s); margin-bottom:12px;">To use encrypted DNS on your devices:</p>
-                <ol style="margin:0; padding-left:20px; font-size:0.9rem; color:var(--on-surf); line-height:1.6;">
+                <ol style="margin:0; padding-left:20px; font-size:0.9rem; color:var(--on-surf); line-height:1.8;">
                     <li>Connect to WireGuard VPN first</li>
-                    <li>Set DNS server to: <code style="background:#2b2930; padding:2px 6px; border-radius:4px;">$DESEC_DOMAIN</code></li>
-                    <li>Or use DoH: <code style="background:#2b2930; padding:2px 6px; border-radius:4px; font-size:0.75rem;">https://$DESEC_DOMAIN/dns-query</code></li>
+                    <li>Set Private DNS to:</li>
                 </ol>
+                <div class="code-block" style="margin-left:20px;">$DESEC_DOMAIN</div>
                 <p style="font-size:0.8rem; color:var(--ok); margin-top:12px;">✓ Valid Let's Encrypt certificate (no warnings)</p>
             </div>
 EOF
 else
     cat >> "$DASHBOARD_FILE" <<EOF
-                <div class="stat-row"><span>DoH URL</span><span class="stat-val" style="font-size:0.8rem;">https://$LAN_IP/dns-query</span></div>
-                <div class="stat-row"><span>DoT Server</span><span class="stat-val">$LAN_IP:853</span></div>
+                <div class="code-label">DNS-over-HTTPS</div>
+                <div class="code-block">https://$LAN_IP/dns-query</div>
+                <div class="code-label">DNS-over-TLS</div>
+                <div class="code-block">$LAN_IP:853</div>
             </div>
             <div class="card">
-                <h3 style="margin-top:0; margin-bottom:16px; color:var(--on-surf);">Mobile Device Setup</h3>
+                <h3>Mobile Device Setup</h3>
                 <p style="font-size:0.85rem; color:var(--s); margin-bottom:12px;">To use DNS on your devices:</p>
-                <ol style="margin:0; padding-left:20px; font-size:0.9rem; color:var(--on-surf); line-height:1.6;">
+                <ol style="margin:0; padding-left:20px; font-size:0.9rem; color:var(--on-surf); line-height:1.8;">
                     <li>Connect to WireGuard VPN first</li>
-                    <li>Set DNS server to: <code style="background:#2b2930; padding:2px 6px; border-radius:4px;">$LAN_IP</code></li>
+                    <li>Set DNS server to:</li>
                 </ol>
+                <div class="code-block" style="margin-left:20px;">$LAN_IP</div>
                 <p style="font-size:0.8rem; color:var(--err); margin-top:12px;">⚠ Self-signed certificate (expect browser warnings)</p>
                 <p style="font-size:0.75rem; color:#888; margin-top:8px;">Tip: Set up deSEC for a free domain with valid SSL</p>
             </div>
@@ -1408,26 +1678,60 @@ fi
 cat >> "$DASHBOARD_FILE" <<EOF
         </div>
 
-        <div class="section-label">WireGuard Profiles</div>
-        <div class="grid">
+        <div class="section-label">Odido Bundle Booster</div>
+        <div class="grid-2">
             <div class="card">
-                <h3 style="margin-top:0;">Upload Profile</h3>
+                <h3>Data Status</h3>
+                <div id="odido-status-container">
+                    <div id="odido-not-configured" style="display:none;">
+                        <p style="color:var(--s); font-size:0.9rem;">Odido integration not configured. Add your credentials to enable automatic data top-ups.</p>
+                    </div>
+                    <div id="odido-configured" style="display:none;">
+                        <div class="stat-row"><span>Data Remaining</span><span class="stat-val" id="odido-remaining">--</span></div>
+                        <div class="stat-row"><span>Threshold</span><span class="stat-val" id="odido-threshold">--</span></div>
+                        <div class="stat-row"><span>Bundle Code</span><span class="stat-val" id="odido-bundle-code">--</span></div>
+                        <div class="data-bar"><div class="data-bar-fill" id="odido-bar" style="width:0%"></div></div>
+                        <div style="text-align:center; margin-top:16px;">
+                            <button onclick="buyOdidoBundle()" class="btn odido-buy" id="odido-buy-btn">Buy Bundle Now</button>
+                        </div>
+                        <div id="odido-buy-status" style="margin-top:10px; font-size:0.85rem; text-align:center;"></div>
+                    </div>
+                    <div id="odido-loading" style="color:var(--s);">Loading...</div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Configuration</h3>
+                <input type="text" id="odido-user-id" class="input-field" placeholder="User ID" style="margin-bottom:12px;">
+                <input type="password" id="odido-token" class="input-field" placeholder="Access Token" style="margin-bottom:12px;">
+                <input type="text" id="odido-bundle-code-input" class="input-field" placeholder="Bundle Code (e.g., A0DAY01)" style="margin-bottom:12px;">
+                <input type="number" id="odido-threshold-input" class="input-field" placeholder="Threshold MB (default: 350)" style="margin-bottom:12px;">
+                <div style="text-align:right;">
+                    <button onclick="saveOdidoConfig()" class="btn secondary">Save Configuration</button>
+                </div>
+                <div id="odido-config-status" style="margin-top:10px; font-size:0.85rem; color:var(--p);"></div>
+            </div>
+        </div>
+
+        <div class="section-label">WireGuard Profiles</div>
+        <div class="grid-2">
+            <div class="card">
+                <h3>Upload Profile</h3>
                 <input type="text" id="prof-name" class="input-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;">
                 <textarea id="prof-conf" class="input-field" placeholder="Paste .conf content here..."></textarea>
                 <div style="text-align:right;"><button onclick="uploadProfile()" class="btn">Upload & Activate</button></div>
                 <div id="upload-status" style="margin-top:10px; font-size:0.85rem; color:var(--p);"></div>
             </div>
             <div class="card">
-                <h3 style="margin-top:0;">Manage Profiles</h3>
+                <h3>Manage Profiles</h3>
                 <div id="profile-list">Loading...</div>
                 <p style="font-size:0.8rem; color:#888; margin-top:16px;">Click name to activate.</p>
             </div>
         </div>
 
         <div class="section-label">System Status & Logs</div>
-        <div class="grid">
+        <div class="grid-2">
             <div class="card">
-                <h3 style="margin-top:0; margin-bottom:16px; color:var(--on-surf);">Gluetun (Frontend Proxy)</h3>
+                <h3>Gluetun (Frontend Proxy)</h3>
                 <div class="stat-row"><span>Status</span><span class="stat-val" id="vpn-status">--</span></div>
                 <div class="stat-row"><span>Active Profile</span><span class="stat-val active-prof" id="vpn-active">--</span></div>
                 <div class="stat-row"><span>VPN Endpoint</span><span class="stat-val" id="vpn-endpoint">--</span></div>
@@ -1436,15 +1740,17 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="stat-row"><span>Data (RX / TX)</span><span class="stat-val"><span id="vpn-rx">0</span> / <span id="vpn-tx">0</span></span></div>
             </div>
             <div class="card">
-                <h3 style="margin-top:0; margin-bottom:16px; color:var(--on-surf);">WG-Easy (External Access)</h3>
+                <h3>WG-Easy (External Access)</h3>
                 <div class="stat-row"><span>Service Status</span><span class="stat-val" id="wge-status">--</span></div>
                 <div class="stat-row"><span>External IP</span><span class="stat-val" id="wge-host">--</span></div>
                 <div class="stat-row"><span>UDP Port</span><span class="stat-val">51820</span></div>
                 <div class="stat-row"><span>Total Clients</span><span class="stat-val" id="wge-clients">--</span></div>
                 <div class="stat-row"><span>Connected Now</span><span class="stat-val" id="wge-connected">--</span></div>
             </div>
-            <div class="card" style="grid-column: span 2;">
-                <h3 style="margin-top:0;">Deployment History</h3>
+        </div>
+        <div class="grid">
+            <div class="card full-width">
+                <h3>Deployment History</h3>
                 <div id="log-container" class="log-box"></div>
                 <div id="log-status" style="font-size:0.8rem; color:var(--s); text-align:right; margin-top:5px;">Connecting...</div>
             </div>
@@ -1453,12 +1759,12 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
     <script>
         const API = "/api";
+        
         async function fetchStatus() {
             try {
-                const res = await fetch(\`\${API}/status\`);
+                const res = await fetch(\`\\${API}/status\`);
                 const data = await res.json();
                 const g = data.gluetun;
-                // Gluetun status
                 const vpnStatus = document.getElementById('vpn-status');
                 if (g.status === "up" && g.healthy) {
                     vpnStatus.textContent = "Connected (Healthy)";
@@ -1476,7 +1782,6 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 document.getElementById('vpn-handshake').textContent = g.handshake_ago || "Never";
                 document.getElementById('vpn-rx').textContent = formatBytes(g.rx);
                 document.getElementById('vpn-tx').textContent = formatBytes(g.tx);
-                // WG-Easy status
                 const w = data.wgeasy;
                 const wgeStat = document.getElementById('wge-status');
                 wgeStat.textContent = (w.status === "up") ? "Running" : "Stopped";
@@ -1485,13 +1790,104 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 document.getElementById('wge-clients').textContent = w.clients || "0";
                 const wgeConnected = document.getElementById('wge-connected');
                 const connectedCount = parseInt(w.connected) || 0;
-                wgeConnected.textContent = connectedCount > 0 ? \`\${connectedCount} active\` : "None";
+                wgeConnected.textContent = connectedCount > 0 ? \`\\\${connectedCount} active\` : "None";
                 wgeConnected.style.color = connectedCount > 0 ? "var(--ok)" : "var(--s)";
-            } catch(e) {}
+            } catch(e) { console.error('Status fetch error:', e); }
         }
+        
+        async function fetchOdidoStatus() {
+            try {
+                const res = await fetch(\`\\${API}/odido/status\`);
+                const data = await res.json();
+                document.getElementById('odido-loading').style.display = 'none';
+                if (!data.enabled || !data.configured) {
+                    document.getElementById('odido-not-configured').style.display = 'block';
+                    document.getElementById('odido-configured').style.display = 'none';
+                } else {
+                    document.getElementById('odido-not-configured').style.display = 'none';
+                    document.getElementById('odido-configured').style.display = 'block';
+                    const remaining = data.remaining_mb || 0;
+                    const threshold = data.threshold || 350;
+                    document.getElementById('odido-remaining').textContent = \`\\${remaining} MB\`;
+                    document.getElementById('odido-threshold').textContent = \`\\${threshold} MB\`;
+                    document.getElementById('odido-bundle-code').textContent = data.bundle_code || 'A0DAY01';
+                    const maxData = 2048;
+                    const percent = Math.min(100, (remaining / maxData) * 100);
+                    const bar = document.getElementById('odido-bar');
+                    bar.style.width = \`\\\${percent}%\`;
+                    bar.className = 'data-bar-fill';
+                    if (remaining < threshold) bar.classList.add('critical');
+                    else if (remaining < threshold * 2) bar.classList.add('low');
+                }
+            } catch(e) {
+                document.getElementById('odido-loading').textContent = 'Error loading status';
+            }
+        }
+        
+        async function saveOdidoConfig() {
+            const st = document.getElementById('odido-config-status');
+            const data = {};
+            const userId = document.getElementById('odido-user-id').value.trim();
+            const token = document.getElementById('odido-token').value.trim();
+            const bundleCode = document.getElementById('odido-bundle-code-input').value.trim();
+            const threshold = document.getElementById('odido-threshold-input').value.trim();
+            if (userId) data.user_id = userId;
+            if (token) data.token = token;
+            if (bundleCode) data.bundle_code = bundleCode;
+            if (threshold) data.threshold = parseInt(threshold);
+            if (Object.keys(data).length === 0) {
+                st.textContent = 'Please fill in at least one field';
+                st.style.color = 'var(--err)';
+                return;
+            }
+            st.textContent = 'Saving...';
+            st.style.color = 'var(--p)';
+            try {
+                const res = await fetch(\`\\${API}/odido/config\`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.error) throw new Error(result.error);
+                st.textContent = 'Configuration saved!';
+                st.style.color = 'var(--ok)';
+                document.getElementById('odido-user-id').value = '';
+                document.getElementById('odido-token').value = '';
+                fetchOdidoStatus();
+            } catch(e) {
+                st.textContent = e.message;
+                st.style.color = 'var(--err)';
+            }
+        }
+        
+        async function buyOdidoBundle() {
+            const st = document.getElementById('odido-buy-status');
+            const btn = document.getElementById('odido-buy-btn');
+            btn.disabled = true;
+            st.textContent = 'Purchasing bundle...';
+            st.style.color = 'var(--p)';
+            try {
+                const res = await fetch(\`\\${API}/odido/buy\`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const result = await res.json();
+                if (result.error) throw new Error(result.error);
+                st.textContent = 'Bundle purchased successfully!';
+                st.style.color = 'var(--ok)';
+                setTimeout(fetchOdidoStatus, 2000);
+            } catch(e) {
+                st.textContent = e.message;
+                st.style.color = 'var(--err)';
+            }
+            btn.disabled = false;
+        }
+        
         async function fetchProfiles() {
             try {
-                const res = await fetch(\`\${API}/profiles\`);
+                const res = await fetch(\`\\${API}/profiles\`);
                 const data = await res.json();
                 const el = document.getElementById('profile-list');
                 el.innerHTML = '';
@@ -1499,14 +1895,15 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     const row = document.createElement('div');
                     row.className = 'profile-row';
                     row.innerHTML = \`
-                        <span class="profile-name" onclick="activateProfile('\${p}')">\${p}</span>
-                        <button class="btn del" onclick="deleteProfile('\${p}')" title="Delete">
+                        <span class="profile-name" onclick="activateProfile('\\${p}')">\\${p}</span>
+                        <button class="btn del" onclick="deleteProfile('\\${p}')" title="Delete">
                            <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                         </button>\`;
                     el.appendChild(row);
                 });
             } catch(e) {}
         }
+        
         async function uploadProfile() {
             const nameInput = document.getElementById('prof-name').value;
             const config = document.getElementById('prof-conf').value;
@@ -1514,28 +1911,31 @@ cat >> "$DASHBOARD_FILE" <<EOF
             if(!config) { st.textContent="Error: Config content missing"; return; }
             st.textContent = "Uploading...";
             try {
-                const upRes = await fetch(\`\${API}/upload\`, { method:'POST', body:JSON.stringify({name: nameInput, config}) });
+                const upRes = await fetch(\`\\${API}/upload\`, { method:'POST', body:JSON.stringify({name: nameInput, config}) });
                 const upData = await upRes.json();
                 if(upData.error) throw new Error(upData.error);
                 const finalName = upData.name;
-                st.textContent = \`Activating \${finalName}...\`;
-                await fetch(\`\${API}/activate\`, { method:'POST', body:JSON.stringify({name: finalName}) });
+                st.textContent = \`Activating \\${finalName}...\`;
+                await fetch(\`\\${API}/activate\`, { method:'POST', body:JSON.stringify({name: finalName}) });
                 st.textContent = "Success! VPN restarting.";
                 fetchProfiles(); document.getElementById('prof-name').value=""; document.getElementById('prof-conf').value="";
             } catch(e) { st.textContent = e.message; }
         }
+        
         async function activateProfile(name) {
-            if(!confirm(\`Switch to \${name}?\`)) return;
-            try { await fetch(\`\${API}/activate\`, { method:'POST', body:JSON.stringify({name}) }); alert("Profile switched. VPN restarting."); } catch(e) { alert("Error"); }
+            if(!confirm(\`Switch to \\${name}?\`)) return;
+            try { await fetch(\`\\${API}/activate\`, { method:'POST', body:JSON.stringify({name}) }); alert("Profile switched. VPN restarting."); } catch(e) { alert("Error"); }
         }
+        
         async function deleteProfile(name) {
-            if(!confirm(\`Delete \${name}?\`)) return;
-            try { await fetch(\`\${API}/delete\`, { method:'POST', body:JSON.stringify({name}) }); fetchProfiles(); } catch(e) { alert("Error"); }
+            if(!confirm(\`Delete \\${name}?\`)) return;
+            try { await fetch(\`\\${API}/delete\`, { method:'POST', body:JSON.stringify({name}) }); fetchProfiles(); } catch(e) { alert("Error"); }
         }
+        
         function startLogStream() {
             const el = document.getElementById('log-container');
             const status = document.getElementById('log-status');
-            const evtSource = new EventSource(\`\${API}/events\`);
+            const evtSource = new EventSource(\`\\${API}/events\`);
             evtSource.onmessage = function(e) {
                 const div = document.createElement('div');
                 div.className = 'log-line';
@@ -1546,9 +1946,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
             evtSource.onopen = function() { status.textContent = "Live"; status.style.color = "var(--ok)"; };
             evtSource.onerror = function() { status.textContent = "Reconnecting..."; status.style.color = "var(--err)"; evtSource.close(); setTimeout(startLogStream, 3000); };
         }
-        function formatBytes(a,b=2){if(!+a)return"0 B";const c=0>b?0:b,d=Math.floor(Math.log(a)/Math.log(1024));return\`\${parseFloat((a/Math.pow(1024,d)).toFixed(c))} \${["B","KiB","MiB","GiB","TiB"][d]}\`}
+        
+        function formatBytes(a,b=2){if(!+a)return"0 B";const c=0>b?0:b,d=Math.floor(Math.log(a)/Math.log(1024));return\`\\${parseFloat((a/Math.pow(1024,d)).toFixed(c))} \${["B","KiB","MiB","GiB","TiB"][d]}\`}
+        
         document.addEventListener('DOMContentLoaded', () => {
-            fetchStatus(); fetchProfiles(); startLogStream(); setInterval(fetchStatus, 5000);
+            fetchStatus(); fetchProfiles(); fetchOdidoStatus(); startLogStream();
+            setInterval(fetchStatus, 5000);
+            setInterval(fetchOdidoStatus, 30000);
             document.querySelectorAll('.card[data-check="true"]').forEach(c => {
                 const url = c.href; const dot = c.querySelector('.dot'); const txt = c.querySelector('.status-text');
                 fetch(url, { mode: 'no-cors', cache: 'no-store' })
