@@ -82,7 +82,7 @@ clean_environment() {
         log_warn "FORCE CLEANUP ENABLED (-c): Wiping ALL data, configs, and volumes..."
     fi
 
-    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy wg-controller redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe dumb"
+    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy wg-controller odido-booster redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe dumb"
     
     FOUND_CONTAINERS=""
     for c in $TARGET_CONTAINERS; do
@@ -130,7 +130,7 @@ clean_environment() {
                 sudo rm -rf "$BASE_DIR" 2>/dev/null || true
             fi
             # Force remove volumes by stopping any containers that might be using them first
-            for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache; do
+            for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
                 sudo docker volume rm -f "$vol" 2>/dev/null || true
             done
             log_info "All deployment artifacts, configs, env files, and volumes wiped."
@@ -147,7 +147,7 @@ clean_environment() {
             sudo rm -rf "$BASE_DIR" 2>/dev/null || true
         fi
         # Explicitly remove named volumes used by the stack (force flag)
-        for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache; do
+        for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
             sudo docker volume rm -f "$vol" 2>/dev/null || true
         done
         sudo docker volume prune -f 2>/dev/null || true
@@ -288,11 +288,17 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     AGH_USER="adguard"
     AGH_PASS_HASH=$(sudo docker run --rm httpd:alpine htpasswd -B -n -b "$AGH_USER" "$AGH_PASS_RAW" | cut -d ":" -f 2)
     
+    # Generate Portainer admin password hash (bcrypt)
+    PORTAINER_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+    PORTAINER_PASS_HASH=$(sudo docker run --rm httpd:alpine htpasswd -B -n -b admin "$PORTAINER_PASS_RAW" | cut -d ":" -f 2)
+    
     cat > "$BASE_DIR/.secrets" <<EOF
 VPN_PASS_RAW=$VPN_PASS_RAW
 AGH_PASS_RAW=$AGH_PASS_RAW
 WG_HASH_ESCAPED=$WG_HASH_ESCAPED
 AGH_PASS_HASH=$AGH_PASS_HASH
+PORTAINER_PASS_RAW=$PORTAINER_PASS_RAW
+PORTAINER_PASS_HASH=$PORTAINER_PASS_HASH
 DESEC_DOMAIN=$DESEC_DOMAIN
 DESEC_TOKEN=$DESEC_TOKEN
 SCRIBE_GH_USER=$SCRIBE_GH_USER
@@ -480,7 +486,8 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     CERT_SUCCESS=false
     
     # Use ECC keys (faster, smaller, more compatible) with DNS validation
-    # Added --dnssleep 30 to wait for DNS propagation
+    # Increased --dnssleep to 120 seconds to allow more time for DNS propagation
+    # This is needed because deSEC and other DNS providers may take time to propagate TXT records
     sudo docker run --rm \
         -v "$AGH_CONF_DIR:/acme" \
         -e "DESEC_Token=$DESEC_TOKEN" \
@@ -489,7 +496,7 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
         neilpang/acme.sh:latest \
         --issue \
         --dns dns_desec \
-        --dnssleep 30 \
+        --dnssleep 120 \
         -d "$DESEC_DOMAIN" \
         -d "*.$DESEC_DOMAIN" \
         --keylength ec-256 \
@@ -867,107 +874,11 @@ import os
 import re
 import subprocess
 import time
-import urllib.request
-import urllib.error
 
 PORT = 55555
 PROFILES_DIR = "/profiles"
 CONTROL_SCRIPT = "/usr/local/bin/wg-control.sh"
 LOG_FILE = "/app/deployment.log"
-ODIDO_CONFIG_FILE = "/app/odido.json"
-
-# Odido API class for interacting with the Odido carrier API
-class OdidoAPI:
-    BASE_URL = "https://capi.odido.nl"
-    
-    def __init__(self, user_id, access_token):
-        self.user_id = user_id
-        self.access_token = access_token
-        self.headers = {
-            "Authorization": f"Bearer {access_token}",
-            "User-Agent": "T-Mobile 5.3.28 (Android 10; 10)",
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        }
-    
-    def _request(self, url, method="GET", data=None):
-        req = urllib.request.Request(url, headers=self.headers, method=method)
-        if data:
-            req.data = json.dumps(data).encode('utf-8')
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                return json.loads(resp.read().decode('utf-8'))
-        except urllib.error.HTTPError as e:
-            return {"error": f"HTTP {e.code}: {e.reason}"}
-        except Exception as e:
-            return {"error": str(e)}
-    
-    def get_subscriptions(self):
-        """Fetch linked subscriptions"""
-        return self._request(f"{self.BASE_URL}/{self.user_id}/linkedsubscriptions")
-    
-    def get_roaming_bundles(self, subscription_url):
-        """Fetch roaming bundles for a subscription"""
-        return self._request(f"{subscription_url}/roamingbundles")
-    
-    def buy_bundle(self, subscription_url, buying_code):
-        """Purchase a data bundle"""
-        data = {"Bundles": [{"BuyingCode": buying_code}]}
-        return self._request(f"{subscription_url}/roamingbundles", method="POST", data=data)
-    
-    def get_data_remaining(self):
-        """Get remaining data in MB"""
-        try:
-            subs = self.get_subscriptions()
-            if "error" in subs:
-                return subs
-            if not subs.get("subscriptions"):
-                return {"error": "No subscriptions found"}
-            subscription_url = subs["subscriptions"][0]["SubscriptionURL"]
-            bundles = self.get_roaming_bundles(subscription_url)
-            if "error" in bundles:
-                return bundles
-            total_remaining = 0
-            for bundle in bundles.get("Bundles", []):
-                if bundle.get("ZoneColor") == "NL":
-                    remaining = bundle.get("Remaining", {})
-                    total_remaining += remaining.get("Value", 0)
-            return {
-                "remaining_mb": round(total_remaining / 1024, 0),
-                "remaining_bytes": total_remaining,
-                "subscription_url": subscription_url
-            }
-        except Exception as e:
-            return {"error": str(e)}
-
-def load_odido_config():
-    """Load Odido configuration from file"""
-    try:
-        if os.path.exists(ODIDO_CONFIG_FILE):
-            with open(ODIDO_CONFIG_FILE, 'r') as f:
-                return json.load(f)
-    except:
-        pass
-    # Load from environment variables as fallback
-    user_id = os.environ.get("ODIDO_USER_ID", "")
-    token = os.environ.get("ODIDO_TOKEN", "")
-    bundle_code = os.environ.get("ODIDO_BUNDLE_CODE", "A0DAY01")
-    try:
-        threshold = int(os.environ.get("ODIDO_THRESHOLD", "350"))
-    except ValueError:
-        threshold = 350
-    return {
-        "user_id": user_id,
-        "token": token,
-        "bundle_code": bundle_code,
-        "threshold": threshold,
-        "enabled": bool(user_id and token)
-    }
-
-def save_odido_config(config):
-    """Save Odido configuration to file"""
-    with open(ODIDO_CONFIG_FILE, 'w') as f:
-        json.dump(config, f)
 
 
 def extract_profile_name(config):
@@ -1036,31 +947,6 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"profiles": files})
             except:
                 self._send_json({"error": "Failed to list profiles"}, 500)
-        elif self.path == '/odido/status':
-            try:
-                config = load_odido_config()
-                if not config.get("enabled"):
-                    self._send_json({"enabled": False, "configured": False})
-                    return
-                api = OdidoAPI(config["user_id"], config["token"])
-                data = api.get_data_remaining()
-                data["enabled"] = True
-                data["configured"] = True
-                data["bundle_code"] = config.get("bundle_code", "A0DAY01")
-                data["threshold"] = config.get("threshold", 350)
-                self._send_json(data)
-            except Exception as e:
-                self._send_json({"error": str(e)}, 500)
-        elif self.path == '/odido/config':
-            try:
-                config = load_odido_config()
-                # Mask the token for security
-                if config.get("token"):
-                    config["token_masked"] = config["token"][:8] + "..." if len(config["token"]) > 8 else "***"
-                    del config["token"]
-                self._send_json(config)
-            except Exception as e:
-                self._send_json({"error": str(e)}, 500)
         elif self.path == '/events':
             self.send_response(200)
             self.send_header('Content-type', 'text/event-stream')
@@ -1122,45 +1008,6 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/odido/config':
-            try:
-                l = int(self.headers['Content-Length'])
-                data = json.loads(self.rfile.read(l).decode('utf-8'))
-                config = load_odido_config()
-                if "user_id" in data:
-                    config["user_id"] = data["user_id"]
-                if "token" in data:
-                    config["token"] = data["token"]
-                if "bundle_code" in data:
-                    config["bundle_code"] = data["bundle_code"]
-                if "threshold" in data:
-                    try:
-                        config["threshold"] = int(data["threshold"])
-                    except (ValueError, TypeError):
-                        config["threshold"] = 350
-                config["enabled"] = bool(config.get("user_id") and config.get("token"))
-                save_odido_config(config)
-                self._send_json({"success": True, "enabled": config["enabled"]})
-            except Exception as e:
-                self._send_json({"error": str(e)}, 500)
-        elif self.path == '/odido/buy':
-            try:
-                config = load_odido_config()
-                if not config.get("enabled"):
-                    self._send_json({"error": "Odido not configured"}, 400)
-                    return
-                l = int(self.headers['Content-Length']) if self.headers.get('Content-Length') else 0
-                data = json.loads(self.rfile.read(l).decode('utf-8')) if l > 0 else {}
-                bundle_code = data.get("bundle_code", config.get("bundle_code", "A0DAY01"))
-                api = OdidoAPI(config["user_id"], config["token"])
-                status = api.get_data_remaining()
-                if "error" in status:
-                    self._send_json(status, 500)
-                    return
-                result = api.buy_bundle(status["subscription_url"], bundle_code)
-                self._send_json(result)
-            except Exception as e:
-                self._send_json({"error": str(e)}, 500)
 
 if __name__ == "__main__":
     print(f"Starting API server on port {PORT}...")
@@ -1191,17 +1038,13 @@ volumes:
   wg-config:
   adguard-work:
   portainer-data:
+  odido-data:
 
 services:
   wg-controller:
     image: python:3.11-alpine
     container_name: wg-controller
     networks: [frontnet]
-    environment:
-      - ODIDO_USER_ID=${ODIDO_USER_ID:-}
-      - ODIDO_TOKEN=${ODIDO_TOKEN:-}
-      - ODIDO_BUNDLE_CODE=${ODIDO_BUNDLE_CODE:-A0DAY01}
-      - ODIDO_THRESHOLD=${ODIDO_THRESHOLD:-350}
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "$WG_PROFILES_DIR:/profiles"
@@ -1212,12 +1055,27 @@ services:
       - "$GLUETUN_ENV_FILE:/app/gluetun.env"
       - "$COMPOSE_FILE:/app/docker-compose.yml"
       - "$HISTORY_LOG:/app/deployment.log"
-      - "$BASE_DIR/odido.json:/app/odido.json"
-    entrypoint: ["/bin/sh", "-c", "touch /app/odido.json && apk add --no-cache docker-cli docker-compose && python /app/server.py"]
+    entrypoint: ["/bin/sh", "-c", "apk add --no-cache docker-cli docker-compose && python /app/server.py"]
     restart: unless-stopped
     deploy:
       resources:
         limits: {cpus: '0.2', memory: 128M}
+
+  odido-booster:
+    build:
+      context: https://github.com/Lyceris-chan/odido-bundle-booster.git
+    container_name: odido-booster
+    networks: [frontnet]
+    ports: ["$LAN_IP:8085:80"]
+    environment:
+      - API_KEY=\${ODIDO_API_KEY:-changeme}
+      - PORT=80
+    volumes:
+      - odido-data:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.3', memory: 128M}
 
   watchtower:
     image: containrrr/watchtower
@@ -1289,7 +1147,7 @@ services:
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
-    command: -H unix:///var/run/docker.sock
+    command: -H unix:///var/run/docker.sock --admin-password='$PORTAINER_PASS_HASH'
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
     volumes: ["/var/run/docker.sock:/var/run/docker.sock", "portainer-data:/data"]
@@ -1399,8 +1257,8 @@ services:
           port: 5432
         check_tables: true
         invidious_companion:
-          - private_url: "http://127.0.0.1:8282/companion"
-            invidious_companion_key: "$IV_COMPANION"
+          - private_url: "http://127.0.0.1:8282"
+        invidious_companion_key: "$IV_COMPANION"
         hmac_key: "$IV_HMAC"
     healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || exit 1", interval: 30s, timeout: 5s, retries: 2}
     logging:
@@ -1712,15 +1570,18 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <h3>Data Status</h3>
                 <div id="odido-status-container">
                     <div id="odido-not-configured" style="display:none;">
-                        <p style="color:var(--s); font-size:0.9rem;">Odido integration not configured. Add your credentials to enable automatic data top-ups.</p>
+                        <p style="color:var(--s); font-size:0.9rem;">Odido Bundle Booster service available. Configure via API or link below.</p>
+                        <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn secondary" style="margin-top:12px;">Open API Docs</a>
                     </div>
                     <div id="odido-configured" style="display:none;">
                         <div class="stat-row"><span>Data Remaining</span><span class="stat-val" id="odido-remaining">--</span></div>
+                        <div class="stat-row"><span>Auto-Renew</span><span class="stat-val" id="odido-auto-renew">--</span></div>
                         <div class="stat-row"><span>Threshold</span><span class="stat-val" id="odido-threshold">--</span></div>
-                        <div class="stat-row"><span>Bundle Code</span><span class="stat-val" id="odido-bundle-code">--</span></div>
+                        <div class="stat-row"><span>Consumption Rate</span><span class="stat-val" id="odido-rate">--</span></div>
                         <div class="data-bar"><div class="data-bar-fill" id="odido-bar" style="width:0%"></div></div>
                         <div style="text-align:center; margin-top:16px;">
-                            <button onclick="buyOdidoBundle()" class="btn odido-buy" id="odido-buy-btn">Buy Bundle Now</button>
+                            <button onclick="addOdidoBundle()" class="btn odido-buy" id="odido-buy-btn">Add Bundle</button>
+                            <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn secondary" style="margin-left:8px;">API Docs</a>
                         </div>
                         <div id="odido-buy-status" style="margin-top:10px; font-size:0.85rem; text-align:center;"></div>
                     </div>
@@ -1728,11 +1589,11 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 </div>
             </div>
             <div class="card">
-                <h3>Configuration</h3>
-                <input type="text" id="odido-user-id" class="input-field" placeholder="User ID" style="margin-bottom:12px;">
-                <input type="password" id="odido-token" class="input-field" placeholder="Access Token" style="margin-bottom:12px;">
-                <input type="text" id="odido-bundle-code-input" class="input-field" placeholder="Bundle Code (e.g., A0DAY01)" style="margin-bottom:12px;">
-                <input type="number" id="odido-threshold-input" class="input-field" placeholder="Threshold MB (default: 350)" style="margin-bottom:12px;">
+                <h3>Quick Configuration</h3>
+                <input type="text" id="odido-api-key" class="input-field" placeholder="API Key for authentication" style="margin-bottom:12px;">
+                <input type="number" id="odido-bundle-size-input" class="input-field" placeholder="Bundle Size MB (default: 1024)" style="margin-bottom:12px;">
+                <input type="number" id="odido-threshold-input" class="input-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;">
+                <input type="number" id="odido-lead-time-input" class="input-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;">
                 <div style="text-align:right;">
                     <button onclick="saveOdidoConfig()" class="btn secondary">Save Configuration</button>
                 </div>
@@ -1787,6 +1648,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
     <script>
         const API = "/api";
+        const ODIDO_API = "http://$LAN_IP:8085/api";
+        let odidoApiKey = localStorage.getItem('odido_api_key') || '';
         
         async function fetchStatus() {
             try {
@@ -1825,44 +1688,53 @@ cat >> "$DASHBOARD_FILE" <<EOF
         
         async function fetchOdidoStatus() {
             try {
-                const res = await fetch(\`\${API}/odido/status\`);
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(\`\${ODIDO_API}/status\`, { headers });
+                if (!res.ok) throw new Error('API unavailable');
                 const data = await res.json();
                 document.getElementById('odido-loading').style.display = 'none';
-                if (!data.enabled || !data.configured) {
-                    document.getElementById('odido-not-configured').style.display = 'block';
-                    document.getElementById('odido-configured').style.display = 'none';
-                } else {
-                    document.getElementById('odido-not-configured').style.display = 'none';
-                    document.getElementById('odido-configured').style.display = 'block';
-                    const remaining = data.remaining_mb || 0;
-                    const threshold = data.threshold || 350;
-                    document.getElementById('odido-remaining').textContent = \`\${remaining} MB\`;
-                    document.getElementById('odido-threshold').textContent = \`\${threshold} MB\`;
-                    document.getElementById('odido-bundle-code').textContent = data.bundle_code || 'A0DAY01';
-                    const maxData = 2048;
-                    const percent = Math.min(100, (remaining / maxData) * 100);
-                    const bar = document.getElementById('odido-bar');
-                    bar.style.width = \`\${percent}%\`;
-                    bar.className = 'data-bar-fill';
-                    if (remaining < threshold) bar.classList.add('critical');
-                    else if (remaining < threshold * 2) bar.classList.add('low');
-                }
+                document.getElementById('odido-not-configured').style.display = 'none';
+                document.getElementById('odido-configured').style.display = 'block';
+                const state = data.state || {};
+                const config = data.config || {};
+                const remaining = state.remaining_mb || 0;
+                const threshold = config.absolute_min_threshold_mb || 100;
+                const rate = data.consumption_rate_mb_per_min || 0;
+                document.getElementById('odido-remaining').textContent = \`\${Math.round(remaining)} MB\`;
+                document.getElementById('odido-threshold').textContent = \`\${threshold} MB\`;
+                document.getElementById('odido-auto-renew').textContent = config.auto_renew_enabled ? 'Enabled' : 'Disabled';
+                document.getElementById('odido-rate').textContent = \`\${rate.toFixed(3)} MB/min\`;
+                const maxData = config.bundle_size_mb || 1024;
+                const percent = Math.min(100, (remaining / maxData) * 100);
+                const bar = document.getElementById('odido-bar');
+                bar.style.width = \`\${percent}%\`;
+                bar.className = 'data-bar-fill';
+                if (remaining < threshold) bar.classList.add('critical');
+                else if (remaining < threshold * 2) bar.classList.add('low');
             } catch(e) {
-                document.getElementById('odido-loading').textContent = 'Error loading status';
+                document.getElementById('odido-loading').style.display = 'none';
+                document.getElementById('odido-not-configured').style.display = 'block';
+                document.getElementById('odido-configured').style.display = 'none';
             }
         }
         
         async function saveOdidoConfig() {
             const st = document.getElementById('odido-config-status');
             const data = {};
-            const userId = document.getElementById('odido-user-id').value.trim();
-            const token = document.getElementById('odido-token').value.trim();
-            const bundleCode = document.getElementById('odido-bundle-code-input').value.trim();
+            const apiKey = document.getElementById('odido-api-key').value.trim();
+            const bundleSize = document.getElementById('odido-bundle-size-input').value.trim();
             const threshold = document.getElementById('odido-threshold-input').value.trim();
-            if (userId) data.user_id = userId;
-            if (token) data.token = token;
-            if (bundleCode) data.bundle_code = bundleCode;
-            if (threshold) data.threshold = parseInt(threshold);
+            const leadTime = document.getElementById('odido-lead-time-input').value.trim();
+            
+            if (apiKey) {
+                odidoApiKey = apiKey;
+                localStorage.setItem('odido_api_key', apiKey);
+                data.api_key = apiKey;
+            }
+            if (bundleSize) data.bundle_size_mb = parseInt(bundleSize);
+            if (threshold) data.absolute_min_threshold_mb = parseInt(threshold);
+            if (leadTime) data.lead_time_minutes = parseInt(leadTime);
+            
             if (Object.keys(data).length === 0) {
                 st.textContent = 'Please fill in at least one field';
                 st.style.color = 'var(--err)';
@@ -1871,17 +1743,21 @@ cat >> "$DASHBOARD_FILE" <<EOF
             st.textContent = 'Saving...';
             st.style.color = 'var(--p)';
             try {
-                const res = await fetch(\`\${API}/odido/config\`, {
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(\`\${ODIDO_API}/config\`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify(data)
                 });
                 const result = await res.json();
-                if (result.error) throw new Error(result.error);
+                if (result.detail) throw new Error(result.detail);
                 st.textContent = 'Configuration saved!';
                 st.style.color = 'var(--ok)';
-                document.getElementById('odido-user-id').value = '';
-                document.getElementById('odido-token').value = '';
+                document.getElementById('odido-api-key').value = '';
+                document.getElementById('odido-bundle-size-input').value = '';
+                document.getElementById('odido-threshold-input').value = '';
+                document.getElementById('odido-lead-time-input').value = '';
                 fetchOdidoStatus();
             } catch(e) {
                 st.textContent = e.message;
@@ -1889,23 +1765,25 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
         }
         
-        async function buyOdidoBundle() {
+        async function addOdidoBundle() {
             const st = document.getElementById('odido-buy-status');
             const btn = document.getElementById('odido-buy-btn');
             btn.disabled = true;
-            st.textContent = 'Purchasing bundle...';
+            st.textContent = 'Adding bundle...';
             st.style.color = 'var(--p)';
             try {
-                const res = await fetch(\`\${API}/odido/buy\`, {
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(\`\${ODIDO_API}/add-bundle\`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({})
                 });
                 const result = await res.json();
-                if (result.error) throw new Error(result.error);
-                st.textContent = 'Bundle purchased successfully!';
+                if (result.detail) throw new Error(result.detail);
+                st.textContent = 'Bundle added successfully!';
                 st.style.color = 'var(--ok)';
-                setTimeout(fetchOdidoStatus, 2000);
+                setTimeout(fetchOdidoStatus, 1000);
             } catch(e) {
                 st.textContent = e.message;
                 st.style.color = 'var(--err)';
@@ -2130,6 +2008,8 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo "VPN Web UI Password: $VPN_PASS_RAW"
     echo "AdGuard Home Password: $AGH_PASS_RAW"
     echo "AdGuard Home Username: adguard"
+    echo "Portainer Password: $PORTAINER_PASS_RAW"
+    echo "Portainer Username: admin"
     echo ""
     echo "IMPORTANT: Save these credentials securely!"
     echo "They are also stored in: $BASE_DIR/.secrets"
