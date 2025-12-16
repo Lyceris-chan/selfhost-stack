@@ -261,17 +261,11 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     AGH_USER="adguard"
     AGH_PASS_HASH=$(sudo docker run --rm httpd:alpine htpasswd -B -n -b "$AGH_USER" "$AGH_PASS_RAW" | cut -d ":" -f 2)
     
-    # Generate Portainer admin password hash (bcrypt)
-    PORTAINER_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
-    PORTAINER_PASS_HASH=$(sudo docker run --rm httpd:alpine htpasswd -B -n -b admin "$PORTAINER_PASS_RAW" | cut -d ":" -f 2)
-    
     cat > "$BASE_DIR/.secrets" <<EOF
 VPN_PASS_RAW=$VPN_PASS_RAW
 AGH_PASS_RAW=$AGH_PASS_RAW
 WG_HASH_ESCAPED=$WG_HASH_ESCAPED
 AGH_PASS_HASH=$AGH_PASS_HASH
-PORTAINER_PASS_RAW=$PORTAINER_PASS_RAW
-PORTAINER_PASS_HASH=$PORTAINER_PASS_HASH
 DESEC_DOMAIN=$DESEC_DOMAIN
 DESEC_TOKEN=$DESEC_TOKEN
 SCRIBE_GH_USER=$SCRIBE_GH_USER
@@ -457,7 +451,7 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     
     # Use ECC keys (faster, smaller, more compatible) with DNS validation
     # Increased --dnssleep to 120 seconds to allow more time for DNS propagation
-    # This is needed because deSEC and other DNS providers may take time to propagate TXT records
+    # Added --debug 2 for detailed output to help diagnose issues
     sudo docker run --rm \
         -v "$AGH_CONF_DIR:/acme" \
         -e "DESEC_Token=$DESEC_TOKEN" \
@@ -467,6 +461,7 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
         --issue \
         --dns dns_desec \
         --dnssleep 120 \
+        --debug 2 \
         -d "$DESEC_DOMAIN" \
         -d "*.$DESEC_DOMAIN" \
         --keylength ec-256 \
@@ -1117,7 +1112,7 @@ services:
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
-    command: -H unix:///var/run/docker.sock --admin-password='$PORTAINER_PASS_HASH'
+    command: -H unix:///var/run/docker.sock
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
     volumes: ["/var/run/docker.sock:/var/run/docker.sock", "portainer-data:/data"]
@@ -1978,12 +1973,13 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo "VPN Web UI Password: $VPN_PASS_RAW"
     echo "AdGuard Home Password: $AGH_PASS_RAW"
     echo "AdGuard Home Username: adguard"
-    echo "Portainer Password: $PORTAINER_PASS_RAW"
-    echo "Portainer Username: admin"
     echo "Odido Booster API Key: $ODIDO_API_KEY"
     echo ""
     echo "IMPORTANT: Save these credentials securely!"
     echo "They are also stored in: $BASE_DIR/.secrets"
+    echo ""
+    echo "NOTE: Portainer will prompt for password on first access."
+    echo "      This ensures a clean environment with -c flag."
     echo ""
 fi
 echo "=========================================================="
