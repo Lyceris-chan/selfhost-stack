@@ -1383,11 +1383,12 @@ services:
 
   # VERT: Local file conversion service
   vertd:
-    image: ghcr.io/vert-sh/vertd:latest
     container_name: vertd
+    image: ghcr.io/vert-sh/vertd:latest
     networks: [frontnet]
+    # Intel GPU support
     devices:
-      - /dev/dri:/dev/dri
+      - /dev/dri
     restart: unless-stopped
     deploy:
       resources:
