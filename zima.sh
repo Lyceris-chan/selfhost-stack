@@ -249,12 +249,20 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     
     echo ""
     echo "--- Odido Bundle Booster (Optional) ---"
-    echo "   Get credentials from: https://github.com/ink-splatters/odido-aap"
+    echo "   Obtain credentials using https://github.com/GuusBackup/Odido.Authenticator"
+    echo "   (works on any platform with .NET, no Apple device needed)"
+    echo ""
+    echo "   The Authenticator provides two values:"
+    echo "   1. Refresh Token (one-time use) - used internally to generate OAuth token"
+    echo "   2. OAuth Token - this is your ODIDO_TOKEN (enter it below)"
+    echo ""
+    echo "   For User ID: After authentication, call the subscriptions API"
+    echo "   and extract from URL path like: capi.odido.nl/{USER_ID}/linkedsubscriptions"
     echo ""
     echo -n "Odido User ID (or Enter to skip): "
     read -r ODIDO_USER_ID
     if [ -n "$ODIDO_USER_ID" ]; then
-        echo -n "Odido Access Token: "
+        echo -n "Odido Access Token (OAuth Token from Authenticator): "
         read -rs ODIDO_TOKEN
         echo ""
     else
@@ -695,6 +703,11 @@ module.exports = config
 EOF
 clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe"
 clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious"
+clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster"
+if grep -q "setcap 'cap_net_bind_service=+ep' /usr/local/bin/python3" "$SRC_DIR/odido-bundle-booster/Dockerfile"; then
+    sed -i "s|setcap 'cap_net_bind_service=+ep' /usr/local/bin/python3|setcap 'cap_net_bind_service=+ep' \$(readlink -f /usr/local/bin/python3)|g" "$SRC_DIR/odido-bundle-booster/Dockerfile"
+    log_info "Patched odido-bundle-booster Dockerfile to fix setcap on symlinked Python binary"
+fi
 mkdir -p "$SRC_DIR/redlib"
 cat > "$SRC_DIR/redlib/Dockerfile" <<EOF
 FROM alpine:3.19
@@ -1013,7 +1026,7 @@ services:
 
   odido-booster:
     build:
-      context: https://github.com/Lyceris-chan/odido-bundle-booster.git#main
+      context: $SRC_DIR/odido-bundle-booster
     container_name: odido-booster
     networks: [frontnet]
     ports: ["$LAN_IP:8085:80"]
