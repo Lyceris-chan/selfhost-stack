@@ -252,6 +252,21 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo ""
     fi
     
+    echo ""
+    echo "--- Odido Bundle Booster (Optional) ---"
+    echo "   Get credentials from: https://github.com/ink-splatters/odido-aap"
+    echo ""
+    echo -n "Odido User ID (or Enter to skip): "
+    read -r ODIDO_USER_ID
+    if [ -n "$ODIDO_USER_ID" ]; then
+        echo -n "Odido Access Token: "
+        read -rs ODIDO_TOKEN
+        echo ""
+    else
+        ODIDO_TOKEN=""
+        echo "   Skipping Odido API integration (manual mode only)"
+    fi
+    
     log_info "Generating Secrets..."
     sudo docker pull -q ghcr.io/wg-easy/wg-easy:latest > /dev/null
     HASH_OUTPUT=$(sudo docker run --rm ghcr.io/wg-easy/wg-easy wgpw "$VPN_PASS_RAW")
@@ -270,6 +285,8 @@ DESEC_DOMAIN=$DESEC_DOMAIN
 DESEC_TOKEN=$DESEC_TOKEN
 SCRIBE_GH_USER=$SCRIBE_GH_USER
 SCRIBE_GH_TOKEN=$SCRIBE_GH_TOKEN
+ODIDO_USER_ID=$ODIDO_USER_ID
+ODIDO_TOKEN=$ODIDO_TOKEN
 EOF
 else
     source "$BASE_DIR/.secrets"
@@ -343,7 +360,7 @@ sudo docker pull -q qmcgaw/gluetun:latest > /dev/null
 cat > "$GLUETUN_ENV_FILE" <<EOF
 VPN_SERVICE_PROVIDER=custom
 VPN_TYPE=wireguard
-FIREWALL_VPN_INPUT_PORTS=8080,8180,3000,3001,3002,8280,10416,8480,80,24153
+FIREWALL_VPN_INPUT_PORTS=8080,8180,3000,3001,3002,8280,10416,8480
 FIREWALL_OUTBOUND_SUBNETS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 EOF
 
@@ -731,7 +748,7 @@ if [ "$ACTION" = "activate" ]; then
     if [ -f "$PROFILES_DIR/$PROFILE_NAME.conf" ]; then
         ln -sf "$PROFILES_DIR/$PROFILE_NAME.conf" "$ACTIVE_CONF"
         echo "$PROFILE_NAME" > "$NAME_FILE"
-        DEPENDENTS="redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe vert vertd"
+        DEPENDENTS="redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe"
         docker stop $DEPENDENTS 2>/dev/null || true
         docker-compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
         sleep 5
@@ -1035,6 +1052,8 @@ services:
     ports: ["$LAN_IP:8085:80"]
     environment:
       - API_KEY=$ODIDO_API_KEY
+      - ODIDO_USER_ID=$ODIDO_USER_ID
+      - ODIDO_TOKEN=$ODIDO_TOKEN
       - PORT=80
     volumes:
       - odido-data:/data
@@ -1078,8 +1097,6 @@ services:
       - "$LAN_IP:$PORT_SCRIBE:$PORT_SCRIBE/tcp"
       - "$LAN_IP:$PORT_BREEZEWIKI:$PORT_INT_BREEZEWIKI/tcp"
       - "$LAN_IP:$PORT_ANONYMOUS:$PORT_INT_ANONYMOUS/tcp"
-      - "$LAN_IP:$PORT_VERT:$PORT_INT_VERT/tcp"
-      - "$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD/tcp"
     volumes:
       - "$ACTIVE_WG_CONF:/gluetun/wireguard/wg0.conf:ro"
     env_file:
@@ -1340,10 +1357,9 @@ services:
     build:
       context: https://github.com/VERT-sh/vertd.git#main
     container_name: vertd
-    network_mode: "service:gluetun"
+    networks: [frontnet]
     devices:
       - /dev/dri:/dev/dri
-    depends_on: {gluetun: {condition: service_healthy}}
     restart: unless-stopped
     deploy:
       resources:
@@ -1355,15 +1371,15 @@ services:
       args:
         - PUB_ENV=production
         - PUB_HOSTNAME=$LAN_IP:$PORT_VERT
-        - PUB_VERTD_URL=http://127.0.0.1:$PORT_INT_VERTD
+        - PUB_VERTD_URL=http://vertd:$PORT_INT_VERTD
         - PUB_DISABLE_ALL_EXTERNAL_REQUESTS=true
         - PUB_PLAUSIBLE_URL=
         - PUB_DONATION_URL=
         - PUB_STRIPE_KEY=
     container_name: vert
-    network_mode: "service:gluetun"
+    networks: [frontnet]
+    ports: ["$LAN_IP:$PORT_VERT:$PORT_INT_VERT"]
     depends_on:
-      gluetun: {condition: service_healthy}
       vertd: {condition: service_started}
     restart: unless-stopped
     deploy:
@@ -1492,7 +1508,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             <a href="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true"><h2>Scribe</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
             <a href="http://$LAN_IP:$PORT_BREEZEWIKI" class="card" data-check="true"><h2>BreezeWiki</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
             <a href="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true"><h2>AnonOverflow</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_VERT" class="card" data-check="true"><h2>VERT</h2><div class="chip-box"><span class="badge vpn">VPN</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_VERT" class="card" data-check="true"><h2>VERT</h2><div class="chip-box"><span class="badge admin">Local</span></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
         </div>
 
         <div class="section-label">Administration</div>
@@ -1561,18 +1577,21 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <h3>Data Status</h3>
                 <div id="odido-status-container">
                     <div id="odido-not-configured" style="display:none;">
-                        <p style="color:var(--s); font-size:0.9rem;">Odido Bundle Booster service available. Configure via API or link below.</p>
+                        <p style="color:var(--s); font-size:0.9rem;">Odido Bundle Booster service available. Configure credentials via API or link below.</p>
                         <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn secondary" style="margin-top:12px;">Open API Docs</a>
                     </div>
                     <div id="odido-configured" style="display:none;">
                         <div class="stat-row"><span>Data Remaining</span><span class="stat-val" id="odido-remaining">--</span></div>
+                        <div class="stat-row"><span>Bundle Code</span><span class="stat-val" id="odido-bundle-code">--</span></div>
                         <div class="stat-row"><span>Auto-Renew</span><span class="stat-val" id="odido-auto-renew">--</span></div>
                         <div class="stat-row"><span>Threshold</span><span class="stat-val" id="odido-threshold">--</span></div>
                         <div class="stat-row"><span>Consumption Rate</span><span class="stat-val" id="odido-rate">--</span></div>
+                        <div class="stat-row"><span>API Connected</span><span class="stat-val" id="odido-api-status">--</span></div>
                         <div class="data-bar"><div class="data-bar-fill" id="odido-bar" style="width:0%"></div></div>
                         <div style="text-align:center; margin-top:16px;">
-                            <button onclick="addOdidoBundle()" class="btn odido-buy" id="odido-buy-btn">Add Bundle</button>
-                            <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn secondary" style="margin-left:8px;">API Docs</a>
+                            <button onclick="buyOdidoBundle()" class="btn odido-buy" id="odido-buy-btn">Buy Bundle</button>
+                            <button onclick="refreshOdidoRemaining()" class="btn secondary" style="margin-left:8px;">Refresh</button>
+                            <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn secondary" style="margin-left:8px;">API</a>
                         </div>
                         <div id="odido-buy-status" style="margin-top:10px; font-size:0.85rem; text-align:center;"></div>
                     </div>
@@ -1580,9 +1599,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 </div>
             </div>
             <div class="card">
-                <h3>Quick Configuration</h3>
-                <input type="text" id="odido-api-key" class="input-field" placeholder="API Key for authentication" style="margin-bottom:12px;">
-                <input type="number" id="odido-bundle-size-input" class="input-field" placeholder="Bundle Size MB (default: 1024)" style="margin-bottom:12px;">
+                <h3>Configuration</h3>
+                <input type="text" id="odido-api-key" class="input-field" placeholder="Dashboard API Key" style="margin-bottom:12px;">
+                <input type="text" id="odido-bundle-code-input" class="input-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;">
                 <input type="number" id="odido-threshold-input" class="input-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;">
                 <input type="number" id="odido-lead-time-input" class="input-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;">
                 <div style="text-align:right;">
@@ -1691,10 +1710,16 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const remaining = state.remaining_mb || 0;
                 const threshold = config.absolute_min_threshold_mb || 100;
                 const rate = data.consumption_rate_mb_per_min || 0;
+                const bundleCode = config.bundle_code || 'A0DAY01';
+                const hasOdidoCreds = config.odido_user_id && config.odido_token;
                 document.getElementById('odido-remaining').textContent = \`\${Math.round(remaining)} MB\`;
+                document.getElementById('odido-bundle-code').textContent = bundleCode;
                 document.getElementById('odido-threshold').textContent = \`\${threshold} MB\`;
                 document.getElementById('odido-auto-renew').textContent = config.auto_renew_enabled ? 'Enabled' : 'Disabled';
                 document.getElementById('odido-rate').textContent = \`\${rate.toFixed(3)} MB/min\`;
+                const apiStatus = document.getElementById('odido-api-status');
+                apiStatus.textContent = hasOdidoCreds ? 'Connected' : 'Not configured';
+                apiStatus.style.color = hasOdidoCreds ? 'var(--ok)' : 'var(--warn)';
                 const maxData = config.bundle_size_mb || 1024;
                 const percent = Math.min(100, (remaining / maxData) * 100);
                 const bar = document.getElementById('odido-bar');
@@ -1713,7 +1738,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const st = document.getElementById('odido-config-status');
             const data = {};
             const apiKey = document.getElementById('odido-api-key').value.trim();
-            const bundleSize = document.getElementById('odido-bundle-size-input').value.trim();
+            const bundleCode = document.getElementById('odido-bundle-code-input').value.trim();
             const threshold = document.getElementById('odido-threshold-input').value.trim();
             const leadTime = document.getElementById('odido-lead-time-input').value.trim();
             
@@ -1722,7 +1747,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 localStorage.setItem('odido_api_key', apiKey);
                 data.api_key = apiKey;
             }
-            if (bundleSize) data.bundle_size_mb = parseInt(bundleSize);
+            if (bundleCode) data.bundle_code = bundleCode;
             if (threshold) data.absolute_min_threshold_mb = parseInt(threshold);
             if (leadTime) data.lead_time_minutes = parseInt(leadTime);
             
@@ -1746,7 +1771,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 st.textContent = 'Configuration saved!';
                 st.style.color = 'var(--ok)';
                 document.getElementById('odido-api-key').value = '';
-                document.getElementById('odido-bundle-size-input').value = '';
+                document.getElementById('odido-bundle-code-input').value = '';
                 document.getElementById('odido-threshold-input').value = '';
                 document.getElementById('odido-lead-time-input').value = '';
                 fetchOdidoStatus();
@@ -1756,30 +1781,49 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
         }
         
-        async function addOdidoBundle() {
+        async function buyOdidoBundle() {
             const st = document.getElementById('odido-buy-status');
             const btn = document.getElementById('odido-buy-btn');
             btn.disabled = true;
-            st.textContent = 'Adding bundle...';
+            st.textContent = 'Purchasing bundle from Odido...';
             st.style.color = 'var(--p)';
             try {
                 const headers = { 'Content-Type': 'application/json' };
                 if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                const res = await fetch(\`\${ODIDO_API}/add-bundle\`, {
+                const res = await fetch(\`\${ODIDO_API}/odido/buy-bundle\`, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify({})
                 });
                 const result = await res.json();
                 if (result.detail) throw new Error(result.detail);
-                st.textContent = 'Bundle added successfully!';
+                st.textContent = 'Bundle purchased successfully!';
+                st.style.color = 'var(--ok)';
+                setTimeout(fetchOdidoStatus, 2000);
+            } catch(e) {
+                st.textContent = e.message;
+                st.style.color = 'var(--err)';
+            }
+            btn.disabled = false;
+        }
+        
+        async function refreshOdidoRemaining() {
+            const st = document.getElementById('odido-buy-status');
+            st.textContent = 'Fetching from Odido API...';
+            st.style.color = 'var(--p)';
+            try {
+                const headers = {};
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(\`\${ODIDO_API}/odido/remaining\`, { headers });
+                const result = await res.json();
+                if (result.detail) throw new Error(result.detail);
+                st.textContent = \`Live data: \${Math.round(result.remaining_mb || 0)} MB remaining\`;
                 st.style.color = 'var(--ok)';
                 setTimeout(fetchOdidoStatus, 1000);
             } catch(e) {
                 st.textContent = e.message;
                 st.style.color = 'var(--err)';
             }
-            btn.disabled = false;
         }
         
         async function fetchProfiles() {
