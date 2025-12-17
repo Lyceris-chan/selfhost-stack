@@ -868,118 +868,6 @@ EOF
 clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe"
 clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious"
 clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster"
-if grep -q "setcap 'cap_net_bind_service=+ep' /usr/local/bin/python3" "$SRC_DIR/odido-bundle-booster/Dockerfile"; then
-    sed -i "s|setcap 'cap_net_bind_service=+ep' /usr/local/bin/python3|setcap 'cap_net_bind_service=+ep' \$(readlink -f /usr/local/bin/python3)|g" "$SRC_DIR/odido-bundle-booster/Dockerfile"
-    log_info "Patched odido-bundle-booster Dockerfile to fix setcap on symlinked Python binary"
-fi
-# Fix entrypoint.sh path - Dockerfile copies to /app/entrypoint.sh but ENTRYPOINT expects /entrypoint.sh
-if grep -q "COPY entrypoint.sh ./" "$SRC_DIR/odido-bundle-booster/Dockerfile"; then
-    sed -i "s|COPY entrypoint.sh ./|COPY entrypoint.sh /entrypoint.sh|g" "$SRC_DIR/odido-bundle-booster/Dockerfile"
-    log_info "Patched odido-bundle-booster Dockerfile to fix entrypoint.sh path"
-fi
-
-# Patch scheduler.py to sync with Odido API before first auto-renewal check
-# This prevents instant bundle purchase on deployment by fetching real remaining data first
-cat > "$SRC_DIR/odido-bundle-booster/app/scheduler.py" << 'SCHEDULEREOF'
-from __future__ import annotations
-
-import threading
-import time
-import os
-import logging
-from typing import Optional
-
-from .service import BundleService
-
-logger = logging.getLogger("odido.scheduler")
-
-
-class Scheduler:
-    def __init__(self, service: BundleService) -> None:
-        self.service = service
-        self.thread: Optional[threading.Thread] = None
-        self._stop = threading.Event()
-        self._first_run = True
-        self._last_sync_time = 0
-        self._sync_interval = 300  # Sync with Odido API every 5 minutes
-
-    def start(self) -> None:
-        if self.thread and self.thread.is_alive():
-            return
-        self.thread = threading.Thread(target=self._run_loop, daemon=True)
-        self.thread.start()
-
-    def stop(self) -> None:
-        self._stop.set()
-        if self.thread:
-            self.thread.join(timeout=5)
-
-    def _sync_remaining_from_api(self) -> bool:
-        """Fetch remaining data from Odido API and update local state."""
-        try:
-            from .odido_api import OdidoAPI, OdidoAPIError, OdidoAuthError
-            
-            api = OdidoAPI(
-                user_id=self.service.config.odido_user_id or os.getenv("ODIDO_USER_ID"),
-                access_token=self.service.config.odido_token or os.getenv("ODIDO_TOKEN"),
-            )
-            
-            if not api.is_configured:
-                logger.info("Odido API not configured - skipping sync")
-                return False
-            
-            logger.info("Syncing remaining data from Odido API...")
-            remaining_mb = api.get_remaining_data_mb()
-            
-            # Update local state with real remaining data
-            self.service.state.remaining_mb = remaining_mb
-            self.service.state.last_updated_ts = time.time()
-            self.service.storage.save_state(self.service.state)
-            self._last_sync_time = time.time()
-            logger.info(f"Synced remaining data: {remaining_mb} MB")
-            return True
-            
-        except Exception as e:
-            logger.warning(f"Failed to sync remaining data from Odido API: {e}")
-            return False
-
-    def _run_loop(self) -> None:
-        while not self._stop.is_set():
-            now = time.time()
-            
-            # On first run or every sync_interval, fetch real data from Odido API
-            should_sync = (
-                self._first_run or 
-                self.service.state.remaining_mb == 0 or
-                (now - self._last_sync_time) >= self._sync_interval
-            )
-            
-            if should_sync:
-                self._first_run = False
-                if self.service.state.remaining_mb == 0:
-                    logger.info("Fresh/empty state detected, syncing with Odido API...")
-                else:
-                    logger.debug("Periodic sync with Odido API...")
-                self._sync_remaining_from_api()
-            
-            result = self.service.run_check_cycle()
-            sleep_seconds = result["next_interval_minutes"] * 60
-            
-            # Ensure we sync at least every sync_interval
-            time_since_sync = now - self._last_sync_time
-            if self._last_sync_time > 0:
-                time_until_next_sync = self._sync_interval - time_since_sync
-                if time_until_next_sync > 0:
-                    sleep_seconds = min(sleep_seconds, time_until_next_sync)
-            
-            reset_ts = self.service.state.next_reset_ts
-            if reset_ts:
-                until_reset = max(reset_ts - now, 0)
-                sleep_seconds = min(sleep_seconds, until_reset)
-            
-            self._stop.wait(timeout=max(sleep_seconds, 60))  # Min 60s between checks
-SCHEDULEREOF
-log_info "Patched odido-bundle-booster scheduler.py to sync with Odido API periodically (every 5 min)"
 
 mkdir -p "$SRC_DIR/redlib"
 cat > "$SRC_DIR/redlib/Dockerfile" <<EOF
@@ -1672,31 +1560,6 @@ services:
       resources:
         limits: {cpus: '0.3', memory: 128M}
 
-  # Startup delay container - waits for companion to be ready before Invidious starts
-  invidious-wait:
-    image: alpine:3.19
-    container_name: invidious-wait
-    network_mode: "service:gluetun"
-    command: >
-      /bin/sh -c "
-        echo 'Waiting for companion to be ready...';
-        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-          if wget -qO- http://127.0.0.1:8282/companion >/dev/null 2>&1; then
-            echo 'Companion is ready!';
-            sleep 5;
-            exit 0;
-          fi;
-          echo 'Waiting... attempt' \$i;
-          sleep 5;
-        done;
-        echo 'Companion not ready after 100s, continuing anyway...';
-        exit 0;
-      "
-    depends_on:
-      gluetun: {condition: service_healthy}
-      companion: {condition: service_healthy}
-    restart: "no"
-
   invidious:
     image: quay.io/invidious/invidious:latest
     container_name: invidious
@@ -1722,7 +1585,6 @@ services:
     depends_on:
       invidious-db: {condition: service_healthy}
       gluetun: {condition: service_healthy}
-      invidious-wait: {condition: service_completed_successfully}
     restart: unless-stopped
     deploy:
       resources:
@@ -1747,27 +1609,21 @@ services:
     image: quay.io/invidious/invidious-companion:latest
     container_name: companion
     network_mode: "service:gluetun"
-    environment: {SERVER_SECRET_KEY: "$IV_COMPANION", SERVER_PORT: "8282"}
-    volumes: ["companioncache:/var/tmp/youtubei.js:rw"]
-    healthcheck: 
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8282/companion || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+    environment:
+      - SERVER_SECRET_KEY=$IV_COMPANION
+    restart: unless-stopped
     logging:
       options:
         max-size: "1G"
         max-file: "4"
     cap_drop:
       - ALL
-    depends_on: {gluetun: {condition: service_healthy}}
-    restart: unless-stopped
     read_only: true
-    security_opt: ["no-new-privileges:true"]
-    deploy:
-      resources:
-        limits: {cpus: '0.5', memory: 256M}
+    volumes:
+      - companioncache:/var/tmp/youtubei.js:rw
+    security_opt:
+      - no-new-privileges:true
+    depends_on: {gluetun: {condition: service_healthy}}
 
   libremdb:
     image: ghcr.io/zyachel/libremdb:latest
@@ -1956,9 +1812,6 @@ cat > "$DASHBOARD_FILE" <<EOF
             /* Custom warning */
             --md-sys-color-warning: #FFCC80;
             --md-sys-color-on-warning: #4A2800;
-            /* Odido orange */
-            --md-sys-color-odido: #FF6B35;
-            --md-sys-color-on-odido: #FFFFFF;
             /* Expressive shape */
             --md-sys-shape-corner-extra-large: 28px;
             --md-sys-shape-corner-large: 16px;
@@ -2167,9 +2020,9 @@ cat > "$DASHBOARD_FILE" <<EOF
             border: none;
         }
         
-        .chip.odido {
-            background: var(--md-sys-color-odido);
-            color: var(--md-sys-color-on-odido);
+        .chip.tertiary {
+            background: var(--md-sys-color-tertiary-container);
+            color: var(--md-sys-color-on-tertiary-container);
             border: none;
         }
         
@@ -2231,24 +2084,28 @@ cat > "$DASHBOARD_FILE" <<EOF
         
         textarea.text-field { min-height: 120px; resize: vertical; }
         
-        /* MD3 Buttons */
+        /* MD3 Expressive Buttons */
         .btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
-            padding: 10px 24px;
-            border-radius: var(--md-sys-shape-corner-full);
+            padding: 0 24px;
+            height: 40px;
+            min-width: 64px;
+            border-radius: 20px;
             font-size: 14px;
             font-weight: 500;
             letter-spacing: 0.1px;
+            line-height: 20px;
             cursor: pointer;
-            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+            transition: all 200ms cubic-bezier(0.2, 0, 0, 1);
             border: none;
             position: relative;
             overflow: hidden;
             text-decoration: none;
             font-family: inherit;
+            white-space: nowrap;
         }
         
         .btn::before {
@@ -2257,22 +2114,35 @@ cat > "$DASHBOARD_FILE" <<EOF
             inset: 0;
             background: currentColor;
             opacity: 0;
-            transition: opacity var(--md-sys-motion-duration-medium);
+            transition: opacity 150ms ease;
+            pointer-events: none;
         }
         
-        .btn:hover::before { opacity: var(--md-sys-state-hover-opacity); }
-        .btn:active::before { opacity: var(--md-sys-state-pressed-opacity); }
+        .btn:hover::before { opacity: 0.08; }
+        .btn:focus-visible::before { opacity: 0.12; }
+        .btn:active::before { opacity: 0.12; }
         
         .btn-filled {
             background: var(--md-sys-color-primary);
             color: var(--md-sys-color-on-primary);
+            box-shadow: var(--md-sys-elevation-1);
         }
         
-        .btn-filled:hover { box-shadow: var(--md-sys-elevation-1); }
+        .btn-filled:hover { 
+            box-shadow: var(--md-sys-elevation-2);
+        }
+        
+        .btn-filled:active {
+            box-shadow: var(--md-sys-elevation-1);
+        }
         
         .btn-tonal {
             background: var(--md-sys-color-secondary-container);
             color: var(--md-sys-color-on-secondary-container);
+        }
+        
+        .btn-tonal:hover {
+            box-shadow: var(--md-sys-elevation-1);
         }
         
         .btn-outlined {
@@ -2281,34 +2151,57 @@ cat > "$DASHBOARD_FILE" <<EOF
             border: 1px solid var(--md-sys-color-outline);
         }
         
+        .btn-outlined:hover {
+            background: rgba(208, 188, 255, 0.08);
+        }
+        
         .btn-text {
             background: transparent;
             color: var(--md-sys-color-primary);
-            padding: 10px 12px;
+            padding: 0 12px;
+            min-width: 48px;
         }
         
-        .btn-odido {
-            background: var(--md-sys-color-odido);
-            color: var(--md-sys-color-on-odido);
+        .btn-text:hover {
+            background: rgba(208, 188, 255, 0.08);
+        }
+        
+        .btn-tertiary {
+            background: var(--md-sys-color-tertiary-container);
+            color: var(--md-sys-color-on-tertiary-container);
+        }
+        
+        .btn-tertiary:hover {
+            box-shadow: var(--md-sys-elevation-1);
         }
         
         .btn:disabled {
-            opacity: 0.38;
+            background: rgba(230, 225, 229, 0.12);
+            color: rgba(230, 225, 229, 0.38);
+            box-shadow: none;
             cursor: not-allowed;
+            pointer-events: none;
         }
+        
+        .btn:disabled::before { display: none; }
         
         .btn-icon {
             background: transparent;
             border: 1px solid var(--md-sys-color-outline-variant);
-            padding: 8px;
+            padding: 0;
             width: 40px;
             height: 40px;
-            border-radius: var(--md-sys-shape-corner-full);
+            min-width: 40px;
+            border-radius: 20px;
             color: var(--md-sys-color-on-surface-variant);
         }
         
-        .btn-icon:hover { border-color: var(--md-sys-color-on-surface); }
-        .btn-icon svg { width: 20px; height: 20px; fill: currentColor; }
+        .btn-icon:hover { 
+            background: rgba(202, 196, 208, 0.08);
+            border-color: var(--md-sys-color-outline);
+        }
+        
+        .btn-icon svg { width: 24px; height: 24px; fill: currentColor; }
         
         /* Profile List Items */
         .list-item {
@@ -2435,20 +2328,21 @@ cat > "$DASHBOARD_FILE" <<EOF
             background: linear-gradient(90deg, var(--md-sys-color-error), #F44336);
         }
         
-        /* Privacy Toggle - MD3 Switch */
+        /* Privacy Toggle - MD3 Switch (strict implementation) */
         .switch-container {
             display: flex;
             align-items: center;
             gap: 12px;
-            background: var(--md-sys-color-surface-container);
-            padding: 12px 20px;
-            border-radius: var(--md-sys-shape-corner-full);
+            background: transparent;
+            padding: 8px 0;
             margin-left: auto;
         }
         
         .switch-label {
             font-size: 14px;
-            color: var(--md-sys-color-on-surface-variant);
+            font-weight: 500;
+            letter-spacing: 0.1px;
+            color: var(--md-sys-color-on-surface);
             cursor: pointer;
             user-select: none;
         }
@@ -2457,23 +2351,33 @@ cat > "$DASHBOARD_FILE" <<EOF
             position: relative;
             width: 52px;
             height: 32px;
-            background: var(--md-sys-color-surface-variant);
+            background: var(--md-sys-color-surface-container-highest);
             border: 2px solid var(--md-sys-color-outline);
-            border-radius: var(--md-sys-shape-corner-full);
+            border-radius: 16px;
             cursor: pointer;
-            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+            transition: all 200ms cubic-bezier(0.2, 0, 0, 1);
         }
         
         .switch-track::after {
             content: '';
             position: absolute;
-            top: 6px;
-            left: 6px;
+            top: 50%;
+            left: 8px;
+            transform: translateY(-50%);
             width: 16px;
             height: 16px;
             background: var(--md-sys-color-outline);
             border-radius: 50%;
-            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+            transition: all 200ms cubic-bezier(0.2, 0, 0, 1);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        
+        .switch-track:hover {
+            border-color: var(--md-sys-color-on-surface);
+        }
+        
+        .switch-track:hover::after {
+            background: var(--md-sys-color-on-surface-variant);
         }
         
         .switch-track.active {
@@ -2482,11 +2386,19 @@ cat > "$DASHBOARD_FILE" <<EOF
         }
         
         .switch-track.active::after {
-            left: 26px;
+            left: calc(100% - 32px);
             width: 24px;
             height: 24px;
-            top: 2px;
             background: var(--md-sys-color-on-primary);
+        }
+        
+        .switch-track.active:hover {
+            background: var(--md-sys-color-primary);
+            border-color: var(--md-sys-color-primary);
+        }
+        
+        .switch-track.active:hover::after {
+            background: var(--md-sys-color-primary-container);
         }
         
         .sensitive { transition: filter var(--md-sys-motion-duration-medium), opacity var(--md-sys-motion-duration-medium); }
@@ -2494,8 +2406,13 @@ cat > "$DASHBOARD_FILE" <<EOF
         
         .header-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
         
-        /* Button Group */
-        .btn-group { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+        /* Button Group with proper spacing */
+        .btn-group { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+        
+        /* Card content spacing */
+        .card > .btn, .card > div > .btn { margin-top: 16px; }
+        .card > .text-field:last-of-type { margin-bottom: 16px; }
+        .card > div[style*="text-align:right"] { margin-top: 16px; }
         
         /* Status feedback */
         .feedback { margin-top: 12px; font-size: 13px; text-align: center; }
@@ -2615,7 +2532,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         <div class="stat-row"><span class="stat-label">API Connected</span><span class="stat-value" id="odido-api-status">--</span></div>
                         <div class="progress-track"><div class="progress-indicator" id="odido-bar" style="width:0%"></div></div>
                         <div class="btn-group" style="justify-content:center;">
-                            <button onclick="buyOdidoBundle()" class="btn btn-odido" id="odido-buy-btn">Buy Bundle</button>
+                            <button onclick="buyOdidoBundle()" class="btn btn-tertiary" id="odido-buy-btn">Buy Bundle</button>
                             <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh</button>
                             <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
                         </div>
@@ -2715,6 +2632,30 @@ cat >> "$DASHBOARD_FILE" <<EOF
             } catch(e) { console.error('Container fetch error:', e); }
         }
         
+        // Store real profile name for privacy mode masking
+        let realProfileName = '';
+        let maskedProfileId = '';
+        
+        function generateRandomId() {
+            const chars = 'abcdef0123456789';
+            let id = '';
+            for (let i = 0; i < 8; i++) id += chars.charAt(Math.floor(Math.random() * chars.length));
+            return 'profile-' + id;
+        }
+        
+        function updateProfileDisplay() {
+            const vpnActive = document.getElementById('vpn-active');
+            const isPrivate = document.body.classList.contains('privacy-mode');
+            if (isPrivate && realProfileName) {
+                if (!maskedProfileId) maskedProfileId = generateRandomId();
+                vpnActive.textContent = maskedProfileId;
+                vpnActive.classList.add('sensitive-masked');
+            } else if (realProfileName) {
+                vpnActive.textContent = realProfileName;
+                vpnActive.classList.remove('sensitive-masked');
+            }
+        }
+        
         async function fetchStatus() {
             try {
                 const res = await fetch(\`\${API}/status\`);
@@ -2731,7 +2672,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     vpnStatus.textContent = "Disconnected";
                     vpnStatus.className = "stat-value error";
                 }
-                document.getElementById('vpn-active').textContent = g.active_profile || "Unknown";
+                realProfileName = g.active_profile || "Unknown";
+                updateProfileDisplay();
                 document.getElementById('vpn-endpoint').textContent = g.endpoint || "--";
                 document.getElementById('vpn-public-ip').textContent = g.public_ip || "--";
                 document.getElementById('vpn-connection').textContent = g.handshake_ago || "Never";
@@ -2753,7 +2695,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const wgeConnected = document.getElementById('wge-connected');
                 const connectedCount = parseInt(w.connected) || 0;
                 wgeConnected.textContent = connectedCount > 0 ? \`\${connectedCount} active\` : "None";
-                wgeConnected.style.color = connectedCount > 0 ? "var(--md-ext-color-success)" : "var(--md-sys-color-on-surface-variant)";
+                wgeConnected.style.color = connectedCount > 0 ? "var(--md-sys-color-success)" : "var(--md-sys-color-on-surface-variant)";
                 document.getElementById('wge-session-rx').textContent = formatBytes(w.session_rx || 0);
                 document.getElementById('wge-session-tx').textContent = formatBytes(w.session_tx || 0);
                 document.getElementById('wge-total-rx').textContent = formatBytes(w.total_rx || 0);
@@ -3016,6 +2958,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 body.classList.remove('privacy-mode');
                 localStorage.setItem('privacy_mode', 'false');
             }
+            updateProfileDisplay();
         }
         
         function initPrivacyMode() {
@@ -3024,6 +2967,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 document.getElementById('privacy-switch').classList.add('active');
                 document.body.classList.add('privacy-mode');
             }
+            updateProfileDisplay();
         }
         
         document.addEventListener('DOMContentLoaded', () => {
