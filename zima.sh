@@ -682,19 +682,25 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
         --cert-home /acme/certs 2>&1) && CERT_SUCCESS=true || CERT_SUCCESS=false
     echo "$CERT_OUTPUT" > "$CERT_LOG_FILE"
 
-    if [ "$CERT_SUCCESS" = true ] && [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]; then
-        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
-        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
-        log_info "Let's Encrypt certificate installed successfully!"
-        log_info "Certificate log saved to $CERT_LOG_FILE"
-        CERT_SOURCE="letsencrypt"
-    elif [ "$CERT_SUCCESS" = true ] && [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" ]; then
-        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
-        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
-        log_info "Let's Encrypt certificate installed successfully!"
-        log_info "Certificate log saved to $CERT_LOG_FILE"
-        CERT_SOURCE="letsencrypt"
-    else
+    if [ "$CERT_SUCCESS" = true ]; then
+        if [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]; then
+            cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
+            cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
+            log_info "Let's Encrypt certificate installed successfully (ECC)!"
+            log_info "Certificate log saved to $CERT_LOG_FILE"
+            CERT_SOURCE="letsencrypt"
+        elif [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" ]; then
+            cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
+            cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
+            log_info "Let's Encrypt certificate installed successfully (RSA)!"
+            log_info "Certificate log saved to $CERT_LOG_FILE"
+            CERT_SOURCE="letsencrypt"
+        else
+            CERT_SUCCESS=false
+        fi
+    fi
+
+    if [ "$CERT_SUCCESS" = false ]; then
         RETRY_TIME=$(echo "$CERT_OUTPUT" | grep -oiE 'retry after [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]+ UTC' | head -1 | sed 's/retry after //I')
         if [ -n "$RETRY_TIME" ]; then
             RETRY_EPOCH=$(date -u -d "$RETRY_TIME" +%s 2>/dev/null || echo "")
