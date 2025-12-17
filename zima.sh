@@ -327,30 +327,37 @@ log_info "Assigned Subnet: $DOCKER_SUBNET"
 # --- 4. NETWORK INTELLIGENCE ---
 log_info "Analyzing Network..."
 
-detect_lan_ip() {
-    ip -o -4 addr show scope global up 2>/dev/null \
-        | awk '$2 !~ /^(docker0|br-[0-9a-f]{12}|veth|lo)$/ {print $4}' \
-        | cut -d/ -f1 \
-        | head -n1
+detect_route_iface_ip() {
+    local iface
+    iface=$(ip route show default 2>/dev/null | awk 'NR==1 {print $5}')
+    if [ -n "$iface" ]; then
+        ip -o -4 addr show dev "$iface" scope global up 2>/dev/null \
+            | awk '{print $4}' \
+            | cut -d/ -f1 \
+            | head -n1
+    fi
 }
 
-fallback_route_ip() {
-    ip route get 1.1.1.1 2>/dev/null | awk 'NR==1 {print $7}'
+detect_lan_ip() {
+    ip -o -4 addr show scope global up 2>/dev/null \
+        | awk '$2 !~ /^(docker0|br-[0-9a-f]{12}|veth|lo|tailscale0|wg.*)$/ {print $4}' \
+        | cut -d/ -f1 \
+        | head -n1
 }
 
 fallback_hostname_ip() {
     hostname -I 2>/dev/null | awk '{print $1}'
 }
 
-LAN_IP=${LAN_IP_OVERRIDE:-$(detect_lan_ip || true)}
-DETECTION_HINT="primary interface"
+LAN_IP=${LAN_IP_OVERRIDE:-$(detect_route_iface_ip || true)}
+DETECTION_HINT="default route"
 if [ -n "${LAN_IP_OVERRIDE:-}" ]; then
     DETECTION_HINT="manual override"
 fi
 
 if [ -z "$LAN_IP" ]; then
-    LAN_IP=$(fallback_route_ip || true)
-    DETECTION_HINT="default route"
+    LAN_IP=$(detect_lan_ip || true)
+    DETECTION_HINT="primary interface"
 fi
 
 if [ -z "$LAN_IP" ]; then
