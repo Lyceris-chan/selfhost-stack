@@ -875,11 +875,89 @@ if grep -q "COPY entrypoint.sh ./" "$SRC_DIR/odido-bundle-booster/Dockerfile"; t
     sed -i "s|COPY entrypoint.sh ./|COPY entrypoint.sh /entrypoint.sh|g" "$SRC_DIR/odido-bundle-booster/Dockerfile"
     log_info "Patched odido-bundle-booster Dockerfile to fix entrypoint.sh path"
 fi
-# Patch config.py to read AUTO_RENEW_ENABLED from environment (defaults to false to prevent auto-purchase on deployment)
-if grep -q "auto_renew_enabled: bool = True" "$SRC_DIR/odido-bundle-booster/app/config.py"; then
-    sed -i 's|auto_renew_enabled: bool = True|auto_renew_enabled: bool = os.getenv("AUTO_RENEW_ENABLED", "false").lower() == "true"|g' "$SRC_DIR/odido-bundle-booster/app/config.py"
-    log_info "Patched odido-bundle-booster config.py to read AUTO_RENEW_ENABLED from environment (defaults to false)"
-fi
+
+# Patch scheduler.py to sync with Odido API before first auto-renewal check
+# This prevents instant bundle purchase on deployment by fetching real remaining data first
+cat > "$SRC_DIR/odido-bundle-booster/app/scheduler.py" << 'SCHEDULEREOF'
+from __future__ import annotations
+
+import threading
+import time
+import os
+import logging
+from typing import Optional
+
+from .service import BundleService
+
+logger = logging.getLogger("odido.scheduler")
+
+
+class Scheduler:
+    def __init__(self, service: BundleService) -> None:
+        self.service = service
+        self.thread: Optional[threading.Thread] = None
+        self._stop = threading.Event()
+        self._first_run = True
+
+    def start(self) -> None:
+        if self.thread and self.thread.is_alive():
+            return
+        self.thread = threading.Thread(target=self._run_loop, daemon=True)
+        self.thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self.thread:
+            self.thread.join(timeout=5)
+
+    def _sync_remaining_from_api(self) -> bool:
+        """Fetch remaining data from Odido API and update local state."""
+        try:
+            from .odido_api import OdidoAPI, OdidoAPIError, OdidoAuthError
+            
+            api = OdidoAPI(
+                user_id=self.service.config.odido_user_id or os.getenv("ODIDO_USER_ID"),
+                access_token=self.service.config.odido_token or os.getenv("ODIDO_TOKEN"),
+            )
+            
+            if not api.is_configured:
+                logger.info("Odido API not configured - skipping initial sync")
+                return False
+            
+            logger.info("Syncing remaining data from Odido API...")
+            remaining_mb = api.get_remaining_data_mb()
+            
+            # Update local state with real remaining data
+            self.service.state.remaining_mb = remaining_mb
+            self.service.storage.save_state(self.service.state)
+            logger.info(f"Synced remaining data: {remaining_mb} MB")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Failed to sync remaining data from Odido API: {e}")
+            return False
+
+    def _run_loop(self) -> None:
+        while not self._stop.is_set():
+            # On first run, sync with Odido API to get real remaining data
+            # This prevents instant bundle purchase when remaining_mb=0 (fresh state)
+            if self._first_run:
+                self._first_run = False
+                if self.service.state.remaining_mb == 0:
+                    logger.info("Fresh state detected (remaining_mb=0), syncing with Odido API before auto-renewal check...")
+                    self._sync_remaining_from_api()
+            
+            result = self.service.run_check_cycle()
+            sleep_seconds = result["next_interval_minutes"] * 60
+            reset_ts = self.service.state.next_reset_ts
+            now = time.time()
+            if reset_ts:
+                until_reset = max(reset_ts - now, 0)
+                sleep_seconds = min(sleep_seconds, until_reset)
+            self._stop.wait(timeout=sleep_seconds)
+SCHEDULEREOF
+log_info "Patched odido-bundle-booster scheduler.py to sync with Odido API before first auto-renewal"
+
 mkdir -p "$SRC_DIR/redlib"
 cat > "$SRC_DIR/redlib/Dockerfile" <<EOF
 FROM alpine:3.19
@@ -1338,7 +1416,6 @@ services:
       - ODIDO_USER_ID=$ODIDO_USER_ID
       - ODIDO_TOKEN=$ODIDO_TOKEN
       - PORT=80
-      - AUTO_RENEW_ENABLED=false
     volumes:
       - odido-data:/data
     restart: unless-stopped
