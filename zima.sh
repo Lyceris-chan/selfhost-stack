@@ -981,6 +981,23 @@ if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_DIR/vert/Dockerfile"; then
         log_warn "VERT Dockerfile structure changed - could not apply PUB_DISABLE_FAILURE_BLOCKS patch. Build may fail."
     fi
 fi
+
+# Patch VERT layout to suppress insecure context warning when PUB_DISABLE_FAILURE_BLOCKS is set
+# This allows local HTTP deployments without the annoying toast
+VERT_LAYOUT="$SRC_DIR/vert/src/routes/+layout.svelte"
+if [ -f "$VERT_LAYOUT" ]; then
+    # Add import for PUB_DISABLE_FAILURE_BLOCKS if not already imported
+    if ! grep -q "PUB_DISABLE_FAILURE_BLOCKS" "$VERT_LAYOUT"; then
+        sed -i 's|import { PUB_PLAUSIBLE_URL, PUB_HOSTNAME }|import { PUB_PLAUSIBLE_URL, PUB_HOSTNAME, PUB_DISABLE_FAILURE_BLOCKS }|g' "$VERT_LAYOUT"
+        log_info "Added PUB_DISABLE_FAILURE_BLOCKS import to VERT layout"
+    fi
+    # Modify the insecure context check to skip toast when PUB_DISABLE_FAILURE_BLOCKS is true
+    if grep -q 'if (!window.isSecureContext) {' "$VERT_LAYOUT"; then
+        sed -i 's|if (!window.isSecureContext) {|if (!window.isSecureContext \&\& PUB_DISABLE_FAILURE_BLOCKS !== "true") {|g' "$VERT_LAYOUT"
+        log_info "Patched VERT layout to suppress insecure context warning when PUB_DISABLE_FAILURE_BLOCKS is set"
+    fi
+fi
+
 chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
 
 # --- 12. CONTROL SCRIPTS ---
@@ -1580,6 +1597,30 @@ services:
       resources:
         limits: {cpus: '0.3', memory: 128M}
 
+  # Startup delay container - waits for companion to be ready before Invidious starts
+  invidious-wait:
+    image: alpine:3.19
+    container_name: invidious-wait
+    network_mode: "service:gluetun"
+    command: >
+      /bin/sh -c "
+        echo 'Waiting for companion to be ready...';
+        for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+          if wget -qO- http://127.0.0.1:8282/ >/dev/null 2>&1; then
+            echo 'Companion is ready!';
+            exit 0;
+          fi;
+          echo 'Waiting... attempt' \$i;
+          sleep 5;
+        done;
+        echo 'Companion not ready after 60s, continuing anyway...';
+        exit 0;
+      "
+    depends_on:
+      gluetun: {condition: service_healthy}
+      companion: {condition: service_started}
+    restart: "no"
+
   invidious:
     image: quay.io/invidious/invidious:latest
     container_name: invidious
@@ -1605,7 +1646,7 @@ services:
     depends_on:
       invidious-db: {condition: service_healthy}
       gluetun: {condition: service_healthy}
-      companion: {condition: service_healthy}
+      invidious-wait: {condition: service_completed_successfully}
     restart: unless-stopped
     deploy:
       resources:
@@ -1632,12 +1673,6 @@ services:
     network_mode: "service:gluetun"
     environment: {SERVER_SECRET_KEY: "$IV_COMPANION", SERVER_PORT: "8282"}
     volumes: ["companioncache:/var/tmp/youtubei.js:rw"]
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8282/companion || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     logging:
       options:
         max-size: "1G"
