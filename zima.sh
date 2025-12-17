@@ -2062,6 +2062,156 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     if (isTrusted && domain) {
                         el.href = "https://" + info.sub + "." + domain + ":8443/";
                     } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            // Pre-populate Odido API key from deployment
+            if (DEFAULT_ODIDO_API_KEY && !localStorage.getItem('odido_api_key')) {
+                localStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
+                odidoApiKey = DEFAULT_ODIDO_API_KEY;
+            }
+            // Pre-populate the API key input field so users can see their dashboard API key
+            const apiKeyInput = document.getElementById('odido-api-key');
+            if (apiKeyInput && odidoApiKey) {
+                apiKeyInput.value = odidoApiKey;
+            }
+            
+            initPrivacyMode();
+            fetchContainerIds();
+            fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream();
+            setInterval(fetchStatus, 5000);
+            setInterval(fetchOdidoStatus, 60000);  // Reduced polling frequency to respect Odido API
+            setInterval(fetchContainerIds, 60000);
+        });
+    </script>
+</body>
+</html>
+EOF
+
+# --- SECTION 15: BACKGROUND DAEMONS & PROACTIVE MONITORING ---
+# Initialize automated background tasks for SSL renewal and Dynamic DNS updates.
+if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
+    DESEC_MONITOR_DOMAIN="$DESEC_DOMAIN"
+    DESEC_MONITOR_TOKEN="$DESEC_TOKEN"
+else
+    DESEC_MONITOR_DOMAIN=""
+    DESEC_MONITOR_TOKEN=""
+fi
+
+cat > "$CERT_MONITOR_SCRIPT" <<EOF
+#!/usr/bin/env bash
+AGH_CONF_DIR="$AGH_CONF_DIR"
+DESEC_TOKEN="$DESEC_MONITOR_TOKEN"
+DESEC_DOMAIN="$DESEC_DOMAIN"
+COMPOSE_FILE="$COMPOSE_FILE"
+LAN_IP="$LAN_IP"
+PORT_DASHBOARD_WEB="$PORT_DASHBOARD_WEB"
+DOCKER_AUTH_DIR="$DOCKER_AUTH_DIR"
+DOCKER_CMD="sudo env DOCKER_CONFIG=\$DOCKER_AUTH_DIR docker"
+LOG_FILE="\$AGH_CONF_DIR/certbot/monitor.log"
+LOCK_FILE="\$AGH_CONF_DIR/certbot/monitor.lock"
+EOF
+
+cat >> "$CERT_MONITOR_SCRIPT" <<'EOF'
+# Use flock to prevent concurrent runs
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    exit 0
+fi
+
+if [ -z "$DESEC_DOMAIN" ]; then exit 0; fi
+
+# Auto-detect if action is needed:
+# - Certificate file is missing
+# - Certificate is self-signed (not Let's Encrypt)
+# - Certificate expires in less than 30 days
+NEEDS_ACTION=false
+if [ ! -f "$AGH_CONF_DIR/ssl.crt" ]; then
+    NEEDS_ACTION=true
+elif ! grep -qE "Let's Encrypt|R3|ISRG" "$AGH_CONF_DIR/ssl.crt"; then
+    NEEDS_ACTION=true
+elif ! openssl x509 -checkend 2592000 -noout -in "$AGH_CONF_DIR/ssl.crt" >/dev/null 2>&1; then
+    NEEDS_ACTION=true
+fi
+
+if [ "$NEEDS_ACTION" = false ]; then
+    exit 0
+fi
+
+# Check if we should wait due to previous rate limit failure
+CERT_LOG_FILE="$AGH_CONF_DIR/certbot/last_run.log"
+if [ -f "$CERT_LOG_FILE" ]; then
+    RETRY_TIME=$(grep -oiE 'retry after [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]+ UTC' "$CERT_LOG_FILE" | head -1 | sed 's/retry after //I')
+    if [ -n "$RETRY_TIME" ]; then
+        RETRY_EPOCH=$(date -u -d "$RETRY_TIME" +%s 2>/dev/null || echo "")
+        NOW_EPOCH=$(date -u +%s)
+        if [ -n "$RETRY_EPOCH" ] && [ "$NOW_EPOCH" -lt "$RETRY_EPOCH" ]; then
+            # Still in rate limit window
+            exit 0
+        fi
+    fi
+fi
+
+echo "$(date) [INFO] Auto-detected that certificate requires attention (recovery/renewal)." >> "$LOG_FILE"
+
+# Attempt Let's Encrypt
+CERT_TMP_OUT=$(mktemp)
+if $DOCKER_CMD run --rm \
+    -v "$AGH_CONF_DIR:/acme" \
+    -e "DESEC_Token=$DESEC_TOKEN" \
+    -e "DEDYN_TOKEN=$DESEC_TOKEN" \
+    -e "DESEC_DOMAIN=$DESEC_DOMAIN" \
+    neilpang/acme.sh:latest \
+    --issue \
+    --dns dns_desec \
+    --dnssleep 120 \
+    -d "$DESEC_DOMAIN" \
+    -d "*.$DESEC_DOMAIN" \
+    --keylength ec-256 \
+    --server letsencrypt \
+    --home /acme \
+    --config-home /acme \
+    --cert-home /acme/certs \
+    --force > "$CERT_TMP_OUT" 2>&1; then
+    
+    if [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]; then
+        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
+        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
+        
+        # Update docker-compose metadata for CasaOS dashboard transition to HTTPS/Domain
+        if [ -f "$COMPOSE_FILE" ]; then
+            sed -i "s|dev.casaos.app.ui.protocol=http|dev.casaos.app.ui.protocol=https|g" "$COMPOSE_FILE"
+            sed -i "s|dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB|dev.casaos.app.ui.port=8443|g" "$COMPOSE_FILE"
+            sed -i "s|dev.casaos.app.ui.hostname=$LAN_IP|dev.casaos.app.ui.hostname=$DESEC_DOMAIN|g" "$COMPOSE_FILE"
+            sed -i "s|scheme: http|scheme: https|g" "$COMPOSE_FILE"
+            $DOCKER_CMD compose -f "$COMPOSE_FILE" up -d --no-deps dashboard
+        fi
+
+        $DOCKER_CMD restart adguard
+        $DOCKER_CMD restart dashboard
+        echo "$(date) [INFO] Successfully updated Let's Encrypt certificate and synchronized dashboard config." >> "$LOG_FILE"
+    elif [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" ]; then
+        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
+        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
+
+        # Update docker-compose metadata for CasaOS dashboard transition to HTTPS/Domain
+        if [ -f "$COMPOSE_FILE" ]; then
+            sed -i "s|dev.casaos.app.ui.protocol=http|dev.casaos.app.ui.protocol=https|g" "$COMPOSE_FILE"
+            sed -i "s|dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB|dev.casaos.app.ui.port=8443|g" "$COMPOSE_FILE"
+            sed -i "s|dev.casaos.app.ui.hostname=$LAN_IP|dev.casaos.app.ui.hostname=$DESEC_DOMAIN|g" "$COMPOSE_FILE"
+            sed -i "s|scheme: http|scheme: https|g" "$COMPOSE_FILE"
+            $DOCKER_CMD compose -f "$COMPOSE_FILE" up -d --no-deps dashboard
+        fi
+
+        $DOCKER_CMD restart adguard
+        $DOCKER_CMD restart dashboard
+        echo "$(date) [INFO] Successfully updated Let's Encrypt certificate and synchronized dashboard config." >> "$LOG_FILE"
+    fi
+else
+    cat "$CERT_TMP_OUT" > "$CERT_LOG_FILE"
+    echo "$(date) [WARN] Let's Encrypt attempt failed. Will retry later." >> "$LOG_FILE"
+fi
+rm -f "$CERT_TMP_OUT"
+EOF
+chmod +x "$CERT_MONITOR_SCRIPT"
 EXISTING_CRON=$(crontab -l 2>/dev/null || true)
 echo "$EXISTING_CRON" | grep -v "$CERT_MONITOR_SCRIPT" | { cat; echo "*/5 * * * * $CERT_MONITOR_SCRIPT"; } | crontab -
 
