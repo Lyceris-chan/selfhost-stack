@@ -326,65 +326,7 @@ log_info "Assigned Subnet: $DOCKER_SUBNET"
 
 # --- 4. NETWORK INTELLIGENCE ---
 log_info "Analyzing Network..."
-
-is_private_ipv4() {
-    local ip=$1
-    [[ $ip =~ ^10\. ]] || [[ $ip =~ ^192\.168\. ]] || [[ $ip =~ ^172\.(1[6-9]|2[0-9]|3[0-1])\. ]]
-}
-
-sanitize_iface_ip() {
-    local iface=$1
-    ip -o -4 addr show dev "$iface" scope global up 2>/dev/null \
-        | awk '{print $4}' \
-        | cut -d/ -f1 \
-        | grep -Ev '^(127\.|169\.254\.)' \
-        | head -n1
-}
-
-detect_route_iface_ip() {
-    local iface
-    iface=$(ip route show default 2>/dev/null | awk 'NR==1 {print $5}')
-    if [ -n "$iface" ] && [[ ! $iface =~ ^(docker0|br-[0-9a-f]{12}|veth|tailscale0|wg.*)$ ]]; then
-        sanitize_iface_ip "$iface"
-    fi
-}
-
-detect_lan_ip() {
-    ip -o -4 addr show scope global up 2>/dev/null \
-        | awk '$2 !~ /^(docker0|br-[0-9a-f]{12}|veth|lo|tailscale0|wg.*)$/ {print $4}' \
-        | cut -d/ -f1 \
-        | grep -Ev '^(127\.|169\.254\.)' \
-        | head -n1
-}
-
-fallback_hostname_ip() {
-    hostname -I 2>/dev/null | awk '{print $1}' | grep -Ev '^(127\.|169\.254\.)' | head -n1
-}
-
-LAN_IP=${LAN_IP_OVERRIDE:-$(detect_route_iface_ip || true)}
-DETECTION_HINT="default route"
-if [ -n "${LAN_IP_OVERRIDE:-}" ]; then
-    DETECTION_HINT="manual override"
-fi
-
-if [ -z "$LAN_IP" ] || ! is_private_ipv4 "$LAN_IP"; then
-    LAN_IP=$(detect_lan_ip || true)
-    DETECTION_HINT="primary interface"
-fi
-
-if [ -z "$LAN_IP" ] || ! is_private_ipv4 "$LAN_IP"; then
-    LAN_IP=$(fallback_hostname_ip || true)
-    DETECTION_HINT="hostname -I"
-fi
-
-if [ -z "$LAN_IP" ] || ! is_private_ipv4 "$LAN_IP"; then
-    LAN_IP="192.168.0.100"
-    DETECTION_HINT="static fallback"
-    log_warn "Unable to detect LAN IP automatically; defaulting to $LAN_IP. Set LAN_IP_OVERRIDE to force a specific bind IP."
-else
-    log_info "Detected LAN IP ($DETECTION_HINT): $LAN_IP"
-fi
-
+LAN_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+\.\d+\.\d+\.\d+' | grep -v '^127\.' | head -n1 || echo "192.168.0.100")
 PUBLIC_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ifconfig.me || echo "$LAN_IP")
 echo "$PUBLIC_IP" > "$CURRENT_IP_FILE"
 

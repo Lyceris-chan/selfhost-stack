@@ -400,16 +400,6 @@ Users → AdGuard Home (ad blocking) → Unbound (recursive) → Root DNS Server
    crontab -l | grep wg-ip-monitor
    ```
 
-### HTTP 503 or UI Not Reachable
-
-If the dashboard or any service returns an HTTP 503/"service unavailable" page immediately after deployment, Docker likely bound the ports to the wrong interface (for example, `docker0` instead of your LAN IP). Force the bind address when running the installer:
-
-```bash
-LAN_IP_OVERRIDE=192.168.x.x ./zima.sh
-```
-
-Replace `192.168.x.x` with the actual IP of your host on the local network.
-
 ### Certificate Issues
 
 1. **Check certificate files exist**:
