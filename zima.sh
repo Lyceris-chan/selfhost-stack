@@ -875,6 +875,89 @@ if grep -q "COPY entrypoint.sh ./" "$SRC_DIR/odido-bundle-booster/Dockerfile"; t
     sed -i "s|COPY entrypoint.sh ./|COPY entrypoint.sh /entrypoint.sh|g" "$SRC_DIR/odido-bundle-booster/Dockerfile"
     log_info "Patched odido-bundle-booster Dockerfile to fix entrypoint.sh path"
 fi
+
+# Patch scheduler.py to sync with Odido API before first auto-renewal check
+# This prevents instant bundle purchase on deployment by fetching real remaining data first
+cat > "$SRC_DIR/odido-bundle-booster/app/scheduler.py" << 'SCHEDULEREOF'
+from __future__ import annotations
+
+import threading
+import time
+import os
+import logging
+from typing import Optional
+
+from .service import BundleService
+
+logger = logging.getLogger("odido.scheduler")
+
+
+class Scheduler:
+    def __init__(self, service: BundleService) -> None:
+        self.service = service
+        self.thread: Optional[threading.Thread] = None
+        self._stop = threading.Event()
+        self._first_run = True
+
+    def start(self) -> None:
+        if self.thread and self.thread.is_alive():
+            return
+        self.thread = threading.Thread(target=self._run_loop, daemon=True)
+        self.thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self.thread:
+            self.thread.join(timeout=5)
+
+    def _sync_remaining_from_api(self) -> bool:
+        """Fetch remaining data from Odido API and update local state."""
+        try:
+            from .odido_api import OdidoAPI, OdidoAPIError, OdidoAuthError
+            
+            api = OdidoAPI(
+                user_id=self.service.config.odido_user_id or os.getenv("ODIDO_USER_ID"),
+                access_token=self.service.config.odido_token or os.getenv("ODIDO_TOKEN"),
+            )
+            
+            if not api.is_configured:
+                logger.info("Odido API not configured - skipping initial sync")
+                return False
+            
+            logger.info("Syncing remaining data from Odido API...")
+            remaining_mb = api.get_remaining_data_mb()
+            
+            # Update local state with real remaining data
+            self.service.state.remaining_mb = remaining_mb
+            self.service.storage.save_state(self.service.state)
+            logger.info(f"Synced remaining data: {remaining_mb} MB")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Failed to sync remaining data from Odido API: {e}")
+            return False
+
+    def _run_loop(self) -> None:
+        while not self._stop.is_set():
+            # On first run, sync with Odido API to get real remaining data
+            # This prevents instant bundle purchase when remaining_mb=0 (fresh state)
+            if self._first_run:
+                self._first_run = False
+                if self.service.state.remaining_mb == 0:
+                    logger.info("Fresh state detected (remaining_mb=0), syncing with Odido API before auto-renewal check...")
+                    self._sync_remaining_from_api()
+            
+            result = self.service.run_check_cycle()
+            sleep_seconds = result["next_interval_minutes"] * 60
+            reset_ts = self.service.state.next_reset_ts
+            now = time.time()
+            if reset_ts:
+                until_reset = max(reset_ts - now, 0)
+                sleep_seconds = min(sleep_seconds, until_reset)
+            self._stop.wait(timeout=sleep_seconds)
+SCHEDULEREOF
+log_info "Patched odido-bundle-booster scheduler.py to sync with Odido API before first auto-renewal"
+
 mkdir -p "$SRC_DIR/redlib"
 cat > "$SRC_DIR/redlib/Dockerfile" <<EOF
 FROM alpine:3.19
@@ -898,6 +981,23 @@ if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_DIR/vert/Dockerfile"; then
         log_warn "VERT Dockerfile structure changed - could not apply PUB_DISABLE_FAILURE_BLOCKS patch. Build may fail."
     fi
 fi
+
+# Patch VERT layout to suppress insecure context warning when PUB_DISABLE_FAILURE_BLOCKS is set
+# This allows local HTTP deployments without the annoying toast
+VERT_LAYOUT="$SRC_DIR/vert/src/routes/+layout.svelte"
+if [ -f "$VERT_LAYOUT" ]; then
+    # Add import for PUB_DISABLE_FAILURE_BLOCKS if not already imported
+    if ! grep -q "PUB_DISABLE_FAILURE_BLOCKS" "$VERT_LAYOUT"; then
+        sed -i 's|import { PUB_PLAUSIBLE_URL, PUB_HOSTNAME }|import { PUB_PLAUSIBLE_URL, PUB_HOSTNAME, PUB_DISABLE_FAILURE_BLOCKS }|g' "$VERT_LAYOUT"
+        log_info "Added PUB_DISABLE_FAILURE_BLOCKS import to VERT layout"
+    fi
+    # Modify the insecure context check to skip toast when PUB_DISABLE_FAILURE_BLOCKS is true
+    if grep -q 'if (!window.isSecureContext) {' "$VERT_LAYOUT"; then
+        sed -i 's|if (!window.isSecureContext) {|if (!window.isSecureContext \&\& PUB_DISABLE_FAILURE_BLOCKS !== "true") {|g' "$VERT_LAYOUT"
+        log_info "Patched VERT layout to suppress insecure context warning when PUB_DISABLE_FAILURE_BLOCKS is set"
+    fi
+fi
+
 chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
 
 # --- 12. CONTROL SCRIPTS ---
@@ -934,13 +1034,10 @@ elif [ "$ACTION" = "delete" ]; then
 elif [ "$ACTION" = "status" ]; then
     GLUETUN_STATUS="down"
     GLUETUN_HEALTHY="false"
-    HANDSHAKE="0"
     HANDSHAKE_AGO="N/A"
-    RX="0"
-    TX="0"
     ENDPOINT="--"
     PUBLIC_IP="--"
-    VPN_TYPE="--"
+    DATA_FILE="/app/.data_usage"
     
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^gluetun$"; then
         # Check container health status
@@ -990,6 +1087,68 @@ elif [ "$ACTION" = "status" ]; then
         if [ -n "$WG_CONF_ENDPOINT" ]; then
             ENDPOINT="$WG_CONF_ENDPOINT"
         fi
+        
+        # Get current RX/TX from /proc/net/dev (works for tun0 or wg0 interface)
+        # Format: iface: rx_bytes rx_packets ... tx_bytes tx_packets ...
+        NET_DEV=$(docker exec gluetun cat /proc/net/dev 2>/dev/null || echo "")
+        CURRENT_RX="0"
+        CURRENT_TX="0"
+        if [ -n "$NET_DEV" ]; then
+            # Try tun0 first (OpenVPN), then wg0 (WireGuard)
+            VPN_LINE=$(echo "$NET_DEV" | grep -E "^\s*(tun0|wg0):" | head -1 || echo "")
+            if [ -n "$VPN_LINE" ]; then
+                # Extract RX bytes (field 2) and TX bytes (field 10)
+                CURRENT_RX=$(echo "$VPN_LINE" | awk '{print $2}' 2>/dev/null || echo "0")
+                CURRENT_TX=$(echo "$VPN_LINE" | awk '{print $10}' 2>/dev/null || echo "0")
+                case "$CURRENT_RX" in ''|*[!0-9]*) CURRENT_RX="0" ;; esac
+                case "$CURRENT_TX" in ''|*[!0-9]*) CURRENT_TX="0" ;; esac
+            fi
+        fi
+        
+        # Load previous values and calculate cumulative total
+        PREV_RX="0"
+        PREV_TX="0"
+        TOTAL_RX="0"
+        TOTAL_TX="0"
+        LAST_RX="0"
+        LAST_TX="0"
+        if [ -f "$DATA_FILE" ]; then
+            . "$DATA_FILE" 2>/dev/null || true
+        fi
+        
+        # Detect counter reset (container restart) - current < last means reset
+        if { [ "$CURRENT_RX" -lt "$LAST_RX" ] || [ "$CURRENT_TX" -lt "$LAST_TX" ]; } 2>/dev/null; then
+            # Counter reset detected - add last values to total before reset
+            TOTAL_RX=$((TOTAL_RX + LAST_RX))
+            TOTAL_TX=$((TOTAL_TX + LAST_TX))
+        fi
+        
+        # Calculate session values (current readings)
+        SESSION_RX="$CURRENT_RX"
+        SESSION_TX="$CURRENT_TX"
+        
+        # Calculate all-time totals
+        ALLTIME_RX=$((TOTAL_RX + CURRENT_RX))
+        ALLTIME_TX=$((TOTAL_TX + CURRENT_TX))
+        
+        # Save state
+        cat > "$DATA_FILE" <<DATAEOF
+LAST_RX=$CURRENT_RX
+LAST_TX=$CURRENT_TX
+TOTAL_RX=$TOTAL_RX
+TOTAL_TX=$TOTAL_TX
+DATAEOF
+    else
+        # Container not running - load saved totals
+        ALLTIME_RX="0"
+        ALLTIME_TX="0"
+        SESSION_RX="0"
+        SESSION_TX="0"
+        if [ -f "$DATA_FILE" ]; then
+            . "$DATA_FILE" 2>/dev/null || true
+            ALLTIME_RX=$((TOTAL_RX + LAST_RX))
+            ALLTIME_TX=$((TOTAL_TX + LAST_TX))
+        fi
     fi
     
     ACTIVE_NAME=$(cat "$NAME_FILE" 2>/dev/null | tr -d '\n\r' || echo "Unknown")
@@ -1023,8 +1182,8 @@ elif [ "$ACTION" = "status" ]; then
     HANDSHAKE_AGO=$(sanitize_json_string "$HANDSHAKE_AGO")
     WGE_HOST=$(sanitize_json_string "$WGE_HOST")
     
-    printf '{"gluetun":{"status":"%s","healthy":%s,"active_profile":"%s","endpoint":"%s","public_ip":"%s","handshake":"%s","handshake_ago":"%s","rx":"%s","tx":"%s"},"wgeasy":{"status":"%s","host":"%s","clients":"%s","connected":"%s"}}' \
-        "$GLUETUN_STATUS" "$GLUETUN_HEALTHY" "$ACTIVE_NAME" "$ENDPOINT" "$PUBLIC_IP" "$HANDSHAKE" "$HANDSHAKE_AGO" "$RX" "$TX" \
+    printf '{"gluetun":{"status":"%s","healthy":%s,"active_profile":"%s","endpoint":"%s","public_ip":"%s","handshake_ago":"%s","session_rx":"%s","session_tx":"%s","total_rx":"%s","total_tx":"%s"},"wgeasy":{"status":"%s","host":"%s","clients":"%s","connected":"%s"}}' \
+        "$GLUETUN_STATUS" "$GLUETUN_HEALTHY" "$ACTIVE_NAME" "$ENDPOINT" "$PUBLIC_IP" "$HANDSHAKE_AGO" "$SESSION_RX" "$SESSION_TX" "$ALLTIME_RX" "$ALLTIME_TX" \
         "$WGE_STATUS" "$WGE_HOST" "$WGE_CLIENTS" "$WGE_CONNECTED"
 fi
 EOF
@@ -1103,6 +1262,21 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 if json_start != -1 and json_end != -1:
                     output = output[json_start:json_end+1]
                 self._send_json(json.loads(output))
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/containers':
+            try:
+                # Get container IDs for Portainer links
+                result = subprocess.run(
+                    ['docker', 'ps', '-a', '--format', '{{.Names}}\t{{.ID}}'],
+                    capture_output=True, text=True, timeout=10
+                )
+                containers = {}
+                for line in result.stdout.strip().split('\n'):
+                    if '\t' in line:
+                        name, cid = line.split('\t', 1)
+                        containers[name] = cid
+                self._send_json({"containers": containers})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/profiles':
@@ -1429,6 +1603,30 @@ services:
       resources:
         limits: {cpus: '0.3', memory: 128M}
 
+  # Startup delay container - waits for companion to be ready before Invidious starts
+  invidious-wait:
+    image: alpine:3.19
+    container_name: invidious-wait
+    network_mode: "service:gluetun"
+    command: >
+      /bin/sh -c "
+        echo 'Waiting for companion to be ready...';
+        for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+          if wget -qO- http://127.0.0.1:8282/ >/dev/null 2>&1; then
+            echo 'Companion is ready!';
+            exit 0;
+          fi;
+          echo 'Waiting... attempt' \$i;
+          sleep 5;
+        done;
+        echo 'Companion not ready after 60s, continuing anyway...';
+        exit 0;
+      "
+    depends_on:
+      gluetun: {condition: service_healthy}
+      companion: {condition: service_started}
+    restart: "no"
+
   invidious:
     image: quay.io/invidious/invidious:latest
     container_name: invidious
@@ -1451,7 +1649,10 @@ services:
       options:
         max-size: "1G"
         max-file: "4"
-    depends_on: {invidious-db: {condition: service_healthy}, gluetun: {condition: service_healthy}, companion: {condition: service_started}}
+    depends_on:
+      invidious-db: {condition: service_healthy}
+      gluetun: {condition: service_healthy}
+      invidious-wait: {condition: service_completed_successfully}
     restart: unless-stopped
     deploy:
       resources:
@@ -1490,7 +1691,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     deploy:
       resources:
-        limits: {cpus: '0.3', memory: 128M}
+        limits: {cpus: '0.5', memory: 256M}
 
   libremdb:
     image: ghcr.io/zyachel/libremdb:latest
@@ -1561,6 +1762,7 @@ services:
     container_name: vertd
     image: ghcr.io/vert-sh/vertd:latest
     networks: [frontnet]
+    ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
     # Intel GPU support
     devices:
       - /dev/dri
@@ -1580,7 +1782,7 @@ services:
         PUB_ENV: production
         PUB_DISABLE_ALL_EXTERNAL_REQUESTS: "true"
         PUB_DISABLE_FAILURE_BLOCKS: "true"
-        PUB_VERTD_URL: http://vertd:$PORT_INT_VERTD
+        PUB_VERTD_URL: http://$LAN_IP:$PORT_VERTD
         PUB_DONATION_URL: ""
         PUB_STRIPE_KEY: ""
     networks: [frontnet]
@@ -1599,9 +1801,9 @@ x-casaos:
   author: Lyceris-chan
   category: Network
   scheme: http
-  hostname: ""
+  hostname: $LAN_IP
   index: /
-  port_map: "$PORT_DASHBOARD_WEB"
+  port_map: "8081"
   title:
     en_us: Privacy Hub
   tagline:
@@ -1623,121 +1825,586 @@ cat > "$DASHBOARD_FILE" <<EOF
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZimaOS Privacy Hub</title>
-    <link href="https://fontlay.com/css?family=Google+Sans+Flex" rel="stylesheet">
-    <link href="https://fontlay.com/css?family=Cascadia+Code" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=Google+Sans+Text:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet">
     <style>
+        /* MD3 Expressive Dark Theme Color Tokens */
         :root {
-            --bg: #141218; --surf: #1d1b20; --surf-high: #2b2930;
-            --on-surf: #e6e1e5; --outline: #938f99;
-            --p: #d0bcff; --on-p: #381e72; --pc: #4f378b; --on-pc: #eaddff;
-            --s: #ccc2dc; --on-s: #332d41; --sc: #4a4458; --on-sc: #e8def8;
-            --err: #f2b8b5; --on-err: #601410;
-            --ok: #bceabb; --on-ok: #003912;
-            --warn: #ffb74d;
-            --radius: 20px;
+            /* Primary */
+            --md-sys-color-primary: #D0BCFF;
+            --md-sys-color-on-primary: #381E72;
+            --md-sys-color-primary-container: #4F378B;
+            --md-sys-color-on-primary-container: #EADDFF;
+            /* Secondary */
+            --md-sys-color-secondary: #CCC2DC;
+            --md-sys-color-on-secondary: #332D41;
+            --md-sys-color-secondary-container: #4A4458;
+            --md-sys-color-on-secondary-container: #E8DEF8;
+            /* Tertiary */
+            --md-sys-color-tertiary: #EFB8C8;
+            --md-sys-color-on-tertiary: #492532;
+            --md-sys-color-tertiary-container: #633B48;
+            --md-sys-color-on-tertiary-container: #FFD8E4;
+            /* Error */
+            --md-sys-color-error: #F2B8B5;
+            --md-sys-color-on-error: #601410;
+            --md-sys-color-error-container: #8C1D18;
+            --md-sys-color-on-error-container: #F9DEDC;
+            /* Surface */
+            --md-sys-color-surface: #141218;
+            --md-sys-color-on-surface: #E6E1E5;
+            --md-sys-color-surface-variant: #49454F;
+            --md-sys-color-on-surface-variant: #CAC4D0;
+            --md-sys-color-surface-container: #1D1B20;
+            --md-sys-color-surface-container-high: #2B2930;
+            --md-sys-color-surface-container-highest: #36343B;
+            --md-sys-color-surface-bright: #3B383E;
+            /* Outline */
+            --md-sys-color-outline: #938F99;
+            --md-sys-color-outline-variant: #49454F;
+            /* Custom success */
+            --md-sys-color-success: #A8DAB5;
+            --md-sys-color-on-success: #003912;
+            --md-sys-color-success-container: #00522B;
+            /* Custom warning */
+            --md-sys-color-warning: #FFCC80;
+            --md-sys-color-on-warning: #4A2800;
+            /* Odido orange */
+            --md-sys-color-odido: #FF6B35;
+            --md-sys-color-on-odido: #FFFFFF;
+            /* Expressive shape */
+            --md-sys-shape-corner-extra-large: 28px;
+            --md-sys-shape-corner-large: 16px;
+            --md-sys-shape-corner-medium: 12px;
+            --md-sys-shape-corner-small: 8px;
+            --md-sys-shape-corner-full: 100px;
+            /* State layers */
+            --md-sys-state-hover-opacity: 0.08;
+            --md-sys-state-focus-opacity: 0.12;
+            --md-sys-state-pressed-opacity: 0.12;
+            /* Elevation */
+            --md-sys-elevation-1: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
+            --md-sys-elevation-2: 0 1px 2px rgba(0,0,0,0.3), 0 2px 6px 2px rgba(0,0,0,0.15);
+            --md-sys-elevation-3: 0 4px 8px 3px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.3);
+            /* Motion */
+            --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0.0, 0, 1.0);
+            --md-sys-motion-duration-medium: 300ms;
         }
-        body { background: var(--bg); color: var(--on-surf); font-family: 'Google Sans Flex', sans-serif; margin: 0; padding: 40px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-        .container { max-width: 1200px; width: 100%; }
-        header { margin-bottom: 48px; }
-        h1 { font-weight: 400; font-size: 3rem; margin: 0; color: var(--p); line-height: 1.1; }
-        .sub { font-size: 1.1rem; color: var(--s); margin-top: 8px; font-weight: 500; }
+        
+        * { box-sizing: border-box; }
+        
+        body {
+            background: var(--md-sys-color-surface);
+            color: var(--md-sys-color-on-surface);
+            font-family: 'Google Sans Text', 'Google Sans', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+        
+        .container { max-width: 1280px; width: 100%; }
+        
+        /* MD3 Typography */
+        .display-large { font-size: 57px; line-height: 64px; font-weight: 400; letter-spacing: -0.25px; }
+        .display-medium { font-size: 45px; line-height: 52px; font-weight: 400; }
+        .headline-large { font-size: 32px; line-height: 40px; font-weight: 400; }
+        .headline-medium { font-size: 28px; line-height: 36px; font-weight: 400; }
+        .title-large { font-size: 22px; line-height: 28px; font-weight: 500; }
+        .title-medium { font-size: 16px; line-height: 24px; font-weight: 500; letter-spacing: 0.15px; }
+        .title-small { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px; }
+        .body-large { font-size: 16px; line-height: 24px; font-weight: 400; letter-spacing: 0.5px; }
+        .body-medium { font-size: 14px; line-height: 20px; font-weight: 400; letter-spacing: 0.25px; }
+        .body-small { font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0.4px; }
+        .label-large { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px; }
+        .label-medium { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; }
+        .label-small { font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; }
+        
+        /* Header */
+        header {
+            margin-bottom: 40px;
+            padding: 24px 0;
+        }
+        
+        h1 {
+            font-family: 'Google Sans', sans-serif;
+            font-weight: 500;
+            font-size: 45px;
+            line-height: 52px;
+            margin: 0;
+            color: var(--md-sys-color-primary);
+            letter-spacing: -0.5px;
+        }
+        
+        .subtitle {
+            font-size: 16px;
+            color: var(--md-sys-color-on-surface-variant);
+            margin-top: 8px;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Section Labels - MD3 Overline style */
         .section-label {
-            color: var(--p); font-size: 0.9rem; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
-            margin: 48px 0 16px 8px;
+            color: var(--md-sys-color-primary);
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin: 48px 0 16px 4px;
         }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        
+        .section-hint {
+            font-size: 12px;
+            color: var(--md-sys-color-on-surface-variant);
+            margin: -8px 0 16px 4px;
+            letter-spacing: 0.4px;
+        }
+        
+        /* Grid Layouts */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
         @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+        @media (max-width: 600px) { body { padding: 16px; } }
+        
+        /* MD3 Cards with tonal elevation */
         .card {
-            background: var(--surf); border-radius: var(--radius); padding: 24px;
-            text-decoration: none; color: inherit; transition: 0.2s; position: relative;
-            display: flex; flex-direction: column; justify-content: space-between; min-height: 130px; border: 1px solid transparent;
+            background: var(--md-sys-color-surface-container);
+            border-radius: var(--md-sys-shape-corner-extra-large);
+            padding: 24px;
+            text-decoration: none;
+            color: inherit;
+            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            min-height: 140px;
+            border: none;
+            overflow: hidden;
         }
-        .card:hover { background: var(--surf-high); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--md-sys-color-on-surface);
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+            pointer-events: none;
+        }
+        
+        .card:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        .card:hover { 
+            background: var(--md-sys-color-surface-container-high);
+            box-shadow: var(--md-sys-elevation-2);
+        }
+        
+        .card:active::before { opacity: var(--md-sys-state-pressed-opacity); }
         .card.full-width { grid-column: 1 / -1; }
-        .card h2 { margin: 0 0 8px 0; font-size: 1.4rem; font-weight: 400; color: var(--on-surf); }
-        .card h3 { margin: 0 0 16px 0; font-size: 1.1rem; font-weight: 500; color: var(--on-surf); }
-        .chip-box { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: auto; }
-        .badge { font-size: 0.75rem; padding: 6px 12px; border-radius: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; text-decoration: none; transition: 0.2s; }
-        .badge.vpn { background: var(--pc); color: var(--on-pc); }
-        .badge.vpn:hover { background: #6b4fa3; box-shadow: 0 2px 8px rgba(79, 55, 139, 0.4); }
-        .badge.admin { background: var(--sc); color: var(--on-sc); }
-        .badge.admin:hover { background: #5a5468; box-shadow: 0 2px 8px rgba(74, 68, 88, 0.4); }
-        .badge.odido { background: #ff6b35; color: #fff; }
-        a.badge { cursor: pointer; }
-        .status-pill {
-            display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.06);
-            padding: 6px 14px; border-radius: 50px; font-size: 0.85rem; color: var(--s); margin-top: 16px; width: fit-content;
+        
+        .card h2 {
+            margin: 0 0 8px 0;
+            font-size: 22px;
+            font-weight: 500;
+            color: var(--md-sys-color-on-surface);
+            line-height: 28px;
         }
-        .dot { width: 8px; height: 8px; border-radius: 50%; background: #666; transition: 0.3s; }
-        .dot.up { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
-        .dot.down { background: var(--err); box-shadow: 0 0 10px var(--err); }
-        .input-field {
-            width: 100%; background: #141218; border: 1px solid #49454f; color: #fff;
-            padding: 14px; border-radius: 12px; font-family: 'Cascadia Code', monospace; font-size: 0.9rem; box-sizing: border-box; outline: none; transition: 0.2s;
+        
+        .card h3 {
+            margin: 0 0 16px 0;
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--md-sys-color-on-surface);
+            line-height: 24px;
+            letter-spacing: 0.15px;
         }
-        .input-field:focus { border-color: var(--p); background: #1d1b20; }
-        textarea.input-field { min-height: 120px; resize: vertical; }
+        
+        /* MD3 Assist Chips */
+        .chip-box { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 12px; }
+        
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            padding: 6px 16px;
+            border-radius: var(--md-sys-shape-corner-small);
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            text-decoration: none;
+            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+            border: 1px solid var(--md-sys-color-outline);
+            background: transparent;
+            color: var(--md-sys-color-on-surface);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .chip::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: currentColor;
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-medium);
+        }
+        
+        .chip:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        
+        .chip.vpn {
+            background: var(--md-sys-color-primary-container);
+            color: var(--md-sys-color-on-primary-container);
+            border: none;
+        }
+        
+        .chip.admin {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            border: none;
+        }
+        
+        .chip.odido {
+            background: var(--md-sys-color-odido);
+            color: var(--md-sys-color-on-odido);
+            border: none;
+        }
+        
+        a.chip { cursor: pointer; }
+        
+        /* Status Indicator */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--md-sys-color-surface-container-highest);
+            padding: 8px 16px;
+            border-radius: var(--md-sys-shape-corner-full);
+            font-size: 13px;
+            color: var(--md-sys-color-on-surface-variant);
+            margin-top: 16px;
+            width: fit-content;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--md-sys-color-outline);
+            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+        }
+        
+        .status-dot.up {
+            background: var(--md-sys-color-success);
+            box-shadow: 0 0 12px var(--md-sys-color-success);
+        }
+        
+        .status-dot.down {
+            background: var(--md-sys-color-error);
+            box-shadow: 0 0 12px var(--md-sys-color-error);
+        }
+        
+        /* MD3 Text Fields */
+        .text-field {
+            width: 100%;
+            background: transparent;
+            border: 1px solid var(--md-sys-color-outline);
+            color: var(--md-sys-color-on-surface);
+            padding: 16px;
+            border-radius: var(--md-sys-shape-corner-small);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            box-sizing: border-box;
+            outline: none;
+            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+        }
+        
+        .text-field:hover { border-color: var(--md-sys-color-on-surface); }
+        .text-field:focus {
+            border-color: var(--md-sys-color-primary);
+            border-width: 2px;
+            padding: 15px;
+        }
+        
+        textarea.text-field { min-height: 120px; resize: vertical; }
+        
+        /* MD3 Buttons */
         .btn {
-            background: var(--p); color: var(--on-p); border: none; padding: 12px 24px; border-radius: 50px;
-            font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: 0.2s; margin-top: 16px; display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 24px;
+            border-radius: var(--md-sys-shape-corner-full);
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.1px;
+            cursor: pointer;
+            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+            border: none;
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+            font-family: inherit;
         }
-        .btn:hover { opacity: 0.9; box-shadow: 0 2px 8px rgba(208, 188, 255, 0.3); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn.secondary { background: var(--sc); color: var(--on-sc); }
-        .btn.odido-buy { background: #ff6b35; color: #fff; }
-        .btn.del { 
-            background: transparent; border: 1px solid #444; 
-            padding: 8px; width: 32px; height: 32px; border-radius: 8px; 
-            display: flex; align-items: center; justify-content: center; margin: 0; transition: 0.2s;
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: currentColor;
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-medium);
         }
-        .btn.del:hover { background: rgba(242, 184, 181, 0.1); border-color: var(--err); }
-        .btn.del svg { width: 16px; height: 16px; fill: var(--err); }
-        .profile-row {
-            display: flex; justify-content: space-between; align-items: center;
-            background: #2b2930; padding: 12px 16px; border-radius: 12px; margin-bottom: 8px; border: 1px solid #444;
+        
+        .btn:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        .btn:active::before { opacity: var(--md-sys-state-pressed-opacity); }
+        
+        .btn-filled {
+            background: var(--md-sys-color-primary);
+            color: var(--md-sys-color-on-primary);
         }
-        .profile-name { font-weight: 500; color: var(--on-surf); cursor: pointer; flex-grow: 1; }
-        .profile-name:hover { color: var(--p); }
-        .stat-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem; border-bottom: 1px solid #333; padding-bottom: 8px; }
-        .stat-row:last-child { border: none; padding: 0; margin: 0; }
-        .stat-val { font-family: 'Cascadia Code', monospace; color: var(--p); }
-        .active-prof { color: var(--ok); font-weight: bold; }
-        .log-box {
-            background: #000; border: 1px solid #333; padding: 16px; border-radius: 12px;
-            height: 300px; overflow-y: auto; font-family: 'Cascadia Code', monospace; font-size: 0.85rem; color: #ccc;
+        
+        .btn-filled:hover { box-shadow: var(--md-sys-elevation-1); }
+        
+        .btn-tonal {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
         }
-        .log-line { margin: 2px 0; border-bottom: 1px solid #111; padding-bottom: 2px; }
+        
+        .btn-outlined {
+            background: transparent;
+            color: var(--md-sys-color-primary);
+            border: 1px solid var(--md-sys-color-outline);
+        }
+        
+        .btn-text {
+            background: transparent;
+            color: var(--md-sys-color-primary);
+            padding: 10px 12px;
+        }
+        
+        .btn-odido {
+            background: var(--md-sys-color-odido);
+            color: var(--md-sys-color-on-odido);
+        }
+        
+        .btn:disabled {
+            opacity: 0.38;
+            cursor: not-allowed;
+        }
+        
+        .btn-icon {
+            background: transparent;
+            border: 1px solid var(--md-sys-color-outline-variant);
+            padding: 8px;
+            width: 40px;
+            height: 40px;
+            border-radius: var(--md-sys-shape-corner-full);
+            color: var(--md-sys-color-on-surface-variant);
+        }
+        
+        .btn-icon:hover { border-color: var(--md-sys-color-on-surface); }
+        .btn-icon svg { width: 20px; height: 20px; fill: currentColor; }
+        
+        /* Profile List Items */
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--md-sys-color-surface-container-high);
+            padding: 16px 20px;
+            border-radius: var(--md-sys-shape-corner-large);
+            margin-bottom: 8px;
+            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .list-item::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--md-sys-color-on-surface);
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-medium);
+        }
+        
+        .list-item:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        
+        .list-item-text {
+            font-weight: 500;
+            color: var(--md-sys-color-on-surface);
+            cursor: pointer;
+            flex-grow: 1;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .list-item-text:hover { color: var(--md-sys-color-primary); }
+        
+        /* Stats Display */
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--md-sys-color-outline-variant);
+            font-size: 14px;
+        }
+        
+        .stat-row:last-child { border: none; }
+        
+        .stat-label { color: var(--md-sys-color-on-surface-variant); }
+        
+        .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--md-sys-color-primary);
+            font-weight: 500;
+        }
+        
+        .stat-value.success { color: var(--md-sys-color-success); }
+        .stat-value.error { color: var(--md-sys-color-error); }
+        .stat-value.warning { color: var(--md-sys-color-warning); }
+        
+        /* Log Container */
+        .log-container {
+            background: #0D0D0D;
+            border: 1px solid var(--md-sys-color-outline-variant);
+            border-radius: var(--md-sys-shape-corner-large);
+            padding: 16px;
+            height: 320px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--md-sys-color-on-surface-variant);
+        }
+        
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        /* Code Display */
+        .code-label {
+            font-size: 11px;
+            color: var(--md-sys-color-on-surface-variant);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+        
         .code-block {
-            background: #0d0d0d; border: 1px solid #333; border-radius: 8px; padding: 12px 16px;
-            font-family: 'Cascadia Code', monospace; font-size: 0.85rem; color: var(--p);
-            margin: 8px 0; overflow-x: auto; white-space: nowrap;
+            background: #0D0D0D;
+            border: 1px solid var(--md-sys-color-outline-variant);
+            border-radius: var(--md-sys-shape-corner-small);
+            padding: 14px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--md-sys-color-primary);
+            margin: 8px 0;
+            overflow-x: auto;
+            white-space: nowrap;
         }
-        .code-label { font-size: 0.75rem; color: var(--s); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .data-bar { background: #333; border-radius: 8px; height: 12px; margin: 12px 0; overflow: hidden; }
-        .data-bar-fill { background: linear-gradient(90deg, var(--ok), #4caf50); height: 100%; border-radius: 8px; transition: width 0.3s; }
-        .data-bar-fill.low { background: linear-gradient(90deg, var(--warn), #ff9800); }
-        .data-bar-fill.critical { background: linear-gradient(90deg, var(--err), #f44336); }
-        /* Privacy toggle styles */
-        .privacy-toggle {
-            display: flex; align-items: center; gap: 12px; background: var(--surf);
-            padding: 10px 16px; border-radius: 50px; margin-left: auto;
+        
+        /* Progress Bar */
+        .progress-track {
+            background: var(--md-sys-color-surface-container-highest);
+            border-radius: var(--md-sys-shape-corner-full);
+            height: 8px;
+            margin: 16px 0;
+            overflow: hidden;
         }
-        .privacy-toggle label { font-size: 0.85rem; color: var(--s); cursor: pointer; user-select: none; }
-        .toggle-switch {
-            position: relative; width: 44px; height: 24px; background: #444; border-radius: 12px;
-            cursor: pointer; transition: 0.3s;
+        
+        .progress-indicator {
+            background: linear-gradient(90deg, var(--md-sys-color-success), #4CAF50);
+            height: 100%;
+            border-radius: var(--md-sys-shape-corner-full);
+            transition: width var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
         }
-        .toggle-switch.active { background: var(--p); }
-        .toggle-switch::after {
-            content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
-            background: #fff; border-radius: 50%; transition: 0.3s;
+        
+        .progress-indicator.low {
+            background: linear-gradient(90deg, var(--md-sys-color-warning), #FF9800);
         }
-        .toggle-switch.active::after { left: 23px; }
-        .sensitive { transition: filter 0.3s, opacity 0.3s; }
-        .privacy-mode .sensitive { filter: blur(8px); opacity: 0.6; user-select: none; }
+        
+        .progress-indicator.critical {
+            background: linear-gradient(90deg, var(--md-sys-color-error), #F44336);
+        }
+        
+        /* Privacy Toggle - MD3 Switch */
+        .switch-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--md-sys-color-surface-container);
+            padding: 12px 20px;
+            border-radius: var(--md-sys-shape-corner-full);
+            margin-left: auto;
+        }
+        
+        .switch-label {
+            font-size: 14px;
+            color: var(--md-sys-color-on-surface-variant);
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .switch-track {
+            position: relative;
+            width: 52px;
+            height: 32px;
+            background: var(--md-sys-color-surface-variant);
+            border: 2px solid var(--md-sys-color-outline);
+            border-radius: var(--md-sys-shape-corner-full);
+            cursor: pointer;
+            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+        }
+        
+        .switch-track::after {
+            content: '';
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            width: 16px;
+            height: 16px;
+            background: var(--md-sys-color-outline);
+            border-radius: 50%;
+            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+        }
+        
+        .switch-track.active {
+            background: var(--md-sys-color-primary);
+            border-color: var(--md-sys-color-primary);
+        }
+        
+        .switch-track.active::after {
+            left: 26px;
+            width: 24px;
+            height: 24px;
+            top: 2px;
+            background: var(--md-sys-color-on-primary);
+        }
+        
+        .sensitive { transition: filter var(--md-sys-motion-duration-medium), opacity var(--md-sys-motion-duration-medium); }
+        .privacy-mode .sensitive { filter: blur(10px); opacity: 0.5; user-select: none; }
+        
         .header-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+        
+        /* Button Group */
+        .btn-group { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+        
+        /* Status feedback */
+        .feedback { margin-top: 12px; font-size: 13px; text-align: center; }
+        .feedback.success { color: var(--md-sys-color-success); }
+        .feedback.error { color: var(--md-sys-color-error); }
+        .feedback.info { color: var(--md-sys-color-primary); }
+        
+        /* Material Icons */
+        .material-symbols-rounded { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
     </style>
 </head>
 <body>
@@ -1746,42 +2413,42 @@ cat > "$DASHBOARD_FILE" <<EOF
             <div class="header-row">
                 <div>
                     <h1>Privacy Hub</h1>
-                    <div class="sub">Secure Self-Hosted Gateway</div>
+                    <div class="subtitle">Secure Self-Hosted Gateway</div>
                 </div>
-                <div class="privacy-toggle">
-                    <label for="privacy-switch">Hide Sensitive Info</label>
-                    <div class="toggle-switch" id="privacy-switch" onclick="togglePrivacy()" title="Toggle to blur sensitive information like IPs, endpoints, and keys"></div>
+                <div class="switch-container">
+                    <span class="switch-label" onclick="togglePrivacy()">Hide Sensitive</span>
+                    <div class="switch-track" id="privacy-switch" onclick="togglePrivacy()" title="Blur sensitive information"></div>
                 </div>
             </div>
         </header>
 
         <div class="section-label">Privacy Services</div>
-        <p style="font-size:0.8rem; color:var(--s); margin:-8px 0 16px 8px;">🔒 = Outbound traffic routed through VPN &nbsp;|&nbsp; 📍 = Direct connection &nbsp;|&nbsp; <em>All services accessible via LAN or WG-Easy</em></p>
+        <div class="section-hint">🔒 VPN Routed &nbsp;•&nbsp; 📍 Direct &nbsp;•&nbsp; Click chip to manage in Portainer</div>
         <div class="grid">
-            <a href="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true"><h2>Invidious</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true"><h2>Redlib</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true"><h2>Wikiless</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_LIBREMDB" class="card" data-check="true"><h2>LibremDB</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true"><h2>Rimgo</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true"><h2>Scribe</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_BREEZEWIKI" class="card" data-check="true"><h2>BreezeWiki</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true"><h2>AnonOverflow</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge vpn" onclick="event.stopPropagation();" title="Manage in Portainer">🔒 VPN Routed</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
-            <a href="http://$LAN_IP:$PORT_VERT" class="card" data-check="true"><h2>VERT</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge admin" onclick="event.stopPropagation();" title="Manage in Portainer">📍 Direct</a></div><div class="status-pill"><span class="dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true" data-container="invidious"><h2>Invidious</h2><div class="chip-box"><span class="chip vpn portainer-link" data-container="invidious">🔒 VPN</span></div><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib"><h2>Redlib</h2><div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib">🔒 VPN</span></div><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true" data-container="wikiless"><h2>Wikiless</h2><div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless">🔒 VPN</span></div><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_LIBREMDB" class="card" data-check="true" data-container="libremdb"><h2>LibremDB</h2><div class="chip-box"><span class="chip vpn portainer-link" data-container="libremdb">🔒 VPN</span></div><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true" data-container="rimgo"><h2>Rimgo</h2><div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo">🔒 VPN</span></div><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true" data-container="scribe"><h2>Scribe</h2><div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe">🔒 VPN</span></div><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_BREEZEWIKI" class="card" data-check="true" data-container="breezewiki"><h2>BreezeWiki</h2><div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki">🔒 VPN</span></div><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true" data-container="anonymousoverflow"><h2>AnonOverflow</h2><div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow">🔒 VPN</span></div><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Checking...</span></div></a>
+            <a href="http://$LAN_IP:$PORT_VERT" class="card" data-check="true" data-container="vert"><h2>VERT</h2><div class="chip-box"><span class="chip admin portainer-link" data-container="vert">📍 Direct</span></div><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Checking...</span></div></a>
         </div>
 
         <div class="section-label">Administration</div>
-        <p style="font-size:0.8rem; color:var(--s); margin:-8px 0 16px 8px;"><em>Accessible via LAN or WG-Easy remote connection</em></p>
+        <div class="section-hint">Accessible via LAN or WG-Easy remote connection</div>
         <div class="grid-3">
-            <a href="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card"><h2>AdGuard Home</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge admin" onclick="event.stopPropagation();" title="Manage in Portainer">📍 Direct</a></div></a>
-            <a href="http://$LAN_IP:$PORT_PORTAINER" class="card"><h2>Portainer</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge admin" onclick="event.stopPropagation();" title="Manage in Portainer">📍 Direct</a></div></a>
-            <a href="http://$LAN_IP:$PORT_WG_WEB" class="card"><h2>WireGuard</h2><div class="chip-box"><a href="http://$LAN_IP:$PORT_PORTAINER/#!/1/docker/containers" class="badge admin" onclick="event.stopPropagation();" title="Manage in Portainer">📍 Direct</a></div></a>
+            <a href="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card" data-container="adguard"><h2>AdGuard Home</h2><div class="chip-box"><span class="chip admin portainer-link" data-container="adguard">📍 Direct</span></div></a>
+            <a href="http://$LAN_IP:$PORT_PORTAINER" class="card" data-container="portainer"><h2>Portainer</h2><div class="chip-box"><span class="chip admin portainer-link" data-container="portainer">📍 Direct</span></div></a>
+            <a href="http://$LAN_IP:$PORT_WG_WEB" class="card" data-container="wg-easy"><h2>WireGuard</h2><div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy">📍 Direct</span></div></a>
         </div>
 
         <div class="section-label">DNS Configuration</div>
         <div class="grid-2">
             <div class="card">
                 <h3>Device DNS Settings</h3>
-                <p style="font-size:0.85rem; color:var(--s); margin-bottom:16px;">Configure your devices to use this DNS server:</p>
+                <p class="body-medium" style="color:var(--md-sys-color-on-surface-variant); margin-bottom:16px;">Configure your devices to use this DNS server:</p>
                 <div class="code-label">Plain DNS</div>
                 <div class="code-block sensitive">$LAN_IP:53</div>
 EOF
@@ -1798,13 +2465,13 @@ if [ -n "$DESEC_DOMAIN" ]; then
             </div>
             <div class="card">
                 <h3>Mobile Device Setup</h3>
-                <p style="font-size:0.85rem; color:var(--s); margin-bottom:12px;">To use encrypted DNS on your devices:</p>
-                <ol style="margin:0; padding-left:20px; font-size:0.9rem; color:var(--on-surf); line-height:1.8;">
+                <p class="body-medium" style="color:var(--md-sys-color-on-surface-variant); margin-bottom:12px;">To use encrypted DNS on your devices:</p>
+                <ol style="margin:0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8;">
                     <li>Connect to WireGuard VPN first</li>
                     <li>Set Private DNS to:</li>
                 </ol>
                 <div class="code-block sensitive" style="margin-left:20px;">$DESEC_DOMAIN</div>
-                <p style="font-size:0.8rem; color:var(--ok); margin-top:12px;">✓ Valid Let's Encrypt certificate (no warnings)</p>
+                <p class="body-small" style="color:var(--md-sys-color-success); margin-top:12px;">✓ Valid Let's Encrypt certificate (no warnings)</p>
             </div>
 EOF
 else
@@ -1836,38 +2503,38 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <h3>Data Status</h3>
                 <div id="odido-status-container">
                     <div id="odido-not-configured" style="display:none;">
-                        <p style="color:var(--s); font-size:0.9rem;">Odido Bundle Booster service available. Configure credentials via API or link below.</p>
-                        <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn secondary" style="margin-top:12px;">Open API Docs</a>
+                        <p class="body-medium" style="color:var(--md-sys-color-on-surface-variant);">Odido Bundle Booster service available. Configure credentials via API or link below.</p>
+                        <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-tonal" style="margin-top:12px;">Open API Docs</a>
                     </div>
                     <div id="odido-configured" style="display:none;">
-                        <div class="stat-row"><span>Data Remaining</span><span class="stat-val" id="odido-remaining">--</span></div>
-                        <div class="stat-row"><span>Bundle Code</span><span class="stat-val" id="odido-bundle-code">--</span></div>
-                        <div class="stat-row"><span>Auto-Renew</span><span class="stat-val" id="odido-auto-renew">--</span></div>
-                        <div class="stat-row"><span>Threshold</span><span class="stat-val" id="odido-threshold">--</span></div>
-                        <div class="stat-row"><span>Consumption Rate</span><span class="stat-val" id="odido-rate">--</span></div>
-                        <div class="stat-row"><span>API Connected</span><span class="stat-val" id="odido-api-status">--</span></div>
-                        <div class="data-bar"><div class="data-bar-fill" id="odido-bar" style="width:0%"></div></div>
-                        <div style="text-align:center; margin-top:16px;">
-                            <button onclick="buyOdidoBundle()" class="btn odido-buy" id="odido-buy-btn">Buy Bundle</button>
-                            <button onclick="refreshOdidoRemaining()" class="btn secondary" style="margin-left:8px;">Refresh</button>
-                            <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn secondary" style="margin-left:8px;">API</a>
+                        <div class="stat-row"><span class="stat-label">Data Remaining</span><span class="stat-value" id="odido-remaining">--</span></div>
+                        <div class="stat-row"><span class="stat-label">Bundle Code</span><span class="stat-value" id="odido-bundle-code">--</span></div>
+                        <div class="stat-row"><span class="stat-label">Auto-Renew</span><span class="stat-value" id="odido-auto-renew">--</span></div>
+                        <div class="stat-row"><span class="stat-label">Threshold</span><span class="stat-value" id="odido-threshold">--</span></div>
+                        <div class="stat-row"><span class="stat-label">Consumption Rate</span><span class="stat-value" id="odido-rate">--</span></div>
+                        <div class="stat-row"><span class="stat-label">API Connected</span><span class="stat-value" id="odido-api-status">--</span></div>
+                        <div class="progress-track"><div class="progress-indicator" id="odido-bar" style="width:0%"></div></div>
+                        <div class="btn-group" style="justify-content:center;">
+                            <button onclick="buyOdidoBundle()" class="btn btn-odido" id="odido-buy-btn">Buy Bundle</button>
+                            <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh</button>
+                            <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
                         </div>
-                        <div id="odido-buy-status" style="margin-top:10px; font-size:0.85rem; text-align:center;"></div>
+                        <div id="odido-buy-status" class="feedback"></div>
                     </div>
-                    <div id="odido-loading" style="color:var(--s);">Loading...</div>
+                    <div id="odido-loading" style="color:var(--md-sys-color-on-surface-variant);">Loading...</div>
                 </div>
             </div>
             <div class="card">
                 <h3>Configuration</h3>
-                <input type="text" id="odido-api-key" class="input-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;">
-                <input type="password" id="odido-oauth-token" class="input-field sensitive" placeholder="Odido OAuth Token (auto-fetches User ID)" style="margin-bottom:12px;">
-                <input type="text" id="odido-bundle-code-input" class="input-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;">
-                <input type="number" id="odido-threshold-input" class="input-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;">
-                <input type="number" id="odido-lead-time-input" class="input-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;">
+                <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;">
+                <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token (auto-fetches User ID)" style="margin-bottom:12px;">
+                <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;">
+                <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;">
+                <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;">
                 <div style="text-align:right;">
-                    <button onclick="saveOdidoConfig()" class="btn secondary">Save Configuration</button>
+                    <button onclick="saveOdidoConfig()" class="btn btn-tonal">Save Configuration</button>
                 </div>
-                <div id="odido-config-status" style="margin-top:10px; font-size:0.85rem; color:var(--p);"></div>
+                <div id="odido-config-status" class="feedback info"></div>
             </div>
         </div>
 
@@ -1875,15 +2542,15 @@ cat >> "$DASHBOARD_FILE" <<EOF
         <div class="grid-2">
             <div class="card">
                 <h3>Upload Profile</h3>
-                <input type="text" id="prof-name" class="input-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;">
-                <textarea id="prof-conf" class="input-field sensitive" placeholder="Paste .conf content here..."></textarea>
-                <div style="text-align:right;"><button onclick="uploadProfile()" class="btn">Upload & Activate</button></div>
-                <div id="upload-status" style="margin-top:10px; font-size:0.85rem; color:var(--p);"></div>
+                <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;">
+                <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..."></textarea>
+                <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled">Upload & Activate</button></div>
+                <div id="upload-status" class="feedback info"></div>
             </div>
             <div class="card">
                 <h3>Manage Profiles</h3>
                 <div id="profile-list">Loading...</div>
-                <p style="font-size:0.8rem; color:#888; margin-top:16px;">Click name to activate.</p>
+                <p class="body-small" style="color:var(--md-sys-color-on-surface-variant); margin-top:16px;">Click name to activate.</p>
             </div>
         </div>
 
@@ -1891,27 +2558,28 @@ cat >> "$DASHBOARD_FILE" <<EOF
         <div class="grid-2">
             <div class="card">
                 <h3>Gluetun (Frontend Proxy)</h3>
-                <div class="stat-row"><span>Status</span><span class="stat-val" id="vpn-status">--</span></div>
-                <div class="stat-row"><span>Active Profile</span><span class="stat-val active-prof" id="vpn-active">--</span></div>
-                <div class="stat-row"><span>VPN Endpoint</span><span class="stat-val sensitive" id="vpn-endpoint">--</span></div>
-                <div class="stat-row"><span>Public IP</span><span class="stat-val sensitive" id="vpn-public-ip">--</span></div>
-                <div class="stat-row"><span>Last Handshake</span><span class="stat-val" id="vpn-handshake">--</span></div>
-                <div class="stat-row"><span>Data (RX / TX)</span><span class="stat-val"><span id="vpn-rx">0</span> / <span id="vpn-tx">0</span></span></div>
+                <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value" id="vpn-status">--</span></div>
+                <div class="stat-row"><span class="stat-label">Active Profile</span><span class="stat-value success" id="vpn-active">--</span></div>
+                <div class="stat-row"><span class="stat-label">VPN Endpoint</span><span class="stat-value sensitive" id="vpn-endpoint">--</span></div>
+                <div class="stat-row"><span class="stat-label">Public IP</span><span class="stat-value sensitive" id="vpn-public-ip">--</span></div>
+                <div class="stat-row"><span class="stat-label">Connection</span><span class="stat-value" id="vpn-connection">--</span></div>
+                <div class="stat-row"><span class="stat-label">Session Data</span><span class="stat-value"><span id="vpn-session-rx">0 B</span> ↓ / <span id="vpn-session-tx">0 B</span> ↑</span></div>
+                <div class="stat-row"><span class="stat-label">Total Data</span><span class="stat-value"><span id="vpn-total-rx">0 B</span> ↓ / <span id="vpn-total-tx">0 B</span> ↑</span></div>
             </div>
             <div class="card">
                 <h3>WG-Easy (External Access)</h3>
-                <div class="stat-row"><span>Service Status</span><span class="stat-val" id="wge-status">--</span></div>
-                <div class="stat-row"><span>External IP</span><span class="stat-val sensitive" id="wge-host">--</span></div>
-                <div class="stat-row"><span>UDP Port</span><span class="stat-val">51820</span></div>
-                <div class="stat-row"><span>Total Clients</span><span class="stat-val" id="wge-clients">--</span></div>
-                <div class="stat-row"><span>Connected Now</span><span class="stat-val" id="wge-connected">--</span></div>
+                <div class="stat-row"><span class="stat-label">Service Status</span><span class="stat-value" id="wge-status">--</span></div>
+                <div class="stat-row"><span class="stat-label">External IP</span><span class="stat-value sensitive" id="wge-host">--</span></div>
+                <div class="stat-row"><span class="stat-label">UDP Port</span><span class="stat-value">51820</span></div>
+                <div class="stat-row"><span class="stat-label">Total Clients</span><span class="stat-value" id="wge-clients">--</span></div>
+                <div class="stat-row"><span class="stat-label">Connected Now</span><span class="stat-value" id="wge-connected">--</span></div>
             </div>
         </div>
         <div class="grid">
             <div class="card full-width">
                 <h3>Deployment History</h3>
-                <div id="log-container" class="log-box sensitive"></div>
-                <div id="log-status" style="font-size:0.8rem; color:var(--s); text-align:right; margin-top:5px;">Connecting...</div>
+                <div id="log-container" class="log-container sensitive"></div>
+                <div id="log-status" class="body-small" style="color:var(--md-sys-color-on-surface-variant); text-align:right; margin-top:8px;">Connecting...</div>
             </div>
         </div>
     </div>
@@ -1919,7 +2587,31 @@ cat >> "$DASHBOARD_FILE" <<EOF
     <script>
         const API = "/api";
         const ODIDO_API = "http://$LAN_IP:8085/api";
-        let odidoApiKey = localStorage.getItem('odido_api_key') || '';
+        const PORTAINER_URL = "http://$LAN_IP:$PORT_PORTAINER";
+        const DEFAULT_ODIDO_API_KEY = "$ODIDO_API_KEY";
+        let odidoApiKey = localStorage.getItem('odido_api_key') || DEFAULT_ODIDO_API_KEY;
+        let containerIds = {};
+        
+        async function fetchContainerIds() {
+            try {
+                const res = await fetch(\`\${API}/containers\`);
+                const data = await res.json();
+                containerIds = data.containers || {};
+                // Update all portainer links
+                document.querySelectorAll('.portainer-link').forEach(el => {
+                    const containerName = el.dataset.container;
+                    if (containerIds[containerName]) {
+                        el.onclick = (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.open(\`\${PORTAINER_URL}/#!/2/docker/containers/\${containerIds[containerName]}\`, '_blank');
+                        };
+                        el.style.cursor = 'pointer';
+                        el.title = \`Manage \${containerName} in Portainer\`;
+                    }
+                });
+            } catch(e) { console.error('Container fetch error:', e); }
+        }
         
         async function fetchStatus() {
             try {
@@ -1929,24 +2621,31 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const vpnStatus = document.getElementById('vpn-status');
                 if (g.status === "up" && g.healthy) {
                     vpnStatus.textContent = "Connected (Healthy)";
-                    vpnStatus.style.color = "var(--ok)";
+                    vpnStatus.className = "stat-value success";
                 } else if (g.status === "up") {
                     vpnStatus.textContent = "Connected";
-                    vpnStatus.style.color = "var(--ok)";
+                    vpnStatus.className = "stat-value success";
                 } else {
                     vpnStatus.textContent = "Disconnected";
-                    vpnStatus.style.color = "var(--err)";
+                    vpnStatus.className = "stat-value error";
                 }
                 document.getElementById('vpn-active').textContent = g.active_profile || "Unknown";
                 document.getElementById('vpn-endpoint').textContent = g.endpoint || "--";
                 document.getElementById('vpn-public-ip').textContent = g.public_ip || "--";
-                document.getElementById('vpn-handshake').textContent = g.handshake_ago || "Never";
-                document.getElementById('vpn-rx').textContent = formatBytes(g.rx);
-                document.getElementById('vpn-tx').textContent = formatBytes(g.tx);
+                document.getElementById('vpn-connection').textContent = g.handshake_ago || "Never";
+                document.getElementById('vpn-session-rx').textContent = formatBytes(g.session_rx || 0);
+                document.getElementById('vpn-session-tx').textContent = formatBytes(g.session_tx || 0);
+                document.getElementById('vpn-total-rx').textContent = formatBytes(g.total_rx || 0);
+                document.getElementById('vpn-total-tx').textContent = formatBytes(g.total_tx || 0);
                 const w = data.wgeasy;
                 const wgeStat = document.getElementById('wge-status');
-                wgeStat.textContent = (w.status === "up") ? "Running" : "Stopped";
-                wgeStat.style.color = (w.status === "up") ? "var(--ok)" : "var(--err)";
+                if (w.status === "up") {
+                    wgeStat.textContent = "Running";
+                    wgeStat.className = "stat-value success";
+                } else {
+                    wgeStat.textContent = "Stopped";
+                    wgeStat.className = "stat-value error";
+                }
                 document.getElementById('wge-host').textContent = w.host || "--";
                 document.getElementById('wge-clients').textContent = w.clients || "0";
                 const wgeConnected = document.getElementById('wge-connected');
@@ -1993,12 +2692,12 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 document.getElementById('odido-rate').textContent = \`\${rate.toFixed(3)} MB/min\`;
                 const apiStatus = document.getElementById('odido-api-status');
                 apiStatus.textContent = hasOdidoCreds ? 'Connected' : 'Not configured';
-                apiStatus.style.color = hasOdidoCreds ? 'var(--ok)' : 'var(--warn)';
+                apiStatus.style.color = hasOdidoCreds ? 'var(--md-sys-color-success)' : 'var(--md-sys-color-warning)';
                 const maxData = config.bundle_size_mb || 1024;
                 const percent = Math.min(100, (remaining / maxData) * 100);
                 const bar = document.getElementById('odido-bar');
                 bar.style.width = \`\${percent}%\`;
-                bar.className = 'data-bar-fill';
+                bar.className = 'progress-indicator';
                 if (remaining < threshold) bar.classList.add('critical');
                 else if (remaining < threshold * 2) bar.classList.add('low');
             } catch(e) {
@@ -2140,10 +2839,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 el.innerHTML = '';
                 data.profiles.forEach(p => {
                     const row = document.createElement('div');
-                    row.className = 'profile-row';
+                    row.className = 'list-item';
                     row.innerHTML = \`
-                        <span class="profile-name" onclick="activateProfile('\${p}')">\${p}</span>
-                        <button class="btn del" onclick="deleteProfile('\${p}')" title="Delete">
+                        <span class="list-item-text" onclick="activateProfile('\${p}')">\${p}</span>
+                        <button class="btn btn-icon" onclick="deleteProfile('\${p}')" title="Delete">
                            <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                         </button>\`;
                     el.appendChild(row);
@@ -2185,13 +2884,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const evtSource = new EventSource(\`\${API}/events\`);
             evtSource.onmessage = function(e) {
                 const div = document.createElement('div');
-                div.className = 'log-line';
+                div.className = 'log-entry';
                 div.textContent = e.data;
                 el.appendChild(div);
                 el.scrollTop = el.scrollHeight;
             };
-            evtSource.onopen = function() { status.textContent = "Live"; status.style.color = "var(--ok)"; };
-            evtSource.onerror = function() { status.textContent = "Reconnecting..."; status.style.color = "var(--err)"; evtSource.close(); setTimeout(startLogStream, 3000); };
+            evtSource.onopen = function() { status.textContent = "Live"; status.style.color = "var(--md-sys-color-success)"; };
+            evtSource.onerror = function() { status.textContent = "Reconnecting..."; status.style.color = "var(--md-sys-color-error)"; evtSource.close(); setTimeout(startLogStream, 3000); };
         }
         
         function formatBytes(a,b=2){if(!+a)return"0 B";const c=0>b?0:b,d=Math.floor(Math.log(a)/Math.log(1024));return\`\${parseFloat((a/Math.pow(1024,d)).toFixed(c))} \${["B","KiB","MiB","GiB","TiB"][d]}\`}
@@ -2219,12 +2918,24 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
         
         document.addEventListener('DOMContentLoaded', () => {
+            // Pre-populate Odido API key from deployment
+            if (DEFAULT_ODIDO_API_KEY && !localStorage.getItem('odido_api_key')) {
+                localStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
+                odidoApiKey = DEFAULT_ODIDO_API_KEY;
+            }
+            const apiKeyInput = document.getElementById('odido-api-key');
+            if (apiKeyInput && odidoApiKey) {
+                apiKeyInput.value = odidoApiKey;
+            }
+            
             initPrivacyMode();
+            fetchContainerIds();
             fetchStatus(); fetchProfiles(); fetchOdidoStatus(); startLogStream();
             setInterval(fetchStatus, 5000);
             setInterval(fetchOdidoStatus, 30000);
+            setInterval(fetchContainerIds, 60000);
             document.querySelectorAll('.card[data-check="true"]').forEach(c => {
-                const url = c.href; const dot = c.querySelector('.dot'); const txt = c.querySelector('.status-text');
+                const url = c.href; const dot = c.querySelector('.status-dot'); const txt = c.querySelector('.status-text');
                 fetch(url, { mode: 'no-cors', cache: 'no-store' })
                     .then(() => { dot.classList.add('up'); dot.classList.remove('down'); txt.textContent = "Online"; })
                     .catch(() => { dot.classList.add('down'); dot.classList.remove('up'); txt.textContent = "Offline"; });
