@@ -330,6 +330,33 @@ LAN_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+\.\d+\.\d+\.\d+' | grep -v '^
 PUBLIC_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ifconfig.me || echo "$LAN_IP")
 echo "$PUBLIC_IP" > "$CURRENT_IP_FILE"
 
+# --- 4a. IPTABLES/NETFILTER SAFETY ---
+log_info "Verifying iptables/NAT support for port publishing..."
+NETFILTER_MODULES=(br_netfilter ip_tables iptable_nat nf_nat nf_conntrack xt_MASQUERADE)
+for mod in "${NETFILTER_MODULES[@]}"; do
+    if ! lsmod | awk '{print $1}' | grep -q "^${mod}$"; then
+        sudo modprobe "$mod" 2>/dev/null && log_info "  loaded $mod" || log_warn "  could not load $mod (may be built-in)"
+    fi
+done
+sudo sysctl -w net.bridge.bridge-nf-call-iptables=1 net.bridge.bridge-nf-call-ip6tables=1 >/dev/null 2>&1 || true
+sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+
+NETFILTER_TEST_CHAIN="zima_netfilter_test"
+NETFILTER_OK=true
+if sudo iptables -t nat -N "$NETFILTER_TEST_CHAIN" 2>/dev/null || sudo iptables -t nat -F "$NETFILTER_TEST_CHAIN" 2>/dev/null; then
+    if ! sudo iptables -t nat -A "$NETFILTER_TEST_CHAIN" -s "$DOCKER_SUBNET" -j MASQUERADE >/dev/null 2>&1; then
+        NETFILTER_OK=false
+    fi
+    sudo iptables -t nat -F "$NETFILTER_TEST_CHAIN" >/dev/null 2>&1 || true
+    sudo iptables -t nat -X "$NETFILTER_TEST_CHAIN" >/dev/null 2>&1 || true
+fi
+
+if [ "$NETFILTER_OK" = false ]; then
+    log_crit "Host iptables backend rejected NAT rules (check br_netfilter/xt_MASQUERADE support)."
+    log_crit "Try switching to iptables-legacy or enabling bridge netfilter, then rerun the script."
+    exit 1
+fi
+
 # --- 5. AUTHENTICATION & SECRETS ---
 if [ ! -f "$BASE_DIR/.secrets" ]; then
     echo "========================================"
@@ -435,6 +462,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     fi
     
     log_info "Generating Secrets..."
+    ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
     sudo docker pull -q ghcr.io/wg-easy/wg-easy:latest > /dev/null
     HASH_OUTPUT=$(sudo docker run --rm ghcr.io/wg-easy/wg-easy wgpw "$VPN_PASS_RAW")
     WG_HASH_CLEAN=$(echo "$HASH_OUTPUT" | grep -oP "(?<=PASSWORD_HASH=')[^']+")
@@ -454,9 +482,14 @@ SCRIBE_GH_USER=$SCRIBE_GH_USER
 SCRIBE_GH_TOKEN=$SCRIBE_GH_TOKEN
 ODIDO_USER_ID=$ODIDO_USER_ID
 ODIDO_TOKEN=$ODIDO_TOKEN
+ODIDO_API_KEY=$ODIDO_API_KEY
 EOF
 else
     source "$BASE_DIR/.secrets"
+    if [ -z "${ODIDO_API_KEY:-}" ]; then
+        ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+        echo "ODIDO_API_KEY=$ODIDO_API_KEY" >> "$BASE_DIR/.secrets"
+    fi
     AGH_USER="adguard"
 fi
 
@@ -581,7 +614,6 @@ SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 
 ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
 IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
 IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
-ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
 
 # --- 8. PORT CONFIGURATION ---
 PORT_INT_REDLIB=8080; PORT_INT_WIKILESS=8180; PORT_INT_INVIDIOUS=3000
@@ -598,6 +630,13 @@ log_info "Generating Service Configs..."
 
 # DNS & Certificate Setup
 log_info "Setting up DNS and certificates..."
+
+# Track which certificate is active for UI messaging
+CERT_SOURCE="self_signed"
+CERT_HOST="$LAN_IP"
+CERT_BADGE_LABEL="Local self-signed"
+CERT_BADGE_CLASS="warning"
+CERT_IMPLICATION="Browsers will warn on HTTPS; trust this cert locally to use encrypted DNS (DoH/DoT)."
 
 if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     log_info "deSEC domain provided: $DESEC_DOMAIN"
@@ -621,9 +660,10 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     
     log_info "Attempting Let's Encrypt certificate..."
     CERT_SUCCESS=false
-    
+    CERT_LOG_FILE="$AGH_CONF_DIR/certbot/last_run.log"
+
     # Request Let's Encrypt certificate via DNS-01 challenge
-    sudo docker run --rm \
+    CERT_OUTPUT=$(sudo docker run --rm \
         -v "$AGH_CONF_DIR:/acme" \
         -e "DESEC_Token=$DESEC_TOKEN" \
         -e "DEDYN_TOKEN=$DESEC_TOKEN" \
@@ -639,17 +679,37 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
         --server letsencrypt \
         --home /acme \
         --config-home /acme \
-        --cert-home /acme/certs 2>&1 && CERT_SUCCESS=true || true
-    
+        --cert-home /acme/certs 2>&1) && CERT_SUCCESS=true || CERT_SUCCESS=false
+    echo "$CERT_OUTPUT" > "$CERT_LOG_FILE"
+
     if [ "$CERT_SUCCESS" = true ] && [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]; then
         cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
         cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
         log_info "Let's Encrypt certificate installed successfully!"
+        log_info "Certificate log saved to $CERT_LOG_FILE"
+        CERT_SOURCE="letsencrypt"
     elif [ "$CERT_SUCCESS" = true ] && [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" ]; then
         cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
         cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
         log_info "Let's Encrypt certificate installed successfully!"
+        log_info "Certificate log saved to $CERT_LOG_FILE"
+        CERT_SOURCE="letsencrypt"
     else
+        RETRY_TIME=$(echo "$CERT_OUTPUT" | grep -oiE 'retry after [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]+ UTC' | head -1 | sed 's/retry after //I')
+        if [ -n "$RETRY_TIME" ]; then
+            RETRY_EPOCH=$(date -u -d "$RETRY_TIME" +%s 2>/dev/null || echo "")
+            NOW_EPOCH=$(date -u +%s)
+            if [ -n "$RETRY_EPOCH" ] && [ "$RETRY_EPOCH" -gt "$NOW_EPOCH" ] 2>/dev/null; then
+                SECS_LEFT=$((RETRY_EPOCH - NOW_EPOCH))
+                HRS_LEFT=$((SECS_LEFT / 3600))
+                MINS_LEFT=$(((SECS_LEFT % 3600) / 60))
+                log_warn "Let's Encrypt rate limited. Retry after $RETRY_TIME (~${HRS_LEFT}h ${MINS_LEFT}m)."
+            else
+                log_warn "Let's Encrypt rate limited. Retry after $RETRY_TIME."
+            fi
+        else
+            log_warn "Let's Encrypt failed (see $CERT_LOG_FILE)."
+        fi
         log_warn "Let's Encrypt failed, generating self-signed certificate..."
         sudo docker run --rm \
             -v "$AGH_CONF_DIR:/certs" \
@@ -663,9 +723,10 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
             "
         log_info "Generated self-signed certificate for $DESEC_DOMAIN"
     fi
-    
+
     DNS_SERVER_NAME="$DESEC_DOMAIN"
-    
+    CERT_HOST="$DESEC_DOMAIN"
+
     if [ -f "$AGH_CONF_DIR/ssl.crt" ] && [ -f "$AGH_CONF_DIR/ssl.key" ]; then
         log_info "SSL certificate ready for $DESEC_DOMAIN"
     else
@@ -683,6 +744,25 @@ else
     
     log_info "Self-signed certificate generated"
     DNS_SERVER_NAME="$LAN_IP"
+fi
+
+if [ "$CERT_SOURCE" = "letsencrypt" ]; then
+    CERT_BADGE_LABEL="Let's Encrypt (deSEC)"
+    CERT_BADGE_CLASS="success"
+    CERT_IMPLICATION="Publicly trusted certificate for $CERT_HOST; encrypted DNS should work without warnings."
+elif [ -n "$DESEC_DOMAIN" ]; then
+    CERT_BADGE_LABEL="deSEC domain (self-signed)"
+    CERT_BADGE_CLASS="warning"
+    CERT_IMPLICATION="Using a locally generated certificate for $CERT_HOST. Browsers will warn until it is trusted on your devices."
+fi
+
+MOBILE_CERT_NOTE="⚠ Local self-signed certificate (expect warnings until trusted)"
+MOBILE_CERT_COLOR="var(--md-sys-color-warning)"
+if [ "$CERT_SOURCE" = "letsencrypt" ]; then
+    MOBILE_CERT_NOTE="✓ Valid Let's Encrypt certificate (no warnings)"
+    MOBILE_CERT_COLOR="var(--md-sys-color-success)"
+elif [ -n "$DESEC_DOMAIN" ]; then
+    MOBILE_CERT_NOTE="⚠ Using a local certificate for $CERT_HOST (trust it on devices to silence warnings)"
 fi
 
 UNBOUND_STATIC_IP="172.${FOUND_OCTET}.0.250"
@@ -1716,10 +1796,20 @@ services:
         PUB_ENV: production
         PUB_DISABLE_ALL_EXTERNAL_REQUESTS: "true"
         PUB_DISABLE_FAILURE_BLOCKS: "true"
-        PUB_VERTD_URL: http://$LAN_IP:$PORT_VERTD
+        PUB_VERTD_URL: http://vertd:$PORT_INT_VERTD
         PUB_DONATION_URL: ""
         PUB_STRIPE_KEY: ""
         PUB_DISABLE_DONATIONS: "true"
+    environment:
+      - PUB_HOSTNAME=$LAN_IP:$PORT_VERT
+      - PUB_PLAUSIBLE_URL=
+      - PUB_ENV=production
+      - PUB_DISABLE_ALL_EXTERNAL_REQUESTS=true
+      - PUB_DISABLE_FAILURE_BLOCKS=true
+      - PUB_VERTD_URL=http://vertd:$PORT_INT_VERTD
+      - PUB_DONATION_URL=
+      - PUB_STRIPE_KEY=
+      - PUB_DISABLE_DONATIONS=true
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_VERT:$PORT_INT_VERT"]
     labels:
@@ -1762,10 +1852,10 @@ cat > "$DASHBOARD_FILE" <<EOF
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZimaOS Privacy Hub</title>
-    <!-- Google Sans Flex from cdn.fontlay.com, Cascadia Code from Google Fonts -->
+    <!-- All fonts fetched via cdn.fontlay.com -->
     <link href="https://cdn.fontlay.com/google-sans-flex/css/google-sans-flex.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Cascadia+Code:wght@400;500;600&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet">
+    <link href="https://cdn.fontlay.com/cascadia-code/css/cascadia-code.css" rel="stylesheet">
+    <link href="https://cdn.fontlay.com/material-symbols-rounded/css/material-symbols-rounded.css" rel="stylesheet">
     <style>
         /* ============================================
            Material 3 Dark Theme - Strict Implementation
@@ -2019,15 +2109,44 @@ cat > "$DASHBOARD_FILE" <<EOF
             color: var(--md-sys-color-on-secondary-container);
             border: none;
         }
-        
+
         .chip.tertiary {
             background: var(--md-sys-color-tertiary-container);
             color: var(--md-sys-color-on-tertiary-container);
             border: none;
         }
-        
+
+        .chip.success {
+            background: var(--md-sys-color-success-container);
+            color: var(--md-sys-color-on-success);
+            border: none;
+        }
+
+        .chip.warning {
+            background: color-mix(in srgb, var(--md-sys-color-warning) 18%, transparent);
+            color: var(--md-sys-color-warning);
+            border: 1px solid color-mix(in srgb, var(--md-sys-color-warning) 35%, transparent);
+        }
+
         a.chip { cursor: pointer; }
-        
+
+        .cert-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 4px 0 10px 0;
+        }
+
+        .cert-chip { padding: 4px 12px; }
+
+        .cert-note {
+            margin: 0;
+            font-size: 12px;
+            color: var(--md-sys-color-on-surface-variant);
+            line-height: 1.4;
+        }
+
         /* Status Indicator */
         .status-indicator {
             display: inline-flex;
@@ -2337,68 +2456,61 @@ cat > "$DASHBOARD_FILE" <<EOF
             padding: 8px 0;
             margin-left: auto;
         }
-        
+
         .switch-label {
             font-size: 14px;
-            font-weight: 500;
+            font-weight: 600;
             letter-spacing: 0.1px;
             color: var(--md-sys-color-on-surface);
             cursor: pointer;
             user-select: none;
         }
-        
+
         .switch-track {
             position: relative;
             width: 52px;
             height: 32px;
-            background: var(--md-sys-color-surface-container-highest);
+            background: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
             border: 2px solid var(--md-sys-color-outline);
-            border-radius: 16px;
+            border-radius: 999px;
             cursor: pointer;
-            transition: all 200ms cubic-bezier(0.2, 0, 0, 1);
+            transition: background var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized),
+                        border-color var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
         }
-        
+
         .switch-track::after {
             content: '';
             position: absolute;
             top: 50%;
-            left: 8px;
+            left: 6px;
             transform: translateY(-50%);
-            width: 16px;
-            height: 16px;
-            background: var(--md-sys-color-outline);
+            width: 18px;
+            height: 18px;
+            background: var(--md-sys-color-surface);
             border-radius: 50%;
-            transition: all 200ms cubic-bezier(0.2, 0, 0, 1);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
         }
-        
+
         .switch-track:hover {
             border-color: var(--md-sys-color-on-surface);
         }
-        
+
         .switch-track:hover::after {
-            background: var(--md-sys-color-on-surface-variant);
+            background: var(--md-sys-color-surface-container-highest);
         }
-        
+
         .switch-track.active {
             background: var(--md-sys-color-primary);
             border-color: var(--md-sys-color-primary);
         }
-        
+
         .switch-track.active::after {
-            left: calc(100% - 32px);
-            width: 24px;
-            height: 24px;
+            left: calc(100% - 26px);
+            width: 22px;
+            height: 22px;
             background: var(--md-sys-color-on-primary);
-        }
-        
-        .switch-track.active:hover {
-            background: var(--md-sys-color-primary);
-            border-color: var(--md-sys-color-primary);
-        }
-        
-        .switch-track.active:hover::after {
-            background: var(--md-sys-color-primary-container);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
         }
         
         .sensitive { transition: filter var(--md-sys-motion-duration-medium), opacity var(--md-sys-motion-duration-medium); }
@@ -2419,6 +2531,10 @@ cat > "$DASHBOARD_FILE" <<EOF
         .feedback.success { color: var(--md-sys-color-success); }
         .feedback.error { color: var(--md-sys-color-error); }
         .feedback.info { color: var(--md-sys-color-primary); }
+
+        .profile-card { display: flex; flex-direction: column; gap: 12px; }
+        .profile-card #profile-list { flex: 1; }
+        .profile-hint { color: var(--md-sys-color-on-surface-variant); margin-top: auto; }
         
         /* Material Icons */
         .material-symbols-rounded { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
@@ -2466,6 +2582,10 @@ cat > "$DASHBOARD_FILE" <<EOF
             <div class="card">
                 <h3>Device DNS Settings</h3>
                 <p class="body-medium" style="color:var(--md-sys-color-on-surface-variant); margin-bottom:16px;">Configure your devices to use this DNS server:</p>
+                <div class="cert-status">
+                    <span class="chip cert-chip $CERT_BADGE_CLASS">$CERT_BADGE_LABEL</span>
+                    <p class="cert-note">$CERT_IMPLICATION</p>
+                </div>
                 <div class="code-label">Plain DNS</div>
                 <div class="code-block sensitive">$LAN_IP:53</div>
 EOF
@@ -2488,7 +2608,7 @@ if [ -n "$DESEC_DOMAIN" ]; then
                     <li>Set Private DNS to:</li>
                 </ol>
                 <div class="code-block sensitive" style="margin-left:20px;">$DESEC_DOMAIN</div>
-                <p class="body-small" style="color:var(--md-sys-color-success); margin-top:12px;">✓ Valid Let's Encrypt certificate (no warnings)</p>
+                <p class="body-small" style="color:$MOBILE_CERT_COLOR; margin-top:12px;">$MOBILE_CERT_NOTE</p>
             </div>
 EOF
 else
@@ -2564,10 +2684,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled">Upload & Activate</button></div>
                 <div id="upload-status" class="feedback info"></div>
             </div>
-            <div class="card">
+            <div class="card profile-card">
                 <h3>Manage Profiles</h3>
                 <div id="profile-list">Loading...</div>
-                <p class="body-small" style="color:var(--md-sys-color-on-surface-variant); margin-top:16px;">Click name to activate.</p>
+                <p class="body-small profile-hint">Click name to activate.</p>
             </div>
         </div>
 
@@ -2608,7 +2728,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
         const ODIDO_API = "http://$LAN_IP:8085/api";
         const PORTAINER_URL = "http://$LAN_IP:$PORT_PORTAINER";
         const DEFAULT_ODIDO_API_KEY = "$ODIDO_API_KEY";
-        let odidoApiKey = localStorage.getItem('odido_api_key') || DEFAULT_ODIDO_API_KEY;
+        let storedOdidoKey = localStorage.getItem('odido_api_key');
+        // Ensure the dashboard always uses the latest deployment key
+        if (DEFAULT_ODIDO_API_KEY && storedOdidoKey && storedOdidoKey !== DEFAULT_ODIDO_API_KEY) {
+            localStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
+            storedOdidoKey = DEFAULT_ODIDO_API_KEY;
+        }
+        let odidoApiKey = storedOdidoKey || DEFAULT_ODIDO_API_KEY;
         let containerIds = {};
         
         async function fetchContainerIds() {
@@ -2635,6 +2761,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         // Store real profile name for privacy mode masking
         let realProfileName = '';
         let maskedProfileId = '';
+        const profileMaskMap = {};
         
         function generateRandomId() {
             const chars = 'abcdef0123456789';
@@ -2654,6 +2781,22 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 vpnActive.textContent = realProfileName;
                 vpnActive.classList.remove('sensitive-masked');
             }
+            updateProfileListDisplay();
+        }
+
+        function getProfileLabel(name) {
+            const isPrivate = document.body.classList.contains('privacy-mode');
+            if (!isPrivate) return name;
+            if (!profileMaskMap[name]) profileMaskMap[name] = generateRandomId();
+            return profileMaskMap[name];
+        }
+
+        function updateProfileListDisplay() {
+            const items = document.querySelectorAll('#profile-list .list-item-text');
+            items.forEach((item) => {
+                const realName = item.dataset.realName;
+                if (realName) item.textContent = getProfileLabel(realName);
+            });
         }
         
         async function fetchStatus() {
@@ -2891,16 +3034,26 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 data.profiles.forEach(p => {
                     const row = document.createElement('div');
                     row.className = 'list-item';
-                    row.innerHTML = \`
-                        <span class="list-item-text" onclick="activateProfile('\${p}')">\${p}</span>
-                        <button class="btn btn-icon" onclick="deleteProfile('\${p}')" title="Delete">
-                           <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                        </button>\`;
+
+                    const name = document.createElement('span');
+                    name.className = 'list-item-text';
+                    name.dataset.realName = p;
+                    name.textContent = getProfileLabel(p);
+                    name.onclick = () => activateProfile(p);
+
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'btn btn-icon';
+                    delBtn.title = 'Delete';
+                    delBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+                    delBtn.onclick = () => deleteProfile(p);
+
+                    row.appendChild(name);
+                    row.appendChild(delBtn);
                     el.appendChild(row);
                 });
+                updateProfileListDisplay();
             } catch(e) {}
         }
-        
         async function uploadProfile() {
             const nameInput = document.getElementById('prof-name').value;
             const config = document.getElementById('prof-conf').value;
@@ -3065,9 +3218,6 @@ sudo modprobe tun || true
 
 sudo env DOCKER_CONFIG="$BASE_DIR/.docker" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
 
-echo "[+] Waiting for AdGuard to start..."
-sleep 10
-
 if sudo docker ps | grep -q adguard; then
     log_info "AdGuard container is running"
     sleep 5
@@ -3081,15 +3231,13 @@ if sudo docker ps | grep -q adguard; then
     else
         log_warn "AdGuard configuration file not found in container"
     fi
-else
-    log_warn "AdGuard container not running - please check logs"
 fi
 
 echo "[+] Cleaning up unused images..."
 sudo docker image prune -af
 
 echo "=========================================================="
-echo "DEPLOYMENT COMPLETE V3.9"
+echo "DEPLOYMENT COMPLETE V3.9.2"
 echo "=========================================================="
 echo "ACCESS DASHBOARD:"
 echo "http://$LAN_IP:$PORT_DASHBOARD_WEB"
@@ -3147,9 +3295,5 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo ""
     echo "IMPORTANT: Save these credentials securely!"
     echo "They are also stored in: $BASE_DIR/.secrets"
-    echo ""
-    echo "NOTE: Portainer will prompt for password on first access."
-    echo "      This ensures a clean environment with -c flag."
-    echo ""
 fi
 echo "=========================================================="

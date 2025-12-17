@@ -383,6 +383,29 @@ Users → AdGuard Home (ad blocking) → Unbound (recursive) → Root DNS Server
    dig @192.168.69.206 google.com
    ```
 
+### Docker iptables/MASQUERADE errors when starting AdGuard
+
+If deployment fails with an error similar to:
+
+```
+driver failed programming external connectivity on endpoint adguard ... Unable to enable MASQUERADE rule ... iptables: Invalid argument
+```
+
+Your host kernel is blocking Docker's NAT rules for DNS ports. Fix it by enabling the required netfilter modules and, if needed, switching to the legacy iptables backend:
+
+```bash
+sudo modprobe br_netfilter ip_tables iptable_nat nf_nat nf_conntrack xt_MASQUERADE
+sudo sysctl -w net.bridge.bridge-nf-call-iptables=1 net.bridge.bridge-nf-call-ip6tables=1
+
+# If iptables-nft is missing features, switch to legacy (requires sudo/root)
+if command -v update-alternatives >/dev/null; then
+  sudo update-alternatives --set iptables /usr/sbin/iptables-legacy
+  sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+fi
+```
+
+Re-run `./zima.sh` after the modules/backend are active.
+
 ### IP Not Updating
 
 1. **Check monitor script**:
@@ -407,7 +430,13 @@ Users → AdGuard Home (ad blocking) → Unbound (recursive) → Root DNS Server
    ls -la /DATA/AppData/privacy-hub/config/adguard/ssl.*
    ```
 
-2. **Regenerate certificates**:
+2. **Inspect the last ACME run for errors (including rate limits)**:
+   ```bash
+   cat /DATA/AppData/privacy-hub/config/adguard/certbot/last_run.log
+   ```
+   The deployment script now surfaces the "retry after" timestamp from Let's Encrypt so you know exactly how long you must wait before requesting another certificate.
+
+3. **Regenerate certificates**:
    - Run `./zima.sh -c` to do a clean deployment
 
 ## License
@@ -456,7 +485,7 @@ Since [odido-aap](https://github.com/ink-splatters/odido-aap) requires an iPhone
 ### Configuration via Dashboard
 
 After deployment, you can configure the Odido Bundle Booster via the web dashboard:
-- **Dashboard API Key**: The API key shown after deployment (required for authentication)
+- **Dashboard API Key**: The API key shown after deployment (required for authentication). It is now persisted in `/DATA/AppData/privacy-hub/.secrets` as `ODIDO_API_KEY` and is automatically prefilled on the dashboard.
 - **Odido OAuth Token**: Enter your OAuth token and the dashboard will automatically fetch your User ID using the hub-api service
 - **Bundle Code**: Default is `A0DAY01` (2GB daily bundle), can also use `A0DAY05` (5GB daily)
 - **Threshold**: Minimum MB before auto-renewal triggers (default: 100 MB)
