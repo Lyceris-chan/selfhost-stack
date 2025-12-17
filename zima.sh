@@ -1088,15 +1088,21 @@ elif [ "$ACTION" = "status" ]; then
             ENDPOINT="$WG_CONF_ENDPOINT"
         fi
         
-        # Get current RX/TX from WireGuard and track cumulative usage
-        WG_TRANSFER=$(docker exec gluetun wg show wg0 transfer 2>/dev/null | head -1 || echo "")
+        # Get current RX/TX from /proc/net/dev (works for tun0 or wg0 interface)
+        # Format: iface: rx_bytes rx_packets ... tx_bytes tx_packets ...
+        NET_DEV=$(docker exec gluetun cat /proc/net/dev 2>/dev/null || echo "")
         CURRENT_RX="0"
         CURRENT_TX="0"
-        if [ -n "$WG_TRANSFER" ]; then
-            CURRENT_RX=$(echo "$WG_TRANSFER" | awk '{print $2}' 2>/dev/null || echo "0")
-            CURRENT_TX=$(echo "$WG_TRANSFER" | awk '{print $3}' 2>/dev/null || echo "0")
-            case "$CURRENT_RX" in ''|*[!0-9]*) CURRENT_RX="0" ;; esac
-            case "$CURRENT_TX" in ''|*[!0-9]*) CURRENT_TX="0" ;; esac
+        if [ -n "$NET_DEV" ]; then
+            # Try tun0 first (OpenVPN), then wg0 (WireGuard)
+            VPN_LINE=$(echo "$NET_DEV" | grep -E "^\s*(tun0|wg0):" | head -1 || echo "")
+            if [ -n "$VPN_LINE" ]; then
+                # Extract RX bytes (field 2) and TX bytes (field 10)
+                CURRENT_RX=$(echo "$VPN_LINE" | awk '{print $2}' 2>/dev/null || echo "0")
+                CURRENT_TX=$(echo "$VPN_LINE" | awk '{print $10}' 2>/dev/null || echo "0")
+                case "$CURRENT_RX" in ''|*[!0-9]*) CURRENT_RX="0" ;; esac
+                case "$CURRENT_TX" in ''|*[!0-9]*) CURRENT_TX="0" ;; esac
+            fi
         fi
         
         # Load previous values and calculate cumulative total
@@ -1756,6 +1762,7 @@ services:
     container_name: vertd
     image: ghcr.io/vert-sh/vertd:latest
     networks: [frontnet]
+    ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
     # Intel GPU support
     devices:
       - /dev/dri
@@ -1775,7 +1782,7 @@ services:
         PUB_ENV: production
         PUB_DISABLE_ALL_EXTERNAL_REQUESTS: "true"
         PUB_DISABLE_FAILURE_BLOCKS: "true"
-        PUB_VERTD_URL: http://vertd:$PORT_INT_VERTD
+        PUB_VERTD_URL: http://$LAN_IP:$PORT_VERTD
         PUB_DONATION_URL: ""
         PUB_STRIPE_KEY: ""
     networks: [frontnet]
