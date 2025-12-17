@@ -407,7 +407,13 @@ Users → AdGuard Home (ad blocking) → Unbound (recursive) → Root DNS Server
    ls -la /DATA/AppData/privacy-hub/config/adguard/ssl.*
    ```
 
-2. **Regenerate certificates**:
+2. **Inspect the last ACME run for errors (including rate limits)**:
+   ```bash
+   cat /DATA/AppData/privacy-hub/config/adguard/certbot/last_run.log
+   ```
+   The deployment script now surfaces the "retry after" timestamp from Let's Encrypt so you know exactly how long you must wait before requesting another certificate.
+
+3. **Regenerate certificates**:
    - Run `./zima.sh -c` to do a clean deployment
 
 ## License
@@ -456,7 +462,7 @@ Since [odido-aap](https://github.com/ink-splatters/odido-aap) requires an iPhone
 ### Configuration via Dashboard
 
 After deployment, you can configure the Odido Bundle Booster via the web dashboard:
-- **Dashboard API Key**: The API key shown after deployment (required for authentication)
+- **Dashboard API Key**: The API key shown after deployment (required for authentication). It is now persisted in `/DATA/AppData/privacy-hub/.secrets` as `ODIDO_API_KEY` and is automatically prefilled on the dashboard.
 - **Odido OAuth Token**: Enter your OAuth token and the dashboard will automatically fetch your User ID using the hub-api service
 - **Bundle Code**: Default is `A0DAY01` (2GB daily bundle), can also use `A0DAY05` (5GB daily)
 - **Threshold**: Minimum MB before auto-renewal triggers (default: 100 MB)
