@@ -61,15 +61,6 @@ log_info() { echo -e "\e[34m[INFO]\e[0m $1"; }
 log_warn() { echo -e "\e[33m[WARN]\e[0m $1"; }
 log_crit() { echo -e "\e[31m[CRIT]\e[0m $1"; }
 
-detect_conflict_markers() {
-    if grep -qE '^(<<<<<<<|=======|>>>>>>> )' "$0"; then
-        log_crit "Detected unresolved merge conflict markers in $0. Please resolve them before running."
-        exit 1
-    fi
-}
-
-detect_conflict_markers
-
 # --- 2. CLEANUP FUNCTION ---
 ask_confirm() {
     if [ "$FORCE_CLEAN" = true ]; then return 0; fi
