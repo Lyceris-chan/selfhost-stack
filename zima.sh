@@ -2062,3 +2062,94 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     if (isTrusted && domain) {
                         el.href = "https://" + info.sub + "." + domain + ":8443/";
                     } else {
+EXISTING_CRON=$(crontab -l 2>/dev/null || true)
+echo "$EXISTING_CRON" | grep -v "$CERT_MONITOR_SCRIPT" | { cat; echo "*/5 * * * * $CERT_MONITOR_SCRIPT"; } | crontab -
+
+# --- SECTION 15.1: DYNAMIC IP AUTOMATION ---
+# Detect public IP changes and synchronize DNS records and VPN endpoints.
+cat > "$MONITOR_SCRIPT" <<EOF
+#!/usr/bin/env bash
+COMPOSE_FILE="$COMPOSE_FILE"
+CURRENT_IP_FILE="$CURRENT_IP_FILE"
+LOG_FILE="$IP_LOG_FILE"
+LOCK_FILE="$BASE_DIR/.ip-monitor.lock"
+DESEC_DOMAIN="$DESEC_MONITOR_DOMAIN"
+DESEC_TOKEN="$DESEC_MONITOR_TOKEN"
+DOCKER_CONFIG="$DOCKER_AUTH_DIR"
+export DOCKER_CONFIG
+EOF
+
+cat >> "$MONITOR_SCRIPT" <<'EOF'
+# Use flock to prevent concurrent runs
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    exit 0
+fi
+
+NEW_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ifconfig.me || echo "FAILED")
+
+if [[ ! "$NEW_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "$(date) [ERROR] Failed to get valid public IP (Response: $NEW_IP)" >> "$LOG_FILE"
+    exit 1
+fi
+
+OLD_IP=$(cat "$CURRENT_IP_FILE" 2>/dev/null || echo "")
+
+if [ "$NEW_IP" != "$OLD_IP" ]; then
+    echo "$(date) [INFO] IP Change detected: $OLD_IP -> $NEW_IP" >> "$LOG_FILE"
+    echo "$NEW_IP" > "$CURRENT_IP_FILE"
+    
+    if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
+        echo "$(date) [INFO] Updating deSEC DNS record for $DESEC_DOMAIN..." >> "$LOG_FILE"
+        DESEC_RESPONSE=$(curl -s -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
+            -H "Authorization: Token $DESEC_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$NEW_IP\"]}]" 2>&1 || echo "CURL_ERROR")
+        
+        NEW_IP_ESCAPED=$(echo "$NEW_IP" | sed 's/\./\\./g')
+        if [[ "$DESEC_RESPONSE" == "CURL_ERROR" ]]; then
+            echo "$(date) [ERROR] Failed to communicate with deSEC API" >> "$LOG_FILE"
+        elif [ -z "$DESEC_RESPONSE" ] || echo "$DESEC_RESPONSE" | grep -qE "(${NEW_IP_ESCAPED}|\[\]|\"records\")" ; then
+            echo "$(date) [INFO] deSEC DNS updated successfully to $NEW_IP" >> "$LOG_FILE"
+        else
+            echo "$(date) [WARN] deSEC DNS update may have failed: $DESEC_RESPONSE" >> "$LOG_FILE"
+        fi
+    fi
+    
+    sed -i "s|WG_HOST=.*|WG_HOST=$NEW_IP|g" "$COMPOSE_FILE"
+    docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate wg-easy
+    echo "$(date) [INFO] WireGuard container restarted with new IP" >> "$LOG_FILE"
+fi
+EOF
+chmod +x "$MONITOR_SCRIPT"
+CRON_CMD="*/5 * * * * $MONITOR_SCRIPT"
+EXISTING_CRON=$(crontab -l 2>/dev/null || true)
+echo "$EXISTING_CRON" | grep -v "$MONITOR_SCRIPT" | { cat; echo "$CRON_CMD"; } | crontab -
+
+# --- SECTION 16: STACK ORCHESTRATION & DEPLOYMENT ---
+# Execute system deployment and verify global infrastructure integrity.
+check_iptables() {
+    log_info "Verifying iptables rules..."
+    if sudo iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null && \
+       sudo iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null && \
+       sudo iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
+        log_info "iptables rules for wg-easy are correctly set up."
+    else
+        log_warn "iptables rules for wg-easy may not be correctly set up."
+        log_warn "Please check your firewall settings if you experience connectivity issues."
+    fi
+}
+
+echo "=========================================================="
+echo "RUNNING SYSTEM DEPLOYMENT"
+echo "=========================================================="
+sudo modprobe tun || true
+
+sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
+
+if $DOCKER_CMD ps | grep -q adguard; then
+    log_info "AdGuard container is running"
+    sleep 5
+    if curl -s --max-time 5 "http://$LAN_IP:$PORT_ADGUARD_WEB" > /dev/null; then
+        log_info "AdGuard web interface is accessible"
+    else
