@@ -294,10 +294,10 @@ clean_environment
 
 mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR/unbound" "$AGH_CONF_DIR" "$NGINX_CONF_DIR" "$WG_PROFILES_DIR"
 
-# Initialize log files
-touch "$HISTORY_LOG" "$ACTIVE_WG_CONF"
+# Initialize log files and data files
+touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
 if [ ! -f "$ACTIVE_PROFILE_NAME_FILE" ]; then echo "Initial-Setup" > "$ACTIVE_PROFILE_NAME_FILE"; fi
-chmod 666 "$ACTIVE_PROFILE_NAME_FILE" "$HISTORY_LOG"
+chmod 666 "$ACTIVE_PROFILE_NAME_FILE" "$HISTORY_LOG" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
 
 # --- 3. DYNAMIC SUBNET ALLOCATION ---
 log_info "Allocating Private Network Subnet..."
@@ -900,6 +900,8 @@ class Scheduler:
         self.thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._first_run = True
+        self._last_sync_time = 0
+        self._sync_interval = 300  # Sync with Odido API every 5 minutes
 
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
@@ -923,7 +925,7 @@ class Scheduler:
             )
             
             if not api.is_configured:
-                logger.info("Odido API not configured - skipping initial sync")
+                logger.info("Odido API not configured - skipping sync")
                 return False
             
             logger.info("Syncing remaining data from Odido API...")
@@ -931,7 +933,9 @@ class Scheduler:
             
             # Update local state with real remaining data
             self.service.state.remaining_mb = remaining_mb
+            self.service.state.last_updated_ts = time.time()
             self.service.storage.save_state(self.service.state)
+            self._last_sync_time = time.time()
             logger.info(f"Synced remaining data: {remaining_mb} MB")
             return True
             
@@ -941,24 +945,41 @@ class Scheduler:
 
     def _run_loop(self) -> None:
         while not self._stop.is_set():
-            # On first run, sync with Odido API to get real remaining data
-            # This prevents instant bundle purchase when remaining_mb=0 (fresh state)
-            if self._first_run:
+            now = time.time()
+            
+            # On first run or every sync_interval, fetch real data from Odido API
+            should_sync = (
+                self._first_run or 
+                self.service.state.remaining_mb == 0 or
+                (now - self._last_sync_time) >= self._sync_interval
+            )
+            
+            if should_sync:
                 self._first_run = False
                 if self.service.state.remaining_mb == 0:
-                    logger.info("Fresh state detected (remaining_mb=0), syncing with Odido API before auto-renewal check...")
-                    self._sync_remaining_from_api()
+                    logger.info("Fresh/empty state detected, syncing with Odido API...")
+                else:
+                    logger.debug("Periodic sync with Odido API...")
+                self._sync_remaining_from_api()
             
             result = self.service.run_check_cycle()
             sleep_seconds = result["next_interval_minutes"] * 60
+            
+            # Ensure we sync at least every sync_interval
+            time_since_sync = now - self._last_sync_time
+            if self._last_sync_time > 0:
+                time_until_next_sync = self._sync_interval - time_since_sync
+                if time_until_next_sync > 0:
+                    sleep_seconds = min(sleep_seconds, time_until_next_sync)
+            
             reset_ts = self.service.state.next_reset_ts
-            now = time.time()
             if reset_ts:
                 until_reset = max(reset_ts - now, 0)
                 sleep_seconds = min(sleep_seconds, until_reset)
-            self._stop.wait(timeout=sleep_seconds)
+            
+            self._stop.wait(timeout=max(sleep_seconds, 60))  # Min 60s between checks
 SCHEDULEREOF
-log_info "Patched odido-bundle-booster scheduler.py to sync with Odido API before first auto-renewal"
+log_info "Patched odido-bundle-booster scheduler.py to sync with Odido API periodically (every 5 min)"
 
 mkdir -p "$SRC_DIR/redlib"
 cat > "$SRC_DIR/redlib/Dockerfile" <<EOF
@@ -973,14 +994,14 @@ HEALTHCHECK --interval=1m --timeout=3s CMD wget --spider -q http://localhost:808
 CMD ["redlib"]
 EOF
 clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert"
-# Patch VERT Dockerfile to add missing PUB_DISABLE_FAILURE_BLOCKS ARG/ENV
+# Patch VERT Dockerfile to add missing build args
 if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_DIR/vert/Dockerfile"; then
     if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_DIR/vert/Dockerfile" && grep -q "^ENV PUB_STRIPE_KEY=" "$SRC_DIR/vert/Dockerfile"; then
-        sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_FAILURE_BLOCKS' "$SRC_DIR/vert/Dockerfile"
-        sed -i '/^ENV PUB_STRIPE_KEY=\${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_FAILURE_BLOCKS=${PUB_DISABLE_FAILURE_BLOCKS}' "$SRC_DIR/vert/Dockerfile"
-        log_info "Patched VERT Dockerfile to add missing PUB_DISABLE_FAILURE_BLOCKS ARG/ENV"
+        sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_FAILURE_BLOCKS\nARG PUB_DISABLE_DONATIONS' "$SRC_DIR/vert/Dockerfile"
+        sed -i '/^ENV PUB_STRIPE_KEY=\${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_FAILURE_BLOCKS=${PUB_DISABLE_FAILURE_BLOCKS}\nENV PUB_DISABLE_DONATIONS=${PUB_DISABLE_DONATIONS}' "$SRC_DIR/vert/Dockerfile"
+        log_info "Patched VERT Dockerfile to add missing PUB_DISABLE_FAILURE_BLOCKS and PUB_DISABLE_DONATIONS ARG/ENV"
     else
-        log_warn "VERT Dockerfile structure changed - could not apply PUB_DISABLE_FAILURE_BLOCKS patch. Build may fail."
+        log_warn "VERT Dockerfile structure changed - could not apply patches. Build may fail."
     fi
 fi
 
@@ -1145,6 +1166,12 @@ DATAEOF
     WGE_CLIENTS="0"
     WGE_CONNECTED="0"
     
+    WGE_SESSION_RX="0"
+    WGE_SESSION_TX="0"
+    WGE_TOTAL_RX="0"
+    WGE_TOTAL_TX="0"
+    WGE_DATA_FILE="/app/.wge_data_usage"
+    
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^wg-easy$"; then
         WGE_STATUS="up"
         WGE_HOST=$(docker exec wg-easy printenv WG_HOST 2>/dev/null | tr -d '\n\r' || echo "Unknown")
@@ -1153,6 +1180,45 @@ DATAEOF
         if [ -n "$WG_PEER_DATA" ]; then
             WGE_CLIENTS=$(echo "$WG_PEER_DATA" | grep -c "^peer:" 2>/dev/null || echo "0")
             CONNECTED_COUNT=0
+            
+            # Calculate total RX/TX from all peers
+            WGE_CURRENT_RX=0
+            WGE_CURRENT_TX=0
+            for rx in $(echo "$WG_PEER_DATA" | grep "transfer:" | awk '{print $2}' | sed 's/[^0-9]//g' 2>/dev/null || echo ""); do
+                case "$rx" in ''|*[!0-9]*) ;; *) WGE_CURRENT_RX=$((WGE_CURRENT_RX + rx)) ;; esac
+            done
+            for tx in $(echo "$WG_PEER_DATA" | grep "transfer:" | awk '{print $4}' | sed 's/[^0-9]//g' 2>/dev/null || echo ""); do
+                case "$tx" in ''|*[!0-9]*) ;; *) WGE_CURRENT_TX=$((WGE_CURRENT_TX + tx)) ;; esac
+            done
+            
+            # Load previous values for WG-Easy
+            WGE_LAST_RX="0"
+            WGE_LAST_TX="0"
+            WGE_SAVED_TOTAL_RX="0"
+            WGE_SAVED_TOTAL_TX="0"
+            if [ -f "$WGE_DATA_FILE" ]; then
+                . "$WGE_DATA_FILE" 2>/dev/null || true
+            fi
+            
+            # Detect counter reset
+            if { [ "$WGE_CURRENT_RX" -lt "$WGE_LAST_RX" ] || [ "$WGE_CURRENT_TX" -lt "$WGE_LAST_TX" ]; } 2>/dev/null; then
+                WGE_SAVED_TOTAL_RX=$((WGE_SAVED_TOTAL_RX + WGE_LAST_RX))
+                WGE_SAVED_TOTAL_TX=$((WGE_SAVED_TOTAL_TX + WGE_LAST_TX))
+            fi
+            
+            WGE_SESSION_RX="$WGE_CURRENT_RX"
+            WGE_SESSION_TX="$WGE_CURRENT_TX"
+            WGE_TOTAL_RX=$((WGE_SAVED_TOTAL_RX + WGE_CURRENT_RX))
+            WGE_TOTAL_TX=$((WGE_SAVED_TOTAL_TX + WGE_CURRENT_TX))
+            
+            # Save state
+            cat > "$WGE_DATA_FILE" <<WGEDATAEOF
+WGE_LAST_RX=$WGE_CURRENT_RX
+WGE_LAST_TX=$WGE_CURRENT_TX
+WGE_SAVED_TOTAL_RX=$WGE_SAVED_TOTAL_RX
+WGE_SAVED_TOTAL_TX=$WGE_SAVED_TOTAL_TX
+WGEDATAEOF
+            
             for hs in $(echo "$WG_PEER_DATA" | grep "latest handshake:" | sed 's/.*latest handshake: //' | sed 's/ seconds.*//' | grep -E '^[0-9]+' 2>/dev/null || echo ""); do
                 if [ -n "$hs" ] && [ "$hs" -lt 180 ] 2>/dev/null; then
                     CONNECTED_COUNT=$((CONNECTED_COUNT + 1))
@@ -1168,9 +1234,9 @@ DATAEOF
     HANDSHAKE_AGO=$(sanitize_json_string "$HANDSHAKE_AGO")
     WGE_HOST=$(sanitize_json_string "$WGE_HOST")
     
-    printf '{"gluetun":{"status":"%s","healthy":%s,"active_profile":"%s","endpoint":"%s","public_ip":"%s","handshake_ago":"%s","session_rx":"%s","session_tx":"%s","total_rx":"%s","total_tx":"%s"},"wgeasy":{"status":"%s","host":"%s","clients":"%s","connected":"%s"}}' \
+    printf '{"gluetun":{"status":"%s","healthy":%s,"active_profile":"%s","endpoint":"%s","public_ip":"%s","handshake_ago":"%s","session_rx":"%s","session_tx":"%s","total_rx":"%s","total_tx":"%s"},"wgeasy":{"status":"%s","host":"%s","clients":"%s","connected":"%s","session_rx":"%s","session_tx":"%s","total_rx":"%s","total_tx":"%s"}}' \
         "$GLUETUN_STATUS" "$GLUETUN_HEALTHY" "$ACTIVE_NAME" "$ENDPOINT" "$PUBLIC_IP" "$HANDSHAKE_AGO" "$SESSION_RX" "$SESSION_TX" "$ALLTIME_RX" "$ALLTIME_TX" \
-        "$WGE_STATUS" "$WGE_HOST" "$WGE_CLIENTS" "$WGE_CONNECTED"
+        "$WGE_STATUS" "$WGE_HOST" "$WGE_CLIENTS" "$WGE_CONNECTED" "$WGE_SESSION_RX" "$WGE_SESSION_TX" "$WGE_TOTAL_RX" "$WGE_TOTAL_TX"
 fi
 EOF
 chmod +x "$WG_CONTROL_SCRIPT"
@@ -1275,7 +1341,9 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/event-stream')
             self.send_header('Cache-Control', 'no-cache')
+            self.send_header('Connection', 'keep-alive')
             self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('X-Accel-Buffering', 'no')
             self.end_headers()
             try:
                 for _ in range(10):
@@ -1287,14 +1355,27 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     self.wfile.flush()
                 f = open(LOG_FILE, 'r')
                 f.seek(0, 2)
+                # Send initial keepalive
+                self.wfile.write(b": keepalive\n\n")
+                self.wfile.flush()
+                keepalive_counter = 0
                 while True:
                     line = f.readline()
                     if line:
                         self.wfile.write(f"data: {line.strip()}\n\n".encode('utf-8'))
                         self.wfile.flush()
+                        keepalive_counter = 0
                     else:
                         time.sleep(1)
-            except:
+                        keepalive_counter += 1
+                        # Send keepalive comment every 15 seconds to prevent timeout
+                        if keepalive_counter >= 15:
+                            self.wfile.write(b": keepalive\n\n")
+                            self.wfile.flush()
+                            keepalive_counter = 0
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            except Exception:
                 pass
 
     def do_POST(self):
@@ -1408,7 +1489,9 @@ services:
       - "$GLUETUN_ENV_FILE:/app/gluetun.env"
       - "$COMPOSE_FILE:/app/docker-compose.yml"
       - "$HISTORY_LOG:/app/deployment.log"
-    entrypoint: ["/bin/sh", "-c", "apk add --no-cache docker-cli docker-compose && python /app/server.py"]
+      - "$BASE_DIR/.data_usage:/app/.data_usage"
+      - "$BASE_DIR/.wge_data_usage:/app/.wge_data_usage"
+    entrypoint: ["/bin/sh", "-c", "apk add --no-cache docker-cli docker-compose && touch /app/.data_usage /app/.wge_data_usage && python /app/server.py"]
     restart: unless-stopped
     deploy:
       resources:
@@ -1597,20 +1680,21 @@ services:
     command: >
       /bin/sh -c "
         echo 'Waiting for companion to be ready...';
-        for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
           if wget -qO- http://127.0.0.1:8282/companion >/dev/null 2>&1; then
             echo 'Companion is ready!';
+            sleep 5;
             exit 0;
           fi;
           echo 'Waiting... attempt' \$i;
           sleep 5;
         done;
-        echo 'Companion not ready after 60s, continuing anyway...';
+        echo 'Companion not ready after 100s, continuing anyway...';
         exit 0;
       "
     depends_on:
       gluetun: {condition: service_healthy}
-      companion: {condition: service_started}
+      companion: {condition: service_healthy}
     restart: "no"
 
   invidious:
@@ -1665,6 +1749,12 @@ services:
     network_mode: "service:gluetun"
     environment: {SERVER_SECRET_KEY: "$IV_COMPANION", SERVER_PORT: "8282"}
     volumes: ["companioncache:/var/tmp/youtubei.js:rw"]
+    healthcheck: 
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8282/companion || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     logging:
       options:
         max-size: "1G"
@@ -1749,6 +1839,8 @@ services:
     image: ghcr.io/vert-sh/vertd:latest
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
+    labels:
+      - "casaos.skip=true"
     # Intel GPU support
     devices:
       - /dev/dri
@@ -1771,8 +1863,11 @@ services:
         PUB_VERTD_URL: http://$LAN_IP:$PORT_VERTD
         PUB_DONATION_URL: ""
         PUB_STRIPE_KEY: ""
+        PUB_DISABLE_DONATIONS: "true"
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_VERT:$PORT_INT_VERT"]
+    labels:
+      - "casaos.skip=true"
     depends_on:
       vertd: {condition: service_started}
     restart: unless-stopped
@@ -1811,12 +1906,18 @@ cat > "$DASHBOARD_FILE" <<EOF
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZimaOS Privacy Hub</title>
-    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=Google+Sans+Text:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Google Sans Flex from cdn.fontlay.com, Cascadia Code from Google Fonts -->
+    <link href="https://cdn.fontlay.com/google-sans-flex/css/google-sans-flex.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cascadia+Code:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet">
     <style>
-        /* MD3 Expressive Dark Theme Color Tokens */
+        /* ============================================
+           Material 3 Dark Theme - Strict Implementation
+           Reference: https://m3.material.io/
+           ============================================ */
+        
         :root {
-            /* Primary */
+            /* M3 Dark Theme Color Tokens */
             --md-sys-color-primary: #D0BCFF;
             --md-sys-color-on-primary: #381E72;
             --md-sys-color-primary-container: #4F378B;
@@ -1877,12 +1978,12 @@ cat > "$DASHBOARD_FILE" <<EOF
             --md-sys-motion-duration-medium: 300ms;
         }
         
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         
         body {
             background: var(--md-sys-color-surface);
             color: var(--md-sys-color-on-surface);
-            font-family: 'Google Sans Text', 'Google Sans', system-ui, -apple-system, sans-serif;
+            font-family: 'Google Sans Flex', 'Google Sans', system-ui, -apple-system, sans-serif;
             margin: 0;
             padding: 24px;
             display: flex;
@@ -1890,16 +1991,17 @@ cat > "$DASHBOARD_FILE" <<EOF
             align-items: center;
             min-height: 100vh;
             line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
         }
         
         .container { max-width: 1280px; width: 100%; }
         
-        /* MD3 Typography */
+        /* MD3 Typography Scale */
         .display-large { font-size: 57px; line-height: 64px; font-weight: 400; letter-spacing: -0.25px; }
-        .display-medium { font-size: 45px; line-height: 52px; font-weight: 400; }
-        .headline-large { font-size: 32px; line-height: 40px; font-weight: 400; }
-        .headline-medium { font-size: 28px; line-height: 36px; font-weight: 400; }
-        .title-large { font-size: 22px; line-height: 28px; font-weight: 500; }
+        .display-medium { font-size: 45px; line-height: 52px; font-weight: 400; letter-spacing: 0; }
+        .headline-large { font-size: 32px; line-height: 40px; font-weight: 400; letter-spacing: 0; }
+        .headline-medium { font-size: 28px; line-height: 36px; font-weight: 400; letter-spacing: 0; }
+        .title-large { font-size: 22px; line-height: 28px; font-weight: 400; letter-spacing: 0; }
         .title-medium { font-size: 16px; line-height: 24px; font-weight: 500; letter-spacing: 0.15px; }
         .title-small { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px; }
         .body-large { font-size: 16px; line-height: 24px; font-weight: 400; letter-spacing: 0.5px; }
@@ -1911,18 +2013,18 @@ cat > "$DASHBOARD_FILE" <<EOF
         
         /* Header */
         header {
-            margin-bottom: 40px;
-            padding: 24px 0;
+            margin-bottom: 32px;
+            padding: 16px 0;
         }
         
         h1 {
-            font-family: 'Google Sans', sans-serif;
-            font-weight: 500;
+            font-family: 'Google Sans Flex', 'Google Sans', sans-serif;
+            font-weight: 400;
             font-size: 45px;
             line-height: 52px;
             margin: 0;
             color: var(--md-sys-color-primary);
-            letter-spacing: -0.5px;
+            letter-spacing: 0;
         }
         
         .subtitle {
@@ -1943,6 +2045,10 @@ cat > "$DASHBOARD_FILE" <<EOF
             margin: 48px 0 16px 4px;
         }
         
+        .section-label:first-of-type {
+            margin-top: 24px;
+        }
+        
         .section-hint {
             font-size: 12px;
             color: var(--md-sys-color-on-surface-variant);
@@ -1950,10 +2056,10 @@ cat > "$DASHBOARD_FILE" <<EOF
             letter-spacing: 0.4px;
         }
         
-        /* Grid Layouts */
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        /* Grid Layouts - MD3 spacing (16dp gap) */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
         @media (max-width: 1100px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
         @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
         @media (max-width: 600px) { body { padding: 16px; } }
@@ -2109,7 +2215,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             color: var(--md-sys-color-on-surface);
             padding: 16px;
             border-radius: var(--md-sys-shape-corner-small);
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'Cascadia Code', 'Consolas', monospace;
             font-size: 14px;
             box-sizing: border-box;
             outline: none;
@@ -2255,7 +2361,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         .stat-label { color: var(--md-sys-color-on-surface-variant); }
         
         .stat-value {
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'Cascadia Code', 'Consolas', monospace;
             color: var(--md-sys-color-primary);
             font-weight: 500;
         }
@@ -2272,7 +2378,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             padding: 16px;
             height: 320px;
             overflow-y: auto;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'Cascadia Code', 'Consolas', monospace;
             font-size: 13px;
             color: var(--md-sys-color-on-surface-variant);
         }
@@ -2297,7 +2403,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             border: 1px solid var(--md-sys-color-outline-variant);
             border-radius: var(--md-sys-shape-corner-small);
             padding: 14px 16px;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'Cascadia Code', 'Consolas', monospace;
             font-size: 13px;
             color: var(--md-sys-color-primary);
             margin: 8px 0;
@@ -2557,8 +2663,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="stat-row"><span class="stat-label">VPN Endpoint</span><span class="stat-value sensitive" id="vpn-endpoint">--</span></div>
                 <div class="stat-row"><span class="stat-label">Public IP</span><span class="stat-value sensitive" id="vpn-public-ip">--</span></div>
                 <div class="stat-row"><span class="stat-label">Connection</span><span class="stat-value" id="vpn-connection">--</span></div>
-                <div class="stat-row"><span class="stat-label">Session Data</span><span class="stat-value"><span id="vpn-session-rx">0 B</span> ↓ / <span id="vpn-session-tx">0 B</span> ↑</span></div>
-                <div class="stat-row"><span class="stat-label">Total Data</span><span class="stat-value"><span id="vpn-total-rx">0 B</span> ↓ / <span id="vpn-total-tx">0 B</span> ↑</span></div>
+                <div class="stat-row"><span class="stat-label">This Session</span><span class="stat-value"><span id="vpn-session-rx">0 B</span> ↓ / <span id="vpn-session-tx">0 B</span> ↑</span></div>
+                <div class="stat-row"><span class="stat-label">All Time</span><span class="stat-value"><span id="vpn-total-rx">0 B</span> ↓ / <span id="vpn-total-tx">0 B</span> ↑</span></div>
             </div>
             <div class="card">
                 <h3>WG-Easy (External Access)</h3>
@@ -2567,6 +2673,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="stat-row"><span class="stat-label">UDP Port</span><span class="stat-value">51820</span></div>
                 <div class="stat-row"><span class="stat-label">Total Clients</span><span class="stat-value" id="wge-clients">--</span></div>
                 <div class="stat-row"><span class="stat-label">Connected Now</span><span class="stat-value" id="wge-connected">--</span></div>
+                <div class="stat-row"><span class="stat-label">This Session</span><span class="stat-value"><span id="wge-session-rx">0 B</span> ↓ / <span id="wge-session-tx">0 B</span> ↑</span></div>
+                <div class="stat-row"><span class="stat-label">All Time</span><span class="stat-value"><span id="wge-total-rx">0 B</span> ↓ / <span id="wge-total-tx">0 B</span> ↑</span></div>
             </div>
         </div>
         <div class="grid">
@@ -2645,7 +2753,11 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const wgeConnected = document.getElementById('wge-connected');
                 const connectedCount = parseInt(w.connected) || 0;
                 wgeConnected.textContent = connectedCount > 0 ? \`\${connectedCount} active\` : "None";
-                wgeConnected.style.color = connectedCount > 0 ? "var(--ok)" : "var(--s)";
+                wgeConnected.style.color = connectedCount > 0 ? "var(--md-ext-color-success)" : "var(--md-sys-color-on-surface-variant)";
+                document.getElementById('wge-session-rx').textContent = formatBytes(w.session_rx || 0);
+                document.getElementById('wge-session-tx').textContent = formatBytes(w.session_tx || 0);
+                document.getElementById('wge-total-rx').textContent = formatBytes(w.total_rx || 0);
+                document.getElementById('wge-total-tx').textContent = formatBytes(w.total_tx || 0);
             } catch(e) { console.error('Status fetch error:', e); }
         }
         
@@ -2915,18 +3027,22 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
         
         document.addEventListener('DOMContentLoaded', () => {
-            // Pre-populate Odido API key from deployment (stored in localStorage but not shown)
+            // Pre-populate Odido API key from deployment
             if (DEFAULT_ODIDO_API_KEY && !localStorage.getItem('odido_api_key')) {
                 localStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
                 odidoApiKey = DEFAULT_ODIDO_API_KEY;
             }
-            // Do NOT pre-populate the API key input field for security reasons
+            // Pre-populate the API key input field so users can see their dashboard API key
+            const apiKeyInput = document.getElementById('odido-api-key');
+            if (apiKeyInput && odidoApiKey) {
+                apiKeyInput.value = odidoApiKey;
+            }
             
             initPrivacyMode();
             fetchContainerIds();
             fetchStatus(); fetchProfiles(); fetchOdidoStatus(); startLogStream();
             setInterval(fetchStatus, 5000);
-            setInterval(fetchOdidoStatus, 30000);
+            setInterval(fetchOdidoStatus, 60000);  // Reduced polling frequency to respect Odido API
             setInterval(fetchContainerIds, 60000);
             document.querySelectorAll('.card[data-check="true"]').forEach(c => {
                 const url = c.href; const dot = c.querySelector('.status-dot'); const txt = c.querySelector('.status-text');
