@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC1091,SC2001,SC2015,SC2034,SC2024,SC2086
+# shellcheck disable=SC1091,SC2001,SC2015,SC2016,SC2034,SC2024,SC2086
 set -euo pipefail
 
 # ==============================================================================
@@ -401,14 +401,16 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     if [ -n "$ODIDO_TOKEN" ]; then
         log_info "Fetching Odido User ID automatically..."
         # Use curl with -L to follow redirects and capture the final URL
+        # Note: curl may fail on network issues, so we use || true to prevent script exit
         ODIDO_REDIRECT_URL=$(curl -sL -o /dev/null -w '%{url_effective}' \
             -H "Authorization: Bearer $ODIDO_TOKEN" \
             -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
-            "https://capi.odido.nl/account/current" 2>/dev/null)
+            "https://capi.odido.nl/account/current" 2>/dev/null || true)
         
         # Extract User ID from URL path - it's a 12-character hex string after capi.odido.nl/
         # Format: https://capi.odido.nl/{12-char-hex-userid}/account/...
-        ODIDO_USER_ID=$(echo "$ODIDO_REDIRECT_URL" | grep -oiE 'capi\.odido\.nl/[0-9a-f]{12}' | sed 's|capi\.odido\.nl/||i' | head -1)
+        # Note: grep may not find a match, so we use || true to prevent pipeline failure with set -euo pipefail
+        ODIDO_USER_ID=$(echo "$ODIDO_REDIRECT_URL" | grep -oiE 'capi\.odido\.nl/[0-9a-f]{12}' | sed 's|capi\.odido\.nl/||I' | head -1 || true)
         
         # Fallback: try to extract first path segment if hex pattern doesn't match
         if [ -z "$ODIDO_USER_ID" ]; then
@@ -979,22 +981,6 @@ if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_DIR/vert/Dockerfile"; then
         log_info "Patched VERT Dockerfile to add missing PUB_DISABLE_FAILURE_BLOCKS ARG/ENV"
     else
         log_warn "VERT Dockerfile structure changed - could not apply PUB_DISABLE_FAILURE_BLOCKS patch. Build may fail."
-    fi
-fi
-
-# Patch VERT layout to suppress insecure context warning when PUB_DISABLE_FAILURE_BLOCKS is set
-# This allows local HTTP deployments without the annoying toast
-VERT_LAYOUT="$SRC_DIR/vert/src/routes/+layout.svelte"
-if [ -f "$VERT_LAYOUT" ]; then
-    # Add import for PUB_DISABLE_FAILURE_BLOCKS if not already imported
-    if ! grep -q "PUB_DISABLE_FAILURE_BLOCKS" "$VERT_LAYOUT"; then
-        sed -i 's|import { PUB_PLAUSIBLE_URL, PUB_HOSTNAME }|import { PUB_PLAUSIBLE_URL, PUB_HOSTNAME, PUB_DISABLE_FAILURE_BLOCKS }|g' "$VERT_LAYOUT"
-        log_info "Added PUB_DISABLE_FAILURE_BLOCKS import to VERT layout"
-    fi
-    # Modify the insecure context check to skip toast when PUB_DISABLE_FAILURE_BLOCKS is true
-    if grep -q 'if (!window.isSecureContext) {' "$VERT_LAYOUT"; then
-        sed -i 's|if (!window.isSecureContext) {|if (!window.isSecureContext \&\& PUB_DISABLE_FAILURE_BLOCKS !== "true") {|g' "$VERT_LAYOUT"
-        log_info "Patched VERT layout to suppress insecure context warning when PUB_DISABLE_FAILURE_BLOCKS is set"
     fi
 fi
 
