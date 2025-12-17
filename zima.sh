@@ -208,6 +208,326 @@ setup_fonts() {
         done
     done
     cd - >/dev/null
+    
+    log_info "Fonts setup complete (Separate files retained for reliability)."
+}
+
+check_docker_rate_limit() {
+    log_info "Checking if Docker Hub is going to throttle you..."
+    # Export DOCKER_CONFIG globally
+    export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
+    
+    if ! output=$(sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker pull hello-world 2>&1); then
+        if echo "$output" | grep -iaE "toomanyrequests|rate.*limit|pull.*limit|reached.*limit" >/dev/null; then
+            log_crit "Docker Hub Rate Limit Reached! They want you to log in."
+            # We already tried to auth at start, but maybe it failed or they skipped?
+            # Or maybe they want to try a different account now.
+            if ! authenticate_registries; then
+                exit 1
+            fi
+        else
+            log_warn "Docker pull check failed. We'll proceed, but don't be surprised if image pulls fail later."
+        fi
+    else
+        log_info "Docker Hub connection is fine."
+    fi
+}
+
+clean_environment() {
+    echo "=========================================================="
+    echo "🛡️  ENVIRONMENT CHECK & CLEANUP"
+    echo "=========================================================="
+    
+    check_docker_rate_limit
+
+    if [ "$FORCE_CLEAN" = true ]; then
+        log_warn "NUCLEAR CLEANUP ENABLED (-c): We're wiping EVERYTHING. Hope you have backups."
+    fi
+
+    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe vert vertd"
+    
+    FOUND_CONTAINERS=""
+    for c in $TARGET_CONTAINERS; do
+        if $DOCKER_CMD ps -a --format '{{.Names}}' | grep -q "^${c}$"; then
+            FOUND_CONTAINERS="$FOUND_CONTAINERS $c"
+        fi
+    done
+
+    if [ -n "$FOUND_CONTAINERS" ]; then
+        if ask_confirm "Want to remove existing containers?"; then
+            $DOCKER_CMD rm -f $FOUND_CONTAINERS 2>/dev/null || true
+            log_info "Old containers removed."
+        fi
+    fi
+
+    CONFLICT_NETS=$($DOCKER_CMD network ls --format '{{.Name}}' | grep -E '(privacy-hub_frontnet|privacyhub_frontnet|privacy-hub_default|privacyhub_default)' || true)
+    if [ -n "$CONFLICT_NETS" ]; then
+        if ask_confirm "Remove network conflicts?"; then
+            for net in $CONFLICT_NETS; do
+                log_info "  Removing junk network: $net"
+                $DOCKER_CMD network rm "$net" 2>/dev/null || true
+            done
+        fi
+    fi
+
+    if [ -d "$BASE_DIR" ] || $DOCKER_CMD volume ls -q | grep -q "portainer"; then
+        if ask_confirm "Wipe ALL data? (This resets your logins and configs. This is your last warning.)"; then
+            log_info "Clearing out the BASE_DIR..."
+            if [ -d "$BASE_DIR" ]; then
+                sudo rm -f "$BASE_DIR/.secrets" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/.current_public_ip" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/.active_profile_name" 2>/dev/null || true
+                sudo rm -rf "$BASE_DIR/config" 2>/dev/null || true
+                sudo rm -rf "$BASE_DIR/env" 2>/dev/null || true
+                sudo rm -rf "$BASE_DIR/sources" 2>/dev/null || true
+                sudo rm -rf "$BASE_DIR/wg-profiles" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/active-wg.conf" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/wg-ip-monitor.sh" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/wg-control.sh" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/wg-api.sh" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/wg-ip-monitor.log" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
+                sudo rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
+                sudo rm -rf "$BASE_DIR" 2>/dev/null || true
+            fi
+            # Remove volumes - try both unprefixed and prefixed names (docker compose uses project prefix)
+            for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
+                $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
+                $DOCKER_CMD volume rm -f "${APP_NAME}_${vol}" 2>/dev/null || true
+            done
+            log_info "Data and volumes wiped."
+        fi
+    fi
+    
+    if [ "$FORCE_CLEAN" = true ]; then
+        log_warn "RESTORE SYSTEM: Returning your machine to its original state..."
+        echo ""
+        
+        # ============================================================
+        # PHASE 1: Stop all containers to release locks
+        # ============================================================
+        log_info "Phase 1: Killing containers..."
+        for c in $TARGET_CONTAINERS; do
+            if $DOCKER_CMD ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${c}$"; then
+                log_info "  Stopping: $c"
+                $DOCKER_CMD stop "$c" 2>/dev/null || true
+            fi
+        done
+        sleep 3
+        
+        # ============================================================
+        # PHASE 2: Remove all containers
+        # ============================================================
+        log_info "Phase 2: Removing containers..."
+        REMOVED_CONTAINERS=""
+        for c in $TARGET_CONTAINERS; do
+            if $DOCKER_CMD ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${c}$"; then
+                log_info "  Removing: $c"
+                $DOCKER_CMD rm -f "$c" 2>/dev/null || true
+                REMOVED_CONTAINERS="${REMOVED_CONTAINERS}$c "
+            fi
+        done
+        
+        # ============================================================
+        # PHASE 3: Remove ALL volumes (list everything, match patterns)
+        # ============================================================
+        log_info "Phase 3: Removing volumes..."
+        REMOVED_VOLUMES=""
+        ALL_VOLUMES=$($DOCKER_CMD volume ls -q 2>/dev/null || echo "")
+        for vol in $ALL_VOLUMES; do
+            case "$vol" in
+                # Match exact names
+                portainer-data|adguard-work|redis-data|postgresdata|wg-config|companioncache|odido-data)
+                    log_info "  Removing volume: $vol"
+                    $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
+                    REMOVED_VOLUMES="${REMOVED_VOLUMES}$vol "
+                    ;;
+                # Match prefixed names (docker compose project prefix)
+                privacy-hub_*|privacyhub_*)
+                    log_info "  Removing volume: $vol"
+                    $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
+                    REMOVED_VOLUMES="${REMOVED_VOLUMES}$vol "
+                    ;;
+                # Match any volume containing our identifiers
+                *portainer*|*adguard*|*redis*|*postgres*|*wg-config*|*companion*|*odido*)
+                    log_info "  Removing volume: $vol"
+                    $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
+                    REMOVED_VOLUMES="${REMOVED_VOLUMES}$vol "
+                    ;;
+            esac
+        done
+        
+        # ============================================================
+        # PHASE 4: Remove ALL networks created by this deployment
+        # ============================================================
+        log_info "Phase 4: Removing networks..."
+        REMOVED_NETWORKS=""
+        ALL_NETWORKS=$($DOCKER_CMD network ls --format '{{.Name}}' 2>/dev/null || echo "")
+        for net in $ALL_NETWORKS; do
+            case "$net" in
+                # Skip default Docker networks
+                bridge|host|none) continue ;;
+                # Match our networks
+                privacy-hub_*|privacyhub_*|*frontnet*)
+                    log_info "  Removing network: $net"
+                    $DOCKER_CMD network rm "$net" 2>/dev/null || true
+                    REMOVED_NETWORKS="${REMOVED_NETWORKS}$net "
+                    ;;
+            esac
+        done
+        
+        # ============================================================
+        # PHASE 5: Remove ALL images built/pulled by this deployment
+        # ============================================================
+        log_info "Phase 5: Removing images..."
+        REMOVED_IMAGES=""
+        # Remove images by known names
+        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome nginx:alpine dhi.io/nginx:alpine portainer/portainer-ce containrrr/watchtower python:3.11-alpine dhi.io/python:3.11-alpine ghcr.io/wg-easy/wg-easy redis:8-alpine dhi.io/redis:8-alpine quay.io/invidious/invidious quay.io/invidious/invidious-companion docker.io/library/postgres:14 dhi.io/postgres:14 ghcr.io/zyachel/libremdb codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine dhi.io/httpd:alpine alpine:latest dhi.io/alpine:latest neilpang/acme.sh"
+        for img in $KNOWN_IMAGES; do
+            if $DOCKER_CMD images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -q "$img"; then
+                log_info "  Removing: $img"
+                $DOCKER_CMD rmi -f "$img" 2>/dev/null || true
+                REMOVED_IMAGES="${REMOVED_IMAGES}$img "
+            fi
+        done
+        # Remove locally built images
+        ALL_IMAGES=$($DOCKER_CMD images --format '{{.Repository}}:{{.Tag}} {{.ID}}' 2>/dev/null || echo "")
+        echo "$ALL_IMAGES" | while read -r img_info; do
+            img_name=$(echo "$img_info" | awk '{print $1}')
+            img_id=$(echo "$img_info" | awk '{print $2}')
+            case "$img_name" in
+                *privacy-hub*|*privacyhub*|*odido*|*redlib*|*wikiless*|*scribe*|*vert*|*invidious*|*sources_*)
+                    log_info "  Removing local build: $img_name"
+                    $DOCKER_CMD rmi -f "$img_id" 2>/dev/null || true
+                    # Note: We can't easily append to REMOVED_IMAGES inside a subshell/pipe loop
+                    # but the main ones are captured above.
+                    ;;
+                "<none>:<none>")
+                    # Remove dangling images
+                    $DOCKER_CMD rmi -f "$img_id" 2>/dev/null || true
+                    ;;
+            esac
+        done
+        
+        # ============================================================
+        # PHASE 6: Remove ALL data directories and files
+        # ============================================================
+        log_info "Phase 6: Removing data directories..."
+        
+        # Main data directory
+        if [ -d "$BASE_DIR" ]; then
+            log_info "  Removing: $BASE_DIR"
+            sudo rm -rf "$BASE_DIR"
+        fi
+        
+        # Alternative locations that might have been created
+        if [ -d "/DATA/AppData/privacy-hub" ]; then
+            log_info "  Removing alternative path: /DATA/AppData/privacy-hub"
+            sudo rm -rf "/DATA/AppData/privacy-hub"
+        fi
+        
+        # ============================================================
+        # PHASE 7: Remove cron jobs added by this script
+        # ============================================================
+        log_info "Phase 7: Removing cron jobs..."
+        EXISTING_CRON=$(crontab -l 2>/dev/null || true)
+        REMOVED_CRONS=""
+        if echo "$EXISTING_CRON" | grep -q "wg-ip-monitor"; then REMOVED_CRONS="${REMOVED_CRONS}wg-ip-monitor "; fi
+        if echo "$EXISTING_CRON" | grep -q "cert-monitor"; then REMOVED_CRONS="${REMOVED_CRONS}cert-monitor "; fi
+        
+        if [ -n "$REMOVED_CRONS" ]; then
+            log_info "  Clearing cron: $REMOVED_CRONS"
+            echo "$EXISTING_CRON" | grep -v "wg-ip-monitor" | grep -v "cert-monitor" | grep -v "privacy-hub" | crontab - 2>/dev/null || true
+        fi
+        
+        # ============================================================
+        # PHASE 8: Docker system cleanup
+        # ============================================================
+        log_info "Phase 8: Docker system cleanup..."
+        # $DOCKER_CMD volume prune -f 2>/dev/null || true
+        # $DOCKER_CMD network prune -f 2>/dev/null || true
+        $DOCKER_CMD image prune -af 2>/dev/null || true
+        $DOCKER_CMD builder prune -af 2>/dev/null || true
+        $DOCKER_CMD system prune -f 2>/dev/null || true
+        
+       
+        # ============================================================
+        # PHASE 9: Reset iptables rules
+        # ============================================================
+        log_info "Phase 9: Resetting iptables..."
+        sudo iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
+        sudo iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
+        sudo iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
+        
+        echo ""
+        log_info "============================================================"
+        log_info "RESTORE COMPLETE"
+        log_info "============================================================"
+        log_info "The following garbage has been taken out:"
+        log_info "  ✓ Containers: ${REMOVED_CONTAINERS:-none}"
+        log_info "  ✓ Volumes: ${REMOVED_VOLUMES:-none}"
+        log_info "  ✓ Networks: ${REMOVED_NETWORKS:-none}"
+        log_info "  ✓ Images: ${REMOVED_IMAGES:-none}"
+        log_info "  ✓ Configs and secrets"
+        log_info "  ✓ Data directories ($BASE_DIR)"
+        log_info "  ✓ Cron jobs: ${REMOVED_CRONS:-none}"
+        log_info "  ✓ Iptables rules"
+        log_info ""
+        log_info "Your system is back to normal."
+        log_info "============================================================"
+    fi
+}
+
+# Authenticate to registries (DHI & Docker Hub)
+authenticate_registries
+
+# Run cleanup
+clean_environment
+
+# Ensure authentication works by pulling critical utility images now
+log_info "Pre-pulling ALL deployment images to avoid rate limits..."
+# Explicitly pull images used by 'docker run' commands later in the script
+# These images are small but critical for password generation and setup
+CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:alpine portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine ghcr.io/wg-easy/wg-easy dhi.io/redis:8-alpine quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14 ghcr.io/zyachel/libremdb codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert dhi.io/httpd:alpine dhi.io/alpine:latest dhi.io/alpine:3.19 dhi.io/node:16-alpine 84codes/crystal:1.8.1-alpine node:25.2-alpine3.21 dhi.io/nginx:stable-alpine oven/bun:latest neilpang/acme.sh"
+
+for img in $CRITICAL_IMAGES; do
+    if ! $DOCKER_CMD pull "$img"; then
+        log_warn "Failed to pull $img. You might be hitting rate limits."
+        if authenticate_docker_hub; then
+             # Retry once
+             if ! $DOCKER_CMD pull "$img"; then
+                 log_crit "Failed to pull $img even after login. Exiting."
+                 exit 1
+             fi
+        else
+             log_crit "Authentication failed or cancelled. Exiting."
+             exit 1
+        fi
+    fi
+done
+
+mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR/unbound" "$AGH_CONF_DIR" "$NGINX_CONF_DIR" "$WG_PROFILES_DIR"
+
+setup_fonts
+
+# Initialize log files and data files
+touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
+if [ ! -f "$ACTIVE_PROFILE_NAME_FILE" ]; then echo "Initial-Setup" > "$ACTIVE_PROFILE_NAME_FILE"; fi
+chmod 666 "$ACTIVE_PROFILE_NAME_FILE" "$HISTORY_LOG" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
+
+# --- SECTION 3: DYNAMIC SUBNET ALLOCATION ---
+# Automatically identify and assign a free bridge subnet to prevent network conflicts.
+log_info "Allocating Private Network Subnet..."
+
+FOUND_SUBNET=""
+FOUND_OCTET=""
+
+for i in {20..30}; do
+    TEST_SUBNET="172.$i.0.0/16"
+    TEST_NET_NAME="probe_net_$i"
+    if $DOCKER_CMD network create --subnet="$TEST_SUBNET" "$TEST_NET_NAME" >/dev/null 2>&1; then
 echo "=========================================================="
 
 # WireGuard Configuration Validation
