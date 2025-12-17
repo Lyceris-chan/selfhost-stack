@@ -1094,7 +1094,7 @@ elif [ "$ACTION" = "status" ]; then
         fi
         
         # Detect counter reset (container restart) - current < last means reset
-        if [ "$CURRENT_RX" -lt "$LAST_RX" ] 2>/dev/null || [ "$CURRENT_TX" -lt "$LAST_TX" ] 2>/dev/null; then
+        if { [ "$CURRENT_RX" -lt "$LAST_RX" ] || [ "$CURRENT_TX" -lt "$LAST_TX" ]; } 2>/dev/null; then
             # Counter reset detected - add last values to total before reset
             TOTAL_RX=$((TOTAL_RX + LAST_RX))
             TOTAL_TX=$((TOTAL_TX + LAST_TX))
@@ -2546,7 +2546,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
         const API = "/api";
         const ODIDO_API = "http://$LAN_IP:8085/api";
         const PORTAINER_URL = "http://$LAN_IP:$PORT_PORTAINER";
-        let odidoApiKey = localStorage.getItem('odido_api_key') || '';
+        const DEFAULT_ODIDO_API_KEY = "$ODIDO_API_KEY";
+        let odidoApiKey = localStorage.getItem('odido_api_key') || DEFAULT_ODIDO_API_KEY;
         let containerIds = {};
         
         async function fetchContainerIds() {
@@ -2875,6 +2876,16 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
         
         document.addEventListener('DOMContentLoaded', () => {
+            // Pre-populate Odido API key from deployment
+            if (DEFAULT_ODIDO_API_KEY && !localStorage.getItem('odido_api_key')) {
+                localStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
+                odidoApiKey = DEFAULT_ODIDO_API_KEY;
+            }
+            const apiKeyInput = document.getElementById('odido-api-key');
+            if (apiKeyInput && odidoApiKey) {
+                apiKeyInput.value = odidoApiKey;
+            }
+            
             initPrivacyMode();
             fetchContainerIds();
             fetchStatus(); fetchProfiles(); fetchOdidoStatus(); startLogStream();
