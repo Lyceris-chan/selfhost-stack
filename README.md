@@ -58,3 +58,93 @@ We support **Encrypted Client Hello (ECH)**. It shields your metadata, ensuring 
 ### Standard Setup: ISP Router Only
 If you just have the standard router your ISP gave you, you only need to do one thing:
 1.  **Forward port 51820/UDP** to your ZimaOS machine's local IP.
+This is the only open door. As explained in the [Security Model](#-security-audit--privacy-standards), this port is cryptographically silent and does not increase your attack surface.
+
+### Local "Home" Mode: DNS Rewrites
+When you're at home, you shouldn't have to bounce traffic off a satellite just to see your own dashboard. 
+- **How it works**: AdGuard Home uses **DNS Rewrites**. When your device asks for `yourdomain.dedyn.io`, it's given the local LAN IP (`192.168.1.100`) instead of your public IP.
+- **The Result**: You get to use your SSL certificate and local speeds without needing a VPN tunnel.
+
+## 📡 Advanced Setup: OpenWrt & Double NAT
+
+If you're running a real router like OpenWrt behind your ISP modem, you are in a **Double NAT** situation. This means your data has to pass through two layers of address translation before reaching your machine. You need to fix the routing so your packets actually arrive.
+
+### 1. OpenWrt: Static IP Assignment (DHCP Lease)
+Assign a static lease so your Privacy Hub doesn't wander off to a different IP every time the power cycles.
+1.  Navigate to **Network** → **DHCP and DNS** → **Static Leases**.
+2.  Click **Add**. **Hostname**: `ZimaOS-Privacy-Hub`. **IPv4-Address**: `192.168.1.100`.
+3.  **Save & Apply**.
+
+<details>
+<summary>💻 CLI: UCI Commands for Static Lease</summary>
+
+```bash
+# Add the static lease (Replace MAC and IP with your own hardware's values)
+uci add dhcp host
+uci set dhcp.@host[-1].name='ZimaOS-Privacy-Hub'
+uci set dhcp.@host[-1].dns='1'
+uci set dhcp.@host[-1].mac='00:11:22:33:44:55' # <--- REPLACE THIS WITH YOUR MAC
+uci set dhcp.@host[-1].ip='192.168.1.100'      # <--- REPLACE THIS WITH YOUR DESIRED IP
+uci commit dhcp
+/etc/init.d/dnsmasq restart
+```
+</details>
+
+### 2. OpenWrt: Port Forwarding & Firewall
+OpenWrt is the gatekeeper. Point the traffic to your machine and then actually open the door.
+1.  **Port Forwarding (DNAT)**: Points the internet request to your ZimaOS.
+2.  **Traffic Rules**: Explicitly tells the firewall that this traffic is allowed.
+
+<details>
+<summary>💻 CLI: UCI Commands for Firewall (Port Forward + Traffic Rule)</summary>
+
+```bash
+# 1. Add Port Forwarding (Replace dest_ip with your ZimaOS machine's IP)
+uci add firewall redirect
+uci set firewall.@redirect[-1].name='Forward-WireGuard'
+uci set firewall.@redirect[-1].src='wan'
+uci set firewall.@redirect[-1].proto='udp'
+uci set firewall.@redirect[-1].src_dport='51820'
+uci set firewall.@redirect[-1].dest_ip='192.168.1.100' # <--- REPLACE THIS WITH YOUR IP
+uci set firewall.@redirect[-1].dest_port='51820'
+uci set firewall.@redirect[-1].target='DNAT'
+
+# 2. Add Traffic Rule (Allowance)
+uci add firewall rule
+uci set firewall.@rule[-1].name='Allow-WireGuard-Inbound'
+uci set firewall.@rule[-1].src='wan'
+uci set firewall.@rule[-1].proto='udp'
+uci set firewall.@rule[-1].dest_port='51820'
+uci set firewall.@rule[-1].target='ACCEPT'
+
+# Apply the changes
+uci commit firewall
+/etc/init.d/firewall restart
+```
+</details>
+
+### 3. ISP Modem: Primary Port Forward
+You have to forward the entry point to your OpenWrt router first.
+- **Forward**: `51820/UDP` → **OpenWrt WAN IP**.
+- This completes the chain of custody for your data: `Internet` → `ISP Modem` → `OpenWrt` → `ZimaOS`.
+
+## 📡 Remote Access: Taking Your Network With You
+
+Privacy Hub isn't just for your house; it's a portable security boundary. Using **WG-Easy (WireGuard)**, you can route all your traffic back through your ZimaOS from anywhere.
+
+### Bandwidth-Optimized Split Tunneling
+By default, we use **Split Tunneling**. This means only your private traffic and DNS go through the tunnel. 
+
+VPN companies love to scare you into thinking your ISP seeing your data is a disaster. It's 2025. [Over 95% of web traffic is HTTPS encrypted](https://transparencyreport.google.com/https/overview). Your ISP can see you're connected to an IP, but they can't see what's inside the packet. HTTPS already took care of that.
+
+The **real leak** is DNS. If you don't own your DNS, your ISP logs every domain you visit. By using split tunneling:
+- **Efficiency**: Your heavy, already-encrypted traffic (Netflix, updates) goes direct. You save bandwidth and don't lag.
+- **Privacy**: Your DNS is still forced through AdGuard Home and Unbound. Your "phonebook" requests are never seen or sold.
+
+### Why use WireGuard for Remote Access?
+- **Public Wi-Fi Safety**: Don't trust the airport Wi-Fi. Encrypt your DNS and internal traffic.
+- **Accessing Local Services**: Use internal IPs (like `http://192.168.1.100:8081`) as if you were at home.
+- **Seamless Domain Access (dedyn.io)**: Your hostnames (see [Service Access](#-service-access--port-reference)) resolve correctly over the VPN, allowing you to use SSL certificates globally.
+
+## 🛡️ Security Audit & Privacy Standards
+
