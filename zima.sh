@@ -1598,7 +1598,7 @@ services:
       /bin/sh -c "
         echo 'Waiting for companion to be ready...';
         for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
-          if wget -qO- http://127.0.0.1:8282/ >/dev/null 2>&1; then
+          if wget -qO- http://127.0.0.1:8282/companion >/dev/null 2>&1; then
             echo 'Companion is ready!';
             exit 0;
           fi;
@@ -1954,6 +1954,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
         .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        @media (max-width: 1100px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
         @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
         @media (max-width: 600px) { body { padding: 16px; } }
         
@@ -1971,6 +1972,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             min-height: 140px;
             border: none;
             overflow: hidden;
+            box-sizing: border-box;
         }
         
         .card::before {
@@ -1998,6 +2000,9 @@ cat > "$DASHBOARD_FILE" <<EOF
             font-weight: 500;
             color: var(--md-sys-color-on-surface);
             line-height: 28px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         
         .card h3 {
@@ -2007,6 +2012,9 @@ cat > "$DASHBOARD_FILE" <<EOF
             color: var(--md-sys-color-on-surface);
             line-height: 24px;
             letter-spacing: 0.15px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         
         /* MD3 Assist Chips */
@@ -2410,7 +2418,7 @@ cat > "$DASHBOARD_FILE" <<EOF
 
         <div class="section-label">Privacy Services</div>
         <div class="section-hint">🔒 VPN Routed &nbsp;•&nbsp; 📍 Direct &nbsp;•&nbsp; Click chip to manage in Portainer</div>
-        <div class="grid">
+        <div class="grid-3">
             <a href="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true" data-container="invidious"><h2>Invidious</h2><div class="chip-box"><span class="chip vpn portainer-link" data-container="invidious">🔒 VPN</span></div><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Checking...</span></div></a>
             <a href="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib"><h2>Redlib</h2><div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib">🔒 VPN</span></div><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Checking...</span></div></a>
             <a href="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true" data-container="wikiless"><h2>Wikiless</h2><div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless">🔒 VPN</span></div><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Checking...</span></div></a>
@@ -2590,7 +2598,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         el.onclick = (e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            window.open(\`\${PORTAINER_URL}/#!/2/docker/containers/\${containerIds[containerName]}\`, '_blank');
+                            window.open(\`\${PORTAINER_URL}/#!/1/docker/containers/\${containerIds[containerName]}\`, '_blank');
                         };
                         el.style.cursor = 'pointer';
                         el.title = \`Manage \${containerName} in Portainer\`;
@@ -2671,14 +2679,17 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const rate = data.consumption_rate_mb_per_min || 0;
                 const bundleCode = config.bundle_code || 'A0DAY01';
                 const hasOdidoCreds = config.odido_user_id && config.odido_token;
+                // Also consider as "connected" if we have real data from the API
+                const hasRealData = remaining > 0 || state.last_updated_ts;
+                const isConfigured = hasOdidoCreds || hasRealData;
                 document.getElementById('odido-remaining').textContent = \`\${Math.round(remaining)} MB\`;
                 document.getElementById('odido-bundle-code').textContent = bundleCode;
                 document.getElementById('odido-threshold').textContent = \`\${threshold} MB\`;
                 document.getElementById('odido-auto-renew').textContent = config.auto_renew_enabled ? 'Enabled' : 'Disabled';
                 document.getElementById('odido-rate').textContent = \`\${rate.toFixed(3)} MB/min\`;
                 const apiStatus = document.getElementById('odido-api-status');
-                apiStatus.textContent = hasOdidoCreds ? 'Connected' : 'Not configured';
-                apiStatus.style.color = hasOdidoCreds ? 'var(--md-sys-color-success)' : 'var(--md-sys-color-warning)';
+                apiStatus.textContent = isConfigured ? 'Connected' : 'Not configured';
+                apiStatus.style.color = isConfigured ? 'var(--md-sys-color-success)' : 'var(--md-sys-color-warning)';
                 const maxData = config.bundle_size_mb || 1024;
                 const percent = Math.min(100, (remaining / maxData) * 100);
                 const bar = document.getElementById('odido-bar');
@@ -2904,15 +2915,12 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
         
         document.addEventListener('DOMContentLoaded', () => {
-            // Pre-populate Odido API key from deployment
+            // Pre-populate Odido API key from deployment (stored in localStorage but not shown)
             if (DEFAULT_ODIDO_API_KEY && !localStorage.getItem('odido_api_key')) {
                 localStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
                 odidoApiKey = DEFAULT_ODIDO_API_KEY;
             }
-            const apiKeyInput = document.getElementById('odido-api-key');
-            if (apiKeyInput && odidoApiKey) {
-                apiKeyInput.value = odidoApiKey;
-            }
+            // Do NOT pre-populate the API key input field for security reasons
             
             initPrivacyMode();
             fetchContainerIds();
