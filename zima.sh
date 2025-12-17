@@ -1560,31 +1560,6 @@ services:
       resources:
         limits: {cpus: '0.3', memory: 128M}
 
-  # Startup delay container - waits for companion to be ready before Invidious starts
-  invidious-wait:
-    image: alpine:3.19
-    container_name: invidious-wait
-    network_mode: "service:gluetun"
-    command: >
-      /bin/sh -c "
-        echo 'Waiting for companion to be ready...';
-        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-          if wget -qO- http://127.0.0.1:8282/healthz >/dev/null 2>&1; then
-            echo 'Companion is ready!';
-            sleep 5;
-            exit 0;
-          fi;
-          echo 'Waiting... attempt' \$i;
-          sleep 5;
-        done;
-        echo 'Companion not ready after 100s, continuing anyway...';
-        exit 0;
-      "
-    depends_on:
-      gluetun: {condition: service_healthy}
-      companion: {condition: service_healthy}
-    restart: "no"
-
   invidious:
     image: quay.io/invidious/invidious:latest
     container_name: invidious
@@ -1610,7 +1585,6 @@ services:
     depends_on:
       invidious-db: {condition: service_healthy}
       gluetun: {condition: service_healthy}
-      invidious-wait: {condition: service_completed_successfully}
     restart: unless-stopped
     deploy:
       resources:
@@ -1635,26 +1609,21 @@ services:
     image: quay.io/invidious/invidious-companion:latest
     container_name: companion
     network_mode: "service:gluetun"
-    environment: {SERVER_SECRET_KEY: "$IV_COMPANION", SERVER_PORT: "8282"}
-    volumes: ["companioncache:/var/tmp/youtubei.js:rw"]
-    healthcheck: 
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8282/healthz || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+    environment:
+      - SERVER_SECRET_KEY=$IV_COMPANION
+    restart: unless-stopped
     logging:
       options:
         max-size: "1G"
         max-file: "4"
     cap_drop:
       - ALL
+    read_only: true
+    volumes:
+      - companioncache:/var/tmp/youtubei.js:rw
+    security_opt:
+      - no-new-privileges:true
     depends_on: {gluetun: {condition: service_healthy}}
-    restart: unless-stopped
-    security_opt: ["no-new-privileges:true"]
-    deploy:
-      resources:
-        limits: {cpus: '0.5', memory: 256M}
 
   libremdb:
     image: ghcr.io/zyachel/libremdb:latest
@@ -1843,11 +1812,6 @@ cat > "$DASHBOARD_FILE" <<EOF
             /* Custom warning */
             --md-sys-color-warning: #FFCC80;
             --md-sys-color-on-warning: #4A2800;
-            /* Odido - M3 Extended Color (Tertiary variant for brand) */
-            --md-sys-color-odido: #FFB77C;
-            --md-sys-color-on-odido: #4D2700;
-            --md-sys-color-odido-container: #6E3A00;
-            --md-sys-color-on-odido-container: #FFDCC2;
             /* Expressive shape */
             --md-sys-shape-corner-extra-large: 28px;
             --md-sys-shape-corner-large: 16px;
@@ -2056,9 +2020,9 @@ cat > "$DASHBOARD_FILE" <<EOF
             border: none;
         }
         
-        .chip.odido {
-            background: var(--md-sys-color-odido);
-            color: var(--md-sys-color-on-odido);
+        .chip.tertiary {
+            background: var(--md-sys-color-tertiary-container);
+            color: var(--md-sys-color-on-tertiary-container);
             border: none;
         }
         
@@ -2161,15 +2125,15 @@ cat > "$DASHBOARD_FILE" <<EOF
         .btn-filled {
             background: var(--md-sys-color-primary);
             color: var(--md-sys-color-on-primary);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
+            box-shadow: var(--md-sys-elevation-1);
         }
         
         .btn-filled:hover { 
-            box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 2px 6px 2px rgba(0,0,0,0.15);
+            box-shadow: var(--md-sys-elevation-2);
         }
         
         .btn-filled:active {
-            box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
+            box-shadow: var(--md-sys-elevation-1);
         }
         
         .btn-tonal {
@@ -2178,7 +2142,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         }
         
         .btn-tonal:hover {
-            box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
+            box-shadow: var(--md-sys-elevation-1);
         }
         
         .btn-outlined {
@@ -2202,13 +2166,13 @@ cat > "$DASHBOARD_FILE" <<EOF
             background: rgba(208, 188, 255, 0.08);
         }
         
-        .btn-odido {
-            background: var(--md-sys-color-odido-container);
-            color: var(--md-sys-color-on-odido-container);
+        .btn-tertiary {
+            background: var(--md-sys-color-tertiary-container);
+            color: var(--md-sys-color-on-tertiary-container);
         }
         
-        .btn-odido:hover {
-            box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
+        .btn-tertiary:hover {
+            box-shadow: var(--md-sys-elevation-1);
         }
         
         .btn:disabled {
@@ -2568,7 +2532,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         <div class="stat-row"><span class="stat-label">API Connected</span><span class="stat-value" id="odido-api-status">--</span></div>
                         <div class="progress-track"><div class="progress-indicator" id="odido-bar" style="width:0%"></div></div>
                         <div class="btn-group" style="justify-content:center;">
-                            <button onclick="buyOdidoBundle()" class="btn btn-odido" id="odido-buy-btn">Buy Bundle</button>
+                            <button onclick="buyOdidoBundle()" class="btn btn-tertiary" id="odido-buy-btn">Buy Bundle</button>
                             <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh</button>
                             <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
                         </div>
