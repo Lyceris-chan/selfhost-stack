@@ -198,3 +198,19 @@ Opening a port for WireGuard does **not** expose your home to DDoS or unauthoriz
 | **Portainer (Docker UI)** | `9000` | `https://portainer.yourdomain.dedyn.io:8443` | Direct |
 | **WireGuard (Web UI)** | `51821` | `https://wireguard.yourdomain.dedyn.io:8443` | Direct |
 | **Invidious** | `3000` | `https://invidious.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
+| **Redlib** | `8080` | `https://redlib.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
+| **Wikiless** | `8180` | `https://wikiless.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
+| **LibremDB** | `3001` | `https://libremdb.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
+| **Rimgo** | `3002` | `https://rimgo.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
+| **Scribe** | `8280` | `https://scribe.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
+| **BreezeWiki** | `8380` | `https://breezewiki.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
+| **AnonOverflow** | `8480` | `https://anonymousoverflow.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
+| **VERT** | `5555` | `https://vert.yourdomain.dedyn.io:8443` | Direct |
+
+## 🏗️ System Resilience
+
+### Reactive SSL Management
+The `cert-monitor.sh` script manages Let's Encrypt certificates. If it hits a rate limit, it detects it, installs a temporary self-signed cert, and retries the moment the window opens.
+
+### Intelligent IP Monitoring
+`wg-ip-monitor.sh` checks your IP every 5 minutes. If it changes, it updates deSEC and restarts WireGuard. Your ISP's dynamic IP garbage won't knock you offline.
