@@ -528,6 +528,245 @@ for i in {20..30}; do
     TEST_SUBNET="172.$i.0.0/16"
     TEST_NET_NAME="probe_net_$i"
     if $DOCKER_CMD network create --subnet="$TEST_SUBNET" "$TEST_NET_NAME" >/dev/null 2>&1; then
+        $DOCKER_CMD network rm "$TEST_NET_NAME" >/dev/null 2>&1
+        FOUND_SUBNET="$TEST_SUBNET"
+        FOUND_OCTET="$i"
+        break
+    fi
+done
+
+if [ -z "$FOUND_SUBNET" ]; then
+    log_crit "Fatal: No free subnets identified. Manual network cleanup required."
+    exit 1
+fi
+
+DOCKER_SUBNET="$FOUND_SUBNET"
+log_info "Assigned Virtual Subnet: $DOCKER_SUBNET"
+
+# --- SECTION 4: NETWORK TOPOLOGY ANALYSIS ---
+# Detect primary LAN interface and public IP for VPN endpoint configuration.
+log_info "Analyzing Network Topology..."
+
+is_private_ipv4() {
+    local ip=$1
+    [[ $ip =~ ^10\. ]] || [[ $ip =~ ^192\.168\. ]] || [[ $ip =~ ^172\.(1[6-9]|2[0-9]|3[0-1])\. ]]
+}
+
+sanitize_iface_ip() {
+    local iface=$1
+    ip -o -4 addr show dev "$iface" scope global up 2>/dev/null \
+        | awk '{print $4}' \
+        | cut -d/ -f1 \
+        | grep -Ev '^(127\.|169\.254\.)' \
+        | head -n1
+}
+
+detect_route_iface_ip() {
+    local iface
+    iface=$(ip route show default 2>/dev/null | awk 'NR==1 {print $5}')
+    if [ -n "$iface" ] && [[ ! $iface =~ ^(docker0|br-[0-9a-f]{12}|veth|tailscale0|wg.*)$ ]]; then
+        sanitize_iface_ip "$iface"
+    fi
+}
+
+detect_lan_ip() {
+    ip -o -4 addr show scope global up 2>/dev/null \
+        | awk '$2 !~ /^(docker0|br-[0-9a-f]{12}|veth|lo|tailscale0|wg.*)$/ {print $4}' \
+        | cut -d/ -f1 \
+        | grep -Ev '^(127\.|169\.254\.)' \
+        | head -n1
+}
+
+fallback_hostname_ip() {
+    hostname -I 2>/dev/null | awk '{print $1}' | grep -Ev '^(127\.|169\.254\.)' | head -n1
+}
+
+LAN_IP=${LAN_IP_OVERRIDE:-$(detect_route_iface_ip || true)}
+DETECTION_HINT="default route"
+if [ -n "${LAN_IP_OVERRIDE:-}" ]; then
+    DETECTION_HINT="manual override"
+fi
+
+if [ -z "$LAN_IP" ] || ! is_private_ipv4 "$LAN_IP"; then
+    LAN_IP=$(detect_lan_ip || true)
+    DETECTION_HINT="primary interface"
+fi
+
+if [ -z "$LAN_IP" ] || ! is_private_ipv4 "$LAN_IP"; then
+    LAN_IP=$(fallback_hostname_ip || true)
+    DETECTION_HINT="hostname -I"
+fi
+
+if [ -z "$LAN_IP" ] || ! is_private_ipv4 "$LAN_IP"; then
+    LAN_IP="192.168.0.100"
+    DETECTION_HINT="static fallback"
+    log_warn "Unable to detect LAN IP automatically; defaulting to $LAN_IP. Set LAN_IP_OVERRIDE to force a specific bind IP."
+else
+    log_info "Detected LAN IP ($DETECTION_HINT): $LAN_IP"
+fi
+
+PUBLIC_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ifconfig.me || echo "$LAN_IP")
+echo "$PUBLIC_IP" > "$CURRENT_IP_FILE"
+
+# --- SECTION 5: AUTHENTICATION & CREDENTIAL MANAGEMENT ---
+# Initialize or retrieve system secrets and administrative passwords.
+if [ ! -f "$BASE_DIR/.secrets" ]; then
+    echo "========================================"
+    echo " CREDENTIAL SETUP"
+    echo "========================================"
+    
+    if [ "$AUTO_PASSWORD" = true ]; then
+        log_info "Auto-generating VPN and AdGuard passwords..."
+        VPN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+        AGH_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+        log_info "Passwords generated (will be displayed at the end)"
+        echo ""
+    else
+        echo -n "1. Enter password for VPN Web UI: "
+        read -rs VPN_PASS_RAW
+        echo ""
+        echo -n "2. Enter password for AdGuard Home: "
+        read -rs AGH_PASS_RAW
+        echo ""
+    fi
+    
+    echo "--- deSEC Domain & Certificate Setup ---"
+    echo "   Steps:"
+    echo "   1. Sign up at https://desec.io/"
+    echo "   2. Create a domain (e.g., myhome.dedyn.io)"
+    echo "   3. Create a NEW Token in Token Management (if you lost the old one)"
+    echo ""
+    echo -n "3. deSEC Domain (e.g., myhome.dedyn.io, or Enter to skip): "
+    read -r DESEC_DOMAIN
+    if [ -n "$DESEC_DOMAIN" ]; then
+        echo -n "4. deSEC API Token: "
+        read -rs DESEC_TOKEN
+        echo ""
+    else
+        DESEC_TOKEN=""
+        echo "   Skipping deSEC (will use self-signed certificates)"
+    fi
+    echo ""
+    
+    echo "--- Scribe (Medium Frontend) GitHub Integration ---"
+    echo "   Scribe proxies GitHub gists and needs a token to avoid rate limits (60/hr vs 5000/hr)."
+    echo "   1. Go to https://github.com/settings/tokens"
+    echo "   2. Generate a new 'Classic' token"
+    echo "   3. Scopes: Select 'gist' only"
+    if [ -n "$DESEC_DOMAIN" ]; then
+        echo -n "5. GitHub Username: "
+        read -r SCRIBE_GH_USER
+        echo -n "6. GitHub Personal Access Token: "
+        read -rs SCRIBE_GH_TOKEN
+        echo ""
+    else
+        echo -n "4. GitHub Username: "
+        read -r SCRIBE_GH_USER
+        echo -n "5. GitHub Personal Access Token: "
+        read -rs SCRIBE_GH_TOKEN
+        echo ""
+    fi
+    
+    echo ""
+    echo "--- Odido Bundle Booster (Optional) ---"
+    echo "   Obtain the OAuth Token using https://github.com/GuusBackup/Odido.Authenticator"
+    echo "   (works on any platform with .NET, no Apple device needed)"
+    echo ""
+    echo "   Steps:"
+    echo "   1. Clone and run: git clone --recursive https://github.com/GuusBackup/Odido.Authenticator.git"
+    echo "   2. Run: dotnet run --project Odido.Authenticator"
+    echo "   3. Follow the login flow and get the OAuth Token"
+    echo "   4. Enter the OAuth Token below - the script will fetch your User ID automatically"
+    echo ""
+    echo -n "Odido Access Token (OAuth Token from Authenticator, or Enter to skip): "
+    read -rs ODIDO_TOKEN
+    echo ""
+    if [ -n "$ODIDO_TOKEN" ]; then
+        log_info "Fetching Odido User ID automatically..."
+        # Use curl with -L to follow redirects and capture the effective URL
+        # Note: curl may fail on network issues, so we use || true to prevent script exit
+        ODIDO_REDIRECT_URL=$(curl -sL -o /dev/null -w '%{url_effective}' \
+            -H "Authorization: Bearer $ODIDO_TOKEN" \
+            -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
+            "https://capi.odido.nl/account/current" 2>/dev/null || true)
+        
+        # Extract User ID from URL path - it's a 12-character hex string after capi.odido.nl/
+        # Format: https://capi.odido.nl/{12-char-hex-userid}/account/...
+        # Note: grep may not find a match, so we use || true to prevent pipeline failure with set -euo pipefail
+        ODIDO_USER_ID=$(echo "$ODIDO_REDIRECT_URL" | grep -oiE 'capi\.odido\.nl/[0-9a-f]{12}' | sed 's|capi\.odido\.nl/||I' | head -1 || true)
+        
+        # Fallback: try to extract first path segment if hex pattern doesn't match
+        if [ -z "$ODIDO_USER_ID" ]; then
+            ODIDO_USER_ID=$(echo "$ODIDO_REDIRECT_URL" | sed -n 's|https://capi.odido.nl/\([^/]*\)/.*|\1|p')
+        fi
+        
+        if [ -n "$ODIDO_USER_ID" ] && [ "$ODIDO_USER_ID" != "account" ]; then
+            log_info "Successfully retrieved Odido User ID: $ODIDO_USER_ID"
+        else
+            log_warn "Could not automatically retrieve User ID from Odido API"
+            log_warn "The API may be temporarily unavailable or the token may be invalid"
+            echo -n "   Enter Odido User ID manually (or Enter to skip): "
+            read -r ODIDO_USER_ID
+            if [ -z "$ODIDO_USER_ID" ]; then
+                log_warn "No User ID provided, skipping Odido integration"
+                ODIDO_TOKEN=""
+            fi
+        fi
+    else
+        ODIDO_USER_ID=""
+        echo "   Skipping Odido API integration (manual mode only)"
+    fi
+    
+    log_info "Generating Secrets..."
+    ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    $DOCKER_CMD pull -q ghcr.io/wg-easy/wg-easy:latest > /dev/null || log_warn "Failed to pull wg-easy image, attempting to use local if available."
+    
+    # Safely generate WG hash
+    HASH_OUTPUT=$($DOCKER_CMD run --rm ghcr.io/wg-easy/wg-easy wgpw "$VPN_PASS_RAW" 2>&1 || echo "FAILED")
+    if [[ "$HASH_OUTPUT" == "FAILED" ]]; then
+        log_crit "Failed to generate WireGuard password hash. Check Docker status."
+        exit 1
+    fi
+    WG_HASH_CLEAN=$(echo "$HASH_OUTPUT" | grep -oP "(?<=PASSWORD_HASH=')[^']+")
+    WG_HASH_ESCAPED="${WG_HASH_CLEAN//\$/\$\$}"
+
+    AGH_USER="adguard"
+    # Safely generate AGH hash
+    AGH_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/httpd:alpine htpasswd -B -n -b "$AGH_USER" "$AGH_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    if [[ "$AGH_PASS_HASH" == "FAILED" ]]; then
+        log_crit "Failed to generate AdGuard password hash. Check Docker status."
+        exit 1
+    fi
+    
+    cat > "$BASE_DIR/.secrets" <<EOF
+VPN_PASS_RAW=$VPN_PASS_RAW
+AGH_PASS_RAW=$AGH_PASS_RAW
+WG_HASH_CLEAN=$WG_HASH_CLEAN
+AGH_PASS_HASH=$AGH_PASS_HASH
+DESEC_DOMAIN=$DESEC_DOMAIN
+DESEC_TOKEN=$DESEC_TOKEN
+SCRIBE_GH_USER=$SCRIBE_GH_USER
+SCRIBE_GH_TOKEN=$SCRIBE_GH_TOKEN
+ODIDO_USER_ID=$ODIDO_USER_ID
+ODIDO_TOKEN=$ODIDO_TOKEN
+ODIDO_API_KEY=$ODIDO_API_KEY
+EOF
+else
+    source "$BASE_DIR/.secrets"
+    if [ -z "${ODIDO_API_KEY:-}" ]; then
+        ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+        echo "ODIDO_API_KEY=$ODIDO_API_KEY" >> "$BASE_DIR/.secrets"
+    fi
+    # If using an old .secrets file that has WG_HASH_ESCAPED but not WG_HASH_CLEAN
+    if [ -z "${WG_HASH_CLEAN:-}" ] && [ -n "${WG_HASH_ESCAPED:-}" ]; then
+        WG_HASH_CLEAN="${WG_HASH_ESCAPED//\$\$/\$}"
+    fi
+    AGH_USER="adguard"
+fi
+
+echo ""
+echo "=========================================================="
+echo " PROTON WIREGUARD CONFIGURATION"
 echo "=========================================================="
 
 # WireGuard Configuration Validation
@@ -659,6 +898,140 @@ PORT_PORTAINER=9000; PORT_WG_WEB=51821
 PORT_REDLIB=8080; PORT_WIKILESS=8180; PORT_INVIDIOUS=3000; PORT_LIBREMDB=3001
 PORT_RIMGO=3002; PORT_SCRIBE=8280; PORT_BREEZEWIKI=8380; PORT_ANONYMOUS=8480
 PORT_VERT=5555; PORT_VERTD=24153
+
+# VERT dynamic URLs for different access modes
+if [ -n "$DESEC_DOMAIN" ]; then
+    VERT_PUB_HOSTNAME="vert.$DESEC_DOMAIN:8443"
+    VERTD_PUB_URL="https://vertd.$DESEC_DOMAIN:8443"
+else
+    VERT_PUB_HOSTNAME="$LAN_IP:$PORT_VERT"
+    VERTD_PUB_URL="http://$LAN_IP:$PORT_VERTD"
+fi
+
+# --- SECTION 9: INFRASTRUCTURE CONFIGURATION ---
+# Generate configuration files for core system services (DNS, SSL, Nginx).
+log_info "Compiling Infrastructure Configs..."
+
+# DNS & Certificate Setup
+log_info "Setting up DNS and certificates..."
+
+if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
+    log_info "deSEC domain provided: $DESEC_DOMAIN"
+    log_info "Configuring Let's Encrypt with DNS-01 challenge..."
+    
+    log_info "Updating deSEC DNS record to point to $PUBLIC_IP..."
+    DESEC_RESPONSE=$(curl -s -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
+        -H "Authorization: Token $DESEC_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}]" 2>&1 || echo "CURL_ERROR")
+    
+    PUBLIC_IP_ESCAPED="${PUBLIC_IP//./\\.}"
+    if [[ "$DESEC_RESPONSE" == "CURL_ERROR" ]]; then
+        log_warn "Failed to communicate with deSEC API (network error)."
+    elif [ -z "$DESEC_RESPONSE" ] || echo "$DESEC_RESPONSE" | grep -qE "(${PUBLIC_IP_ESCAPED}|\[\]|\"records\")" ; then
+        log_info "DNS record updated successfully"
+    else
+        log_warn "DNS update response: $DESEC_RESPONSE"
+    fi
+    
+    log_info "Setting up SSL certificates..."
+    mkdir -p "$AGH_CONF_DIR/certbot"
+    
+    log_info "Attempting Let's Encrypt certificate..."
+    CERT_SUCCESS=false
+    CERT_LOG_FILE="$AGH_CONF_DIR/certbot/last_run.log"
+
+    # Request Let's Encrypt certificate via DNS-01 challenge
+    # We use a temp file to capture output to avoid 'set -e' issues with $(...) assignments in some shells
+    CERT_TMP_OUT=$(mktemp)
+    if $DOCKER_CMD run --rm \
+        -v "$AGH_CONF_DIR:/acme" \
+        -e "DESEC_Token=$DESEC_TOKEN" \
+        -e "DEDYN_TOKEN=$DESEC_TOKEN" \
+        -e "DESEC_DOMAIN=$DESEC_DOMAIN" \
+        neilpang/acme.sh:latest \
+        --issue \
+        --dns dns_desec \
+        --dnssleep 120 \
+        --debug 2 \
+        -d "$DESEC_DOMAIN" \
+        -d "*.$DESEC_DOMAIN" \
+        --keylength ec-256 \
+        --server letsencrypt \
+        --home /acme \
+        --config-home /acme \
+        --cert-home /acme/certs > "$CERT_TMP_OUT" 2>&1; then
+        CERT_SUCCESS=true
+    else
+        CERT_SUCCESS=false
+    fi
+    CERT_OUTPUT=$(cat "$CERT_TMP_OUT")
+    echo "$CERT_OUTPUT" > "$CERT_LOG_FILE"
+    rm -f "$CERT_TMP_OUT"
+
+    if [ "$CERT_SUCCESS" = true ] && [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]; then
+        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
+        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
+        log_info "Let's Encrypt certificate installed successfully!"
+        log_info "Certificate log saved to $CERT_LOG_FILE"
+    elif [ "$CERT_SUCCESS" = true ] && [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" ]; then
+        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
+        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
+        log_info "Let's Encrypt certificate installed successfully!"
+        log_info "Certificate log saved to $CERT_LOG_FILE"
+    else
+        RETRY_TIME=$(echo "$CERT_OUTPUT" | grep -oiE 'retry after [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]+ UTC' | head -1 | sed 's/retry after //I')
+        if [ -n "$RETRY_TIME" ]; then
+            RETRY_EPOCH=$(date -u -d "$RETRY_TIME" +%s 2>/dev/null || echo "")
+            NOW_EPOCH=$(date -u +%s)
+            if [ -n "$RETRY_EPOCH" ] && [ "$RETRY_EPOCH" -gt "$NOW_EPOCH" ] 2>/dev/null; then
+                SECS_LEFT=$((RETRY_EPOCH - NOW_EPOCH))
+                HRS_LEFT=$((SECS_LEFT / 3600))
+                MINS_LEFT=$(((SECS_LEFT % 3600) / 60))
+                log_warn "Let's Encrypt rate limited. Retry after $RETRY_TIME (~${HRS_LEFT}h ${MINS_LEFT}m)."
+                log_info "A background task has been scheduled to automatically retry at exactly this time."
+            else
+                log_warn "Let's Encrypt rate limited. Retry after $RETRY_TIME."
+                log_info "A background task has been scheduled to automatically retry at exactly this time."
+            fi
+        else
+            log_warn "Let's Encrypt failed (see $CERT_LOG_FILE)."
+        fi
+        log_warn "Let's Encrypt failed, generating self-signed certificate..."
+        $DOCKER_CMD run --rm \
+            -v "$AGH_CONF_DIR:/certs" \
+            dhi.io/alpine:latest /bin/sh -c "
+            apk add --no-cache openssl > /dev/null 2>&1
+            openssl req -x509 -newkey rsa:4096 -sha256 \
+                -days 365 -nodes \
+                -keyout /certs/ssl.key -out /certs/ssl.crt \
+                -subj '/CN=$DESEC_DOMAIN' \
+                -addext 'subjectAltName=DNS:$DESEC_DOMAIN,DNS:*.$DESEC_DOMAIN,IP:$PUBLIC_IP'
+            "
+        log_info "Generated self-signed certificate for $DESEC_DOMAIN"
+    fi
+    
+    DNS_SERVER_NAME="$DESEC_DOMAIN"
+    
+    if [ -f "$AGH_CONF_DIR/ssl.crt" ] && [ -f "$AGH_CONF_DIR/ssl.key" ]; then
+        log_info "SSL certificate ready for $DESEC_DOMAIN"
+    else
+        log_warn "SSL certificate files not found - AdGuard may not start with TLS"
+    fi
+    
+else
+    log_info "No deSEC domain provided, generating self-signed certificate..."
+    $DOCKER_CMD run --rm -v "$AGH_CONF_DIR:/certs" dhi.io/alpine:latest /bin/sh -c \
+        "apk add --no-cache openssl && \
+         openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
+         -keyout /certs/ssl.key -out /certs/ssl.crt \
+         -subj '/CN=$LAN_IP' \
+         -addext 'subjectAltName=IP:$LAN_IP,IP:$PUBLIC_IP'"
+    
+    log_info "Self-signed certificate generated"
+    DNS_SERVER_NAME="$LAN_IP"
+fi
+
 UNBOUND_STATIC_IP="172.${FOUND_OCTET}.0.250"
 log_info "Unbound will use static IP: $UNBOUND_STATIC_IP"
 
@@ -750,6 +1123,830 @@ rewrites:
 EOF
 fi
 
+# Prepare escaped hash for docker-compose (v2 requires $$ for literal $)
+WG_HASH_COMPOSE="${WG_HASH_CLEAN//\$/\$\$}"
+
+cat > "$NGINX_CONF" <<EOF
+error_log /dev/stderr info;
+access_log /dev/stdout;
+
+# Dynamic backend mapping for subdomains
+map \$http_host \$backend {
+    hostnames;
+    default "";
+    invidious.$DESEC_DOMAIN  http://gluetun:3000;
+    redlib.$DESEC_DOMAIN     http://gluetun:8080;
+    wikiless.$DESEC_DOMAIN   http://gluetun:8180;
+    libremdb.$DESEC_DOMAIN   http://gluetun:3001;
+    rimgo.$DESEC_DOMAIN      http://gluetun:3002;
+    scribe.$DESEC_DOMAIN     http://gluetun:8280;
+    breezewiki.$DESEC_DOMAIN http://gluetun:10416;
+    anonymousoverflow.$DESEC_DOMAIN http://gluetun:8480;
+    vert.$DESEC_DOMAIN       http://vert:80;
+    vertd.$DESEC_DOMAIN      http://vertd:24153;
+    adguard.$DESEC_DOMAIN    http://adguard:8083;
+    portainer.$DESEC_DOMAIN  http://portainer:9000;
+    wireguard.$DESEC_DOMAIN  http://$LAN_IP:51821;
+    odido.$DESEC_DOMAIN      http://odido-booster:80;
+    
+    # Handle the 8443 port in the host header
+    "invidious.$DESEC_DOMAIN:8443"  http://gluetun:3000;
+    "redlib.$DESEC_DOMAIN:8443"     http://gluetun:8080;
+    "wikiless.$DESEC_DOMAIN:8443"   http://gluetun:8180;
+    "libremdb.$DESEC_DOMAIN:8443"   http://gluetun:3001;
+    "rimgo.$DESEC_DOMAIN:8443"      http://gluetun:3002;
+    "scribe.$DESEC_DOMAIN:8443"     http://gluetun:8280;
+    "breezewiki.$DESEC_DOMAIN:8443" http://gluetun:10416;
+    "anonymousoverflow.$DESEC_DOMAIN:8443" http://gluetun:8480;
+    "vert.$DESEC_DOMAIN:8443"       http://vert:80;
+    "vertd.$DESEC_DOMAIN:8443"      http://vertd:24153;
+    "adguard.$DESEC_DOMAIN:8443"    http://adguard:8083;
+    "portainer.$DESEC_DOMAIN:8443"  http://portainer:9000;
+    "wireguard.$DESEC_DOMAIN:8443"  http://$LAN_IP:51821;
+    "odido.$DESEC_DOMAIN:8443"      http://odido-booster:80;
+}
+
+server {
+    listen $PORT_DASHBOARD_WEB default_server;
+    listen 8443 ssl default_server;
+    
+    ssl_certificate /etc/adguard/conf/ssl.crt;
+    ssl_certificate_key /etc/adguard/conf/ssl.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # If the host matches a service subdomain, proxy it
+    location / {
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+
+        if (\$backend != "") {
+            proxy_pass \$backend;
+            break;
+        }
+        root /usr/share/nginx/html;
+        index index.html;
+    }
+
+    location /api/ {
+        resolver 127.0.0.11 valid=30s;
+        proxy_pass http://hub-api:55555/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 60s;
+    }
+
+    location /odido-api/ {
+        resolver 127.0.0.11 valid=30s;
+        proxy_pass http://odido-booster:80/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+
+# --- SECTION 10: PERSISTENT ENVIRONMENT CONFIGURATION ---
+# Generate environment variables for specialized privacy frontends.
+cat > "$ENV_DIR/libremdb.env" <<EOF
+NEXT_PUBLIC_URL=http://$LAN_IP:$PORT_LIBREMDB
+AXIOS_USERAGENT=Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0
+NEXT_TELEMETRY_DISABLED=1
+EOF
+cat > "$ENV_DIR/anonymousoverflow.env" <<EOF
+APP_URL=http://$LAN_IP:$PORT_ANONYMOUS
+JWT_SIGNING_SECRET=$ANONYMOUS_SECRET
+EOF
+cat > "$ENV_DIR/scribe.env" <<EOF
+SCRIBE_HOST=0.0.0.0
+PORT=$PORT_SCRIBE
+SECRET_KEY_BASE=$SCRIBE_SECRET
+LUCKY_ENV=production
+APP_DOMAIN=$LAN_IP:$PORT_SCRIBE
+GITHUB_USERNAME="$SCRIBE_GH_USER"
+GITHUB_PERSONAL_ACCESS_TOKEN="$SCRIBE_GH_TOKEN"
+EOF
+
+# --- SECTION 11: SOURCE REPOSITORY SYNCHRONIZATION ---
+# Initialize or update external source code for locally-built application containers.
+log_info "Synchronizing Source Repositories..."
+clone_repo() { 
+    if [ ! -d "$2/.git" ]; then 
+        git clone --depth 1 "$1" "$2"
+    else 
+        (cd "$2" && git fetch --all && git reset --hard "origin/$(git rev-parse --abbrev-ref HEAD)" && git pull)
+    fi
+}
+clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless"
+cat > "$SRC_DIR/wikiless/wikiless.config" <<'EOF'
+const config = {
+  /**
+  * Set these configs below to suite your environment.
+  */
+  domain: process.env.DOMAIN || '', // Set to your own domain
+  default_lang: process.env.DEFAULT_LANG || 'en', // Set your own language by default
+  theme: process.env.THEME || 'dark', // Set to 'white' or 'dark' by default
+  http_addr: process.env.HTTP_ADDR || '0.0.0.0', // don't touch, unless you know what your doing
+  nonssl_port: process.env.NONSSL_PORT || 8080, // don't touch, unless you know what your doing
+  
+  /**
+  * You can configure redis below if needed.
+  * By default Wikiless uses 'redis://127.0.0.1:6379' as the Redis URL.
+  * Versions before 0.1.1 Wikiless used redis_host and redis_port properties,
+  * but they are not supported anymore.
+  * process.env.REDIS_HOST is still here for backwards compatibility.
+  */
+  redis_url: process.env.REDIS_URL || process.env.REDIS_HOST || 'redis://127.0.0.1:6379',
+  redis_password: process.env.REDIS_PASSWORD,
+  
+  /**
+  * You might need to change these configs below if you host through a reverse
+  * proxy like nginx.
+  */
+  trust_proxy: process.env.TRUST_PROXY === 'true' || true,
+  trust_proxy_address: process.env.TRUST_PROXY_ADDRESS || '127.0.0.1',
+
+  /**
+  * Redis cache expiration values (in seconds).
+  * When the cache expires, new content is fetched from Wikipedia (when the
+  * given URL is revisited).
+  */
+  setexs: {
+    wikipage: process.env.WIKIPAGE_CACHE_EXPIRATION || (60 * 60 * 1), // 1 hour
+  },
+
+  /**
+  * Wikimedia requires a HTTP User-agent header for all Wikimedia related
+  * requests. It's a good idea to change this to something unique.
+  * Read more: https://useragents.me/
+  */
+  wikimedia_useragent: process.env.wikimedia_useragent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+
+  /**
+  * Cache control. Wikiless can automatically remove the cached media files from
+  * the server. Cache control is on by default.
+  * 'cache_control_interval' sets the interval for often the cache directory
+  * is emptied (in hours). Default is every 24 hours.
+  */
+  cache_control: process.env.CACHE_CONTROL !== 'true' || true,
+  cache_control_interval: process.env.CACHE_CONTROL_INTERVAL || 24,
+}
+
+module.exports = config
+EOF
+clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe"
+clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious"
+clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster"
+
+mkdir -p "$SRC_DIR/hub-api"
+cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
+FROM dhi.io/python:3.11-alpine
+RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd
+WORKDIR /app
+CMD ["python", "server.py"]
+EOF
+
+clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert"
+# Patch VERT Dockerfile to add missing build args
+if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_DIR/vert/Dockerfile"; then
+    if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_DIR/vert/Dockerfile" && grep -q "^ENV PUB_STRIPE_KEY=" "$SRC_DIR/vert/Dockerfile"; then
+        sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_FAILURE_BLOCKS\nARG PUB_DISABLE_DONATIONS' "$SRC_DIR/vert/Dockerfile"
+        sed -i "/^ENV PUB_STRIPE_KEY=\${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_FAILURE_BLOCKS=\${PUB_DISABLE_FAILURE_BLOCKS}\nENV PUB_DISABLE_DONATIONS=\${PUB_DISABLE_DONATIONS}" "$SRC_DIR/vert/Dockerfile"
+        log_info "Patched VERT Dockerfile to add missing PUB_DISABLE_FAILURE_BLOCKS and PUB_DISABLE_DONATIONS ARG/ENV"
+    else
+        log_warn "VERT Dockerfile structure changed - could not apply patches. Build may fail."
+    fi
+fi
+
+chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
+
+# --- SECTION 12: ADMINISTRATIVE CONTROL ARTIFACTS ---
+
+# Generate administrative scripts for profile management and internal health monitoring.
+
+
+
+cat > "$WG_CONTROL_SCRIPT" <<'EOF'
+#!/bin/sh
+ACTION=$1
+PROFILE_NAME=$2
+PROFILES_DIR="/profiles"
+ACTIVE_CONF="/active-wg.conf"
+NAME_FILE="/app/.active_profile_name"
+LOG_FILE="/app/deployment.log"
+LOCK_FILE="/app/.wg-control.lock"
+
+# Use flock to prevent concurrent runs (especially during profile switching)
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    echo "Error: Another control operation is in progress"
+    exit 1
+fi
+
+sanitize_json_string() {
+    printf '%s' "$1" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\n\r'
+}
+
+if [ "$ACTION" = "activate" ]; then
+    if [ -f "$PROFILES_DIR/$PROFILE_NAME.conf" ]; then
+        ln -sf "$PROFILES_DIR/$PROFILE_NAME.conf" "$ACTIVE_CONF"
+        echo "$PROFILE_NAME" > "$NAME_FILE"
+        DEPENDENTS="redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe"
+        docker stop $DEPENDENTS 2>/dev/null || true
+        docker compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
+        sleep 5
+        docker start $DEPENDENTS 2>/dev/null || true
+    else
+        echo "Error: Profile not found"
+        exit 1
+    fi
+elif [ "$ACTION" = "delete" ]; then
+    if [ -f "$PROFILES_DIR/$PROFILE_NAME.conf" ]; then
+        rm "$PROFILES_DIR/$PROFILE_NAME.conf"
+    fi
+elif [ "$ACTION" = "status" ]; then
+    GLUETUN_STATUS="down"
+    GLUETUN_HEALTHY="false"
+    HANDSHAKE_AGO="N/A"
+    ENDPOINT="--"
+    PUBLIC_IP="--"
+    DATA_FILE="/app/.data_usage"
+    
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^gluetun$"; then
+        # Check container health status
+        HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
+        if [ "$HEALTH" = "healthy" ]; then
+            GLUETUN_HEALTHY="true"
+        fi
+        
+        # Use gluetun's HTTP control server API (port 8000) for status
+        # API docs: https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
+        
+        # Get VPN status from control server
+        VPN_STATUS_RESPONSE=$(docker exec gluetun wget -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
+        if [ -n "$VPN_STATUS_RESPONSE" ]; then
+            # Extract status from {"status":"running"} or {"status":"stopped"}
+            VPN_RUNNING=$(echo "$VPN_STATUS_RESPONSE" | grep -o '"status":"running"' || echo "")
+            if [ -n "$VPN_RUNNING" ]; then
+                GLUETUN_STATUS="up"
+                HANDSHAKE_AGO="Connected"
+            else
+                GLUETUN_STATUS="down"
+                HANDSHAKE_AGO="Disconnected"
+            fi
+        elif [ "$GLUETUN_HEALTHY" = "true" ]; then
+            # Fallback: if container is healthy, assume VPN is up
+            GLUETUN_STATUS="up"
+            HANDSHAKE_AGO="Connected (API unavailable)"
+        fi
+        
+        # Get public IP from control server
+        PUBLIC_IP_RESPONSE=$(docker exec gluetun wget -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
+        if [ -n "$PUBLIC_IP_RESPONSE" ]; then
+            # Extract IP from {"public_ip":"x.x.x.x"}
+            EXTRACTED_IP=$(echo "$PUBLIC_IP_RESPONSE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
+            if [ -n "$EXTRACTED_IP" ]; then
+                PUBLIC_IP="$EXTRACTED_IP"
+            fi
+        fi
+        
+        # Fallback to external IP check if control server didn't return an IP
+        if [ -z "$PUBLIC_IP" ] || [ "$PUBLIC_IP" = "--" ]; then
+            PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
+        fi
+        
+        # Try to get endpoint from WireGuard config if available
+        WG_CONF_ENDPOINT=$(docker exec gluetun cat /gluetun/wireguard/wg0.conf 2>/dev/null | grep -i "^Endpoint" | cut -d'=' -f2 | tr -d ' ' | head -1 || echo "")
+        if [ -n "$WG_CONF_ENDPOINT" ]; then
+            ENDPOINT="$WG_CONF_ENDPOINT"
+        fi
+        
+        # Get current RX/TX from /proc/net/dev (works for tun0 or wg0 interface)
+        # Format: iface: rx_bytes rx_packets ... tx_bytes tx_packets ...
+        NET_DEV=$(docker exec gluetun cat /proc/net/dev 2>/dev/null || echo "")
+        CURRENT_RX="0"
+        CURRENT_TX="0"
+        if [ -n "$NET_DEV" ]; then
+            # Try tun0 first (OpenVPN), then wg0 (WireGuard)
+            VPN_LINE=$(echo "$NET_DEV" | grep -E "^\s*(tun0|wg0):" | head -1 || echo "")
+            if [ -n "$VPN_LINE" ]; then
+                # Extract RX bytes (field 2) and TX bytes (field 10)
+                CURRENT_RX=$(echo "$VPN_LINE" | awk '{print $2}' 2>/dev/null || echo "0")
+                CURRENT_TX=$(echo "$VPN_LINE" | awk '{print $10}' 2>/dev/null || echo "0")
+                case "$CURRENT_RX" in ''|*[!0-9]*) CURRENT_RX="0" ;; esac
+                case "$CURRENT_TX" in ''|*[!0-9]*) CURRENT_TX="0" ;; esac
+            fi
+        fi
+        
+        # Load previous values and calculate cumulative total
+        PREV_RX="0"
+        PREV_TX="0"
+        TOTAL_RX="0"
+        TOTAL_TX="0"
+        LAST_RX="0"
+        LAST_TX="0"
+        if [ -f "$DATA_FILE" ]; then
+            . "$DATA_FILE" 2>/dev/null || true
+        fi
+        
+        # Detect counter reset (container restart) - current < last means reset
+        if { [ "$CURRENT_RX" -lt "$LAST_RX" ] || [ "$CURRENT_TX" -lt "$LAST_TX" ]; } 2>/dev/null; then
+            # Counter reset detected - add last values to total before reset
+            TOTAL_RX=$((TOTAL_RX + LAST_RX))
+            TOTAL_TX=$((TOTAL_TX + LAST_TX))
+        fi
+        
+        # Calculate session values (current readings)
+        SESSION_RX="$CURRENT_RX"
+        SESSION_TX="$CURRENT_TX"
+        
+        # Calculate all-time totals
+        ALLTIME_RX=$((TOTAL_RX + CURRENT_RX))
+        ALLTIME_TX=$((TOTAL_TX + CURRENT_TX))
+        
+        # Save state
+        cat > "$DATA_FILE" <<DATAEOF
+LAST_RX=$CURRENT_RX
+LAST_TX=$CURRENT_TX
+TOTAL_RX=$TOTAL_RX
+TOTAL_TX=$TOTAL_TX
+DATAEOF
+    else
+        # Container not running - load saved totals
+        ALLTIME_RX="0"
+        ALLTIME_TX="0"
+        SESSION_RX="0"
+        SESSION_TX="0"
+        if [ -f "$DATA_FILE" ]; then
+            . "$DATA_FILE" 2>/dev/null || true
+            ALLTIME_RX=$((TOTAL_RX + LAST_RX))
+            ALLTIME_TX=$((TOTAL_TX + LAST_TX))
+        fi
+    fi
+    
+    ACTIVE_NAME=$(cat "$NAME_FILE" 2>/dev/null | tr -d '\n\r' || echo "Unknown")
+    if [ -z "$ACTIVE_NAME" ]; then ACTIVE_NAME="Unknown"; fi
+    
+    WGE_STATUS="down"
+    WGE_HOST="Unknown"
+    WGE_CLIENTS="0"
+    WGE_CONNECTED="0"
+    
+    WGE_SESSION_RX="0"
+    WGE_SESSION_TX="0"
+    WGE_TOTAL_RX="0"
+    WGE_TOTAL_TX="0"
+    WGE_DATA_FILE="/app/.wge_data_usage"
+    
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^wg-easy$"; then
+        WGE_STATUS="up"
+        WGE_HOST=$(docker exec wg-easy printenv WG_HOST 2>/dev/null | tr -d '\n\r' || echo "Unknown")
+        if [ -z "$WGE_HOST" ]; then WGE_HOST="Unknown"; fi
+        WG_PEER_DATA=$(docker exec wg-easy wg show wg0 2>/dev/null || echo "")
+        if [ -n "$WG_PEER_DATA" ]; then
+            WGE_CLIENTS=$(echo "$WG_PEER_DATA" | grep -c "^peer:" 2>/dev/null || echo "0")
+            CONNECTED_COUNT=0
+            
+            # Calculate total RX/TX from all peers
+            WGE_CURRENT_RX=0
+            WGE_CURRENT_TX=0
+            for rx in $(echo "$WG_PEER_DATA" | grep "transfer:" | awk '{print $2}' | sed 's/[^0-9]//g' 2>/dev/null || echo ""); do
+                case "$rx" in ''|*[!0-9]*) ;; *) WGE_CURRENT_RX=$((WGE_CURRENT_RX + rx)) ;; esac
+            done
+            for tx in $(echo "$WG_PEER_DATA" | grep "transfer:" | awk '{print $4}' | sed 's/[^0-9]//g' 2>/dev/null || echo ""); do
+                case "$tx" in ''|*[!0-9]*) ;; *) WGE_CURRENT_TX=$((WGE_CURRENT_TX + tx)) ;; esac
+            done
+            
+            # Load previous values for WG-Easy
+            WGE_LAST_RX="0"
+            WGE_LAST_TX="0"
+            WGE_SAVED_TOTAL_RX="0"
+            WGE_SAVED_TOTAL_TX="0"
+            if [ -f "$WGE_DATA_FILE" ]; then
+                . "$WGE_DATA_FILE" 2>/dev/null || true
+            fi
+            
+            # Detect counter reset
+            if { [ "$WGE_CURRENT_RX" -lt "$WGE_LAST_RX" ] || [ "$WGE_CURRENT_TX" -lt "$WGE_LAST_TX" ]; } 2>/dev/null; then
+                WGE_SAVED_TOTAL_RX=$((WGE_SAVED_TOTAL_RX + WGE_LAST_RX))
+                WGE_SAVED_TOTAL_TX=$((WGE_SAVED_TOTAL_TX + WGE_LAST_TX))
+            fi
+            
+            WGE_SESSION_RX="$WGE_CURRENT_RX"
+            WGE_SESSION_TX="$WGE_CURRENT_TX"
+            WGE_TOTAL_RX=$((WGE_SAVED_TOTAL_RX + WGE_CURRENT_RX))
+            WGE_TOTAL_TX=$((WGE_SAVED_TOTAL_TX + WGE_CURRENT_TX))
+            
+            # Save state
+            cat > "$WGE_DATA_FILE" <<WGEDATAEOF
+WGE_LAST_RX=$WGE_CURRENT_RX
+WGE_LAST_TX=$WGE_CURRENT_TX
+WGE_SAVED_TOTAL_RX=$WGE_SAVED_TOTAL_RX
+WGE_SAVED_TOTAL_TX=$WGE_SAVED_TOTAL_TX
+WGEDATAEOF
+            
+            for hs in $(echo "$WG_PEER_DATA" | grep "latest handshake:" | sed 's/.*latest handshake: //' | sed 's/ seconds.*//' | grep -E '^[0-9]+' 2>/dev/null || echo ""); do
+                if [ -n "$hs" ] && [ "$hs" -lt 180 ] 2>/dev/null; then
+                    CONNECTED_COUNT=$((CONNECTED_COUNT + 1))
+                fi
+            done
+            WGE_CONNECTED="$CONNECTED_COUNT"
+        fi
+    fi
+    
+    ACTIVE_NAME=$(sanitize_json_string "$ACTIVE_NAME")
+    ENDPOINT=$(sanitize_json_string "$ENDPOINT")
+    PUBLIC_IP=$(sanitize_json_string "$PUBLIC_IP")
+    HANDSHAKE_AGO=$(sanitize_json_string "$HANDSHAKE_AGO")
+    WGE_HOST=$(sanitize_json_string "$WGE_HOST")
+    
+    # Check individual privacy services status internally
+    SERVICES_JSON="{"
+    FIRST_SRV=1
+    # Added core infrastructure services to the monitoring loop
+    for srv in "invidious:3000" "redlib:8080" "wikiless:8180" "libremdb:3001" "rimgo:3002" "scribe:8280" "breezewiki:10416" "anonymousoverflow:8480" "vert:80" "vertd:24153" "adguard:8083" "portainer:9000" "wg-easy:51821"; do
+        s_name=${srv%:*}
+        s_port=${srv#*:}
+        [ $FIRST_SRV -eq 0 ] && SERVICES_JSON="$SERVICES_JSON,"
+        
+        # Priority 1: Check Docker container health if it exists
+        HEALTH="unknown"
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${s_name}$"; then
+            HEALTH=$(docker inspect --format='{{.State.Health.Status}}' "$s_name" 2>/dev/null || echo "running")
+        fi
+
+        if [ "$HEALTH" = "healthy" ] || [ "$HEALTH" = "running" ]; then
+            SERVICES_JSON="$SERVICES_JSON\"$s_name\":\"up\""
+        elif [ "$HEALTH" = "unhealthy" ] || [ "$HEALTH" = "starting" ]; then
+            # If Docker says unhealthy but port is reachable, count as up
+            # For services in gluetun network, we check against gluetun container
+            TARGET_HOST="$s_name"
+            case "$s_name" in
+                invidious|redlib|wikiless|libremdb|rimgo|scribe|breezewiki|anonymousoverflow) TARGET_HOST="gluetun" ;;
+            esac
+            if nc -z -w 2 "$TARGET_HOST" "$s_port" >/dev/null 2>&1; then
+                SERVICES_JSON="$SERVICES_JSON\"$s_name\":\"up\""
+            else
+                SERVICES_JSON="$SERVICES_JSON\"$s_name\":\"down\""
+            fi
+        else
+            # Fallback to network check
+            TARGET_HOST="$s_name"
+            case "$s_name" in
+                invidious|redlib|wikiless|libremdb|rimgo|scribe|breezewiki|anonymousoverflow) TARGET_HOST="gluetun" ;;
+            esac
+            
+            if nc -z -w 2 "$TARGET_HOST" "$s_port" >/dev/null 2>&1; then
+                SERVICES_JSON="$SERVICES_JSON\"$s_name\":\"up\""
+            else
+                SERVICES_JSON="$SERVICES_JSON\"$s_name\":\"down\""
+            fi
+        fi
+        FIRST_SRV=0
+    done
+    SERVICES_JSON="$SERVICES_JSON}"
+
+    printf '{"gluetun":{"status":"%s","healthy":%s,"active_profile":"%s","endpoint":"%s","public_ip":"%s","handshake_ago":"%s","session_rx":"%s","session_tx":"%s","total_rx":"%s","total_tx":"%s"},"wgeasy":{"status":"%s","host":"%s","clients":"%s","connected":"%s","session_rx":"%s","session_tx":"%s","total_rx":"%s","total_tx":"%s"},"services":%s}' \
+        "$GLUETUN_STATUS" "$GLUETUN_HEALTHY" "$ACTIVE_NAME" "$ENDPOINT" "$PUBLIC_IP" "$HANDSHAKE_AGO" "$SESSION_RX" "$SESSION_TX" "$ALLTIME_RX" "$ALLTIME_TX" \
+        "$WGE_STATUS" "$WGE_HOST" "$WGE_CLIENTS" "$WGE_CONNECTED" "$WGE_SESSION_RX" "$WGE_SESSION_TX" "$WGE_TOTAL_RX" "$WGE_TOTAL_TX" \
+        "$SERVICES_JSON"
+fi
+EOF
+chmod +x "$WG_CONTROL_SCRIPT"
+
+cat > "$WG_API_SCRIPT" <<'APIEOF'
+#!/usr/bin/env python3
+import http.server
+import socketserver
+import json
+import os
+import re
+import subprocess
+import time
+
+PORT = 55555
+PROFILES_DIR = "/profiles"
+CONTROL_SCRIPT = "/usr/local/bin/wg-control.sh"
+LOG_FILE = "/app/deployment.log"
+
+
+def extract_profile_name(config):
+    """Extract profile name from WireGuard config."""
+    lines = config.split('\n')
+    in_peer = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.lower() == '[peer]':
+            in_peer = True
+            continue
+        if in_peer and stripped.startswith('#'):
+            name = stripped.lstrip('#').strip()
+            if name:
+                return name
+        if in_peer and stripped.startswith('['):
+            break
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            name = stripped.lstrip('#').strip()
+            if name and '=' not in name:
+                return name
+    return None
+
+class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+
+class APIHandler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        # Restore logging to see requests
+        print(f"[{self.date_time_string()}] {format % args}")
+    
+    def _send_json(self, data, code=200):
+        self.send_response(code)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-API-Key')
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode('utf-8'))
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-API-Key')
+        self.end_headers()
+
+    def _check_auth(self):
+        # Allow GET status/profiles without auth for the dashboard if local
+        if self.command == 'GET' and self.path in ['/status', '/profiles', '/containers', '/certificate-status', '/events']:
+            return True
+        
+        # Watchtower notification (comes from docker network, simple path check)
+        if self.path.startswith('/watchtower'):
+            return True
+
+        # Check for API Key in headers
+        api_key = self.headers.get('X-API-Key')
+        expected_key = os.environ.get('HUB_API_KEY')
+        
+        if expected_key and api_key == expected_key:
+            return True
+            
+        return False
+
+    def do_GET(self):
+        if not self._check_auth():
+            self._send_json({"error": "Unauthorized"}, 401)
+            return
+
+        if self.path == '/status':
+            try:
+                result = subprocess.run([CONTROL_SCRIPT, "status"], capture_output=True, text=True, timeout=30)
+                output = result.stdout.strip()
+                output = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', output)
+                json_start = output.find('{')
+                json_end = output.rfind('}')
+                if json_start != -1 and json_end != -1:
+                    output = output[json_start:json_end+1]
+                self._send_json(json.loads(output))
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/containers':
+            try:
+                # Get container IDs for Portainer links
+                result = subprocess.run(
+                    ['docker', 'ps', '-a', '--format', '{{.Names}}\t{{.ID}}'],
+                    capture_output=True, text=True, timeout=10
+                )
+                containers = {}
+                for line in result.stdout.strip().split('\n'):
+                    if '\t' in line:
+                        name, cid = line.split('\t', 1)
+                        containers[name] = cid
+                self._send_json({"containers": containers})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/certificate-status':
+            try:
+                cert_path = "/etc/adguard/conf/ssl.crt"
+                if not os.path.exists(cert_path):
+                    self._send_json({"error": "Certificate not found"}, 404)
+                    return
+                
+                result = subprocess.run(
+                    ['openssl', 'x509', '-in', cert_path, '-noout', '-subject', '-issuer', '-dates'],
+                    capture_output=True, text=True, timeout=10
+                )
+                output = result.stdout.strip()
+                
+                # Simple parsing of the openssl output
+                subject_match = re.search(r'subject=.*?CN\s*=\s*(.*)', output)
+                issuer_match = re.search(r'issuer=.*?CN\s*=\s*(.*)', output)
+                not_before_match = re.search(r'notBefore=(.*)', output)
+                not_after_match = re.search(r'notAfter=(.*)', output)
+                
+                subject = subject_match.group(1).strip() if subject_match else "Unknown"
+                issuer = issuer_match.group(1).strip() if issuer_match else "Unknown"
+                
+                cert_type = "Let's Encrypt" if any(x in issuer for x in ["Let's Encrypt", "R3", "ISRG"]) else "Self-Signed"
+
+                failure_reason = None
+                retry_after = None
+                
+                # Check for failure logs if self-signed
+                if cert_type == "Self-Signed":
+                    log_path = "/etc/adguard/conf/certbot/last_run.log"
+                    if os.path.exists(log_path):
+                        with open(log_path, 'r') as f:
+                            log_content = f.read()
+                            # Parse retry time
+                            retry_match = re.search(r'retry after ([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]+ UTC)', log_content, re.IGNORECASE)
+                            if retry_match:
+                                retry_after = retry_match.group(1)
+                            
+                            # Extract a concise error message (look for common acme.sh errors)
+                            if "rateLimited" in log_content:
+                                failure_reason = "Let's Encrypt Rate Limit Reached"
+                            elif "dns_desec" in log_content and "Error" in log_content:
+                                failure_reason = "deSEC DNS API Authentication Failed"
+                            elif "validation failed" in log_content.lower():
+                                failure_reason = "Domain Validation Failed"
+                            else:
+                                failure_reason = "Unknown acme.sh failure (see logs)"
+
+                self._send_json({
+                    "subject": subject,
+                    "issuer": issuer,
+                    "valid_from": not_before_match.group(1).strip() if not_before_match else "Unknown",
+                    "valid_to": not_after_match.group(1).strip() if not_after_match else "Unknown",
+                    "type": cert_type,
+                    "failure_reason": failure_reason,
+                    "retry_after": retry_after
+                })
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/request-ssl-check':
+            try:
+                # Manually trigger the monitor script in the background
+                subprocess.Popen(["/usr/local/bin/cert-monitor.sh"])
+                self._send_json({"success": True, "message": "SSL background check triggered"})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/profiles':
+            try:
+                files = [f.replace('.conf', '') for f in os.listdir(PROFILES_DIR) if f.endswith('.conf')]
+                self._send_json({"profiles": files})
+            except:
+                self._send_json({"error": "Failed to list profiles"}, 500)
+        elif self.path == '/events':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/event-stream')
+            self.send_header('Cache-Control', 'no-cache')
+            self.send_header('Connection', 'keep-alive')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('X-Accel-Buffering', 'no')
+            self.end_headers()
+            try:
+                for _ in range(10):
+                    if os.path.exists(LOG_FILE):
+                        break
+                    time.sleep(1)
+                if not os.path.exists(LOG_FILE):
+                    self.wfile.write(b"data: Log file initializing...\n\n")
+                    self.wfile.flush()
+                f = open(LOG_FILE, 'r')
+                f.seek(0, 2)
+                # Send initial keepalive
+                self.wfile.write(b": keepalive\n\n")
+                self.wfile.flush()
+                keepalive_counter = 0
+                while True:
+                    line = f.readline()
+                    if line:
+                        self.wfile.write(f"data: {line.strip()}\n\n".encode('utf-8'))
+                        self.wfile.flush()
+                        keepalive_counter = 0
+                    else:
+                        time.sleep(1)
+                        keepalive_counter += 1
+                        # Send keepalive comment every 15 seconds to prevent timeout
+                        if keepalive_counter >= 15:
+                            self.wfile.write(b": keepalive\n\n")
+                            self.wfile.flush()
+                            keepalive_counter = 0
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            except Exception:
+                pass
+
+    def do_POST(self):
+        if not self._check_auth():
+            self._send_json({"error": "Unauthorized"}, 401)
+            return
+
+        if self.path.startswith('/watchtower'):
+            try:
+                l = int(self.headers['Content-Length'])
+                data = json.loads(self.rfile.read(l).decode('utf-8'))
+                # Log watchtower event to history
+                with open(LOG_FILE, 'a') as f:
+                    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+                    entries = data.get('entries', [])
+                    for entry in entries:
+                        msg = entry.get('message', '')
+                        if 'Updated' in msg or 'Pulling' in msg:
+                            f.write(f"{timestamp} [WATCHTOWER] {msg}\n")
+                self._send_json({"success": True})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/upload':
+            try:
+                l = int(self.headers['Content-Length'])
+                data = json.loads(self.rfile.read(l).decode('utf-8'))
+                raw_name = data.get('name', '').strip()
+                config = data.get('config')
+                if not raw_name:
+                    extracted = extract_profile_name(config)
+                    raw_name = extracted if extracted else f"Imported_{int(time.time())}"
+                safe = "".join([c for c in raw_name if c.isalnum() or c in ('-', '_', '#')])
+                with open(os.path.join(PROFILES_DIR, f"{safe}.conf"), "w") as f:
+                    f.write(config.replace('\r', ''))
+                self._send_json({"success": True, "name": safe})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/activate':
+            try:
+                l = int(self.headers['Content-Length'])
+                name = json.loads(self.rfile.read(l).decode('utf-8')).get('name')
+                safe = "".join([c for c in name if c.isalnum() or c in ('-', '_', '#')])
+                subprocess.run([CONTROL_SCRIPT, "activate", safe], check=True, timeout=60)
+                self._send_json({"success": True})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/delete':
+            try:
+                l = int(self.headers['Content-Length'])
+                name = json.loads(self.rfile.read(l).decode('utf-8')).get('name')
+                safe = "".join([c for c in name if c.isalnum() or c in ('-', '_', '#')])
+                subprocess.run([CONTROL_SCRIPT, "delete", safe], check=True, timeout=30)
+                self._send_json({"success": True})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/odido-userid':
+            try:
+                l = int(self.headers['Content-Length'])
+                data = json.loads(self.rfile.read(l).decode('utf-8'))
+                oauth_token = data.get('oauth_token', '').strip()
+                if not oauth_token:
+                    self._send_json({"error": "oauth_token is required"}, 400)
+                    return
+                # Use curl to fetch the User ID from Odido API
+                result = subprocess.run([
+                    'curl', '-sL', '-o', '/dev/null', '-w', '%{url_effective}',
+                    '-H', f'Authorization: Bearer {oauth_token}',
+                    '-H', 'User-Agent: T-Mobile 5.3.28 (Android 10; 10)',
+                    'https://capi.odido.nl/account/current'
+                ], capture_output=True, text=True, timeout=30)
+                redirect_url = result.stdout.strip()
+                # Extract 12-character hex User ID from URL (case-insensitive)
+                match = re.search(r'capi\.odido\.nl/([0-9a-fA-F]{12})', redirect_url, re.IGNORECASE)
+                if match:
+                    user_id = match.group(1)
+                    self._send_json({"success": True, "user_id": user_id})
+                else:
+                    # Fallback: extract first path segment after capi.odido.nl/
+                    match = re.search(r'capi\.odido\.nl/([^/]+)/', redirect_url, re.IGNORECASE)
+                    if match and match.group(1).lower() != 'account':
+                        user_id = match.group(1)
+                        self._send_json({"success": True, "user_id": user_id})
+                    else:
+                        self._send_json({"error": "Could not extract User ID from Odido API response", "url": redirect_url}, 400)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+
+if __name__ == "__main__":
+    print(f"Starting API server on port {PORT}...")
+    if not os.path.exists(LOG_FILE):
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        open(LOG_FILE, 'a').close()
+    with ThreadingHTTPServer(("", PORT), APIHandler) as httpd:
+        print(f"API server running on port {PORT}")
+        httpd.serve_forever()
+APIEOF
+chmod +x "$WG_API_SCRIPT"
+
+# --- SECTION 13: ORCHESTRATION LAYER (DOCKER COMPOSE) ---
+# Compile the unified multi-container definition for the complete privacy stack.
+log_info "Compiling Orchestration Layer (docker-compose.yml)..."
 cat > "$COMPOSE_FILE" <<EOF
 networks:
   frontnet:
@@ -1220,7 +2417,6 @@ x-casaos:
       including Invidious, Redlib, Wikiless, and more.
   icon: https://raw.githubusercontent.com/AdrienPoupa/docker-compose-nas/master/images/adguard.png
 EOF
-
 
 # --- SECTION 14: DASHBOARD & UI GENERATION ---
 # Generate the Material Design 3 management dashboard.
@@ -2652,6 +3848,35 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     if (isTrusted && domain) {
                         el.href = "https://" + info.sub + "." + domain + ":8443/";
                     } else {
+                        const baseIpUrl = "http://$LAN_IP:" + info.port;
+                        el.href = id === 'breezewiki' ? baseIpUrl + '/' : baseIpUrl;
+                    }
+                }
+
+            } catch (e) {
+                console.error('Cert status fetch error:', e);
+                document.getElementById('cert-type').textContent = "Fetch Error";
+            }
+        }
+
+        async function requestSslCheck() {
+            const btn = document.getElementById('ssl-retry-btn');
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            try {
+                const res = await fetch(API + "/request-ssl-check");
+                const data = await res.json();
+                if (data.success) {
+                    alert("SSL Check triggered in background. This may take 2-3 minutes. Refresh the dashboard later.");
+                } else {
+                    alert("Failed to trigger SSL check: " + (data.error || "Unknown error"));
+                }
+            } catch (e) {
+                alert("Network error while triggering SSL check.");
+            }
+            setTimeout(() => { btn.disabled = false; btn.style.opacity = '1'; }, 10000);
+        }
+        
         document.addEventListener('DOMContentLoaded', () => {
             // Pre-populate Odido API key from deployment
             if (DEFAULT_ODIDO_API_KEY && !localStorage.getItem('odido_api_key')) {
@@ -2893,3 +4118,83 @@ if $DOCKER_CMD ps | grep -q adguard; then
     if curl -s --max-time 5 "http://$LAN_IP:$PORT_ADGUARD_WEB" > /dev/null; then
         log_info "AdGuard web interface is accessible"
     else
+        log_warn "AdGuard web interface not yet accessible (may still be initializing)"
+    fi
+    if $DOCKER_CMD exec adguard test -f /opt/adguardhome/conf/AdGuardHome.yaml; then
+        log_info "AdGuard configuration file is present"
+    else
+        log_warn "AdGuard configuration file not found in container"
+    fi
+fi
+
+check_iptables
+
+
+echo "[+] Taking out the trash (cleaning up unused images)..."
+$DOCKER_CMD image prune -af
+
+$DOCKER_CMD restart portainer 2>/dev/null || true
+
+echo "=========================================================="
+echo "SYSTEM DEPLOYED"
+echo "=========================================================="
+echo "ACCESS YOUR DASHBOARD:"
+echo "http://$LAN_IP:$PORT_DASHBOARD_WEB"
+echo -e "\e[33m[WARN]\e[0m If you have a VPN extension in your browser, TURN IT OFF for this site."
+echo -e "\e[33m[WARN]\e[0m Corporate VPN extensions love to break local dashboards with 'Error 503'."
+echo ""
+echo "ADGUARD HOME (DNS + Web UI):"
+echo "http://$LAN_IP:$PORT_ADGUARD_WEB"
+echo ""
+echo -e "\e[33m[NOTE]\e[0m Everything is bound to $LAN_IP. We aren't fighting ZimaOS for port 80."
+echo ""
+echo "WIREGUARD VPN (Your Remote Access):"
+echo "http://$LAN_IP:$PORT_WG_WEB"
+echo ""
+echo "HOW TO SETUP YOUR DEVICES:"
+echo "  [ AT HOME / LAN ]"
+echo "  Primary DNS: $LAN_IP"
+echo "  -> DO THIS: Set your router's DNS to $LAN_IP so your whole house is protected."
+echo ""
+echo "  [ AWAY FROM HOME / ENCRYPTED DNS ]"
+echo "  - Connect to your WireGuard VPN first. Don't trust the hotel Wi-Fi."
+echo "  - Once connected, use:"
+echo "    - DoH: https://$DESEC_DOMAIN/dns-query"
+echo "    - DoT: $DESEC_DOMAIN:853"
+echo "    - DoQ: quic://$DESEC_DOMAIN"
+echo "  "
+echo "  Note: We only exposed WireGuard. You must be on the VPN to use these away from home."
+echo ""
+echo "SECURITY AUDIT:"
+echo "  ✓ ONLY WireGuard (51820/udp) is open to the internet."
+echo "  ✓ No corporate DNS tracking. You talk to the root servers."
+echo "  ✓ No ISP snooping. Your history isn't their product anymore."
+echo ""
+echo "SPLIT TUNNELING (Save your bandwidth):"
+echo "  ✓ Only your private traffic and DNS go through the VPN."
+echo "  ✓ Netflix and OS updates go direct. Your home's upload speed stays safe."
+echo ""
+if [ -f "$AGH_CONF_DIR/ssl.crt" ]; then
+    if grep -q "BEGIN CERTIFICATE" "$AGH_CONF_DIR/ssl.crt"; then
+        if ! grep -q "Let's Encrypt" "$AGH_CONF_DIR/ssl.crt" && ! grep -q "R3" "$AGH_CONF_DIR/ssl.crt"; then
+            echo -e "\e[33m[IMPORTANT]\e[0m YOU ARE USING A SELF-SIGNED CERTIFICATE"
+            echo "  - Most mobile devices won't like this for encrypted DNS."
+            echo "  - The cert-monitor.sh script is running in the background. It will"
+            echo "    switch you to Let's Encrypt as soon as the rate limit allows."
+            echo "  - Standard DNS (Port 53) works fine over LAN and VPN."
+            echo ""
+        fi
+    fi
+fi
+if [ "$AUTO_PASSWORD" = true ]; then
+    echo "=========================================================="
+    echo "YOUR GENERATED CREDENTIALS"
+    echo "=========================================================="
+    echo "VPN Web UI Password: $VPN_PASS_RAW"
+    echo "AdGuard Home Password: $AGH_PASS_RAW"
+    echo "AdGuard Home Username: adguard"
+    echo "Odido Booster API Key: $ODIDO_API_KEY"
+    echo ""
+    echo "WRITE THESE DOWN. They are also in: $BASE_DIR/.secrets"
+fi
+echo "=========================================================="
