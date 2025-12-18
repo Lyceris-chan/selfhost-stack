@@ -951,6 +951,276 @@ services:
     image: ghcr.io/wg-easy/wg-easy:latest
     container_name: wg-easy
     network_mode: "host"
+    environment:
+      - WG_HOST=$PUBLIC_IP
+      - PASSWORD_HASH=$WG_HASH_COMPOSE
+      - WG_DEFAULT_DNS=$LAN_IP
+      - WG_ALLOWED_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - WG_PERSISTENT_KEEPALIVE=0
+      - WG_PORT=51820
+      - WG_DEVICE=eth0
+      - WG_POST_UP=iptables -t nat -I POSTROUTING 1 -s 10.8.0.0/24 -j MASQUERADE; iptables -A FORWARD -i wg0 -j ACCEPT; iptables -A FORWARD -o wg0 -j ACCEPT
+      - WG_POST_DOWN=iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE; iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o wg0 -j ACCEPT
+    volumes: ["wg-config:/etc/wireguard"]
+    cap_add: [NET_ADMIN, SYS_MODULE]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '1.0', memory: 256M}
+
+  redlib:
+    image: quay.io/redlib/redlib:latest
+    container_name: redlib
+    network_mode: "service:gluetun"
+    environment: {REDLIB_DEFAULT_WIDE: "on", REDLIB_DEFAULT_USE_HLS: "on", REDLIB_DEFAULT_SHOW_NSFW: "on"}
+    restart: always
+    user: nobody
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    depends_on: {gluetun: {condition: service_healthy}}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "--tries=1", "http://localhost:8080/settings"]
+      interval: 5m
+      timeout: 3s
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+
+  wikiless:
+    build: {context: "$SRC_DIR/wikiless"}
+    container_name: wikiless
+    network_mode: "service:gluetun"
+    environment: {DOMAIN: "$LAN_IP:$PORT_WIKILESS", NONSSL_PORT: "$PORT_INT_WIKILESS"}
+    healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:8180/ || exit 1", interval: 30s, timeout: 5s, retries: 2}
+    depends_on: {wikiless_redis: {condition: service_healthy}, gluetun: {condition: service_healthy}}
+    restart: always
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+
+  wikiless_redis:
+    image: dhi.io/redis:7
+    container_name: wikiless_redis
+    labels:
+      - "casaos.skip=true"
+    network_mode: "service:gluetun"
+    volumes: ["redis-data:/data"]
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 5}
+    restart: always
+    deploy:
+      resources:
+        limits: {cpus: '0.3', memory: 128M}
+
+  invidious:
+    image: quay.io/invidious/invidious:latest
+    container_name: invidious
+    network_mode: "service:gluetun"
+    environment:
+      INVIDIOUS_CONFIG: |
+        db:
+          dbname: invidious
+          user: kemal
+          password: kemal
+          host: 127.0.0.1
+          port: 5432
+        check_tables: true
+        invidious_companion:
+          - private_url: "http://127.0.0.1:8282/companion"
+        invidious_companion_key: "$IV_COMPANION"
+        hmac_key: "$IV_HMAC"
+    healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || exit 1", interval: 30s, timeout: 5s, retries: 2}
+    logging:
+      options:
+        max-size: "1G"
+        max-file: "4"
+    depends_on:
+      invidious-db: {condition: service_healthy}
+      gluetun: {condition: service_healthy}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '1.5', memory: 1024M}
+
+  invidious-db:
+    image: dhi.io/postgres:14-alpine
+    container_name: invidious-db
+    labels:
+      - "casaos.skip=true"
+    network_mode: "service:gluetun"
+    environment: {POSTGRES_DB: invidious, POSTGRES_USER: kemal, POSTGRES_PASSWORD: kemal}
+    volumes:
+      - postgresdata:/var/lib/postgresql/data
+      - $SRC_DIR/invidious/config/sql:/config/sql
+      - $SRC_DIR/invidious/docker/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U kemal -d invidious"], interval: 10s, timeout: 5s, retries: 5}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '1.0', memory: 512M}
+
+  companion:
+    image: quay.io/invidious/invidious-companion:latest
+    container_name: companion
+    labels:
+      - "casaos.skip=true"
+    network_mode: "service:gluetun"
+    environment:
+      - SERVER_SECRET_KEY=$IV_COMPANION
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "1G"
+        max-file: "4"
+    cap_drop:
+      - ALL
+    read_only: true
+    volumes:
+      - companioncache:/var/tmp/youtubei.js:rw
+    security_opt:
+      - no-new-privileges:true
+    depends_on: {gluetun: {condition: service_healthy}}
+
+  libremdb:
+    image: ghcr.io/zyachel/libremdb:latest
+    container_name: libremdb
+    network_mode: "service:gluetun"
+    env_file: ["$ENV_DIR/libremdb.env"]
+    environment: {PORT: "$PORT_INT_LIBREMDB"}
+    depends_on: {gluetun: {condition: service_healthy}}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+
+  rimgo:
+    image: codeberg.org/rimgo/rimgo:latest
+    pull_policy: if_not_present
+    container_name: rimgo
+    network_mode: "service:gluetun"
+    environment: {IMGUR_CLIENT_ID: "546c25a59c58ad7", ADDRESS: "0.0.0.0", PORT: "$PORT_INT_RIMGO"}
+    depends_on: {gluetun: {condition: service_healthy}}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+
+  breezewiki:
+    image: quay.io/pussthecatorg/breezewiki:latest
+    container_name: breezewiki
+    network_mode: "service:gluetun"
+    environment:
+      - bw_bind_host=0.0.0.0
+      - bw_port=$PORT_INT_BREEZEWIKI
+      - bw_canonical_origin=http://$LAN_IP:$PORT_BREEZEWIKI
+      - bw_debug=false
+      - bw_feature_search_suggestions=true
+      - bw_strict_proxy=true
+    depends_on: {gluetun: {condition: service_healthy}}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+
+  anonymousoverflow:
+    image: ghcr.io/httpjamesm/anonymousoverflow:release
+    container_name: anonymousoverflow
+    network_mode: "service:gluetun"
+    env_file: ["$ENV_DIR/anonymousoverflow.env"]
+    environment: {PORT: "$PORT_INT_ANONYMOUS"}
+    depends_on: {gluetun: {condition: service_healthy}}
+    restart: always
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+
+  scribe:
+    build: {context: "$SRC_DIR/scribe"}
+    container_name: scribe
+    network_mode: "service:gluetun"
+    env_file: ["$ENV_DIR/scribe.env"]
+    depends_on: {gluetun: {condition: service_healthy}}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+
+  # VERT: Local file conversion service
+  vertd:
+    container_name: vertd
+    image: ghcr.io/vert-sh/vertd:latest
+    networks: [frontnet]
+    ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
+    labels:
+      - "casaos.skip=true"
+    environment:
+      - PUBLIC_URL=$VERTD_PUB_URL
+    # Intel GPU support
+    devices:
+      - /dev/dri
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '2.0', memory: 1024M}
+
+  vert:
+    container_name: vert
+    image: ghcr.io/vert-sh/vert:latest
+    build:
+      context: $SRC_DIR/vert
+      args:
+        PUB_HOSTNAME: $VERT_PUB_HOSTNAME
+        PUB_PLAUSIBLE_URL: ""
+        PUB_ENV: production
+        PUB_DISABLE_ALL_EXTERNAL_REQUESTS: "true"
+        PUB_DISABLE_FAILURE_BLOCKS: "true"
+        PUB_VERTD_URL: $VERTD_PUB_URL
+        PUB_DONATION_URL: ""
+        PUB_STRIPE_KEY: ""
+        PUB_DISABLE_DONATIONS: "true"
+    environment:
+      - PUB_HOSTNAME=$VERT_PUB_HOSTNAME
+      - PUB_PLAUSIBLE_URL=
+      - PUB_ENV=production
+      - PUB_DISABLE_ALL_EXTERNAL_REQUESTS=true
+      - PUB_DISABLE_FAILURE_BLOCKS=true
+      - PUB_VERTD_URL=$VERTD_PUB_URL
+      - PUB_DONATION_URL=
+      - PUB_STRIPE_KEY=
+      - PUB_DISABLE_DONATIONS=true
+    networks: [frontnet]
+    ports: ["$LAN_IP:$PORT_VERT:$PORT_INT_VERT"]
+    labels:
+      - "casaos.skip=true"
+    depends_on:
+      vertd: {condition: service_started}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+
+x-casaos:
+  architectures:
+    - amd64
+  main: dashboard
+  author: Lyceris-chan
+  category: Network
+  scheme: http
+  hostname: $LAN_IP
+  index: /
+  port_map: "8081"
+  title:
+    en_us: Privacy Hub
+  tagline:
+    en_us: Self-hosted privacy stack with VPN, DNS filtering, and privacy frontends
+  description:
+    en_us: |
+      A comprehensive self-hosted privacy stack with WireGuard VPN access, 
+      AdGuard Home DNS filtering, and various privacy-respecting frontend services
+      including Invidious, Redlib, Wikiless, and more.
+  icon: https://raw.githubusercontent.com/AdrienPoupa/docker-compose-nas/master/images/adguard.png
+EOF
+
 
 # --- SECTION 14: DASHBOARD & UI GENERATION ---
 # Generate the Material Design 3 management dashboard.
