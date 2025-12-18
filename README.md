@@ -148,3 +148,53 @@ The **real leak** is DNS. If you don't own your DNS, your ISP logs every domain 
 
 ## 🛡️ Security Audit & Privacy Standards
 
+### DHI Hardened Images
+We don't use standard "official" images where we can avoid it. We use **DHI hardened images** (`dhi.io`). 
+- **Why?**: Standard images are packed with "convenience" tools that are actually just security holes waiting to be exploited. Hardened images are stripped down to the absolute bare essentials.
+- **The Stats**: Hardened images can reduce the attack surface by **over 70%** by removing unnecessary binaries and libraries. Less code means fewer bugs, and fewer bugs mean fewer ways for someone to break into your house. (Source: [CIS Benchmarks](https://www.cisecurity.org/benchmark/docker))
+
+### The "Silent" Security Model (DDoS & Scan Resistance)
+Opening a port for WireGuard does **not** expose your home to DDoS or unauthorized access. In fact, this setup is significantly more secure than typical corporate "cloud" logins.
+- **WireGuard is Silent**: Unlike OpenVPN or SSH, WireGuard does not respond to packets it doesn't recognize. If an attacker scans your IP, your port 51820 looks **closed**. It won't even send a "go away" packet. 
+- **DDoS Mitigation**: Because WireGuard is silent to unauthenticated packets, it is inherently resistant to most DDoS and scanning attacks. Since it doesn't keep state for unauthorized connections, an attacker can't exhaust your machine's memory with "half-open" connections (like a SYN flood). You're effectively invisible to the "noise" of the internet.
+- **Cryptographic Ownership**: You can't "guess" a password. You need a valid 256-bit cryptographic key. Without it, you don't exist to the server.
+- **No Domain-to-Home Path**: Your domain is just a pointer. Since Nginx only listens internally and the only entry point is the secure tunnel, there is **no way** for someone to connect to your dashboard from the internet without being inside your tunnel first. You aren't just hidden; you're unreachable.
+
+## 📦 Service Catalog
+
+### Core Infrastructure
+- **WireGuard (WG-Easy)**: A VPN server that actually works. Secure remote access without the corporate "cloud" middleman.
+- **AdGuard Home**: Network-wide security and ad-filtering. It stops the trackers before they even touch your device.
+- **Unbound**: A validating, recursive, caching DNS resolver. You talk to the root servers directly. You don't ask for permission.
+- **Gluetun**: VPN client that routes specific service traffic through an external provider you trust.
+- **Nginx & Hub-API**: The dashboard and the brains of the operation. No external dependencies.
+
+### Security & Resilience
+- **Reliable Local Fonts**: Font CSS files are served locally. Why let Google track your IP just because you wanted a nice-looking font?
+- **Reactive SSL**: Automated Let's Encrypt management with proactive rate-limit recovery.
+- **IP Monitoring**: Real-time detection of public IP changes with automated DNS synchronization.
+
+### Privacy Frontends (VPN-Routed)
+- **Invidious**: YouTube without tracking, ads, or Google accounts.
+- **Redlib**: Reddit without the bloat or trackers. 
+- **Wikiless**: Wikipedia without tracking cookies.
+- **LibremDB**: Private metadata engine for movies and TV.
+- **Rimgo**: Anonymous Imgur viewer.
+- **Scribe**: Clutter-free Medium reader.
+- **BreezeWiki**: Tracker-free Fandom interface.
+- **AnonOverflow**: Private Stack Overflow interface.
+
+### Utility Services
+- **VERT & VERTD**: Local-first file conversion with Intel GPU acceleration.
+- **Odido Booster**: Automated data bundle management for Odido users.
+- **Watchtower**: Automated container image updates and cleanup.
+
+## 🔌 Service Access & Port Reference
+
+| Service | LAN Port | Subdomain (HTTPS) | Connectivity |
+| :--- | :--- | :--- | :--- |
+| **Management Dashboard** | `8081` | `https://yourdomain.dedyn.io:8443` | Direct |
+| **AdGuard Home (Admin)** | `8083` | `https://adguard.yourdomain.dedyn.io:8443` | Direct |
+| **Portainer (Docker UI)** | `9000` | `https://portainer.yourdomain.dedyn.io:8443` | Direct |
+| **WireGuard (Web UI)** | `51821` | `https://wireguard.yourdomain.dedyn.io:8443` | Direct |
+| **Invidious** | `3000` | `https://invidious.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
