@@ -211,12 +211,15 @@ uci commit firewall
 ## <a id="security"></a>🛡️ Security Model
 
 - **Stealth VPN**: The WireGuard port does not respond to unauthenticated packets, remaining invisible to port scans ([WireGuard Protocol](https://www.wireguard.com/protocol/)).
-- **Hardened Infrastructure**: Generic base images are replaced with **DHI hardened versions** to reduce the attack surface:
-    - **Nginx**: `dhi.io/nginx:1.28-alpine3.21` (Dashboard, VERT)
-    - **Python**: `dhi.io/python:3.11-alpine3.22-dev` (Hub API, Odido)
-    - **Redis**: `dhi.io/redis:7.2-debian13` (Wikiless)
-    - **PostgreSQL**: `dhi.io/postgres:14-alpine3.22` (Invidious)
-    - **Node/Bun/Alpine**: Development images (`dhi.io/node`, `dhi.io/bun`, `dhi.io/alpine-base`) are used for secure local builds.
+- **Hardened Infrastructure**: To minimize the attack surface, this stack enforces the use of **DHI hardened base images**. The `zima.sh` script automatically applies these security standards through direct service definitions and dynamic source-code patching:
+    - **Infrastructure & Databases**:
+        - **Nginx**: `dhi.io/nginx:1.28-alpine3.21` (Powers the Dashboard and VERT frontend).
+        - **Redis**: `dhi.io/redis:7.2-debian13` (Hardened backend for Wikiless).
+        - **PostgreSQL**: `dhi.io/postgres:14-alpine3.22` (Secures the Invidious database).
+    - **Automated Source Patching**: During deployment, the script injects DHI runtimes into upstream Dockerfiles before building:
+        - **Python**: `dhi.io/python:3.11-alpine3.22-dev` (Enforced for Hub-API and Odido Booster).
+        - **Node.js/Bun**: Build pipelines for Wikiless, Scribe, and VERT are patched to use `dhi.io/node:20-alpine3.22-dev` and `dhi.io/bun:1-alpine3.22-dev`.
+        - **Alpine Base**: All services utilizing Alpine are automatically repinned to `dhi.io/alpine-base:3.22-dev` to ensure a minimal, hardened OS layer.
 - **Official Specialized Apps**: High-level applications (Gluetun, AdGuard, etc.) utilize their official registry sources to ensure maximum compatibility and up-to-date functionality.
 - **Zero Public Access**: Internal APIs and management interfaces are only accessible via the encrypted VPN tunnel or local network.
 
