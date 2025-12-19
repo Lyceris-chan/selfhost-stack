@@ -3,18 +3,18 @@
 A self-hosted privacy stack for people who want to own their data instead of renting a false sense of security.
 
 ## 📋 Table of Contents
-- [Project Overview](#project-overview)
-- [Quick Start](#quick-start)
-- [Privacy & Ownership](#privacy--ownership)
-- [Technical Architecture](#technical-architecture)
-- [Network Configuration](#network-configuration)
-- [Advanced Setup: OpenWrt & Double NAT](#advanced-setup-openwrt--double-nat)
-- [Remote Access: Taking Your Network With You](#remote-access-taking-your-network-with-you)
-- [Security Audit & Privacy Standards](#security-audit--privacy-standards)
-- [Service Catalog](#service-catalog)
-- [Service Access & Port Reference](#service-access--port-reference)
-- [System Resilience](#system-resilience)
-- [Community & Contributions](#community--contributions)
+- [Project Overview](#-project-overview)
+- [Quick Start](#-quick-start)
+- [Privacy & Ownership](#-privacy--ownership)
+- [Technical Architecture](#-technical-architecture)
+- [Network Configuration](#-network-configuration)
+- [Advanced Setup: OpenWrt & Double NAT](#-advanced-setup-openwrt--double-nat)
+- [Remote Access: Taking Your Network With You](#-remote-access-taking-your-network-with-you)
+- [Security Audit & Privacy Standards](#-security-audit--privacy-standards)
+- [Service Catalog](#-service-catalog)
+- [Service Access & Port Reference](#-service-access--port-reference)
+- [System Resilience](#-system-resilience)
+- [Community & Contributions](#-community--contributions)
 
 ## 🌟 Project Overview
 Privacy Hub is a security gateway for ZimaOS. It centralizes network traffic through a secure WireGuard tunnel, filters DNS at the source using recursive resolution, and routes application frontends through a dedicated VPN gateway (Gluetun). It's designed to stop your data from being a product sold to the highest bidder.
@@ -84,7 +84,7 @@ In traditional HTTPS, the very first part of the connection (the "Client Hello")
 ### Standard Setup: ISP Router Only
 If you just have the standard router your ISP gave you, you only need to do one thing:
 1.  **Forward port 51820/UDP** to your ZimaOS machine's local IP.
-This is the only open door. It is cryptographically silent and does not increase your attack surface (see the [Security Model](#security-audit--privacy-standards)).
+This is the only open door. It is cryptographically silent and does not increase your attack surface (see the [Security Model](#-security-audit--privacy-standards)).
 
 ### Local "Home" Mode: DNS Rewrites
 When you're at home, you shouldn't have to bounce traffic off a satellite just to see your own dashboard. AdGuard Home uses **DNS Rewrites** to tell your devices the local LAN IP (`192.168.1.100`) instead of your public IP. You get SSL and local speeds without needing a VPN tunnel.
@@ -170,7 +170,7 @@ Privacy Hub turns your ZimaOS into a portable security boundary. Using **WG-Easy
 
 - **Bandwidth-Optimized Split Tunneling**: By default, only private traffic and DNS go through the tunnel. 
 - **The HTTPS Myth**: VPN companies love to scare you, but [over 95% of web traffic is HTTPS encrypted](https://transparencyreport.google.com/https/overview). Your ISP can't see inside your packets; HTTPS already handles that. The **real leak is DNS**, which we solve by forcing "phonebook" requests through the tunnel while letting encrypted data go direct for speed.
-- **Seamless Domain Access (dedyn.io)**: Your hostnames (see [Service Access](#service-access--port-reference)) resolve correctly over the VPN, allowing you to use SSL certificates globally.
+- **Seamless Domain Access (dedyn.io)**: Your hostnames (see [Service Access](#-service-access--port-reference)) resolve correctly over the VPN, allowing you to use SSL certificates globally.
 
 ## 📦 Service Catalog
 
