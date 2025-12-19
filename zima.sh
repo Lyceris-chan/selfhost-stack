@@ -1464,7 +1464,7 @@ if [ -f "$SRC_DIR/vert/$VERT_DOCKERFILE" ]; then
     sed -i 's|^FROM oven/bun[[:space:]]|FROM dhi.io/bun:1-alpine3.22-dev |g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i '/rm -rf \\/var\\/lib\\/apt\\/lists/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     sed -i 's|^FROM nginx:stable-alpine|FROM dhi.io/nginx:1.28-alpine3.21|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     log_info "Patched VERT Dockerfile to use DHI hardened images."
