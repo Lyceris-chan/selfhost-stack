@@ -43,7 +43,7 @@ Privacy Hub centralizes network traffic through a secure WireGuard tunnel and fi
 - **Self-hosted trust boundary**: Frontends and logs live on your hardware, not a public instance you do not control.
 - **Home IP shielding**: VPN-routed services prevent destination platforms from linking traffic to your residential address.
 - **Privacy-First IP Detection**: Public IP detection (used for dynamic DNS and VPN synchronization) utilizes verified privacy-respecting services:
-    - **ident.me**: [Privacy Policy](https://ident-me.io/privacy-policy) (Minimal data retention, no third-party selling).
+    - **ipify.org**: [Privacy Policy](https://www.ipify.org) (No visitor information is ever logged).
     - **ip-api.com**: [Privacy Policy](https://ip-api.com/docs/privacy) (Explicitly does not log requests for free users).
 - **Minimal exposure**: Management interfaces stay on the LAN or inside the WireGuard tunnel by default.
 

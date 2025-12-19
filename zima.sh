@@ -637,7 +637,7 @@ else
     log_info "Detected LAN IP ($DETECTION_HINT): $LAN_IP"
 fi
 
-PUBLIC_IP=$(curl -s --max-time 5 https://ident.me || curl -s --max-time 5 https://ip-api.com/line?fields=query || curl -s --max-time 5 https://eth0.me || echo "$LAN_IP")
+PUBLIC_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ip-api.com/line?fields=query || curl -s --max-time 5 https://eth0.me || echo "$LAN_IP")
 echo "$PUBLIC_IP" > "$CURRENT_IP_FILE"
 
 # --- SECTION 5: AUTHENTICATION & CREDENTIAL MANAGEMENT ---
@@ -1589,7 +1589,7 @@ elif [ "$ACTION" = "status" ]; then
         
         # Fallback to external IP check if control server didn't return an IP
         if [ -z "$PUBLIC_IP" ] || [ "$PUBLIC_IP" = "--" ]; then
-            PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://ident.me 2>/dev/null || echo "--")
+            PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
         fi
         
         # Try to get endpoint from WireGuard config if available
@@ -4262,7 +4262,7 @@ if ! flock -n 9; then
     exit 0
 fi
 
-NEW_IP=$(curl -s --max-time 5 https://ident.me || curl -s --max-time 5 https://ip-api.com/line?fields=query || curl -s --max-time 5 https://eth0.me || echo "FAILED")
+NEW_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ip-api.com/line?fields=query || curl -s --max-time 5 https://eth0.me || echo "FAILED")
 
 if [[ ! "$NEW_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "$(date) [ERROR] Failed to get valid public IP (Response: $NEW_IP)" >> "$LOG_FILE"
