@@ -2585,7 +2585,7 @@ x-casaos:
       recursive DNS with AdGuard filtering, and VPN-isolated privacy frontends
       (Invidious, Redlib, etc.) that reduce tracking and prevent home IP exposure.
   icon: http://$LAN_IP:8081/fonts/privacy-hub.svg
-
+EOF
 
 # --- SECTION 14: DASHBOARD & UI GENERATION ---
 # Generate the Material Design 3 management dashboard.
