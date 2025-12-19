@@ -208,8 +208,8 @@ setup_fonts() {
             
             # Escape URL for sed: escape / and &
             escaped_url=$(echo "$url" | sed 's/[\/&]/\\&/g')
-            # Replace the URL in the CSS file (perl keeps compatibility with BSD sed)
-            perl -0pi -e "s|url(['\"]\{0,1\}${escaped_url}['\"]\{0,1\})|url($clean_name)|g" "$css_file"
+            # Replace the URL in the CSS file
+            sed -i "s|url(['\"]\{0,1\}${escaped_url}['\"]\{0,1\})|url($clean_name)|g" "$css_file"
         done
     done
     cd - >/dev/null
