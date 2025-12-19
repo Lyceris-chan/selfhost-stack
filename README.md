@@ -50,8 +50,8 @@ Privacy Hub centralizes network traffic through a secure WireGuard tunnel and fi
 ## <a id="telemetry"></a>🧾 Telemetry & Data Collection
 This stack is configured to minimize telemetry and local logging by default. Verify or adjust as needed:
 
-- **[AdGuard Home](https://adguard.com/en/adguard-home/overview.html)**: AdGuard Home states it does not collect usage statistics by default ([privacy statement](https://github.com/AdguardTeam/AdGuardHome#privacy)). We keep local query logs and statistics for 30 days in `/DATA/AppData/privacy-hub/config/adguard/AdGuardHome.yaml` (`querylog.enabled=true`, `statistics.enabled=true`, `interval=720h`). Adjust retention or disable in the AdGuard UI or config if you want less local logging.
-- **[Portainer CE](https://github.com/portainer/portainer-ce)**: The deployment attempts to disable anonymous usage statistics via the Portainer API. Verify in **Settings → General → Allow the collection of anonymous statistics** ([docs](https://docs.portainer.io/admin/settings/general), [privacy policy](https://www.portainer.io/documentation/in-app-analytics-and-privacy-policy/)). The legacy `--no-analytics` flag is deprecated, so use the UI toggle.
+- **[AdGuard Home](https://adguard.com/en/adguard-home/overview.html)**: AdGuard Home states it does not collect usage statistics by default ([privacy policy](https://adguard.com/en/privacy/home.html)). We keep local query logs and statistics for 30 days in `/DATA/AppData/privacy-hub/config/adguard/AdGuardHome.yaml` (`querylog.enabled=true`, `statistics.enabled=true`, `interval=720h`). Adjust retention or disable in the AdGuard UI or config if you want less local logging.
+- **[Portainer CE](https://github.com/portainer/portainer-ce)**: The deployment attempts to disable anonymous usage statistics via the Portainer API. Verify in **Settings → General → Allow the collection of anonymous statistics** ([docs](https://docs.portainer.io/admin/settings/general), [privacy policy](https://www.portainer.io/legal/privacy-policy)). The legacy `--no-analytics` flag is deprecated, so use the UI toggle.
 - **Other services**: No extra telemetry is enabled by this stack. External calls occur only for core functionality (e.g., VPN provider endpoints or update checks).
 
 ## <a id="credentials"></a>🔑 Required Credentials & Configuration
@@ -238,11 +238,11 @@ All links below point to official project pages or maintainer repositories (no G
 | **[Portainer CE](https://github.com/portainer/portainer-ce)** | Management | Port 9000 |
 | **[Invidious](https://github.com/iv-org/invidious)** | YouTube | **🔒 VPN Routed** |
 | **[Redlib](https://github.com/redlib-org/redlib)** | Reddit | **🔒 VPN Routed** |
-| **[Wikiless](https://codeberg.org/orangef/wikiless)** | Wikipedia | **🔒 VPN Routed** |
+| **[Wikiless](https://github.com/Metastem/Wikiless)** | Wikipedia | **🔒 VPN Routed** |
 | **[Memos](https://github.com/usememos/memos)** | Notes | Port 5230 |
 | **[Rimgo](https://codeberg.org/rimgo/rimgo)** | Imgur | **🔒 VPN Routed** |
-| **[Scribe](https://github.com/iv-org/scribe)** | Medium | **🔒 VPN Routed** |
-| **[BreezeWiki](https://gitlab.com/breezewiki/breezewiki)** | Fandom | **🔒 VPN Routed** |
+| **[Scribe](https://git.sr.ht/~edwardloveall/scribe)** | Medium | **🔒 VPN Routed** |
+| **[BreezeWiki](https://gitdab.com/cadence/breezewiki)** | Fandom | **🔒 VPN Routed** |
 | **[AnonOverflow](https://github.com/httpjamesm/anonymousoverflow)** | Stack Overflow | **🔒 VPN Routed** |
 | **[VERT](https://github.com/vert-sh/vert)** | File Conversion | Port 5555 |
 | **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)** | Utility | Port 8085 |
@@ -262,10 +262,10 @@ All links below point to official project pages or maintainer repositories (no G
 #### Privacy Frontends (VPN-Routed)
 - **[Invidious](https://github.com/iv-org/invidious)**: Access YouTube content privately (Port 3000). It strips all tracking and advertisements, routes traffic through the VPN to hide your IP, and provides a lightweight interface without proprietary telemetry.
 - **[Redlib](https://github.com/redlib-org/redlib)**: A hardened Reddit frontend (Port 8080). It eliminates tracking pixels, intrusive analytics, and advertisements, ensuring your browsing habits remain confidential and your home IP is never disclosed.
-- **[Wikiless](https://codeberg.org/orangef/wikiless)**: Wikipedia without the cookies or telemetry (Port 8180). All requests are routed through the VPN to maintain total anonymity.
+- **[Wikiless](https://github.com/Metastem/Wikiless)**: Wikipedia without the cookies or telemetry (Port 8180). All requests are routed through the VPN to maintain total anonymity.
 - **[Rimgo](https://codeberg.org/rimgo/rimgo)**: An anonymous Imgur viewer (Port 3002) that removes telemetry and tracking scripts while hiding your location behind the VPN proxy.
-- **[Scribe](https://github.com/iv-org/scribe)**: Read Medium articles without the paywalls, tracking scripts, or IP logging common on the standard platform (Port 8280).
-- **[BreezeWiki](https://gitlab.com/breezewiki/breezewiki)**: Clean Fandom interface (Port 8380). Neutralizes aggressive advertising networks and prevents tracking scripts from monitoring your visits.
+- **[Scribe](https://git.sr.ht/~edwardloveall/scribe)**: Read Medium articles without the paywalls, tracking scripts, or IP logging common on the standard platform (Port 8280).
+- **[BreezeWiki](https://gitdab.com/cadence/breezewiki)**: Clean Fandom interface (Port 8380). Neutralizes aggressive advertising networks and prevents tracking scripts from monitoring your visits.
 - **[AnonOverflow](https://github.com/httpjamesm/anonymousoverflow)**: Private StackOverflow interface (Port 8480). Facilitates information retrieval for developers without facilitating cross-site corporate surveillance or IP tracking.
 
 #### Utilities & Automation
