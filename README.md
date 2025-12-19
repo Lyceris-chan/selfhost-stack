@@ -14,7 +14,7 @@ A self-hosted privacy stack for people who want to own their data instead of ren
 - [Service Catalog](#service-catalog)
 - [Service Access & Port Reference](#service-access--port-reference)
 - [System Resilience](#system-resilience)
-- [Community & Contributions](#-community--contributions)
+- [Community & Contributions](#community--contributions)
 
 ## 🌟 Project Overview
 Privacy Hub is a security gateway for ZimaOS. It centralizes network traffic through a secure WireGuard tunnel, filters DNS at the source using recursive resolution, and routes application frontends through a dedicated VPN gateway (Gluetun). It's designed to stop your data from being a product sold to the highest bidder.
