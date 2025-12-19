@@ -209,7 +209,7 @@ setup_fonts() {
             # Escape URL for sed: escape / and &
             escaped_url=$(echo "$url" | sed 's/[\/&]/\\&/g')
             # Replace the URL in the CSS file
-            sed -i "s|url(['\"]\{0,1\}$escaped_url['\"]\{0,1\})|url($clean_name)|g" "$css_file"
+            sed -i "s|url(['\"]\{0,1\}${escaped_url}['\"]\{0,1\})|url($clean_name)|g" "$css_file"
         done
     done
     cd - >/dev/null
@@ -1012,8 +1012,7 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
         log_warn "Let's Encrypt failed, generating self-signed certificate..."
         $DOCKER_CMD run --rm \
             -v "$AGH_CONF_DIR:/certs" \
-            dhi.io/alpine-base:3.22 /bin/sh -c "
-            apk add --no-cache openssl > /dev/null 2>&1
+            neilpang/acme.sh:latest /bin/sh -c "
             openssl req -x509 -newkey rsa:4096 -sha256 \
                 -days 365 -nodes \
                 -keyout /certs/ssl.key -out /certs/ssl.crt \
@@ -1033,9 +1032,8 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     
 else
     log_info "No deSEC domain provided, generating self-signed certificate..."
-    $DOCKER_CMD run --rm -v "$AGH_CONF_DIR:/certs" dhi.io/alpine-base:3.22 /bin/sh -c \
-        "apk add --no-cache openssl && \
-         openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
+    $DOCKER_CMD run --rm -v "$AGH_CONF_DIR:/certs" neilpang/acme.sh:latest /bin/sh -c \
+        "openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
          -keyout /certs/ssl.key -out /certs/ssl.crt \
          -subj '/CN=$LAN_IP' \
          -addext 'subjectAltName=IP:$LAN_IP,IP:$PUBLIC_IP'"
@@ -2461,10 +2459,10 @@ x-casaos:
     en_us: Stop being the product. Own your data with VPN, DNS filtering, and private frontends.
   description:
     en_us: |
-      A comprehensive self-hosted privacy stack for people who want to own their data 
-      instead of renting a false sense of security. Features WireGuard VPN, 
-      AdGuard Home DNS filtering, and various privacy frontends (Invidious, Redlib, etc.) 
-      that strip away the tracking garbage from the sites you use every day.
+      A comprehensive self-hosted privacy stack for people who want to own their data
+      instead of renting a false sense of security. Includes WireGuard VPN access,
+      recursive DNS with AdGuard filtering, and VPN-isolated privacy frontends
+      (Invidious, Redlib, etc.) that reduce tracking and prevent home IP exposure.
   icon: http://$LAN_IP:8081/fonts/privacy-hub.svg
 EOF
 
@@ -2489,6 +2487,7 @@ cat > "$DASHBOARD_FILE" <<EOF
            ============================================ */
         
         :root {
+            color-scheme: dark;
             /* M3 Dark Theme Color Tokens */
             --md-sys-color-primary: #D0BCFF;
             --md-sys-color-on-primary: #381E72;
@@ -2601,8 +2600,14 @@ cat > "$DASHBOARD_FILE" <<EOF
         .header-row {
             display: flex;
             justify-content: space-between;
-            align-items: flex-end;
+            align-items: flex-start;
             gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .header-row > div:first-child {
+            flex: 1 1 320px;
+            min-width: 240px;
         }
         
         h1 {
@@ -2622,6 +2627,54 @@ cat > "$DASHBOARD_FILE" <<EOF
             font-weight: 400;
             letter-spacing: 0;
         }
+
+        .label-large {
+            font-size: 14px;
+            line-height: 20px;
+            font-weight: 500;
+            letter-spacing: 0.1px;
+        }
+
+        .body-medium {
+            font-size: 14px;
+            line-height: 20px;
+            letter-spacing: 0.25px;
+        }
+
+        .body-small {
+            font-size: 12px;
+            line-height: 16px;
+            letter-spacing: 0.4px;
+        }
+
+        .code-label {
+            font-size: 12px;
+            line-height: 16px;
+            letter-spacing: 0.4px;
+            font-weight: 500;
+            color: var(--md-sys-color-on-surface-variant);
+            margin-top: 12px;
+        }
+
+        .profile-hint {
+            color: var(--md-sys-color-on-surface-variant);
+            margin-top: 12px;
+        }
+
+        .feedback {
+            margin-top: 12px;
+            padding: 8px 12px;
+            border-radius: var(--md-sys-shape-corner-medium);
+            background: var(--md-sys-color-surface-container-highest);
+            color: var(--md-sys-color-on-surface-variant);
+            font-size: 12px;
+            line-height: 16px;
+            letter-spacing: 0.4px;
+        }
+
+        .feedback.info { border: 1px solid var(--md-sys-color-outline-variant); }
+        .feedback.success { background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success); }
+        .feedback.error { background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
         
         /* Section Labels */
         .section-label {
@@ -2696,6 +2749,8 @@ cat > "$DASHBOARD_FILE" <<EOF
             justify-content: space-between;
             align-items: flex-start;
             margin-bottom: 12px;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
         .card h2 {
@@ -2779,6 +2834,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             font-size: 12px;
             color: var(--md-sys-color-on-surface-variant);
             width: fit-content;
+            flex-shrink: 0;
         }
         
         .status-dot {
@@ -2790,6 +2846,9 @@ cat > "$DASHBOARD_FILE" <<EOF
         
         .status-dot.up { background: var(--md-sys-color-success); box-shadow: 0 0 8px var(--md-sys-color-success); }
         .status-dot.down { background: var(--md-sys-color-error); box-shadow: 0 0 8px var(--md-sys-color-error); }
+        .status-dot.healthy { background: var(--md-sys-color-success); box-shadow: 0 0 8px var(--md-sys-color-success); }
+        .status-dot.starting { background: var(--md-sys-color-warning); box-shadow: 0 0 8px var(--md-sys-color-warning); }
+        .status-dot.unhealthy { background: var(--md-sys-color-error); box-shadow: 0 0 8px var(--md-sys-color-error); }
         
         /* MD3 Text Fields */
         .text-field {
@@ -2895,6 +2954,8 @@ cat > "$DASHBOARD_FILE" <<EOF
             gap: 16px;
             cursor: pointer;
             padding: 8px 0;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
 
         .switch-track {
@@ -2973,54 +3034,8 @@ cat > "$DASHBOARD_FILE" <<EOF
             z-index: 1;
         }
 
-        .portainer-link {
-            text-decoration: none;
-            cursor: pointer;
-            transition: all var(--md-sys-motion-duration-short) linear;
-            position: relative;
-            padding-right: 28px; /* Space for the icon */
-        }
-        .portainer-link:hover {
-            background: var(--md-sys-color-secondary-container);
-            color: var(--md-sys-color-on-secondary-container);
-            border-color: transparent;
-        }
-        /* External link icon for Portainer chips */
-        .portainer-link::after {
-            content: '\e895'; /* Material Symbol 'open_in_new' */
-            font-family: 'Material Symbols Rounded';
-            position: absolute;
-            right: 8px;
-            font-size: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-
-        .portainer-link {
-            text-decoration: none;
-            cursor: pointer;
-            transition: all var(--md-sys-motion-duration-short) linear;
-            position: relative;
-            padding-right: 28px; /* Space for the icon */
-        }
-        .portainer-link:hover {
-            background: var(--md-sys-color-secondary-container);
-            color: var(--md-sys-color-on-secondary-container);
-            border-color: transparent;
-        }
-        /* External link icon for Portainer chips */
-        .portainer-link::after {
-            content: '\e895'; /* Material Symbol 'open_in_new' */
-            font-family: 'Material Symbols Rounded';
-            position: absolute;
-            right: 8px;
-            font-size: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-
         .log-container {
-            background: #0D0D0D;
+            background: var(--md-sys-color-surface-container-highest);
             border-radius: var(--md-sys-shape-corner-large);
             padding: 16px;
             height: 320px;
@@ -3030,7 +3045,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         }
         
         .code-block {
-            background: #0D0D0D;
+            background: var(--md-sys-color-surface-container-highest);
             border-radius: var(--md-sys-shape-corner-small);
             padding: 14px 16px;
             font-size: 13px;
@@ -3041,31 +3056,51 @@ cat > "$DASHBOARD_FILE" <<EOF
         
         .sensitive { transition: filter 400ms var(--md-sys-motion-easing-emphasized); }
         .privacy-mode .sensitive { filter: blur(6px); opacity: 0.4; }
+
+        .sensitive-masked { opacity: 0.7; letter-spacing: 0.3px; }
         
         .text-success { color: var(--md-sys-color-success); }
+        .success { color: var(--md-sys-color-success); }
+        .error { color: var(--md-sys-color-error); }
         .stat-row { 
             display: flex; 
             justify-content: space-between; 
             align-items: center;
+            flex-wrap: wrap;
             margin-bottom: 12px; 
             font-size: 14px; 
             gap: 12px;
         }
         .stat-label { 
             color: var(--md-sys-color-on-surface-variant); 
-            flex-shrink: 0;
+            flex: 1 1 160px;
         }
         .stat-value {
             text-align: right;
-            word-break: break-all;
+            flex: 1 1 200px;
+            overflow-wrap: anywhere;
         }
         
         .progress-track { background: var(--md-sys-color-surface-container-highest); border-radius: 4px; height: 8px; margin: 16px 0; overflow: hidden; }
         .progress-indicator { background: var(--md-sys-color-primary); height: 100%; transition: width var(--md-sys-motion-duration-medium) linear; }
         
         .btn-group { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--md-sys-color-outline-variant); gap: 12px; }
-        .list-item-text { cursor: pointer; flex: 1; font-weight: 500; word-break: break-all; }
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--md-sys-color-outline-variant); gap: 12px; flex-wrap: wrap; }
+        .list-item-text { cursor: pointer; flex: 1 1 220px; font-weight: 500; overflow-wrap: anywhere; }
+
+        @media (max-width: 720px) {
+            body { padding: 16px; }
+            h1 { font-size: 36px; line-height: 42px; }
+            .subtitle { font-size: 18px; line-height: 24px; }
+        }
+
+        @media (max-width: 600px) {
+            .header-row { gap: 16px; }
+            .switch-container { width: 100%; justify-content: space-between; }
+            .stat-row, .list-item { flex-direction: column; align-items: flex-start; }
+            .stat-value { text-align: left; }
+            .card-header { align-items: flex-start; }
+        }
     </style>
 </head>
 <body>
@@ -3140,7 +3175,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         </div>
 
         <div class="section-label">System Management</div>
-        <div class="section-hint" style="display: flex; gap: 8px;">
+        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
             <span class="chip" data-tooltip="Core infrastructure management and gateway orchestration">⚙️ Core Services</span>
         </div>
         <div class="grid-3">
@@ -3156,7 +3191,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             </a>
             <a id="link-wg-easy" href="http://$LAN_IP:$PORT_WG_WEB" class="card" data-check="true" data-container="wg-easy">
                 <div class="card-header"><h2>WireGuard</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">The primary gateway for **secure remote access**. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
+                <p class="description">The primary gateway for <strong>secure remote access</strong>. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container">Local Access</span></div>
             </a>
         </div>
@@ -3993,7 +4028,10 @@ if [ ! -f "$AGH_CONF_DIR/ssl.crt" ]; then
     NEEDS_ACTION=true
 elif ! grep -qE "Let's Encrypt|R3|ISRG" "$AGH_CONF_DIR/ssl.crt"; then
     NEEDS_ACTION=true
-elif ! openssl x509 -checkend 2592000 -noout -in "$AGH_CONF_DIR/ssl.crt" >/dev/null 2>&1; then
+elif ! $DOCKER_CMD run --rm \
+    -v "$AGH_CONF_DIR:/certs" \
+    neilpang/acme.sh:latest /bin/sh -c \
+    "openssl x509 -checkend 2592000 -noout -in /certs/ssl.crt" >/dev/null 2>&1; then
     NEEDS_ACTION=true
 fi
 
@@ -4177,6 +4215,43 @@ check_iptables() {
     fi
 }
 
+disable_portainer_telemetry() {
+    log_info "Disabling Portainer CE anonymous analytics..."
+    local portainer_url="http://$LAN_IP:$PORT_PORTAINER"
+    local auth_payload=""
+    local token=""
+    auth_payload=$(python - <<'PY'
+import json, os
+print(json.dumps({"Username": "admin", "Password": os.environ.get("ADMIN_PASS_RAW", "")}))
+PY
+)
+
+    for _ in {1..10}; do
+        token=$(curl -s --max-time 5 -H "Content-Type: application/json" \
+            -d "$auth_payload" "$portainer_url/api/auth" | python -c "import json,sys; \
+data = json.load(sys.stdin); \
+print(data.get('jwt',''))" 2>/dev/null || echo "")
+        if [ -n "$token" ]; then
+            break
+        fi
+        sleep 3
+    done
+
+    if [ -z "$token" ]; then
+        log_warn "Portainer telemetry toggle skipped (unable to authenticate yet)."
+        return 0
+    fi
+
+    if curl -s --max-time 5 -X PUT "$portainer_url/api/settings" \
+        -H "Authorization: Bearer $token" \
+        -H "Content-Type: application/json" \
+        -d '{"EnableTelemetry":false}' >/dev/null; then
+        log_info "Portainer anonymous analytics disabled."
+    else
+        log_warn "Portainer telemetry toggle failed. Disable it in Settings → General."
+    fi
+}
+
 echo "=========================================================="
 echo "DEPLOYMENT COMPLETE: INFRASTRUCTURE IS OPERATIONAL"
 echo "=========================================================="
@@ -4202,6 +4277,8 @@ echo "[+] Finalizing environment (cleaning up unused images)..."
 $DOCKER_CMD image prune -af
 
 $DOCKER_CMD restart portainer 2>/dev/null || true
+sleep 5
+disable_portainer_telemetry
 
 echo "=========================================================="
 echo "SYSTEM DEPLOYED: PRIVATE INFRASTRUCTURE ESTABLISHED"

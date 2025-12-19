@@ -4,35 +4,52 @@ Digital privacy begins with hardware and code ownership. This project provides a
 
 ## <a id="contents"></a>📋 Table of Contents
 - [Project Overview](#overview)
-- [Quick Start](#quick-start)
+- [Beginner-Friendly Overview](#beginner-friendly-overview-how-it-works)
+- [What This Stack Provides](#what-this-stack-provides)
+- [Privacy Benefits](#privacy-benefits)
+- [Telemetry & Data Collection](#telemetry)
 - [Required Credentials & Configuration](#credentials)
+- [Quick Start](#quick-start)
 - [Independent DNS & RFC Compliance](#encrypted-dns)
 - [VPN-Routed Frontends (Gluetun)](#gluetun)
 - [Management Dashboard](#dashboard)
 - [Network Configuration](#network-config)
+- [WireGuard Split Tunneling](#split-tunnel)
 - [Advanced Setup: OpenWrt & Double NAT](#advanced-setup)
 - [Security Model](#security)
-- [Service Catalog & Ports](#catalog)
+- [Services & Ports](#catalog)
 - [System Resilience](#resilience)
 - [Data Ownership](#ownership)
 
 ## <a id="overview"></a>🌟 Project Overview
 Privacy Hub centralizes network traffic through a secure WireGuard tunnel and filters DNS queries at the source. By utilizing [**Gluetun**](#gluetun) as an internal VPN proxy, the stack anonymizes outgoing requests from privacy frontends (Invidious, Redlib, etc.). This allows you to host your own private instances—removing the need to trust third-party hosts—while ensuring your home IP remains hidden from end-service providers.
 
-## <a id="quick-start"></a>🚀 Quick Start
+## Beginner-Friendly Overview (How It Works)
+1. **Devices → DNS**: All your devices send DNS lookups to [AdGuard Home](https://adguard.com/en/adguard-home/overview.html) + [Unbound](https://nlnetlabs.nl/projects/unbound/about/). Unbound resolves directly from root DNS servers with DNSSEC validation, and AdGuard blocks trackers and malware at the DNS layer.
+2. **Apps → VPN Proxy**: Privacy frontends (Invidious, Redlib, etc.) route outbound traffic through [Gluetun](https://github.com/qdm12/gluetun), so external sites see the VPN exit IP instead of your home IP.
+3. **You → Home**: When away from home, [WireGuard (WG-Easy)](https://github.com/wg-easy/wg-easy) provides secure access back into your network so you can use services privately.
+4. **Dashboard → Local**: The management UI loads local assets only and includes a redaction mode so sensitive info can be hidden during demos or screenshots.
 
-```bash
-# 1. Clone the repository and enter the directory
-# 2. Make the deployment script executable
-chmod +x zima.sh
+## What This Stack Provides
+- **Recursive, encrypted DNS**: [Unbound](https://nlnetlabs.nl/projects/unbound/about/) with DNSSEC and QNAME minimization, plus RFC-compliant DOH/DOT/DOQ endpoints.
+- **Network-wide filtering**: [AdGuard Home](https://adguard.com/en/adguard-home/overview.html) blocks ads, trackers, and malicious domains before they reach your devices.
+- **Secure remote access**: [WireGuard (WG-Easy)](https://github.com/wg-easy/wg-easy) provides encrypted connectivity back to your home network.
+- **VPN-isolated frontends**: [Gluetun](https://github.com/qdm12/gluetun) routes privacy frontends (YouTube, Reddit, Wikipedia, etc.) through a VPN to prevent upstream services from seeing your home IP. See [Services & Ports](#catalog).
+- **Local-first management**: A Material Design 3 dashboard with zero external assets and a built-in redaction mode.
 
-# 3. Execute the script
-./zima.sh
+## Privacy Benefits
+- **No third-party DNS dependency**: Queries resolve from root servers with DNSSEC validation instead of forwarding to large public resolvers.
+- **Reduced metadata leakage**: Encrypted DNS over standard ports and optional ECH support limit passive monitoring.
+- **Self-hosted trust boundary**: Frontends and logs live on your hardware, not a public instance you do not control.
+- **Home IP shielding**: VPN-routed services prevent destination platforms from linking traffic to your residential address.
+- **Minimal exposure**: Management interfaces stay on the LAN or inside the WireGuard tunnel by default.
 
-# Options:
-# -c : Environment reset (Nuke all data/configs)
-# -p : Automated credential generation
-```
+## <a id="telemetry"></a>🧾 Telemetry & Data Collection
+This stack is configured to minimize telemetry and local logging by default. Verify or adjust as needed:
+
+- **[AdGuard Home](https://adguard.com/en/adguard-home/overview.html)**: AdGuard Home states it does not collect usage statistics by default ([privacy statement](https://github.com/AdguardTeam/AdGuardHome#privacy)). We keep local query logs and statistics for 30 days in `/DATA/AppData/privacy-hub/config/adguard/AdGuardHome.yaml` (`querylog.enabled=true`, `statistics.enabled=true`, `interval=720h`). Adjust retention or disable in the AdGuard UI or config if you want less local logging.
+- **[Portainer CE](https://github.com/portainer/portainer-ce)**: The deployment attempts to disable anonymous usage statistics via the Portainer API. Verify in **Settings → General → Allow the collection of anonymous statistics** ([docs](https://docs.portainer.io/admin/settings/general), [privacy policy](https://www.portainer.io/documentation/in-app-analytics-and-privacy-policy/)). The legacy `--no-analytics` flag is deprecated, so use the UI toggle.
+- **Other services**: No extra telemetry is enabled by this stack. External calls occur only for core functionality (e.g., VPN provider endpoints or update checks).
 
 ## <a id="credentials"></a>🔑 Required Credentials & Configuration
 
@@ -65,12 +82,31 @@ To route frontend traffic through a VPN, you need a WireGuard configuration file
 - **GitHub Token**: Required for the **Scribe** Medium frontend to bypass gist rate limits. Generate a "Classic" token with only the `gist` scope at [GitHub Settings](https://github.com/settings/tokens).
 - **Odido Token**: Required for the **Odido Booster** utility. Obtain via the [Odido Authenticator](https://github.com/GuusBackup/Odido.Authenticator) tool.
 
+## <a id="quick-start"></a>🚀 Quick Start
+
+Before you run:
+- Review the [Required Credentials & Configuration](#credentials).
+- Optional: open `dashboard-test.html` to preview the dashboard layout outside the target runtime.
+
+```bash
+# 1. Clone the repository and enter the directory
+# 2. Make the deployment script executable
+chmod +x zima.sh
+
+# 3. Execute the script
+./zima.sh
+
+# Options:
+# -c : Environment reset (Nuke all data/configs)
+# -p : Automated credential generation
+```
+
 ## <a id="encrypted-dns"></a>⚡ Independent DNS & RFC Compliance
 
 We eliminate middlemen (Google, Cloudflare) by communicating directly with Root DNS servers using **Unbound** with **QNAME Minimization** ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816)) and **DNSSEC** ([RFC 4033](https://datatracker.ietf.org/doc/html/rfc4033)) verification.
 
 <details>
-<summary>🤓 Technical: How Independent DNS and QNAME Minimization work</summary>
+<summary>Technical: How Independent DNS and QNAME Minimization work</summary>
 
 - **Talking to the Source**: Instead of using an ISP's "censored phonebook," Unbound talks directly to the **Root DNS servers**. It then follows the chain to the TLD servers (like `.com`) and finally to the **Authoritative Server** for the domain.
 - **QNAME Minimization**: Traditional resolvers tell every server in the chain the full domain you're visiting. Unbound only tells the `.com` server it's looking for something in `.com`, and the `example.com` server it's looking for `example.com`. Your intent remains private until the very last step.
@@ -115,6 +151,7 @@ Built on Material Design 3, the dashboard follows a strict zero-tracking philoso
 - **Local Assets**: All fonts, icons, and libraries are hosted locally. 
 - **Redaction Mode**: Built-in toggle to mask sensitive metrics (IPs, profiles) for safe display.
 - **Native Integration**: One-click access from the ZimaOS/CasaOS interface via local Material Design icon.
+- **Visibility**: Service health badges, certificate status, and a live deployment log help surface what’s wrong when something fails.
 
 ## <a id="network-config"></a>🌐 Network Configuration
 
@@ -123,6 +160,14 @@ Built on Material Design 3, the dashboard follows a strict zero-tracking philoso
 
 ### Local LAN Mode
 AdGuard Home utilizes **DNS Rewrites** to direct internal traffic to your local IP, ensuring optimal performance and local SSL access.
+
+## <a id="split-tunnel"></a>🧭 WireGuard Split Tunneling (Default)
+
+WireGuard is configured for split tunneling so remote devices only route **private LAN ranges** through the VPN, while normal internet traffic stays direct. This keeps browsing fast and avoids unnecessary VPN routing.
+
+- **Current default**: `WG_ALLOWED_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`
+- **Full tunnel option**: change to `0.0.0.0/0, ::/0` if you want all traffic routed through your home VPN.
+- **Where to adjust**: edit `zima.sh` before deployment and re-run the script so WG-Easy regenerates profiles with the new allowed IPs.
 
 ## <a id="advanced-setup"></a>📡 Advanced Setup: OpenWrt & Double NAT
 
@@ -171,51 +216,53 @@ uci commit firewall
 - **Official Specialized Apps**: High-level applications (Gluetun, AdGuard, etc.) utilize their official registry sources to ensure maximum compatibility and up-to-date functionality.
 - **Zero Public Access**: Internal APIs and management interfaces are only accessible via the encrypted VPN tunnel or local network.
 
-## <a id="catalog"></a>📦 Service Catalog & Access
+## <a id="catalog"></a>📦 Services & Ports
+
+All links below point to official project pages or maintainer repositories (no Google/Cloudflare sources).
 
 | Service | Category | Connectivity |
 | :--- | :--- | :--- |
-| **Management Dashboard** | Infrastructure | Port 8081 |
-| **AdGuard Home** | DNS/Filtering | Port 8083 |
-| **WireGuard (WG-Easy)** | Remote Access | **Gateway** (Port 51821) |
-| **Portainer** | Management | Port 9000 |
-| **Invidious** | YouTube | **🔒 VPN Routed** |
-| **Redlib** | Reddit | **🔒 VPN Routed** |
-| **Wikiless** | Wikipedia | **🔒 VPN Routed** |
-| **LibremDB** | Movies/TV | **🔒 VPN Routed** |
-| **Rimgo** | Imgur | **🔒 VPN Routed** |
-| **Scribe** | Medium | **🔒 VPN Routed** |
-| **BreezeWiki** | Fandom | **🔒 VPN Routed** |
-| **AnonOverflow** | Stack Overflow | **🔒 VPN Routed** |
-| **VERT** | File Conversion | Port 5555 |
-| **Odido Booster** | Utility | Port 8085 |
+| **[Management Dashboard](#dashboard)** | Infrastructure | Port 8081 |
+| **[AdGuard Home](https://adguard.com/en/adguard-home/overview.html)** | DNS/Filtering | Port 8083 |
+| **[WireGuard (WG-Easy)](https://github.com/wg-easy/wg-easy)** | Remote Access | **Gateway** (Port 51821) |
+| **[Portainer CE](https://github.com/portainer/portainer-ce)** | Management | Port 9000 |
+| **[Invidious](https://github.com/iv-org/invidious)** | YouTube | **🔒 VPN Routed** |
+| **[Redlib](https://github.com/redlib-org/redlib)** | Reddit | **🔒 VPN Routed** |
+| **[Wikiless](https://codeberg.org/orangef/wikiless)** | Wikipedia | **🔒 VPN Routed** |
+| **[LibremDB](https://github.com/zyachel/libremdb)** | Movies/TV | **🔒 VPN Routed** |
+| **[Rimgo](https://codeberg.org/rimgo/rimgo)** | Imgur | **🔒 VPN Routed** |
+| **[Scribe](https://github.com/iv-org/scribe)** | Medium | **🔒 VPN Routed** |
+| **[BreezeWiki](https://gitlab.com/breezewiki/breezewiki)** | Fandom | **🔒 VPN Routed** |
+| **[AnonOverflow](https://github.com/httpjamesm/anonymousoverflow)** | Stack Overflow | **🔒 VPN Routed** |
+| **[VERT](https://github.com/vert-sh/vert)** | File Conversion | Port 5555 |
+| **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)** | Utility | Port 8085 |
 
 *Note: **WireGuard (WG-Easy)** is the required gateway for maintaining your privacy boundary when away from home.*
 
-### Instance Reference & Functionality
+### Service Details
 
 #### Infrastructure & Core
-- **Management Dashboard**: The central control plane for the stack. Built with Material Design 3, it provides live telemetry, VPN profile management, and service status monitoring with zero external dependencies.
-- **AdGuard Home**: A network-wide advertisement and tracker filtration engine. It intercepts DNS requests to neutralize telemetry and malicious domains at the source.
-- **WireGuard (WG-Easy)**: A high-performance VPN server that provides secure remote access to your home network. It is the mandatory gateway for utilizing your privacy boundary on external or untrusted networks.
-- **Portainer**: A comprehensive management interface for the Docker environment, facilitating granular control over container orchestration and infrastructure lifecycle.
-- **Unbound**: A validating, recursive, caching DNS resolver. It communicates directly with Root DNS servers, eliminating the need for third-party upstream providers.
-- **Gluetun**: A specialized VPN client that acts as an internal proxy. It isolates privacy frontends and routes their outgoing traffic through an external VPN provider to ensure your home IP remains anonymous.
+- **[Management Dashboard](#dashboard)**: The central control plane for the stack. Built with Material Design 3, it provides live telemetry, VPN profile management, and service status monitoring with zero external dependencies.
+- **[AdGuard Home](https://adguard.com/en/adguard-home/overview.html)**: A network-wide advertisement and tracker filtration engine. It intercepts DNS requests to neutralize telemetry and malicious domains at the source.
+- **[WireGuard (WG-Easy)](https://github.com/wg-easy/wg-easy)**: A high-performance VPN server that provides secure remote access to your home network. It is the mandatory gateway for utilizing your privacy boundary on external or untrusted networks.
+- **[Portainer CE](https://github.com/portainer/portainer-ce)**: A comprehensive management interface for the Docker environment, facilitating granular control over container orchestration and infrastructure lifecycle.
+- **[Unbound](https://nlnetlabs.nl/projects/unbound/about/)**: A validating, recursive, caching DNS resolver. It communicates directly with Root DNS servers, eliminating the need for third-party upstream providers.
+- **[Gluetun](https://github.com/qdm12/gluetun)**: A specialized VPN client that acts as an internal proxy. It isolates privacy frontends and routes their outgoing traffic through an external VPN provider to ensure your home IP remains anonymous.
 
 #### Privacy Frontends (VPN-Routed)
-- **Invidious**: Access YouTube content privately. It strips all tracking and advertisements, routes traffic through the VPN to hide your IP, and provides a lightweight interface without proprietary telemetry.
-- **Redlib**: A hardened Reddit frontend. It eliminates tracking pixels, intrusive analytics, and advertisements, ensuring your browsing habits remain confidential and your home IP is never disclosed.
-- **Wikiless**: Wikipedia without the cookies or telemetry. All requests are routed through the VPN to maintain total anonymity.
-- **LibremDB**: Private metadata engine for media collections. Retrieves information without allowing data brokers to profile your interests or track your IP.
-- **Rimgo**: An anonymous Imgur viewer that removes telemetry and tracking scripts while hiding your location behind the VPN proxy.
-- **Scribe**: Read Medium articles without the paywalls, tracking scripts, or IP logging common on the standard platform.
-- **BreezeWiki**: Clean Fandom interface. Neutralizes aggressive advertising networks and prevents tracking scripts from monitoring your visits.
-- **AnonOverflow**: Private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance or IP tracking.
+- **[Invidious](https://github.com/iv-org/invidious)**: Access YouTube content privately. It strips all tracking and advertisements, routes traffic through the VPN to hide your IP, and provides a lightweight interface without proprietary telemetry.
+- **[Redlib](https://github.com/redlib-org/redlib)**: A hardened Reddit frontend. It eliminates tracking pixels, intrusive analytics, and advertisements, ensuring your browsing habits remain confidential and your home IP is never disclosed.
+- **[Wikiless](https://codeberg.org/orangef/wikiless)**: Wikipedia without the cookies or telemetry. All requests are routed through the VPN to maintain total anonymity.
+- **[LibremDB](https://github.com/zyachel/libremdb)**: Private metadata engine for media collections. Retrieves information without allowing data brokers to profile your interests or track your IP.
+- **[Rimgo](https://codeberg.org/rimgo/rimgo)**: An anonymous Imgur viewer that removes telemetry and tracking scripts while hiding your location behind the VPN proxy.
+- **[Scribe](https://github.com/iv-org/scribe)**: Read Medium articles without the paywalls, tracking scripts, or IP logging common on the standard platform.
+- **[BreezeWiki](https://gitlab.com/breezewiki/breezewiki)**: Clean Fandom interface. Neutralizes aggressive advertising networks and prevents tracking scripts from monitoring your visits.
+- **[AnonOverflow](https://github.com/httpjamesm/anonymousoverflow)**: Private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance or IP tracking.
 
 #### Utilities & Automation
-- **VERT**: A local file conversion service that maintains data sovereignty by processing sensitive documents on your own hardware using GPU acceleration.
-- **Odido Booster**: An automated data management utility for Odido users that monitors usage and handles bundle procurement via API.
-- **Watchtower**: A background utility that monitors for container image updates and automates the update process to ensure security patches are applied.
+- **[VERT](https://github.com/vert-sh/vert)**: A local file conversion service that maintains data sovereignty by processing sensitive documents on your own hardware using GPU acceleration.
+- **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)**: An automated data management utility for Odido users that monitors usage and handles bundle procurement via API.
+- **[Watchtower](https://github.com/containrrr/watchtower)**: A background utility that monitors for container image updates and automates the update process to ensure security patches are applied.
 
 ### Background Management Scripts
 - **cert-monitor.sh**: Manages the automated SSL certificate lifecycle. It handles Let's Encrypt issuance via DNS-01 challenges and implements rate-limit recovery by deploying temporary self-signed certificates.
@@ -224,8 +271,10 @@ uci commit firewall
 
 ## <a id="resilience"></a>🏗️ System Resilience
 
-- **Automated SSL**: `cert-monitor.sh` manages Let's Encrypt renewals and rate-limit recovery.
-- **Dynamic IP**: `wg-ip-monitor.sh` automatically updates DNS records and VPN endpoints on public IP changes.
+- **Automated SSL**: `cert-monitor.sh` manages Let's Encrypt renewals, logs failures, and retries after rate limits.
+- **Dynamic IP**: `wg-ip-monitor.sh` detects public IP changes, updates deSEC DNS records, and restarts WireGuard with the new endpoint.
+- **Auto-updates**: Watchtower checks for container image updates and applies them on a nightly schedule.
+- **Self-healing**: The stack retries background tasks and exposes status in the dashboard so most issues resolve without manual intervention.
 
 ## <a id="ownership"></a>🤝 Data Ownership
 
