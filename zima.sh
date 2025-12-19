@@ -4370,8 +4370,8 @@ check_iptables
 
 generate_protonpass_export
 
-echo "[+] Finalizing environment (cleaning up unused images)..."
-$DOCKER_CMD image prune -af
+echo "[+] Finalizing environment (cleaning up dangling images)..."
+$DOCKER_CMD image prune -f
 
 $DOCKER_CMD restart portainer 2>/dev/null || true
 sleep 5
