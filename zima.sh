@@ -1255,12 +1255,43 @@ clone_repo() {
         (cd "$2" && git fetch --all && git reset --hard "origin/$(git rev-parse --abbrev-ref HEAD)" && git pull)
     fi
 }
+
+detect_dockerfile() {
+    local repo_dir="$1"
+    local preferred="${2:-}"
+    local found=""
+
+    if [ -n "$preferred" ] && [ -f "$repo_dir/$preferred" ]; then
+        echo "$preferred"
+        return 0
+    fi
+    if [ -f "$repo_dir/Dockerfile" ]; then
+        echo "Dockerfile"
+        return 0
+    fi
+    if [ -f "$repo_dir/docker/Dockerfile" ]; then
+        echo "docker/Dockerfile"
+        return 0
+    fi
+
+    found=$(find "$repo_dir" -maxdepth 3 -type f -name 'Dockerfile*' 2>/dev/null | head -n 1 || true)
+    if [ -n "$found" ]; then
+        echo "${found#"$repo_dir/"}"
+        return 0
+    fi
+    return 1
+}
 clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless"
 # Patch Wikiless to use DHI Node and Alpine images
-if [ -f "$SRC_DIR/wikiless/Dockerfile" ]; then
+WIKILESS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wikiless" || true)
+if [ -z "$WIKILESS_DOCKERFILE" ]; then
+    log_warn "Wikiless Dockerfile not found - build may fail."
+    WIKILESS_DOCKERFILE="Dockerfile"
+fi
+if [ -f "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE" ]; then
     # Use -dev for the builder stage to ensure npm/yarn are present
-    sed -i 's|^FROM node:.*-alpine.* as builder|FROM dhi.io/node:20-alpine3.22-dev as builder|g' "$SRC_DIR/wikiless/Dockerfile"
-    sed -i 's|^FROM alpine:.*|FROM dhi.io/alpine-base:3.22|g' "$SRC_DIR/wikiless/Dockerfile"
+    sed -i 's|^FROM node:.*-alpine.* as builder|FROM dhi.io/node:20-alpine3.22-dev as builder|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i 's|^FROM alpine:.*|FROM dhi.io/alpine-base:3.22|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
     log_info "Patched Wikiless Dockerfile to use DHI hardened images."
 fi
 
@@ -1322,24 +1353,40 @@ module.exports = config
 EOF
 clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe"
 # Patch Scribe to use DHI Crystal and Alpine images
-if [ -f "$SRC_DIR/scribe/Dockerfile" ]; then
-    sed -i 's|^FROM 84codes/crystal:.*-alpine|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_DIR/scribe/Dockerfile"
-    sed -i 's|^FROM alpine:.*|FROM dhi.io/alpine-base:3.22|g' "$SRC_DIR/scribe/Dockerfile"
+SCRIBE_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/scribe" || true)
+if [ -z "$SCRIBE_DOCKERFILE" ]; then
+    log_warn "Scribe Dockerfile not found - build may fail."
+    SCRIBE_DOCKERFILE="Dockerfile"
+fi
+if [ -f "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE" ]; then
+    sed -i 's|^FROM 84codes/crystal:.*-alpine|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
+    sed -i 's|^FROM alpine:.*|FROM dhi.io/alpine-base:3.22|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
     log_info "Patched Scribe Dockerfile to use DHI hardened images."
 fi
 
 clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious"
-# Patch Invidious to use DHI Alpine images
-if [ -f "$SRC_DIR/invidious/Dockerfile" ]; then
-    # Invidious Dockerfile uses multiple FROM stages, we'll try to target the runtime and builders
-    sed -i 's|^FROM alpine:.*|FROM dhi.io/alpine-base:3.22|g' "$SRC_DIR/invidious/Dockerfile"
-    log_info "Patched Invidious Dockerfile to use DHI hardened images."
+# Patch Invidious to use DHI Alpine images (Dockerfile lives in docker/)
+INVIDIOUS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/invidious" "docker/Dockerfile" || true)
+if [ -z "$INVIDIOUS_DOCKERFILE" ]; then
+    log_warn "Invidious Dockerfile not found - build may fail."
+    INVIDIOUS_DOCKERFILE="Dockerfile"
 fi
+for dockerfile in "$SRC_DIR/invidious/$INVIDIOUS_DOCKERFILE" "$SRC_DIR/invidious/docker/Dockerfile.arm64"; do
+    if [ -f "$dockerfile" ]; then
+        sed -i 's|^FROM alpine:.*|FROM dhi.io/alpine-base:3.22|g' "$dockerfile"
+        log_info "Patched Invidious Dockerfile to use DHI hardened images: $(basename "$dockerfile")"
+    fi
+done
 clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster"
 # Patch Odido Booster to use DHI Python image
-if [ -f "$SRC_DIR/odido-bundle-booster/Dockerfile" ]; then
+ODIDO_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/odido-bundle-booster" || true)
+if [ -z "$ODIDO_DOCKERFILE" ]; then
+    log_warn "Odido Booster Dockerfile not found - build may fail."
+    ODIDO_DOCKERFILE="Dockerfile"
+fi
+if [ -f "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" ]; then
     # Use -dev variant to ensure pip and build tools are present
-    sed -i 's|^FROM python:.*-alpine|FROM dhi.io/python:3.11-alpine3.22-dev|g' "$SRC_DIR/odido-bundle-booster/Dockerfile"
+    sed -i 's|^FROM python:.*-alpine|FROM dhi.io/python:3.11-alpine3.22-dev|g' "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE"
     log_info "Patched Odido Booster Dockerfile to use DHI hardened images."
 fi
 
@@ -1350,24 +1397,32 @@ RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd
 WORKDIR /app
 CMD ["python", "server.py"]
 EOF
+HUB_API_DOCKERFILE="Dockerfile"
 
 clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert"
 # Patch VERT to use DHI Node and Alpine images
-if [ -f "$SRC_DIR/vert/Dockerfile" ]; then
+VERT_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/vert" || true)
+if [ -z "$VERT_DOCKERFILE" ]; then
+    log_warn "VERT Dockerfile not found - build may fail."
+    VERT_DOCKERFILE="Dockerfile"
+fi
+if [ -f "$SRC_DIR/vert/$VERT_DOCKERFILE" ]; then
     # Use -dev variant for build stages to ensure npm/yarn are present
-    sed -i 's|^FROM node:.*-alpine.* as build|FROM dhi.io/node:20-alpine3.22-dev as build|g' "$SRC_DIR/vert/Dockerfile"
-    sed -i 's|^FROM node:.*-alpine.* as runtime|FROM dhi.io/node:20-alpine3.22 as runtime|g' "$SRC_DIR/vert/Dockerfile"
+    sed -i 's|^FROM node:.*-alpine.* as build|FROM dhi.io/node:20-alpine3.22-dev as build|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM node:.*-alpine.* as runtime|FROM dhi.io/node:20-alpine3.22 as runtime|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     log_info "Patched VERT Dockerfile to use DHI hardened images."
 fi
 
 # Patch VERT Dockerfile to add missing build args
-if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_DIR/vert/Dockerfile"; then
-    if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_DIR/vert/Dockerfile" && grep -q "^ENV PUB_STRIPE_KEY=" "$SRC_DIR/vert/Dockerfile"; then
-        sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_FAILURE_BLOCKS\nARG PUB_DISABLE_DONATIONS' "$SRC_DIR/vert/Dockerfile"
-        sed -i "/^ENV PUB_STRIPE_KEY=\${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_FAILURE_BLOCKS=\${PUB_DISABLE_FAILURE_BLOCKS}\nENV PUB_DISABLE_DONATIONS=\${PUB_DISABLE_DONATIONS}" "$SRC_DIR/vert/Dockerfile"
-        log_info "Patched VERT Dockerfile to add missing PUB_DISABLE_FAILURE_BLOCKS and PUB_DISABLE_DONATIONS ARG/ENV"
-    else
-        log_warn "VERT Dockerfile structure changed - could not apply patches. Build may fail."
+if [ -f "$SRC_DIR/vert/$VERT_DOCKERFILE" ]; then
+    if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_DIR/vert/$VERT_DOCKERFILE"; then
+        if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_DIR/vert/$VERT_DOCKERFILE" && grep -q "^ENV PUB_STRIPE_KEY=" "$SRC_DIR/vert/$VERT_DOCKERFILE"; then
+            sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_FAILURE_BLOCKS\nARG PUB_DISABLE_DONATIONS' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+            sed -i "/^ENV PUB_STRIPE_KEY=\${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_FAILURE_BLOCKS=\${PUB_DISABLE_FAILURE_BLOCKS}\nENV PUB_DISABLE_DONATIONS=\${PUB_DISABLE_DONATIONS}" "$SRC_DIR/vert/$VERT_DOCKERFILE"
+            log_info "Patched VERT Dockerfile to add missing PUB_DISABLE_FAILURE_BLOCKS and PUB_DISABLE_DONATIONS ARG/ENV"
+        else
+            log_warn "VERT Dockerfile structure changed - could not apply patches. Build may fail."
+        fi
     fi
 fi
 
@@ -2013,6 +2068,7 @@ services:
   hub-api:
     build:
       context: $SRC_DIR/hub-api
+      dockerfile: $HUB_API_DOCKERFILE
     container_name: hub-api
     labels:
       - "casaos.skip=true"
@@ -2049,6 +2105,7 @@ services:
   odido-booster:
     build:
       context: $SRC_DIR/odido-bundle-booster
+      dockerfile: $ODIDO_DOCKERFILE
     container_name: odido-booster
     networks: [frontnet]
     ports: ["$LAN_IP:8085:80"]
@@ -2231,7 +2288,9 @@ services:
         limits: {cpus: '0.5', memory: 256M}
 
   wikiless:
-    build: {context: "$SRC_DIR/wikiless"}
+    build:
+      context: "$SRC_DIR/wikiless"
+      dockerfile: $WIKILESS_DOCKERFILE
     container_name: wikiless
     network_mode: "service:gluetun"
     environment: {DOMAIN: "$LAN_IP:$PORT_WIKILESS", NONSSL_PORT: "$PORT_INT_WIKILESS"}
@@ -2258,6 +2317,7 @@ services:
   invidious:
     build:
       context: "$SRC_DIR/invidious"
+      dockerfile: $INVIDIOUS_DOCKERFILE
     container_name: invidious
     network_mode: "service:gluetun"
     environment:
@@ -2379,7 +2439,9 @@ services:
         limits: {cpus: '0.5', memory: 256M}
 
   scribe:
-    build: {context: "$SRC_DIR/scribe"}
+    build:
+      context: "$SRC_DIR/scribe"
+      dockerfile: $SCRIBE_DOCKERFILE
     container_name: scribe
     network_mode: "service:gluetun"
     env_file: ["$ENV_DIR/scribe.env"]
@@ -2412,6 +2474,7 @@ services:
     image: ghcr.io/vert-sh/vert:latest
     build:
       context: $SRC_DIR/vert
+      dockerfile: $VERT_DOCKERFILE
       args:
         PUB_HOSTNAME: $VERT_PUB_HOSTNAME
         PUB_PLAUSIBLE_URL: ""
