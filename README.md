@@ -6,10 +6,11 @@ A self-hosted privacy stack for people who want to own their data instead of ren
 - [Project Overview](#-project-overview)
 - [Quick Start](#-quick-start)
 - [Privacy & Ownership](#-privacy--ownership)
+- [Technical Architecture](#-technical-architecture)
 - [Network Configuration](#-network-configuration)
 - [Advanced Setup: OpenWrt & Double NAT](#-advanced-setup-openwrt--double-nat)
-- [Security Audit & Privacy Standards](#-security-audit--privacy-standards)
 - [Remote Access: Taking Your Network With You](#-remote-access-taking-your-network-with-you)
+- [Security Audit & Privacy Standards](#-security-audit--privacy-standards)
 - [Service Catalog](#-service-catalog)
 - [Service Access & Port Reference](#-service-access--port-reference)
 - [System Resilience](#-system-resilience)
@@ -82,7 +83,7 @@ In traditional HTTPS, the very first part of the connection (the "Client Hello")
 ### Standard Setup: ISP Router Only
 If you just have the standard router your ISP gave you, you only need to do one thing:
 1.  **Forward port 51820/UDP** to your ZimaOS machine's local IP.
-This is the only open door. It is cryptographically silent and does not increase your attack surface (see the [Security Model](#-security-audit--privacy-standards)).
+This is the only open door. It is cryptographically silent and does not increase your attack surface (see the [Security Model](#the-silent-security-model-ddos--scan-resistance)).
 
 ### Local "Home" Mode: DNS Rewrites
 When you're at home, you shouldn't have to bounce traffic off a satellite just to see your own dashboard. AdGuard Home uses **DNS Rewrites** to tell your devices the local LAN IP (`192.168.1.100`) instead of your public IP. You get SSL and local speeds without needing a VPN tunnel.
