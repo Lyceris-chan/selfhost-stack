@@ -208,8 +208,8 @@ setup_fonts() {
             
             # Escape URL for sed: escape / and &
             escaped_url=$(echo "$url" | sed 's/[\/&]/\\&/g')
-            # Replace the URL in the CSS file
-            sed -i "s|url(['\"]\{0,1\}${escaped_url}['\"]\{0,1\})|url($clean_name)|g" "$css_file"
+            # Replace the URL in the CSS file (perl keeps compatibility with BSD sed)
+            perl -0pi -e "s|url(['\"]\{0,1\}${escaped_url}['\"]\{0,1\})|url($clean_name)|g" "$css_file"
         done
     done
     cd - >/dev/null
@@ -257,7 +257,7 @@ clean_environment() {
         log_warn "FORCE CLEAN ENABLED (-c): All existing data, configurations, and volumes will be permanently removed."
     fi
 
-    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe vert vertd"
+    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos libremdb rimgo breezewiki anonymousoverflow scribe vert vertd"
     
     FOUND_CONTAINERS=""
     for c in $TARGET_CONTAINERS; do
@@ -397,7 +397,7 @@ clean_environment() {
         log_info "Phase 5: Removing images..."
         REMOVED_IMAGES=""
         # Remove images by known names
-        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev dhi.io/python:3.11-alpine3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 ghcr.io/zyachel/libremdb codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine dhi.io/alpine-base:3.22 dhi.io/node:20-alpine3.22-dev dhi.io/node:20-alpine3.22 84codes/crystal:1.8.1-alpine node:25.2-alpine3.21 neilpang/acme.sh"
+        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
         for img in $KNOWN_IMAGES; do
             if $DOCKER_CMD images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -q "$img"; then
                 log_info "  Removing: $img"
@@ -493,7 +493,7 @@ clean_environment
 log_info "Pre-pulling ALL deployment images to avoid rate limits..."
 # Explicitly pull images used by 'docker run' commands later in the script
 # These images are small but critical for password generation and setup
-CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev dhi.io/python:3.11-alpine3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 ghcr.io/zyachel/libremdb codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine dhi.io/alpine-base:3.22 dhi.io/node:20-alpine3.22-dev dhi.io/node:20-alpine3.22 84codes/crystal:1.8.1-alpine node:25.2-alpine3.21 neilpang/acme.sh"
+CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
 
 for img in $CRITICAL_IMAGES; do
     if ! $DOCKER_CMD pull "$img"; then
@@ -817,10 +817,21 @@ else
     echo "----------------------------------------------------------"
     
     # Sanitize the configuration file
-    sed -i 's/\r//g' "$ACTIVE_WG_CONF"
-    sed -i 's/[ \t]*$//' "$ACTIVE_WG_CONF"
-    sed -i '/./,$!d' "$ACTIVE_WG_CONF"
-    sed -i 's/ *= */=/g' "$ACTIVE_WG_CONF"
+    python - "$ACTIVE_WG_CONF" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+text = text.replace("\r", "")
+lines = text.splitlines()
+while lines and not lines[0].strip():
+    lines.pop(0)
+lines = [line.rstrip() for line in lines]
+lines = [re.sub(r"\s*=\s*", "=", line) for line in lines]
+path.write_text("\n".join(lines) + ("\n" if lines else ""))
+PY
 
     if ! validate_wg_config; then
         log_crit "The pasted WireGuard configuration is invalid (missing PrivateKey or malformed)."
@@ -838,7 +849,7 @@ $DOCKER_CMD pull -q qmcgaw/gluetun:latest > /dev/null
 cat > "$GLUETUN_ENV_FILE" <<EOF
 VPN_SERVICE_PROVIDER=custom
 VPN_TYPE=wireguard
-FIREWALL_VPN_INPUT_PORTS=8080,8180,3000,3001,3002,8280,10416,8480
+FIREWALL_VPN_INPUT_PORTS=8080,8180,3000,3002,8280,10416,8480
 FIREWALL_OUTBOUND_SUBNETS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 EOF
 
@@ -903,11 +914,11 @@ IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 1
 # --- SECTION 8: PORT MAPPING CONFIGURATION ---
 # Define internal and external port mappings for all infrastructure components.
 PORT_INT_REDLIB=8080; PORT_INT_WIKILESS=8180; PORT_INT_INVIDIOUS=3000
-PORT_INT_LIBREMDB=3001; PORT_INT_RIMGO=3002; PORT_INT_BREEZEWIKI=10416
+PORT_INT_RIMGO=3002; PORT_INT_BREEZEWIKI=10416
 PORT_INT_ANONYMOUS=8480; PORT_INT_VERT=80; PORT_INT_VERTD=24153
 PORT_ADGUARD_WEB=8083; PORT_DASHBOARD_WEB=8081
 PORT_PORTAINER=9000; PORT_WG_WEB=51821
-PORT_REDLIB=8080; PORT_WIKILESS=8180; PORT_INVIDIOUS=3000; PORT_LIBREMDB=3001
+PORT_REDLIB=8080; PORT_WIKILESS=8180; PORT_INVIDIOUS=3000; PORT_MEMOS=5230
 PORT_RIMGO=3002; PORT_SCRIBE=8280; PORT_BREEZEWIKI=8380; PORT_ANONYMOUS=8480
 PORT_VERT=5555; PORT_VERTD=24153
 
@@ -1147,7 +1158,7 @@ map \$http_host \$backend {
     invidious.$DESEC_DOMAIN  http://gluetun:3000;
     redlib.$DESEC_DOMAIN     http://gluetun:8080;
     wikiless.$DESEC_DOMAIN   http://gluetun:8180;
-    libremdb.$DESEC_DOMAIN   http://gluetun:3001;
+    memos.$DESEC_DOMAIN      http://$LAN_IP:$PORT_MEMOS;
     rimgo.$DESEC_DOMAIN      http://gluetun:3002;
     scribe.$DESEC_DOMAIN     http://gluetun:8280;
     breezewiki.$DESEC_DOMAIN http://gluetun:10416;
@@ -1163,7 +1174,7 @@ map \$http_host \$backend {
     "invidious.$DESEC_DOMAIN:8443"  http://gluetun:3000;
     "redlib.$DESEC_DOMAIN:8443"     http://gluetun:8080;
     "wikiless.$DESEC_DOMAIN:8443"   http://gluetun:8180;
-    "libremdb.$DESEC_DOMAIN:8443"   http://gluetun:3001;
+    "memos.$DESEC_DOMAIN:8443"      http://$LAN_IP:$PORT_MEMOS;
     "rimgo.$DESEC_DOMAIN:8443"      http://gluetun:3002;
     "scribe.$DESEC_DOMAIN:8443"     http://gluetun:8280;
     "breezewiki.$DESEC_DOMAIN:8443" http://gluetun:10416;
@@ -1226,11 +1237,6 @@ EOF
 
 # --- SECTION 10: PERSISTENT ENVIRONMENT CONFIGURATION ---
 # Generate environment variables for specialized privacy frontends.
-cat > "$ENV_DIR/libremdb.env" <<EOF
-NEXT_PUBLIC_URL=http://$LAN_IP:$PORT_LIBREMDB
-AXIOS_USERAGENT=Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0
-NEXT_TELEMETRY_DISABLED=1
-EOF
 cat > "$ENV_DIR/anonymousoverflow.env" <<EOF
 APP_URL=http://$LAN_IP:$PORT_ANONYMOUS
 JWT_SIGNING_SECRET=$ANONYMOUS_SECRET
@@ -1289,9 +1295,14 @@ if [ -z "$WIKILESS_DOCKERFILE" ]; then
     WIKILESS_DOCKERFILE="Dockerfile"
 fi
 if [ -f "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE" ]; then
-    # Use -dev for the builder stage to ensure npm/yarn are present
-    sed -i 's|^FROM node:.*-alpine.* as builder|FROM dhi.io/node:20-alpine3.22-dev as builder|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i 's|^FROM alpine:.*|FROM dhi.io/alpine-base:3.22|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    # Use -dev for build stages to ensure npm/yarn are present
+    sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
     log_info "Patched Wikiless Dockerfile to use DHI hardened images."
 fi
 
@@ -1352,20 +1363,23 @@ const config = {
 module.exports = config
 EOF
 clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe"
-# Patch Scribe to use DHI Crystal and Alpine images
+# Patch Scribe to use pinned Crystal, DHI Node, and DHI Alpine images
 SCRIBE_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/scribe" || true)
 if [ -z "$SCRIBE_DOCKERFILE" ]; then
     log_warn "Scribe Dockerfile not found - build may fail."
     SCRIBE_DOCKERFILE="Dockerfile"
 fi
 if [ -f "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE" ]; then
-    sed -i 's|^FROM 84codes/crystal:.*-alpine|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
-    sed -i 's|^FROM alpine:.*|FROM dhi.io/alpine-base:3.22|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
-    log_info "Patched Scribe Dockerfile to use DHI hardened images."
+    sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
+    sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
+    sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
+    sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
+    sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
+    log_info "Patched Scribe Dockerfile to use hardened base images."
 fi
 
 clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious"
-# Patch Invidious to use DHI Alpine images (Dockerfile lives in docker/)
+# Patch Invidious to use DHI Alpine and pinned Crystal images (Dockerfile lives in docker/)
 INVIDIOUS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/invidious" "docker/Dockerfile" || true)
 if [ -z "$INVIDIOUS_DOCKERFILE" ]; then
     log_warn "Invidious Dockerfile not found - build may fail."
@@ -1373,8 +1387,11 @@ if [ -z "$INVIDIOUS_DOCKERFILE" ]; then
 fi
 for dockerfile in "$SRC_DIR/invidious/$INVIDIOUS_DOCKERFILE" "$SRC_DIR/invidious/docker/Dockerfile.arm64"; do
     if [ -f "$dockerfile" ]; then
-        sed -i 's|^FROM alpine:.*|FROM dhi.io/alpine-base:3.22|g' "$dockerfile"
-        log_info "Patched Invidious Dockerfile to use DHI hardened images: $(basename "$dockerfile")"
+        sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$dockerfile"
+        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$dockerfile"
+        sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$dockerfile"
+        sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$dockerfile"
+        log_info "Patched Invidious Dockerfile base images: $(basename "$dockerfile")"
     fi
 done
 clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster"
@@ -1387,12 +1404,13 @@ fi
 if [ -f "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" ]; then
     # Use -dev variant to ensure pip and build tools are present
     sed -i 's|^FROM python:.*-alpine|FROM dhi.io/python:3.11-alpine3.22-dev|g' "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE"
+    sed -i "s|readlink -f /usr/local/bin/python3|python -c 'import os,sys; print(os.path.realpath(sys.executable))'|" "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE"
     log_info "Patched Odido Booster Dockerfile to use DHI hardened images."
 fi
 
 mkdir -p "$SRC_DIR/hub-api"
 cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
-FROM dhi.io/python:3.11-alpine3.22
+FROM dhi.io/python:3.11-alpine3.22-dev
 RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd
 WORKDIR /app
 CMD ["python", "server.py"]
@@ -1408,8 +1426,18 @@ if [ -z "$VERT_DOCKERFILE" ]; then
 fi
 if [ -f "$SRC_DIR/vert/$VERT_DOCKERFILE" ]; then
     # Use -dev variant for build stages to ensure npm/yarn are present
-    sed -i 's|^FROM node:.*-alpine.* as build|FROM dhi.io/node:20-alpine3.22-dev as build|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM node:.*-alpine.* as runtime|FROM dhi.io/node:20-alpine3.22 as runtime|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    # Use DHI bun alpine dev for builder to keep hardened alpine base
+    sed -i 's|^FROM oven/bun[^ ]*|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM dhi.io/bun:1-alpine3.22-dev AS|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM oven/bun$|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM oven/bun[[:space:]]|FROM dhi.io/bun:1-alpine3.22-dev |g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i '/rm -rf \\/var\\/lib\\/apt\\/lists/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM nginx:stable-alpine|FROM dhi.io/nginx:1.28-alpine3.21|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     log_info "Patched VERT Dockerfile to use DHI hardened images."
 fi
 
@@ -1441,7 +1469,6 @@ PROFILE_NAME=$2
 PROFILES_DIR="/profiles"
 ACTIVE_CONF="/active-wg.conf"
 NAME_FILE="/app/.active_profile_name"
-LOG_FILE="/app/deployment.log"
 LOCK_FILE="/app/.wg-control.lock"
 
 # Use flock to prevent concurrent runs (especially during profile switching)
@@ -1459,10 +1486,12 @@ if [ "$ACTION" = "activate" ]; then
     if [ -f "$PROFILES_DIR/$PROFILE_NAME.conf" ]; then
         ln -sf "$PROFILES_DIR/$PROFILE_NAME.conf" "$ACTIVE_CONF"
         echo "$PROFILE_NAME" > "$NAME_FILE"
-        DEPENDENTS="redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe"
+        DEPENDENTS="redlib wikiless wikiless_redis invidious invidious-db companion rimgo breezewiki anonymousoverflow scribe"
+        # shellcheck disable=SC2086
         docker stop $DEPENDENTS 2>/dev/null || true
         docker compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
         sleep 5
+        # shellcheck disable=SC2086
         docker start $DEPENDENTS 2>/dev/null || true
     else
         echo "Error: Profile not found"
@@ -1547,13 +1576,12 @@ elif [ "$ACTION" = "status" ]; then
         fi
         
         # Load previous values and calculate cumulative total
-        PREV_RX="0"
-        PREV_TX="0"
         TOTAL_RX="0"
         TOTAL_TX="0"
         LAST_RX="0"
         LAST_TX="0"
         if [ -f "$DATA_FILE" ]; then
+            # shellcheck disable=SC1090
             . "$DATA_FILE" 2>/dev/null || true
         fi
         
@@ -1586,13 +1614,14 @@ DATAEOF
         SESSION_RX="0"
         SESSION_TX="0"
         if [ -f "$DATA_FILE" ]; then
+            # shellcheck disable=SC1090
             . "$DATA_FILE" 2>/dev/null || true
             ALLTIME_RX=$((TOTAL_RX + LAST_RX))
             ALLTIME_TX=$((TOTAL_TX + LAST_TX))
         fi
     fi
     
-    ACTIVE_NAME=$(cat "$NAME_FILE" 2>/dev/null | tr -d '\n\r' || echo "Unknown")
+    ACTIVE_NAME=$(tr -d '\n\r' < "$NAME_FILE" 2>/dev/null || echo "Unknown")
     if [ -z "$ACTIVE_NAME" ]; then ACTIVE_NAME="Unknown"; fi
     
     WGE_STATUS="down"
@@ -1631,6 +1660,7 @@ DATAEOF
             WGE_SAVED_TOTAL_RX="0"
             WGE_SAVED_TOTAL_TX="0"
             if [ -f "$WGE_DATA_FILE" ]; then
+                # shellcheck disable=SC1090
                 . "$WGE_DATA_FILE" 2>/dev/null || true
             fi
             
@@ -1672,7 +1702,7 @@ WGEDATAEOF
     SERVICES_JSON="{"
     FIRST_SRV=1
     # Added core infrastructure services to the monitoring loop
-    for srv in "invidious:3000" "redlib:8080" "wikiless:8180" "libremdb:3001" "rimgo:3002" "scribe:8280" "breezewiki:10416" "anonymousoverflow:8480" "vert:80" "vertd:24153" "adguard:8083" "portainer:9000" "wg-easy:51821"; do
+    for srv in "invidious:3000" "redlib:8080" "wikiless:8180" "memos:5230" "rimgo:3002" "scribe:8280" "breezewiki:10416" "anonymousoverflow:8480" "vert:80" "vertd:24153" "adguard:8083" "portainer:9000" "wg-easy:51821"; do
         s_name=${srv%:*}
         s_port=${srv#*:}
         [ $FIRST_SRV -eq 0 ] && SERVICES_JSON="$SERVICES_JSON,"
@@ -1690,7 +1720,7 @@ WGEDATAEOF
             # For services in gluetun network, we check against gluetun container
             TARGET_HOST="$s_name"
             case "$s_name" in
-                invidious|redlib|wikiless|libremdb|rimgo|scribe|breezewiki|anonymousoverflow) TARGET_HOST="gluetun" ;;
+                invidious|redlib|wikiless|rimgo|scribe|breezewiki|anonymousoverflow) TARGET_HOST="gluetun" ;;
             esac
             if nc -z -w 2 "$TARGET_HOST" "$s_port" >/dev/null 2>&1; then
                 SERVICES_JSON="$SERVICES_JSON\"$s_name\":\"up\""
@@ -1701,7 +1731,7 @@ WGEDATAEOF
             # Fallback to network check
             TARGET_HOST="$s_name"
             case "$s_name" in
-                invidious|redlib|wikiless|libremdb|rimgo|scribe|breezewiki|anonymousoverflow) TARGET_HOST="gluetun" ;;
+                invidious|redlib|wikiless|rimgo|scribe|breezewiki|anonymousoverflow) TARGET_HOST="gluetun" ;;
             esac
             
             if nc -z -w 2 "$TARGET_HOST" "$s_port" >/dev/null 2>&1; then
@@ -2156,7 +2186,6 @@ services:
       - "$LAN_IP:$PORT_REDLIB:$PORT_INT_REDLIB/tcp"
       - "$LAN_IP:$PORT_WIKILESS:$PORT_INT_WIKILESS/tcp"
       - "$LAN_IP:$PORT_INVIDIOUS:$PORT_INT_INVIDIOUS/tcp"
-      - "$LAN_IP:$PORT_LIBREMDB:$PORT_INT_LIBREMDB/tcp"
       - "$LAN_IP:$PORT_RIMGO:$PORT_INT_RIMGO/tcp"
       - "$LAN_IP:$PORT_SCRIBE:$PORT_SCRIBE/tcp"
       - "$LAN_IP:$PORT_BREEZEWIKI:$PORT_INT_BREEZEWIKI/tcp"
@@ -2293,7 +2322,7 @@ services:
       dockerfile: $WIKILESS_DOCKERFILE
     container_name: wikiless
     network_mode: "service:gluetun"
-    environment: {DOMAIN: "$LAN_IP:$PORT_WIKILESS", NONSSL_PORT: "$PORT_INT_WIKILESS"}
+    environment: {DOMAIN: "$LAN_IP:$PORT_WIKILESS", NONSSL_PORT: "$PORT_INT_WIKILESS", REDIS_URL: "redis://127.0.0.1:6379"}
     healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:8180/ || exit 1", interval: 30s, timeout: 5s, retries: 2}
     depends_on: {wikiless_redis: {condition: service_healthy}, gluetun: {condition: service_healthy}}
     restart: always
@@ -2384,18 +2413,6 @@ services:
     security_opt:
       - no-new-privileges:true
     depends_on: {gluetun: {condition: service_healthy}}
-
-  libremdb:
-    image: ghcr.io/zyachel/libremdb:latest
-    container_name: libremdb
-    network_mode: "service:gluetun"
-    env_file: ["$ENV_DIR/libremdb.env"]
-    environment: {PORT: "$PORT_INT_LIBREMDB"}
-    depends_on: {gluetun: {condition: service_healthy}}
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits: {cpus: '0.5', memory: 256M}
 
   rimgo:
     image: codeberg.org/rimgo/rimgo:latest
@@ -3205,10 +3222,10 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance</span></div>
             </a>
-            <a id="link-libremdb" href="http://$LAN_IP:$PORT_LIBREMDB" class="card" data-check="true" data-container="libremdb">
-                <div class="card-header"><h2>LibremDB</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">A private metadata engine for media collections. Retrieves movie and TV information without disclosing viewing habits to third-party data brokers.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="libremdb" data-tooltip="Manage LibremDB Container">Private Instance</span></div>
+            <a id="link-memos" href="http://$LAN_IP:$PORT_MEMOS" class="card" data-check="true" data-container="memos">
+                <div class="card-header"><h2>Memos</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container">Direct Access</span></div>
             </a>
             <a id="link-rimgo" href="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true" data-container="rimgo">
                 <div class="card-header"><h2>Rimgo</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
@@ -3979,7 +3996,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     'invidious': { port: '$PORT_INVIDIOUS', sub: 'invidious' },
                     'redlib': { port: '$PORT_REDLIB', sub: 'redlib' },
                     'wikiless': { port: '$PORT_WIKILESS', sub: 'wikiless' },
-                    'libremdb': { port: '$PORT_LIBREMDB', sub: 'libremdb' },
+                    'memos': { port: '$PORT_MEMOS', sub: 'memos' },
                     'rimgo': { port: '$PORT_RIMGO', sub: 'rimgo' },
                     'scribe': { port: '$PORT_SCRIBE', sub: 'scribe' },
                     'breezewiki': { port: '$PORT_BREEZEWIKI', sub: 'breezewiki' },
@@ -4321,6 +4338,23 @@ echo "=========================================================="
 sudo modprobe tun || true
 
 sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
+
+MEMOS_HOST_DIR="${HOME}/.memos"
+mkdir -p "$MEMOS_HOST_DIR"
+if $DOCKER_CMD ps -a --format '{{.Names}}' | grep -q "^libremdb$"; then
+    log_info "Removing legacy libremdb container in favor of memos..."
+    $DOCKER_CMD rm -f libremdb 2>/dev/null || true
+fi
+if $DOCKER_CMD ps -a --format '{{.Names}}' | grep -q "^memos$"; then
+    log_info "Replacing existing memos container..."
+    $DOCKER_CMD rm -f memos 2>/dev/null || true
+fi
+MEMOS_NET="${APP_NAME}_frontnet"
+MEMOS_NET_FLAG=""
+if $DOCKER_CMD network ls --format '{{.Name}}' | grep -q "^${MEMOS_NET}$"; then
+    MEMOS_NET_FLAG="--network ${MEMOS_NET}"
+fi
+$DOCKER_CMD run -d --name memos --publish "$PORT_MEMOS:5230" --volume "$MEMOS_HOST_DIR:/var/opt/memos" $MEMOS_NET_FLAG neosmemo/memos:stable
 
 if $DOCKER_CMD ps | grep -q adguard; then
     log_info "AdGuard Home is operational. Network-wide filtering is active."

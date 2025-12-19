@@ -229,7 +229,7 @@ All links below point to official project pages or maintainer repositories (no G
 | **[Invidious](https://github.com/iv-org/invidious)** | YouTube | **🔒 VPN Routed** |
 | **[Redlib](https://github.com/redlib-org/redlib)** | Reddit | **🔒 VPN Routed** |
 | **[Wikiless](https://codeberg.org/orangef/wikiless)** | Wikipedia | **🔒 VPN Routed** |
-| **[LibremDB](https://github.com/zyachel/libremdb)** | Movies/TV | **🔒 VPN Routed** |
+| **[Memos](https://github.com/usememos/memos)** | Notes | Port 5230 |
 | **[Rimgo](https://codeberg.org/rimgo/rimgo)** | Imgur | **🔒 VPN Routed** |
 | **[Scribe](https://github.com/iv-org/scribe)** | Medium | **🔒 VPN Routed** |
 | **[BreezeWiki](https://gitlab.com/breezewiki/breezewiki)** | Fandom | **🔒 VPN Routed** |
@@ -250,17 +250,17 @@ All links below point to official project pages or maintainer repositories (no G
 - **[Gluetun](https://github.com/qdm12/gluetun)**: A specialized VPN client that acts as an internal proxy. It isolates privacy frontends and routes their outgoing traffic through an external VPN provider to ensure your home IP remains anonymous.
 
 #### Privacy Frontends (VPN-Routed)
-- **[Invidious](https://github.com/iv-org/invidious)**: Access YouTube content privately. It strips all tracking and advertisements, routes traffic through the VPN to hide your IP, and provides a lightweight interface without proprietary telemetry.
-- **[Redlib](https://github.com/redlib-org/redlib)**: A hardened Reddit frontend. It eliminates tracking pixels, intrusive analytics, and advertisements, ensuring your browsing habits remain confidential and your home IP is never disclosed.
-- **[Wikiless](https://codeberg.org/orangef/wikiless)**: Wikipedia without the cookies or telemetry. All requests are routed through the VPN to maintain total anonymity.
-- **[LibremDB](https://github.com/zyachel/libremdb)**: Private metadata engine for media collections. Retrieves information without allowing data brokers to profile your interests or track your IP.
-- **[Rimgo](https://codeberg.org/rimgo/rimgo)**: An anonymous Imgur viewer that removes telemetry and tracking scripts while hiding your location behind the VPN proxy.
-- **[Scribe](https://github.com/iv-org/scribe)**: Read Medium articles without the paywalls, tracking scripts, or IP logging common on the standard platform.
-- **[BreezeWiki](https://gitlab.com/breezewiki/breezewiki)**: Clean Fandom interface. Neutralizes aggressive advertising networks and prevents tracking scripts from monitoring your visits.
-- **[AnonOverflow](https://github.com/httpjamesm/anonymousoverflow)**: Private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance or IP tracking.
+- **[Invidious](https://github.com/iv-org/invidious)**: Access YouTube content privately (Port 3000). It strips all tracking and advertisements, routes traffic through the VPN to hide your IP, and provides a lightweight interface without proprietary telemetry.
+- **[Redlib](https://github.com/redlib-org/redlib)**: A hardened Reddit frontend (Port 8080). It eliminates tracking pixels, intrusive analytics, and advertisements, ensuring your browsing habits remain confidential and your home IP is never disclosed.
+- **[Wikiless](https://codeberg.org/orangef/wikiless)**: Wikipedia without the cookies or telemetry (Port 8180). All requests are routed through the VPN to maintain total anonymity.
+- **[Rimgo](https://codeberg.org/rimgo/rimgo)**: An anonymous Imgur viewer (Port 3002) that removes telemetry and tracking scripts while hiding your location behind the VPN proxy.
+- **[Scribe](https://github.com/iv-org/scribe)**: Read Medium articles without the paywalls, tracking scripts, or IP logging common on the standard platform (Port 8280).
+- **[BreezeWiki](https://gitlab.com/breezewiki/breezewiki)**: Clean Fandom interface (Port 8380). Neutralizes aggressive advertising networks and prevents tracking scripts from monitoring your visits.
+- **[AnonOverflow](https://github.com/httpjamesm/anonymousoverflow)**: Private StackOverflow interface (Port 8480). Facilitates information retrieval for developers without facilitating cross-site corporate surveillance or IP tracking.
 
 #### Utilities & Automation
 - **[VERT](https://github.com/vert-sh/vert)**: A local file conversion service that maintains data sovereignty by processing sensitive documents on your own hardware using GPU acceleration.
+- **[Memos](https://github.com/usememos/memos)**: A private notes and knowledge base for capturing ideas, snippets, and personal documentation locally.
 - **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)**: An automated data management utility for Odido users that monitors usage and handles bundle procurement via API.
 - **[Watchtower](https://github.com/containrrr/watchtower)**: A background utility that monitors for container image updates and automates the update process to ensure security patches are applied.
 
@@ -268,6 +268,39 @@ All links below point to official project pages or maintainer repositories (no G
 - **cert-monitor.sh**: Manages the automated SSL certificate lifecycle. It handles Let's Encrypt issuance via DNS-01 challenges and implements rate-limit recovery by deploying temporary self-signed certificates.
 - **wg-ip-monitor.sh**: A proactive network monitor that detects changes in your public IP address. It automatically synchronizes DNS records and restarts the WireGuard endpoint to maintain persistent connectivity.
 - **wg-control.sh**: An administrative control script that facilitates profile switching, status reporting, and service dependency management for the VPN tunnel.
+
+## <a id="testing"></a>🧪 Local Test Deployment
+
+Puppeteer-based checks validate that privacy frontends render real content after deployment.
+
+```bash
+cd tests/puppeteer
+npm install
+npm test
+```
+
+Reports are written to `tests/puppeteer/reports/`. If your environment uses different
+hosts or ports, set the `*_URL` or `*_PORT` variables described in
+`tests/puppeteer/README.md`.
+
+## <a id="test-suite"></a>🧪 Comprehensive Test Suite
+
+Run the bundled suite if you want to exercise all structural checks from a single command.
+
+```bash
+./tests/run-suite.sh
+```
+
+The script:
+
+- runs `shellcheck` against `zima.sh`
+- installs Puppeteer dependencies
+- runs the Puppeteer suite while respecting `BREEZEWIKI_TEST_URL`, `BREEZEWIKI_EXPECTED_TEXT`,
+  `RIMGO_TEST_URL`, `WIKILESS_TEST_URL`, and `INVIDIOUS_TEST_URL` (set them before running to point at
+  the correct targets)
+
+The suite assumes the stack is running and may fail with `net::ERR_CONNECTION_REFUSED` or missing-content
+errors until services are healthy. Check `tests/puppeteer/reports/` for detailed Markdown/JSON artifacts.
 
 ## <a id="resilience"></a>🏗️ System Resilience
 
