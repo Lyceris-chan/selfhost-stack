@@ -51,7 +51,7 @@ Privacy Hub centralizes network traffic through a secure WireGuard tunnel and fi
 This stack is configured to minimize telemetry and local logging by default. Verify or adjust as needed:
 
 - **[AdGuard Home](https://adguard.com/en/adguard-home/overview.html)**: AdGuard Home states it does not collect usage statistics by default ([privacy policy](https://adguard.com/en/privacy/home.html)). We keep local query logs and statistics for 30 days in `/DATA/AppData/privacy-hub/config/adguard/AdGuardHome.yaml` (`querylog.enabled=true`, `statistics.enabled=true`, `interval=720h`). Adjust retention or disable in the AdGuard UI or config if you want less local logging.
-- **[Portainer CE](https://github.com/portainer/portainer)**: The deployment attempts to disable anonymous usage statistics via the Portainer API. Verify in **Settings → General → Allow the collection of anonymous statistics** ([docs](https://docs.portainer.io/admin/settings/general), [privacy policy](https://www.portainer.io/legal/privacy-policy)). The legacy `--no-analytics` flag is deprecated, so use the UI toggle.
+- **[Portainer CE](https://www.portainer.io/)**: The deployment attempts to disable anonymous usage statistics via the Portainer API. Verify in **Settings → General → Allow the collection of anonymous statistics** ([docs](https://docs.portainer.io/admin/settings/general), [privacy policy](https://www.portainer.io/legal/privacy-policy)). The legacy `--no-analytics` flag is deprecated, so use the UI toggle.
 - **Other services**: No extra telemetry is enabled by this stack. External calls occur only for core functionality (e.g., VPN provider endpoints or update checks).
 
 ## <a id="credentials"></a>🔑 Required Credentials & Configuration
@@ -233,7 +233,7 @@ All links below point to official project pages or maintainer repositories (no G
 | Service | Category | Connectivity |
 | :--- | :--- | :--- |
 | **[Management Dashboard](#dashboard)** | Infrastructure | Port 8081 |
-| **[AdGuard Home](https://adguard.com/en/adguard-home/overview.html)** | DNS/Filtering | Port 8083 |
+| **[AdGuard Home](https://github.com/AdguardTeam/AdGuardHome)** | DNS/Filtering | Port 8083 |
 | **[WireGuard (WG-Easy)](https://github.com/wg-easy/wg-easy)** | Remote Access | **Gateway** (Port 51821) |
 | **[Portainer CE](https://github.com/portainer/portainer)** | Management | Port 9000 |
 | **[Invidious](https://github.com/iv-org/invidious)** | YouTube | **🔒 VPN Routed** |
@@ -253,7 +253,7 @@ All links below point to official project pages or maintainer repositories (no G
 
 #### Infrastructure & Core
 - **[Management Dashboard](#dashboard)**: The central control plane for the stack. Built with Material Design 3, it provides live telemetry, VPN profile management, and service status monitoring with zero external dependencies.
-- **[AdGuard Home](https://adguard.com/en/adguard-home/overview.html)**: A network-wide advertisement and tracker filtration engine. It intercepts DNS requests to neutralize telemetry and malicious domains at the source.
+- **[AdGuard Home](https://github.com/AdguardTeam/AdGuardHome)**: A network-wide advertisement and tracker filtration engine. It intercepts DNS requests to neutralize telemetry and malicious domains at the source.
 - **[WireGuard (WG-Easy)](https://github.com/wg-easy/wg-easy)**: A high-performance VPN server that provides secure remote access to your home network. It is the mandatory gateway for utilizing your privacy boundary on external or untrusted networks.
 - **[Portainer CE](https://github.com/portainer/portainer)**: A comprehensive management interface for the Docker environment, facilitating granular control over container orchestration and infrastructure lifecycle.
 - **[Unbound](https://nlnetlabs.nl/projects/unbound/about/)**: A validating, recursive, caching DNS resolver. It communicates directly with Root DNS servers, eliminating the need for third-party upstream providers.
