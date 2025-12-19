@@ -1154,11 +1154,11 @@ user_rules:
   - "@@||protonvpn.net^"
   - "@@||dns.desec.io^"
   - "@@||desec.io^"
-  # Default DNS blocklist (Sleepy List)
+  # Default DNS blocklist (sleepy list)
 filters:
   - enabled: true
     url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/refs/heads/main/blocklist.txt
-    name: "Sleepy List"
+    name: "sleepy list"
     id: 1
 filters_update_interval: 1
 EOF
