@@ -86,7 +86,6 @@ To route frontend traffic through a VPN, you need a WireGuard configuration file
 
 Before you run:
 - Review the [Required Credentials & Configuration](#credentials).
-- Optional: open `dashboard-test.html` to preview the dashboard layout outside the target runtime.
 
 ```bash
 # 1. Clone the repository and enter the directory
@@ -268,39 +267,6 @@ All links below point to official project pages or maintainer repositories (no G
 - **cert-monitor.sh**: Manages the automated SSL certificate lifecycle. It handles Let's Encrypt issuance via DNS-01 challenges and implements rate-limit recovery by deploying temporary self-signed certificates.
 - **wg-ip-monitor.sh**: A proactive network monitor that detects changes in your public IP address. It automatically synchronizes DNS records and restarts the WireGuard endpoint to maintain persistent connectivity.
 - **wg-control.sh**: An administrative control script that facilitates profile switching, status reporting, and service dependency management for the VPN tunnel.
-
-## <a id="testing"></a>🧪 Local Test Deployment
-
-Puppeteer-based checks validate that privacy frontends render real content after deployment.
-
-```bash
-cd tests/puppeteer
-npm install
-npm test
-```
-
-Reports are written to `tests/puppeteer/reports/`. If your environment uses different
-hosts or ports, set the `*_URL` or `*_PORT` variables described in
-`tests/puppeteer/README.md`.
-
-## <a id="test-suite"></a>🧪 Comprehensive Test Suite
-
-Run the bundled suite if you want to exercise all structural checks from a single command.
-
-```bash
-./tests/run-suite.sh
-```
-
-The script:
-
-- runs `shellcheck` against `zima.sh`
-- installs Puppeteer dependencies
-- runs the Puppeteer suite while respecting `BREEZEWIKI_TEST_URL`, `BREEZEWIKI_EXPECTED_TEXT`,
-  `RIMGO_TEST_URL`, `WIKILESS_TEST_URL`, and `INVIDIOUS_TEST_URL` (set them before running to point at
-  the correct targets)
-
-The suite assumes the stack is running and may fail with `net::ERR_CONNECTION_REFUSED` or missing-content
-errors until services are healthy. Check `tests/puppeteer/reports/` for detailed Markdown/JSON artifacts.
 
 ## <a id="resilience"></a>🏗️ System Resilience
 
