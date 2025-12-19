@@ -2,24 +2,24 @@
 
 A self-hosted privacy stack for people who want to own their data instead of renting a false sense of security.
 
-## 📋 Table of Contents
-- [Project Overview](#-project-overview)
-- [Quick Start](#-quick-start)
-- [Privacy & Ownership](#-privacy--ownership)
-- [Technical Architecture](#-technical-architecture)
-- [Network Configuration](#-network-configuration)
-- [Advanced Setup: OpenWrt & Double NAT](#-advanced-setup-openwrt--double-nat)
-- [Remote Access: Taking Your Network With You](#-remote-access-taking-your-network-with-you)
-- [Security Audit & Privacy Standards](#-security-audit--privacy-standards)
-- [Service Catalog](#-service-catalog)
-- [Service Access & Port Reference](#-service-access--port-reference)
-- [System Resilience](#-system-resilience)
-- [Community & Contributions](#-community--contributions)
+## <a id="contents"></a>📋 Table of Contents
+- [Project Overview](#overview)
+- [Quick Start](#quick-start)
+- [Privacy & Ownership](#ownership)
+- [Technical Architecture](#architecture)
+- [Network Configuration](#network-config)
+- [Advanced Setup: OpenWrt & Double NAT](#advanced-setup)
+- [Remote Access: Taking Your Network With You](#remote-access)
+- [Security Audit & Privacy Standards](#security)
+- [Service Catalog](#catalog)
+- [Service Access & Port Reference](#ports)
+- [System Resilience](#resilience)
+- [Community & Contributions](#community)
 
-## 🌟 Project Overview
+## <a id="overview"></a>🌟 Project Overview
 Privacy Hub is a security gateway for ZimaOS. It centralizes network traffic through a secure WireGuard tunnel, filters DNS at the source using recursive resolution, and routes application frontends through a dedicated VPN gateway (Gluetun). It's designed to stop your data from being a product sold to the highest bidder.
 
-## 🚀 Quick Start
+## <a id="quick-start"></a>🚀 Quick Start
 
 ```bash
 # 1. Clone the repo and enter the directory
@@ -34,7 +34,7 @@ chmod +x zima.sh
 # -p : Auto-generate passwords
 ```
 
-## 🛡️ Privacy & Ownership
+## <a id="ownership"></a>🛡️ Privacy & Ownership
 
 If you don't own the hardware and the code running your network, you don't own your privacy. You're just renting a temporary privilege from a company that will sell you out the second a court order or a profitable data-sharing deal comes along.
 
@@ -71,7 +71,7 @@ In traditional HTTPS, the very first part of the connection (the "Client Hello")
 **ECH** encrypts that initial greeting. It puts a bag over the head of your connection request, ensuring that metadata observers see only that you are connecting to a general infrastructure provider, but not which specific site or service you are using.
 </details>
 
-## 🏗️ Technical Architecture
+## <a id="architecture"></a>🏗️ Technical Architecture
 
 ### The DNS Chain
 `Your Device` → `AdGuard Home (Filtering)` → `Unbound (Recursive + QNAME Minimization)` → `Root DNS Servers`
@@ -79,17 +79,17 @@ In traditional HTTPS, the very first part of the connection (the "Client Hello")
 ### The Privacy Path
 `Dashboard (Zero-Leak UI)` → `Nginx Proxy` → `Gluetun (VPN Tunnel)` → `Privacy Frontend` → `External VPN Provider` → `Internet`
 
-## 🌐 Network Configuration
+## <a id="network-config"></a>🌐 Network Configuration
 
 ### Standard Setup: ISP Router Only
 If you just have the standard router your ISP gave you, you only need to do one thing:
 1.  **Forward port 51820/UDP** to your ZimaOS machine's local IP.
-This is the only open door. It is cryptographically silent and does not increase your attack surface (see the [Security Model](#-security-audit--privacy-standards)).
+This is the only open door. It is cryptographically silent and does not increase your attack surface (see the [Security Model](#security)).
 
 ### Local "Home" Mode: DNS Rewrites
 When you're at home, you shouldn't have to bounce traffic off a satellite just to see your own dashboard. AdGuard Home uses **DNS Rewrites** to tell your devices the local LAN IP (`192.168.1.100`) instead of your public IP. You get SSL and local speeds without needing a VPN tunnel.
 
-## 📡 Advanced Setup: OpenWrt & Double NAT
+## <a id="advanced-setup"></a>📡 Advanced Setup: OpenWrt & Double NAT
 
 If you're running a real router like OpenWrt behind your ISP modem, you are in a **Double NAT** situation. This means your data has to pass through two layers of address translation. You need to fix the routing so your packets actually arrive.
 
@@ -152,7 +152,7 @@ You have to forward the entry point to your OpenWrt router first.
 - **Forward**: `51820/UDP` → **OpenWrt WAN IP**.
 - This completes the chain of custody for your data: `Internet` → `ISP Modem` → `OpenWrt` → `ZimaOS`.
 
-## 🛡️ Security Audit & Privacy Standards
+## <a id="security"></a>🛡️ Security Audit & Privacy Standards
 
 ### DHI Hardened Images
 Standard images are packed with unnecessary binaries and vulnerabilities. We use **DHI hardened images** (`dhi.io`) which reduce the attack surface by **over 70%** according to CIS Benchmarks. Less junk means fewer ways for someone to break into your house. (Source: [CIS Benchmarks](https://www.cisecurity.org/benchmark/docker))
@@ -164,15 +164,15 @@ Opening a port for WireGuard does **not** increase your attack surface to DDoS o
 - **Cryptographic Ownership**: You can't "guess" a password. You need a valid 256-bit cryptographic key. Without it, you don't exist to the server.
 - **No Domain-to-Home Path**: Your domain is just a pointer. Since Nginx only listens internally, there is **no way** for someone to connect to your dashboard from the internet without being inside your encrypted tunnel first.
 
-## 📡 Remote Access: Taking Your Network With You
+## <a id="remote-access"></a>📡 Remote Access: Taking Your Network With You
 
 Privacy Hub turns your ZimaOS into a portable security boundary. Using **WG-Easy**, you can route all your traffic back through your home from anywhere.
 
 - **Bandwidth-Optimized Split Tunneling**: By default, only private traffic and DNS go through the tunnel. 
 - **The HTTPS Myth**: VPN companies love to scare you, but [over 95% of web traffic is HTTPS encrypted](https://transparencyreport.google.com/https/overview). Your ISP can't see inside your packets; HTTPS already handles that. The **real leak is DNS**, which we solve by forcing "phonebook" requests through the tunnel while letting encrypted data go direct for speed.
-- **Seamless Domain Access (dedyn.io)**: Your hostnames (see [Service Access](#-service-access--port-reference)) resolve correctly over the VPN, allowing you to use SSL certificates globally.
+- **Seamless Domain Access (dedyn.io)**: Your hostnames (see [Service Access](#ports)) resolve correctly over the VPN, allowing you to use SSL certificates globally.
 
-## 📦 Service Catalog
+## <a id="catalog"></a>📦 Service Catalog
 
 ### Core Infrastructure
 - **WireGuard (WG-Easy)**: A VPN server that actually works. Secure remote access without the corporate "cloud" middleman.
@@ -196,7 +196,7 @@ Privacy Hub turns your ZimaOS into a portable security boundary. Using **WG-Easy
 - **Odido Booster**: Automated data bundle management for Odido users.
 - **Watchtower**: Automated container image updates and cleanup.
 
-## 🔌 Service Access & Port Reference
+## <a id="ports"></a>🔌 Service Access & Port Reference
 
 | Service | LAN Port | Subdomain (HTTPS) | Connectivity |
 | :--- | :--- | :--- | :--- |
@@ -214,7 +214,7 @@ Privacy Hub turns your ZimaOS into a portable security boundary. Using **WG-Easy
 | **AnonOverflow** | `8480` | `https://anonymousoverflow.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
 | **VERT** | `5555` | `https://vert.yourdomain.dedyn.io:8443` | Direct |
 
-## 🏗️ System Resilience
+## <a id="resilience"></a>🏗️ System Resilience
 
 ### Reactive SSL Management
 The `cert-monitor.sh` script manages Let's Encrypt certificates. If it hits a rate limit, it detects it, installs a temporary self-signed cert, and retries the moment the window opens.
@@ -222,7 +222,7 @@ The `cert-monitor.sh` script manages Let's Encrypt certificates. If it hits a ra
 ### Intelligent IP Monitoring
 `wg-ip-monitor.sh` checks your IP every 5 minutes. If it changes, it updates deSEC and restarts WireGuard. Your ISP's dynamic IP garbage won't knock you offline.
 
-## 🤝 Community & Contributions
+## <a id="community"></a>🤝 Community & Contributions
 
 This project is built on the principles of digital autonomy and transparency. While it was originally developed for ZimaOS, the scripts and configurations are portable and can be adapted for other Linux-based platforms.
 
