@@ -6,6 +6,7 @@ A self-hosted privacy stack for people who want to own their data instead of ren
 - [Project Overview](#overview)
 - [Quick Start](#quick-start)
 - [Privacy & Ownership](#ownership)
+- [Management Dashboard](#dashboard)
 - [Technical Architecture](#architecture)
 - [Network Configuration](#network-config)
 - [Advanced Setup: OpenWrt & Double NAT](#advanced-setup)
@@ -70,6 +71,25 @@ In traditional HTTPS, the very first part of the connection (the "Client Hello")
 
 **ECH** encrypts that initial greeting. It puts a bag over the head of your connection request, ensuring that metadata observers see only that you are connecting to a general infrastructure provider, but not which specific site or service you are using.
 </details>
+
+## <a id="dashboard"></a>🖥️ Management Dashboard
+
+The Privacy Hub includes a custom-built, Material Design 3 management interface. It's the central nervous system of your privacy stack.
+
+### ZimaOS & CasaOS Integration
+The dashboard is fully integrated with the ZimaOS native interface. After deployment, you will find a dedicated **Privacy Hub icon** on your ZimaOS home screen, allowing for one-click access to your system telemetry and controls.
+
+### What the Dashboard Provides:
+- **Live Telemetry**: Real-time monitoring of your VPN tunnel data usage (RX/TX), both for the current session and all-time.
+- **VPN Control Center**: 
+    - Switch between multiple WireGuard profiles on the fly.
+    - Upload and activate new `.conf` files directly from the UI.
+    - Monitor your public IP and connection health status.
+- **Service Governance**: A visual grid showing the status of every privacy frontend (Invidious, Redlib, etc.) and core infrastructure (AdGuard, Portainer, WireGuard). 
+- **Certificate Awareness**: Deep-dive into your SSL status. See exactly when your Let's Encrypt certificate expires and trigger manual checks if needed.
+- **Deployment Logs**: A live, streaming log of system events, giving you full transparency into what the hub is doing in the background.
+- **Odido Booster Control**: If enabled, manage your mobile data bundles and monitoring thresholds directly.
+- **Redaction Mode**: A privacy toggle that blurs sensitive identifying metrics (like IPs and domain names), perfect for sharing screenshots or troubleshooting without leaking your data.
 
 ## <a id="architecture"></a>🏗️ Technical Architecture
 
