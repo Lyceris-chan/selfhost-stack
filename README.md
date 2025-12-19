@@ -3,17 +3,17 @@
 A self-hosted privacy stack for people who want to own their data instead of renting a false sense of security.
 
 ## 📋 Table of Contents
-- [Project Overview](#-project-overview)
-- [Quick Start](#-quick-start)
-- [Privacy & Ownership](#-privacy--ownership)
-- [Technical Architecture](#-technical-architecture)
-- [Network Configuration](#-network-configuration)
-- [Advanced Setup: OpenWrt & Double NAT](#-advanced-setup-openwrt--double-nat)
-- [Remote Access: Taking Your Network With You](#-remote-access-taking-your-network-with-you)
-- [Security Audit & Privacy Standards](#-security-audit--privacy-standards)
-- [Service Catalog](#-service-catalog)
-- [Service Access & Port Reference](#-service-access--port-reference)
-- [System Resilience](#-system-resilience)
+- [Project Overview](#project-overview)
+- [Quick Start](#quick-start)
+- [Privacy & Ownership](#privacy--ownership)
+- [Technical Architecture](#technical-architecture)
+- [Network Configuration](#network-configuration)
+- [Advanced Setup: OpenWrt & Double NAT](#advanced-setup-openwrt--double-nat)
+- [Remote Access: Taking Your Network With You](#remote-access-taking-your-network-with-you)
+- [Security Audit & Privacy Standards](#security-audit--privacy-standards)
+- [Service Catalog](#service-catalog)
+- [Service Access & Port Reference](#service-access--port-reference)
+- [System Resilience](#system-resilience)
 
 ## 🌟 Project Overview
 Privacy Hub is a security gateway for ZimaOS. It centralizes network traffic through a secure WireGuard tunnel, filters DNS at the source using recursive resolution, and routes application frontends through a dedicated VPN gateway (Gluetun). It's designed to stop your data from being a product sold to the highest bidder.
