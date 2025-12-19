@@ -11,6 +11,11 @@ set -euo pipefail
 # - Privacy frontends routed via Gluetun VPN for complete anonymity.
 # - Automated SSL lifecycle management with deSEC & Let's Encrypt.
 # - Real-time system monitoring and dynamic DNS automation.
+#
+# PORTABILITY & COMMUNITY:
+# While designed for ZimaOS, this script is portable across Linux platforms.
+# I encourage you to fork this, experiment, and share your improvements.
+# Pull requests are always welcome.
 # ==============================================================================
 
 # --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---

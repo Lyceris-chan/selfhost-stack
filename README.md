@@ -14,6 +14,7 @@ A self-hosted privacy stack for people who want to own their data instead of ren
 - [Service Catalog](#service-catalog)
 - [Service Access & Port Reference](#service-access--port-reference)
 - [System Resilience](#system-resilience)
+- [Community & Contributions](#-community--contributions)
 
 ## 🌟 Project Overview
 Privacy Hub is a security gateway for ZimaOS. It centralizes network traffic through a secure WireGuard tunnel, filters DNS at the source using recursive resolution, and routes application frontends through a dedicated VPN gateway (Gluetun). It's designed to stop your data from being a product sold to the highest bidder.
@@ -220,3 +221,11 @@ The `cert-monitor.sh` script manages Let's Encrypt certificates. If it hits a ra
 
 ### Intelligent IP Monitoring
 `wg-ip-monitor.sh` checks your IP every 5 minutes. If it changes, it updates deSEC and restarts WireGuard. Your ISP's dynamic IP garbage won't knock you offline.
+
+## 🤝 Community & Contributions
+
+This project is built on the principles of digital autonomy and transparency. While it was originally developed for ZimaOS, the scripts and configurations are portable and can be adapted for other Linux-based platforms.
+
+- **Fork and Experiment**: I encourage you to fork this repository and make it your own. I’d love to see what you do with it and how you improve the stack.
+- **Contributions**: Pull requests are welcome. If you find a bug, have an idea for a new feature, or want to improve the documentation, don't hesitate to contribute.
+- **Showcase**: If you've built something cool based on this hub, feel free to share it!
