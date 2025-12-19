@@ -31,7 +31,7 @@ done
 
 # --- SECTION 1: ENVIRONMENT VALIDATION & DIRECTORY SETUP ---
 # Verify core dependencies before proceeding.
-REQUIRED_COMMANDS="docker curl git crontab iptables"
+REQUIRED_COMMANDS="docker curl git crontab iptables flock"
 for cmd in $REQUIRED_COMMANDS; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "[CRIT] '$cmd' is required but not installed. Please install it."
@@ -1498,14 +1498,14 @@ PROFILE_NAME=$2
 PROFILES_DIR="/profiles"
 ACTIVE_CONF="/active-wg.conf"
 NAME_FILE="/app/.active_profile_name"
-LOCK_DIR="/app/.wg-control.lock.d"
+LOCK_FILE="/app/.wg-control.lock"
 
-# Use mkdir for atomic locking (flock alternative)
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+# Use flock to prevent concurrent runs
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
     echo "Error: Another control operation is in progress"
     exit 1
 fi
-trap 'rm -rf "$LOCK_DIR"' EXIT
 
 sanitize_json_string() {
     printf '%s' "$1" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\n\r'
@@ -4129,15 +4129,15 @@ PORT_DASHBOARD_WEB="$PORT_DASHBOARD_WEB"
 DOCKER_AUTH_DIR="$DOCKER_AUTH_DIR"
 DOCKER_CMD="sudo env DOCKER_CONFIG=\$DOCKER_AUTH_DIR docker"
 LOG_FILE="\$AGH_CONF_DIR/certbot/monitor.log"
-LOCK_DIR="\$AGH_CONF_DIR/certbot/monitor.lock.d"
+LOCK_FILE="\$AGH_CONF_DIR/certbot/monitor.lock"
 EOF
 
 cat >> "$CERT_MONITOR_SCRIPT" <<'EOF'
-# Use mkdir for atomic locking
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+# Use flock to prevent concurrent runs
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
     exit 0
 fi
-trap 'rm -rf "$LOCK_DIR"' EXIT
 
 if [ -z "$DESEC_DOMAIN" ]; then exit 0; fi
 
@@ -4248,7 +4248,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 COMPOSE_FILE="$COMPOSE_FILE"
 CURRENT_IP_FILE="$CURRENT_IP_FILE"
 LOG_FILE="$IP_LOG_FILE"
-LOCK_DIR="$BASE_DIR/.ip-monitor.lock.d"
+LOCK_FILE="$BASE_DIR/.ip-monitor.lock"
 DESEC_DOMAIN="$DESEC_MONITOR_DOMAIN"
 DESEC_TOKEN="$DESEC_MONITOR_TOKEN"
 DOCKER_CONFIG="$DOCKER_AUTH_DIR"
@@ -4256,11 +4256,11 @@ export DOCKER_CONFIG
 EOF
 
 cat >> "$MONITOR_SCRIPT" <<'EOF'
-# Use mkdir for atomic locking
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+# Use flock to prevent concurrent runs
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
     exit 0
 fi
-trap 'rm -rf "$LOCK_DIR"' EXIT
 
 NEW_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ifconfig.me || echo "FAILED")
 
