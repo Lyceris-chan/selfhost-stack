@@ -36,8 +36,13 @@ if ! command -v docker >/dev/null 2>&1; then
     exit 1
 fi
 
-if ! docker compose version >/dev/null 2>&1; then
+if ! command -v docker compose version >/dev/null 2>&1; then
     echo "[CRIT] Docker Compose v2 is required. Please update your environment."
+    exit 1
+fi
+
+if ! command -v curl >/dev/null 2>&1; then
+    echo "[CRIT] 'curl' is required but not installed. Please install it."
     exit 1
 fi
 
@@ -105,6 +110,10 @@ CURRENT_IP_FILE="$BASE_DIR/.current_public_ip"
 WG_CONTROL_SCRIPT="$BASE_DIR/wg-control.sh"
 WG_API_SCRIPT="$BASE_DIR/wg-api.sh"
 CERT_MONITOR_SCRIPT="$BASE_DIR/cert-monitor.sh"
+
+# Memos storage
+MEMOS_HOST_DIR="${HOME}/.memos"
+mkdir -p "$MEMOS_HOST_DIR"
 
 # Logging Functions
 log_info() { 
@@ -2190,6 +2199,17 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.2', memory: 128M}
+
+  memos:
+    image: neosmemo/memos:stable
+    container_name: memos
+    networks: [frontnet]
+    ports: ["$LAN_IP:$PORT_MEMOS:5230"]
+    volumes: ["$MEMOS_HOST_DIR:/var/opt/memos"]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
 
   gluetun:
     image: qmcgaw/gluetun
@@ -4358,24 +4378,12 @@ echo "DEPLOYMENT COMPLETE: INFRASTRUCTURE IS OPERATIONAL"
 echo "=========================================================="
 sudo modprobe tun || true
 
-sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
-
-MEMOS_HOST_DIR="${HOME}/.memos"
-mkdir -p "$MEMOS_HOST_DIR"
 if $DOCKER_CMD ps -a --format '{{.Names}}' | grep -q "^libremdb$"; then
     log_info "Removing legacy libremdb container in favor of memos..."
     $DOCKER_CMD rm -f libremdb 2>/dev/null || true
 fi
-if $DOCKER_CMD ps -a --format '{{.Names}}' | grep -q "^memos$"; then
-    log_info "Replacing existing memos container..."
-    $DOCKER_CMD rm -f memos 2>/dev/null || true
-fi
-MEMOS_NET="${APP_NAME}_frontnet"
-MEMOS_NET_FLAG=""
-if $DOCKER_CMD network ls --format '{{.Name}}' | grep -q "^${MEMOS_NET}$"; then
-    MEMOS_NET_FLAG="--network ${MEMOS_NET}"
-fi
-$DOCKER_CMD run -d --name memos --publish "$PORT_MEMOS:5230" --volume "$MEMOS_HOST_DIR:/var/opt/memos" $MEMOS_NET_FLAG neosmemo/memos:stable
+
+sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
 
 if $DOCKER_CMD ps | grep -q adguard; then
     log_info "AdGuard Home is operational. Network-wide filtering is active."
