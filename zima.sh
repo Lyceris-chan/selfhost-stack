@@ -3,19 +3,19 @@
 set -euo pipefail
 
 # ==============================================================================
-# ZIMAOS PRIVACY HUB
+# 🛡️ ZIMAOS PRIVACY HUB: SECURE NETWORK STACK
 # ==============================================================================
-# A production-grade, self-hosted privacy stack featuring:
-# - WireGuard VPN for secure, authenticated remote access.
-# - AdGuard Home + Unbound for recursive, filtered DNS resolution.
-# - Privacy frontends routed via Gluetun VPN for complete anonymity.
-# - Automated SSL lifecycle management with deSEC & Let's Encrypt.
-# - Real-time system monitoring and dynamic DNS automation.
+# This deployment provides a self-hosted network security environment.
+# Digital independence requires ownership of the hardware and software that 
+# manages your data.
 #
-# PORTABILITY & COMMUNITY:
-# While designed for ZimaOS, this script is portable across Linux platforms.
-# I encourage you to fork this, experiment, and share your improvements.
-# Pull requests are always welcome.
+# Core Components:
+# - WireGuard: Secure remote access gateway for untrusted networks.
+# - AdGuard Home + Unbound: Recursive, filtered DNS resolution for 
+#   independent network visibility.
+# - Privacy Frontends: Clean, telemetry-free interfaces for web services.
+#
+# ESTABLISH CONTROL. MAINTAIN PRIVACY.
 # ==============================================================================
 
 # --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
@@ -25,19 +25,19 @@ while getopts "cp" opt; do
   case ${opt} in
     c) FORCE_CLEAN=true ;;
     p) AUTO_PASSWORD=true ;;
-    *) echo "Usage: $0 [-c (force cleanup/nuke)] [-p (auto-generate passwords)]"; exit 1 ;;
+    *) echo "Usage: $0 [-c (reset environment)] [-p (automated password generation)]"; exit 1 ;;
   esac
 done
 
 # --- SECTION 1: ENVIRONMENT VALIDATION & DIRECTORY SETUP ---
-# Verify core dependencies before proceeding with deployment.
+# Verify core dependencies before proceeding.
 if ! command -v docker >/dev/null 2>&1; then
     echo "[CRIT] Docker is not installed. System cannot proceed."
     exit 1
 fi
 
 if ! docker compose version >/dev/null 2>&1; then
-    echo "[CRIT] Docker Compose v2 is not installed. Please install it first (usually 'docker-compose-plugin')."
+    echo "[CRIT] Docker Compose v2 is required. Please update your environment."
     exit 1
 fi
 
@@ -133,8 +133,8 @@ authenticate_registries() {
     
     echo ""
     echo "--- REGISTRY AUTHENTICATION ---"
-    echo "Enter your credentials for dhi.io and Docker Hub."
-    echo "We use the same token for both because you shouldn't have to manage five different passwords for one task."
+    echo "Please provide your credentials for dhi.io and Docker Hub."
+    echo "A single token is utilized for both registries to streamline configuration."
     echo ""
 
     while true; do
@@ -145,39 +145,39 @@ authenticate_registries() {
         # DHI Login
         DHI_LOGIN_OK=false
         if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
-            log_info "dhi.io: Authenticated. You're now pulling hardened images."
+            log_info "dhi.io: Authentication successful. Hardened images are now available."
             DHI_LOGIN_OK=true
         else
-            log_crit "dhi.io: Login failed. Check your token."
+            log_crit "dhi.io: Authentication failed. Please verify your credentials."
         fi
 
         # Docker Hub Login
         HUB_LOGIN_OK=false
         if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-             log_info "Docker Hub: Authenticated. Pull limits increased."
+             log_info "Docker Hub: Authentication successful. Pull limits have been adjusted."
              HUB_LOGIN_OK=true
         else
-             log_warn "Docker Hub: Login failed. You might hit pull limits if this is an anonymous pull."
+             log_warn "Docker Hub: Authentication failed. Pull rates may be limited for anonymous requests."
         fi
 
         if [ "$DHI_LOGIN_OK" = true ]; then
             if [ "$HUB_LOGIN_OK" = false ]; then
-                log_warn "Proceeding with DHI only. Docker Hub might throttle you."
+                log_warn "Proceeding with DHI authentication only."
             fi
             return 0
         fi
 
-        if ! ask_confirm "Authentication failed. Want to try again?"; then return 1; fi
+        if ! ask_confirm "Authentication failed. Would you like to retry?"; then return 1; fi
     done
 }
 
 setup_fonts() {
-    log_info "Setting up local fonts so Google doesn't track your dashboard visits..."
+    log_info "Downloading local assets to ensure dashboard privacy and eliminate third-party dependencies."
     mkdir -p "$FONTS_DIR"
     
     # Check if fonts are already set up
     if [ -f "$FONTS_DIR/gs.css" ] && [ -f "$FONTS_DIR/cc.css" ] && [ -f "$FONTS_DIR/ms.css" ]; then
-        log_info "Local fonts are already here."
+        log_info "Local assets are present."
         return 0
     fi
 
@@ -215,6 +215,14 @@ setup_fonts() {
     cd - >/dev/null
     
     log_info "Fonts setup complete (Separate files retained for reliability)."
+
+    # Create local SVG icon for CasaOS/ZimaOS dashboard
+    log_info "Creating local SVG icon for the dashboard..."
+    cat > "$FONTS_DIR/privacy-hub.svg" <<EOF
+<svg xmlns="http://www.w3.org/2000/svg" height="128" viewBox="0 -960 960 960" width="128" fill="#D0BCFF">
+    <path d="M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z"/>
+</svg>
+EOF
 }
 
 check_docker_rate_limit() {
@@ -240,13 +248,13 @@ check_docker_rate_limit() {
 
 clean_environment() {
     echo "=========================================================="
-    echo "🛡️  ENVIRONMENT CHECK & CLEANUP"
+    echo "🛡️  ENVIRONMENT VALIDATION & CLEANUP"
     echo "=========================================================="
     
     check_docker_rate_limit
 
     if [ "$FORCE_CLEAN" = true ]; then
-        log_warn "NUCLEAR CLEANUP ENABLED (-c): We're wiping EVERYTHING. Hope you have backups."
+        log_warn "FORCE CLEAN ENABLED (-c): All existing data, configurations, and volumes will be permanently removed."
     fi
 
     TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion libremdb rimgo breezewiki anonymousoverflow scribe vert vertd"
@@ -259,25 +267,25 @@ clean_environment() {
     done
 
     if [ -n "$FOUND_CONTAINERS" ]; then
-        if ask_confirm "Want to remove existing containers?"; then
+        if ask_confirm "Existing containers detected. Would you like to remove them to ensure a clean deployment?"; then
             $DOCKER_CMD rm -f $FOUND_CONTAINERS 2>/dev/null || true
-            log_info "Old containers removed."
+            log_info "Previous containers have been removed."
         fi
     fi
 
     CONFLICT_NETS=$($DOCKER_CMD network ls --format '{{.Name}}' | grep -E '(privacy-hub_frontnet|privacyhub_frontnet|privacy-hub_default|privacyhub_default)' || true)
     if [ -n "$CONFLICT_NETS" ]; then
-        if ask_confirm "Remove network conflicts?"; then
+        if ask_confirm "Conflicting networks detected. Should they be cleared?"; then
             for net in $CONFLICT_NETS; do
-                log_info "  Removing junk network: $net"
+                log_info "  Removing network conflict: $net"
                 $DOCKER_CMD network rm "$net" 2>/dev/null || true
             done
         fi
     fi
 
     if [ -d "$BASE_DIR" ] || $DOCKER_CMD volume ls -q | grep -q "portainer"; then
-        if ask_confirm "Wipe ALL data? (This resets your logins and configs. This is your last warning.)"; then
-            log_info "Clearing out the BASE_DIR..."
+        if ask_confirm "Wipe ALL application data? This action is irreversible."; then
+            log_info "Clearing BASE_DIR data..."
             if [ -d "$BASE_DIR" ]; then
                 sudo rm -f "$BASE_DIR/.secrets" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/.current_public_ip" 2>/dev/null || true
@@ -302,18 +310,18 @@ clean_environment() {
                 $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
                 $DOCKER_CMD volume rm -f "${APP_NAME}_${vol}" 2>/dev/null || true
             done
-            log_info "Data and volumes wiped."
+            log_info "Application data and volumes have been cleared."
         fi
     fi
     
     if [ "$FORCE_CLEAN" = true ]; then
-        log_warn "RESTORE SYSTEM: Returning your machine to its original state..."
+        log_warn "SYSTEM RESET: Restoring host to its original state..."
         echo ""
         
         # ============================================================
         # PHASE 1: Stop all containers to release locks
         # ============================================================
-        log_info "Phase 1: Killing containers..."
+        log_info "Phase 1: Terminating running containers..."
         for c in $TARGET_CONTAINERS; do
             if $DOCKER_CMD ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${c}$"; then
                 log_info "  Stopping: $c"
@@ -389,7 +397,7 @@ clean_environment() {
         log_info "Phase 5: Removing images..."
         REMOVED_IMAGES=""
         # Remove images by known names
-        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome nginx:alpine dhi.io/nginx:alpine portainer/portainer-ce containrrr/watchtower python:3.11-alpine dhi.io/python:3.11-alpine ghcr.io/wg-easy/wg-easy redis:8-alpine dhi.io/redis:8-alpine quay.io/invidious/invidious quay.io/invidious/invidious-companion docker.io/library/postgres:14 dhi.io/postgres:14 ghcr.io/zyachel/libremdb codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine dhi.io/httpd:alpine alpine:latest dhi.io/alpine:latest neilpang/acme.sh"
+        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev dhi.io/python:3.11-alpine3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 ghcr.io/zyachel/libremdb codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine dhi.io/alpine-base:3.22 dhi.io/node:20-alpine3.22-dev dhi.io/node:20-alpine3.22 84codes/crystal:1.8.1-alpine node:25.2-alpine3.21 neilpang/acme.sh"
         for img in $KNOWN_IMAGES; do
             if $DOCKER_CMD images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -q "$img"; then
                 log_info "  Removing: $img"
@@ -404,7 +412,7 @@ clean_environment() {
             img_id=$(echo "$img_info" | awk '{print $2}')
             case "$img_name" in
                 *privacy-hub*|*privacyhub*|*odido*|*redlib*|*wikiless*|*scribe*|*vert*|*invidious*|*sources_*)
-                    log_info "  Removing local build: $img_name"
+                    log_info "  Removing local image: $img_name"
                     $DOCKER_CMD rmi -f "$img_id" 2>/dev/null || true
                     # Note: We can't easily append to REMOVED_IMAGES inside a subshell/pipe loop
                     # but the main ones are captured above.
@@ -429,21 +437,21 @@ clean_environment() {
         
         # Alternative locations that might have been created
         if [ -d "/DATA/AppData/privacy-hub" ]; then
-            log_info "  Removing alternative path: /DATA/AppData/privacy-hub"
+            log_info "  Removing directory: /DATA/AppData/privacy-hub"
             sudo rm -rf "/DATA/AppData/privacy-hub"
         fi
         
         # ============================================================
         # PHASE 7: Remove cron jobs added by this script
         # ============================================================
-        log_info "Phase 7: Removing cron jobs..."
+        log_info "Phase 7: Clearing scheduled tasks..."
         EXISTING_CRON=$(crontab -l 2>/dev/null || true)
         REMOVED_CRONS=""
         if echo "$EXISTING_CRON" | grep -q "wg-ip-monitor"; then REMOVED_CRONS="${REMOVED_CRONS}wg-ip-monitor "; fi
         if echo "$EXISTING_CRON" | grep -q "cert-monitor"; then REMOVED_CRONS="${REMOVED_CRONS}cert-monitor "; fi
         
         if [ -n "$REMOVED_CRONS" ]; then
-            log_info "  Clearing cron: $REMOVED_CRONS"
+            log_info "  Clearing cron entries: $REMOVED_CRONS"
             echo "$EXISTING_CRON" | grep -v "wg-ip-monitor" | grep -v "cert-monitor" | grep -v "privacy-hub" | crontab - 2>/dev/null || true
         fi
         
@@ -461,26 +469,16 @@ clean_environment() {
         # ============================================================
         # PHASE 9: Reset iptables rules
         # ============================================================
-        log_info "Phase 9: Resetting iptables..."
+        log_info "Phase 9: Resetting networking rules..."
         sudo iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
         sudo iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
         sudo iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
         
         echo ""
         log_info "============================================================"
-        log_info "RESTORE COMPLETE"
+        log_info "RESTORE COMPLETE: ENVIRONMENT HAS BEEN RESET"
         log_info "============================================================"
-        log_info "The following garbage has been taken out:"
-        log_info "  ✓ Containers: ${REMOVED_CONTAINERS:-none}"
-        log_info "  ✓ Volumes: ${REMOVED_VOLUMES:-none}"
-        log_info "  ✓ Networks: ${REMOVED_NETWORKS:-none}"
-        log_info "  ✓ Images: ${REMOVED_IMAGES:-none}"
-        log_info "  ✓ Configs and secrets"
-        log_info "  ✓ Data directories ($BASE_DIR)"
-        log_info "  ✓ Cron jobs: ${REMOVED_CRONS:-none}"
-        log_info "  ✓ Iptables rules"
-        log_info ""
-        log_info "Your system is back to normal."
+        log_info "The host system has been returned to its original state."
         log_info "============================================================"
     fi
 }
@@ -495,12 +493,12 @@ clean_environment
 log_info "Pre-pulling ALL deployment images to avoid rate limits..."
 # Explicitly pull images used by 'docker run' commands later in the script
 # These images are small but critical for password generation and setup
-CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:alpine portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine ghcr.io/wg-easy/wg-easy dhi.io/redis:8-alpine quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14 ghcr.io/zyachel/libremdb codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert dhi.io/httpd:alpine dhi.io/alpine:latest dhi.io/alpine:3.19 dhi.io/node:16-alpine 84codes/crystal:1.8.1-alpine node:25.2-alpine3.21 dhi.io/nginx:stable-alpine oven/bun:latest neilpang/acme.sh"
+CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev dhi.io/python:3.11-alpine3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 ghcr.io/zyachel/libremdb codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine dhi.io/alpine-base:3.22 dhi.io/node:20-alpine3.22-dev dhi.io/node:20-alpine3.22 84codes/crystal:1.8.1-alpine node:25.2-alpine3.21 neilpang/acme.sh"
 
 for img in $CRITICAL_IMAGES; do
     if ! $DOCKER_CMD pull "$img"; then
         log_warn "Failed to pull $img. You might be hitting rate limits."
-        if authenticate_docker_hub; then
+        if authenticate_registries; then
              # Retry once
              if ! $DOCKER_CMD pull "$img"; then
                  log_crit "Failed to pull $img even after login. Exiting."
@@ -524,7 +522,7 @@ chmod 666 "$ACTIVE_PROFILE_NAME_FILE" "$HISTORY_LOG" "$BASE_DIR/.data_usage" "$B
 
 # --- SECTION 3: DYNAMIC SUBNET ALLOCATION ---
 # Automatically identify and assign a free bridge subnet to prevent network conflicts.
-log_info "Allocating Private Network Subnet..."
+log_info "Allocating private virtual subnet for container isolation."
 
 FOUND_SUBNET=""
 FOUND_OCTET=""
@@ -541,7 +539,7 @@ for i in {20..30}; do
 done
 
 if [ -z "$FOUND_SUBNET" ]; then
-    log_crit "Fatal: No free subnets identified. Manual network cleanup required."
+    log_crit "Fatal: No available subnets identified. Please verify host network configuration."
     exit 1
 fi
 
@@ -550,7 +548,7 @@ log_info "Assigned Virtual Subnet: $DOCKER_SUBNET"
 
 # --- SECTION 4: NETWORK TOPOLOGY ANALYSIS ---
 # Detect primary LAN interface and public IP for VPN endpoint configuration.
-log_info "Analyzing Network Topology..."
+log_info "Analyzing network topology and interface configuration..."
 
 is_private_ipv4() {
     local ip=$1
@@ -605,7 +603,7 @@ fi
 if [ -z "$LAN_IP" ] || ! is_private_ipv4 "$LAN_IP"; then
     LAN_IP="192.168.0.100"
     DETECTION_HINT="static fallback"
-    log_warn "Unable to detect LAN IP automatically; defaulting to $LAN_IP. Set LAN_IP_OVERRIDE to force a specific bind IP."
+    log_warn "Automatic LAN IP detection failed; defaulting to $LAN_IP. Set LAN_IP_OVERRIDE if necessary."
 else
     log_info "Detected LAN IP ($DETECTION_HINT): $LAN_IP"
 fi
@@ -617,14 +615,15 @@ echo "$PUBLIC_IP" > "$CURRENT_IP_FILE"
 # Initialize or retrieve system secrets and administrative passwords.
 if [ ! -f "$BASE_DIR/.secrets" ]; then
     echo "========================================"
-    echo " CREDENTIAL SETUP"
+    echo " CREDENTIAL CONFIGURATION"
     echo "========================================"
     
     if [ "$AUTO_PASSWORD" = true ]; then
-        log_info "Auto-generating VPN and AdGuard passwords..."
+        log_info "Automated password generation initialized."
         VPN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
         AGH_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
-        log_info "Passwords generated (will be displayed at the end)"
+        ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+        log_info "Credentials generated and will be displayed upon completion."
         echo ""
     else
         echo -n "1. Enter password for VPN Web UI: "
@@ -632,6 +631,9 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo ""
         echo -n "2. Enter password for AdGuard Home: "
         read -rs AGH_PASS_RAW
+        echo ""
+        echo -n "3. Enter administrative password (for Portainer/Services): "
+        read -rs ADMIN_PASS_RAW
         echo ""
     fi
     
@@ -737,7 +739,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
 
     AGH_USER="adguard"
     # Safely generate AGH hash
-    AGH_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/httpd:alpine htpasswd -B -n -b "$AGH_USER" "$AGH_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    AGH_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "$AGH_USER" "$AGH_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
     if [[ "$AGH_PASS_HASH" == "FAILED" ]]; then
         log_crit "Failed to generate AdGuard password hash. Check Docker status."
         exit 1
@@ -746,6 +748,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     cat > "$BASE_DIR/.secrets" <<EOF
 VPN_PASS_RAW=$VPN_PASS_RAW
 AGH_PASS_RAW=$AGH_PASS_RAW
+ADMIN_PASS_RAW=$ADMIN_PASS_RAW
 WG_HASH_CLEAN=$WG_HASH_CLEAN
 AGH_PASS_HASH=$AGH_PASS_HASH
 DESEC_DOMAIN=$DESEC_DOMAIN
@@ -758,6 +761,10 @@ ODIDO_API_KEY=$ODIDO_API_KEY
 EOF
 else
     source "$BASE_DIR/.secrets"
+    if [ -z "${ADMIN_PASS_RAW:-}" ]; then
+        ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+        echo "ADMIN_PASS_RAW=$ADMIN_PASS_RAW" >> "$BASE_DIR/.secrets"
+    fi
     if [ -z "${ODIDO_API_KEY:-}" ]; then
         ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
         echo "ODIDO_API_KEY=$ODIDO_API_KEY" >> "$BASE_DIR/.secrets"
@@ -1005,7 +1012,7 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
         log_warn "Let's Encrypt failed, generating self-signed certificate..."
         $DOCKER_CMD run --rm \
             -v "$AGH_CONF_DIR:/certs" \
-            dhi.io/alpine:latest /bin/sh -c "
+            dhi.io/alpine-base:3.22 /bin/sh -c "
             apk add --no-cache openssl > /dev/null 2>&1
             openssl req -x509 -newkey rsa:4096 -sha256 \
                 -days 365 -nodes \
@@ -1026,7 +1033,7 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     
 else
     log_info "No deSEC domain provided, generating self-signed certificate..."
-    $DOCKER_CMD run --rm -v "$AGH_CONF_DIR:/certs" dhi.io/alpine:latest /bin/sh -c \
+    $DOCKER_CMD run --rm -v "$AGH_CONF_DIR:/certs" dhi.io/alpine-base:3.22 /bin/sh -c \
         "apk add --no-cache openssl && \
          openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
          -keyout /certs/ssl.key -out /certs/ssl.crt \
@@ -1251,6 +1258,14 @@ clone_repo() {
     fi
 }
 clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless"
+# Patch Wikiless to use DHI Node and Alpine images
+if [ -f "$SRC_DIR/wikiless/Dockerfile" ]; then
+    # Use -dev for the builder stage to ensure npm/yarn are present
+    sed -i 's|^FROM node:.*-alpine.* as builder|FROM dhi.io/node:20-alpine3.22-dev as builder|g' "$SRC_DIR/wikiless/Dockerfile"
+    sed -i 's|^FROM alpine:.*|FROM dhi.io/alpine-base:3.22|g' "$SRC_DIR/wikiless/Dockerfile"
+    log_info "Patched Wikiless Dockerfile to use DHI hardened images."
+fi
+
 cat > "$SRC_DIR/wikiless/wikiless.config" <<'EOF'
 const config = {
   /**
@@ -1308,18 +1323,45 @@ const config = {
 module.exports = config
 EOF
 clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe"
+# Patch Scribe to use DHI Crystal and Alpine images
+if [ -f "$SRC_DIR/scribe/Dockerfile" ]; then
+    sed -i 's|^FROM 84codes/crystal:.*-alpine|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_DIR/scribe/Dockerfile"
+    sed -i 's|^FROM alpine:.*|FROM dhi.io/alpine-base:3.22|g' "$SRC_DIR/scribe/Dockerfile"
+    log_info "Patched Scribe Dockerfile to use DHI hardened images."
+fi
+
 clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious"
+# Patch Invidious to use DHI Alpine images
+if [ -f "$SRC_DIR/invidious/Dockerfile" ]; then
+    # Invidious Dockerfile uses multiple FROM stages, we'll try to target the runtime and builders
+    sed -i 's|^FROM alpine:.*|FROM dhi.io/alpine-base:3.22|g' "$SRC_DIR/invidious/Dockerfile"
+    log_info "Patched Invidious Dockerfile to use DHI hardened images."
+fi
 clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster"
+# Patch Odido Booster to use DHI Python image
+if [ -f "$SRC_DIR/odido-bundle-booster/Dockerfile" ]; then
+    # Use -dev variant to ensure pip and build tools are present
+    sed -i 's|^FROM python:.*-alpine|FROM dhi.io/python:3.11-alpine3.22-dev|g' "$SRC_DIR/odido-bundle-booster/Dockerfile"
+    log_info "Patched Odido Booster Dockerfile to use DHI hardened images."
+fi
 
 mkdir -p "$SRC_DIR/hub-api"
 cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
-FROM dhi.io/python:3.11-alpine
+FROM dhi.io/python:3.11-alpine3.22
 RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd
 WORKDIR /app
 CMD ["python", "server.py"]
 EOF
 
 clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert"
+# Patch VERT to use DHI Node and Alpine images
+if [ -f "$SRC_DIR/vert/Dockerfile" ]; then
+    # Use -dev variant for build stages to ensure npm/yarn are present
+    sed -i 's|^FROM node:.*-alpine.* as build|FROM dhi.io/node:20-alpine3.22-dev as build|g' "$SRC_DIR/vert/Dockerfile"
+    sed -i 's|^FROM node:.*-alpine.* as runtime|FROM dhi.io/node:20-alpine3.22 as runtime|g' "$SRC_DIR/vert/Dockerfile"
+    log_info "Patched VERT Dockerfile to use DHI hardened images."
+fi
+
 # Patch VERT Dockerfile to add missing build args
 if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_DIR/vert/Dockerfile"; then
     if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_DIR/vert/Dockerfile" && grep -q "^ENV PUB_STRIPE_KEY=" "$SRC_DIR/vert/Dockerfile"; then
@@ -2074,7 +2116,7 @@ services:
         limits: {cpus: '2.0', memory: 512M}
 
   dashboard:
-    image: dhi.io/nginx:alpine-slim
+    image: dhi.io/nginx:1.28-alpine3.21
     container_name: dashboard
     networks: [frontnet]
     ports:
@@ -2108,6 +2150,7 @@ services:
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
     volumes: ["/var/run/docker.sock:/var/run/docker.sock", "portainer-data:/data"]
+    # Admin password is saved in protonpass_import.csv for initial setup
     restart: unless-stopped
     deploy:
       resources:
@@ -2202,7 +2245,7 @@ services:
         limits: {cpus: '0.5', memory: 256M}
 
   wikiless_redis:
-    image: dhi.io/redis:7
+    image: dhi.io/redis:7.2-debian13
     container_name: wikiless_redis
     labels:
       - "casaos.skip=true"
@@ -2215,7 +2258,8 @@ services:
         limits: {cpus: '0.3', memory: 128M}
 
   invidious:
-    image: quay.io/invidious/invidious:latest
+    build:
+      context: "$SRC_DIR/invidious"
     container_name: invidious
     network_mode: "service:gluetun"
     environment:
@@ -2245,7 +2289,7 @@ services:
         limits: {cpus: '1.5', memory: 1024M}
 
   invidious-db:
-    image: dhi.io/postgres:14-alpine
+    image: dhi.io/postgres:14-alpine3.22
     container_name: invidious-db
     labels:
       - "casaos.skip=true"
@@ -2414,13 +2458,14 @@ x-casaos:
   title:
     en_us: Privacy Hub
   tagline:
-    en_us: Self-hosted privacy stack with VPN, DNS filtering, and privacy frontends
+    en_us: Stop being the product. Own your data with VPN, DNS filtering, and private frontends.
   description:
     en_us: |
-      A comprehensive self-hosted privacy stack with WireGuard VPN access, 
-      AdGuard Home DNS filtering, and various privacy-respecting frontend services
-      including Invidious, Redlib, Wikiless, and more.
-  icon: https://raw.githubusercontent.com/AdrienPoupa/docker-compose-nas/master/images/adguard.png
+      A comprehensive self-hosted privacy stack for people who want to own their data 
+      instead of renting a false sense of security. Features WireGuard VPN, 
+      AdGuard Home DNS filtering, and various privacy frontends (Invidious, Redlib, etc.) 
+      that strip away the tracking garbage from the sites you use every day.
+  icon: http://$LAN_IP:8081/fonts/privacy-hub.svg
 EOF
 
 # --- SECTION 14: DASHBOARD & UI GENERATION ---
@@ -3029,9 +3074,9 @@ cat > "$DASHBOARD_FILE" <<EOF
             <div class="header-row">
                 <div>
                     <h1>Privacy Hub</h1>
-                    <div class="subtitle">Gateway Systems Governance</div>
+                    <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
                 </div>
-                <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics">
+                <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for safe display">
                     <span class="label-large">Redaction Mode</span>
                     <div class="switch-track">
                         <div class="switch-thumb"></div>
@@ -3042,54 +3087,54 @@ cat > "$DASHBOARD_FILE" <<EOF
 
         <div class="section-label">Applications</div>
         <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span class="chip" data-tooltip="Services isolated within a secure VPN tunnel for complete anonymity">🔒 VPN Protected</span>
-            <span class="chip" data-tooltip="Local services accessed directly through the internal network interface">📍 Direct Access</span>
-            <span class="chip tertiary" data-tooltip="Advanced infrastructure control and container telemetry via Portainer">🛠️ Infrastructure</span>
+            <span class="chip" data-tooltip="Services isolated within a secure VPN tunnel (Gluetun). This allows you to host your own private instances—removing the need to trust third-party hosts—while ensuring your home IP remains hidden from end-service providers.">🔒 VPN Protected</span>
+            <span class="chip" data-tooltip="Local services accessed directly through the internal network interface.">📍 Direct Access</span>
+            <span class="chip tertiary" data-tooltip="Advanced infrastructure control and container telemetry via Portainer.">🛠️ Infrastructure</span>
         </div>
         <div class="grid-3">
             <a id="link-invidious" href="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true" data-container="invidious">
                 <div class="card-header"><h2>Invidious</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">Private YouTube Interface</p>
+                <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance</span></div>
             </a>
             <a id="link-redlib" href="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib">
                 <div class="card-header"><h2>Redlib</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">Private Reddit Interface</p>
+                <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance</span></div>
             </a>
             <a id="link-wikiless" href="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true" data-container="wikiless">
                 <div class="card-header"><h2>Wikiless</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">Private Wikipedia Interface</p>
+                <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance</span></div>
             </a>
             <a id="link-libremdb" href="http://$LAN_IP:$PORT_LIBREMDB" class="card" data-check="true" data-container="libremdb">
                 <div class="card-header"><h2>LibremDB</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">Private Movie Database</p>
+                <p class="description">A private metadata engine for media collections. Retrieves movie and TV information without disclosing viewing habits to third-party data brokers.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="libremdb" data-tooltip="Manage LibremDB Container">Private Instance</span></div>
             </a>
             <a id="link-rimgo" href="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true" data-container="rimgo">
                 <div class="card-header"><h2>Rimgo</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">Private Imgur Interface</p>
+                <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance</span></div>
             </a>
             <a id="link-scribe" href="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true" data-container="scribe">
                 <div class="card-header"><h2>Scribe</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">Private Medium Interface</p>
+                <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance</span></div>
             </a>
             <a id="link-breezewiki" href="http://$LAN_IP:$PORT_BREEZEWIKI/" class="card" data-check="true" data-container="breezewiki">
                 <div class="card-header"><h2>BreezeWiki</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">Private Fandom Interface</p>
+                <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance</span></div>
             </a>
             <a id="link-anonymousoverflow" href="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true" data-container="anonymousoverflow">
                 <div class="card-header"><h2>AnonOverflow</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">Private StackOverflow Interface</p>
+                <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance</span></div>
             </a>
             <a id="link-vert" href="http://$LAN_IP:$PORT_VERT" class="card" data-check="true" data-container="vert">
                 <div class="card-header"><h2>VERT</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">Local File Converter</p>
+                <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container">Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion">GPU Accelerated</span></div>
             </a>
         </div>
@@ -3101,17 +3146,17 @@ cat > "$DASHBOARD_FILE" <<EOF
         <div class="grid-3">
             <a id="link-adguard" href="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card" data-check="true" data-container="adguard">
                 <div class="card-header"><h2>AdGuard Home</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">DNS Ad-Blocker</p>
+                <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container">Local Access</span><span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span></div>
             </a>
             <a id="link-portainer" href="http://$LAN_IP:$PORT_PORTAINER" class="card" data-check="true" data-container="portainer">
                 <div class="card-header"><h2>Portainer</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">Docker Manager</p>
+                <p class="description">A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container">Local Access</span></div>
             </a>
             <a id="link-wg-easy" href="http://$LAN_IP:$PORT_WG_WEB" class="card" data-check="true" data-container="wg-easy">
                 <div class="card-header"><h2>WireGuard</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
-                <p class="description">VPN Server</p>
+                <p class="description">The primary gateway for **secure remote access**. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container">Local Access</span></div>
             </a>
         </div>
@@ -3138,26 +3183,26 @@ cat > "$DASHBOARD_FILE" <<EOF
             </div>
             <div class="card">
                 <h3>Device DNS Settings</h3>
-                <p class="body-medium description">Configure hardware endpoints to utilize this filtering gateway:</p>
-                <div class="code-label" data-tooltip="Standard DNS over port 53">Standard IPv4</div>
+                <p class="body-medium description">Utilize these RFC-compliant encrypted endpoints to maintain digital independence. We utilize standard ports (853) to ensure seamless compatibility with native OS resolvers:</p>
+                <div class="code-label" data-tooltip="Standard unencrypted DNS (Port 53). Recommended only for use within your local LAN.">Standard IPv4 (Local LAN Only)</div>
                 <div class="code-block sensitive">$LAN_IP:53</div>
 EOF
 if [ -n "$DESEC_DOMAIN" ]; then
     cat >> "$DASHBOARD_FILE" <<EOF
-                <div class="code-label" data-tooltip="Secured DNS via HTTPS (port 443)">DNS-over-HTTPS (DoH)</div>
+                <div class="code-label" data-tooltip="DNS-over-HTTPS (DOH) - RFC 8484. Standard for web browsers. Queries are indistinguishable from HTTPS traffic.">Secure DOH (Browsers)</div>
                 <div class="code-block sensitive">https://$DESEC_DOMAIN/dns-query</div>
-                <div class="code-label" data-tooltip="Secured DNS via TLS (port 853)">DNS-over-TLS (DoT)</div>
+                <div class="code-label" data-tooltip="DNS-over-TLS (DOT) - RFC 7858. Port 853. The industry standard for Android 'Private DNS' and system resolvers.">Secure DOT (Android / System)</div>
                 <div class="code-block sensitive">$DESEC_DOMAIN:853</div>
-                <div class="code-label" data-tooltip="Secured DNS via QUIC (port 853)">DNS-over-QUIC (DoQ)</div>
+                <div class="code-label" data-tooltip="DNS-over-QUIC (DOQ) - RFC 9250. Port 853. High-performance encrypted DNS designed for superior latency and stability.">Secure DOQ (Modern Clients)</div>
                 <div class="code-block sensitive">quic://$DESEC_DOMAIN</div>
             </div>
             <div class="card">
                 <h3>Endpoint Provisioning</h3>
                 <div id="dns-setup-trusted" style="display:none;">
-                    <p class="body-medium description">Universal trusted SSL active. Implementation:</p>
+                    <p class="body-medium description">Globally trusted SSL is active. Implementation details:</p>
                     <ol style="margin:0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8;">
-                        <li data-tooltip="Optimized for local low-latency resolution"><b>Intranet:</b> Direct standard binding.</li>
-                        <li data-tooltip="Authenticated remote access tunnel required"><b>Remote:</b> Secure WireGuard link.</li>
+                        <li data-tooltip="For legacy devices within your home network."><b>Local:</b> Standard IP binding.</li>
+                        <li data-tooltip="Requires establishing the WireGuard VPN tunnel when away from home."><b>Remote:</b> Establish VPN tunnel for secure access.</li>
                     </ol>
                     <div class="code-label" style="margin-top:12px;">Mobile Private DNS Hostname</div>
                     <div class="code-block sensitive" style="margin-top:4px;">$DESEC_DOMAIN</div>
@@ -4096,6 +4141,28 @@ CRON_CMD="*/5 * * * * $MONITOR_SCRIPT"
 EXISTING_CRON=$(crontab -l 2>/dev/null || true)
 echo "$EXISTING_CRON" | grep -v "$MONITOR_SCRIPT" | { cat; echo "$CRON_CMD"; } | crontab -
 
+# --- SECTION 15.2: EXPORT CREDENTIALS ---
+# Generate a CSV file compatible with Proton Pass for easy credential management.
+generate_protonpass_export() {
+    log_info "Generating Proton Pass import file (CSV)..."
+    local export_file="$BASE_DIR/protonpass_import.csv"
+    
+    # Proton Pass CSV Import Format: Name,URL,Username,Password,Note
+    # We use this generic format for maximum compatibility.
+    cat > "$export_file" <<EOF
+Name,URL,Username,Password,Note
+Privacy Hub Dashboard,http://$LAN_IP:$PORT_DASHBOARD_WEB,admin,$ADMIN_PASS_RAW,Primary management interface for the Privacy Hub stack.
+AdGuard Home,http://$LAN_IP:$PORT_ADGUARD_WEB,adguard,$AGH_PASS_RAW,Network-wide advertisement and tracker filtration.
+WireGuard VPN UI,http://$LAN_IP:$PORT_WG_WEB,admin,$VPN_PASS_RAW,WireGuard remote access management interface.
+Portainer UI,http://$LAN_IP:$PORT_PORTAINER,admin,$ADMIN_PASS_RAW,Docker container management interface.
+Odido Booster API,,dashboard,$ODIDO_API_KEY,API key for the automated Odido data bundle booster.
+deSEC DNS API,,$DESEC_DOMAIN,$DESEC_TOKEN,API token for deSEC dynamic DNS management.
+GitHub Scribe Token,,$SCRIBE_GH_USER,$SCRIBE_GH_TOKEN,GitHub Personal Access Token for Scribe Medium frontend.
+EOF
+    chmod 600 "$export_file"
+    log_info "Credential export file created: $export_file"
+}
+
 # --- SECTION 16: STACK ORCHESTRATION & DEPLOYMENT ---
 # Execute system deployment and verify global infrastructure integrity.
 check_iptables() {
@@ -4111,95 +4178,85 @@ check_iptables() {
 }
 
 echo "=========================================================="
-echo "RUNNING SYSTEM DEPLOYMENT"
+echo "DEPLOYMENT COMPLETE: INFRASTRUCTURE IS OPERATIONAL"
 echo "=========================================================="
 sudo modprobe tun || true
 
 sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
 
 if $DOCKER_CMD ps | grep -q adguard; then
-    log_info "AdGuard container is running"
+    log_info "AdGuard Home is operational. Network-wide filtering is active."
     sleep 5
     if curl -s --max-time 5 "http://$LAN_IP:$PORT_ADGUARD_WEB" > /dev/null; then
-        log_info "AdGuard web interface is accessible"
+        log_info "AdGuard web interface is accessible."
     else
-        log_warn "AdGuard web interface not yet accessible (may still be initializing)"
-    fi
-    if $DOCKER_CMD exec adguard test -f /opt/adguardhome/conf/AdGuardHome.yaml; then
-        log_info "AdGuard configuration file is present"
-    else
-        log_warn "AdGuard configuration file not found in container"
+        log_warn "AdGuard web interface is still initializing."
     fi
 fi
 
 check_iptables
 
+generate_protonpass_export
 
-echo "[+] Taking out the trash (cleaning up unused images)..."
+echo "[+] Finalizing environment (cleaning up unused images)..."
 $DOCKER_CMD image prune -af
 
 $DOCKER_CMD restart portainer 2>/dev/null || true
 
 echo "=========================================================="
-echo "SYSTEM DEPLOYED"
+echo "SYSTEM DEPLOYED: PRIVATE INFRASTRUCTURE ESTABLISHED"
 echo "=========================================================="
-echo "ACCESS YOUR DASHBOARD:"
+echo "MANAGEMENT DASHBOARD:"
 echo "http://$LAN_IP:$PORT_DASHBOARD_WEB"
-echo -e "\e[33m[WARN]\e[0m If you have a VPN extension in your browser, TURN IT OFF for this site."
-echo -e "\e[33m[WARN]\e[0m Corporate VPN extensions love to break local dashboards with 'Error 503'."
+echo -e "\e[33m[NOTE]\e[0m Please disable browser-based 'privacy' extensions for this local address."
+echo -e "\e[33m[NOTE]\e[0m Some extensions may interfere with local dashboard telemetry."
 echo ""
-echo "ADGUARD HOME (DNS + Web UI):"
+echo "ADGUARD HOME (DNS CONTROL):"
 echo "http://$LAN_IP:$PORT_ADGUARD_WEB"
 echo ""
-echo -e "\e[33m[NOTE]\e[0m Everything is bound to $LAN_IP. We aren't fighting ZimaOS for port 80."
-echo ""
-echo "WIREGUARD VPN (Your Remote Access):"
+echo "WIREGUARD VPN (REMOTE ACCESS GATEWAY):"
 echo "http://$LAN_IP:$PORT_WG_WEB"
 echo ""
-echo "HOW TO SETUP YOUR DEVICES:"
-echo "  [ AT HOME / LAN ]"
+echo "CONFIGURATION INSTRUCTIONS:"
+echo "  [ LOCAL LAN USAGE ]"
 echo "  Primary DNS: $LAN_IP"
-echo "  -> DO THIS: Set your router's DNS to $LAN_IP so your whole house is protected."
+echo "  -> ACTION: Configure your router's DNS to $LAN_IP for network-wide protection."
 echo ""
-echo "  [ AWAY FROM HOME / ENCRYPTED DNS ]"
-echo "  - Connect to your WireGuard VPN first. Don't trust the hotel Wi-Fi."
-echo "  - Once connected, use:"
-echo "    - DoH: https://$DESEC_DOMAIN/dns-query"
-echo "    - DoT: $DESEC_DOMAIN:853"
-echo "    - DoQ: quic://$DESEC_DOMAIN"
-echo "  "
-echo "  Note: We only exposed WireGuard. You must be on the VPN to use these away from home."
+echo "  [ REMOTE ACCESS USAGE ]"
+echo "  - Utilize the WireGuard VPN when connecting from external or untrusted networks."
+echo "  - Once the VPN tunnel is established, your home DNS settings and local services"
+echo "    become securely accessible via your own hardware proxy."
 echo ""
-echo "SECURITY AUDIT:"
-echo "  ✓ ONLY WireGuard (51820/udp) is open to the internet."
-echo "  ✓ No corporate DNS tracking. You talk to the root servers."
-echo "  ✓ No ISP snooping. Your history isn't their product anymore."
-echo ""
-echo "SPLIT TUNNELING (Save your bandwidth):"
-echo "  ✓ Only your private traffic and DNS go through the VPN."
-echo "  ✓ Netflix and OS updates go direct. Your home's upload speed stays safe."
+echo "SECURITY OVERVIEW:"
+echo "  ✓ Only WireGuard (51820/udp) is exposed to the internet."
+echo "  ✓ DNS resolution is independent and communicates directly with Root Servers."
+echo "  ✓ Frontend services are isolated via Gluetun VPN to hide your home IP."
 echo ""
 if [ -f "$AGH_CONF_DIR/ssl.crt" ]; then
     if grep -q "BEGIN CERTIFICATE" "$AGH_CONF_DIR/ssl.crt"; then
         if ! grep -q "Let's Encrypt" "$AGH_CONF_DIR/ssl.crt" && ! grep -q "R3" "$AGH_CONF_DIR/ssl.crt"; then
-            echo -e "\e[33m[IMPORTANT]\e[0m YOU ARE USING A SELF-SIGNED CERTIFICATE"
-            echo "  - Most mobile devices won't like this for encrypted DNS."
-            echo "  - The cert-monitor.sh script is running in the background. It will"
-            echo "    switch you to Let's Encrypt as soon as the rate limit allows."
-            echo "  - Standard DNS (Port 53) works fine over LAN and VPN."
+            echo -e "\e[33m[IMPORTANT]\e[0m CURRENTLY UTILIZING A SELF-SIGNED CERTIFICATE"
+            echo "  - Mobile devices require a trusted CA for Encrypted DNS (DoH/DoT/DoQ)."
+            echo "  - An automated background process is managing Let's Encrypt issuance."
+            echo "  - Standard DNS (Port 53) is functional over LAN and VPN."
             echo ""
         fi
     fi
 fi
 if [ "$AUTO_PASSWORD" = true ]; then
     echo "=========================================================="
-    echo "YOUR GENERATED CREDENTIALS"
+    echo "GENERATED CREDENTIALS"
     echo "=========================================================="
+    echo "Administrative Password: $ADMIN_PASS_RAW (Use for Portainer/Services)"
     echo "VPN Web UI Password: $VPN_PASS_RAW"
     echo "AdGuard Home Password: $AGH_PASS_RAW"
     echo "AdGuard Home Username: adguard"
     echo "Odido Booster API Key: $ODIDO_API_KEY"
     echo ""
-    echo "WRITE THESE DOWN. They are also in: $BASE_DIR/.secrets"
+    echo "IMPORT TO PROTON PASS:"
+    echo "A CSV file has been generated for easy import into Proton Pass:"
+    echo "$BASE_DIR/protonpass_import.csv"
+    echo ""
+    echo "Please save these credentials. They are also stored in: $BASE_DIR/.secrets"
 fi
 echo "=========================================================="

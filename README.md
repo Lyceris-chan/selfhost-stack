@@ -1,159 +1,157 @@
-# 🛡️ ZimaOS Privacy Hub
+# 🛡️ ZimaOS Privacy Hub: Private Network Infrastructure
 
-A self-hosted privacy stack for people who want to own their data instead of renting a false sense of security.
+Digital privacy begins with hardware and code ownership. This project provides a production-grade security gateway that centralizes DNS resolution and routes frontend traffic through a hardened [**VPN Proxy**](#gluetun). This allows you to utilize services like YouTube and Reddit via private interfaces without exposing your home IP address to third-party providers.
 
 ## <a id="contents"></a>📋 Table of Contents
 - [Project Overview](#overview)
 - [Quick Start](#quick-start)
-- [Privacy & Ownership](#ownership)
+- [Required Credentials & Configuration](#credentials)
+- [Independent DNS & RFC Compliance](#encrypted-dns)
+- [VPN-Routed Frontends (Gluetun)](#gluetun)
 - [Management Dashboard](#dashboard)
-- [Technical Architecture](#architecture)
 - [Network Configuration](#network-config)
 - [Advanced Setup: OpenWrt & Double NAT](#advanced-setup)
-- [Remote Access: Taking Your Network With You](#remote-access)
-- [Security Audit & Privacy Standards](#security)
-- [Service Catalog](#catalog)
-- [Service Access & Port Reference](#ports)
+- [Security Model](#security)
+- [Service Catalog & Ports](#catalog)
 - [System Resilience](#resilience)
-- [Community & Contributions](#community)
+- [Data Ownership](#ownership)
 
 ## <a id="overview"></a>🌟 Project Overview
-Privacy Hub is a security gateway for ZimaOS. It centralizes network traffic through a secure WireGuard tunnel, filters DNS at the source using recursive resolution, and routes application frontends through a dedicated VPN gateway (Gluetun). It's designed to stop your data from being a product sold to the highest bidder.
+Privacy Hub centralizes network traffic through a secure WireGuard tunnel and filters DNS queries at the source. By utilizing [**Gluetun**](#gluetun) as an internal VPN proxy, the stack anonymizes outgoing requests from privacy frontends (Invidious, Redlib, etc.). This allows you to host your own private instances—removing the need to trust third-party hosts—while ensuring your home IP remains hidden from end-service providers.
 
 ## <a id="quick-start"></a>🚀 Quick Start
 
 ```bash
-# 1. Clone the repo and enter the directory
-# 2. Make the script executable
+# 1. Clone the repository and enter the directory
+# 2. Make the deployment script executable
 chmod +x zima.sh
 
-# 3. Run it and take back your network
+# 3. Execute the script
 ./zima.sh
 
 # Options:
-# -c : Nuclear cleanup (Wipes everything to start over)
-# -p : Auto-generate passwords
+# -c : Environment reset (Nuke all data/configs)
+# -p : Automated credential generation
 ```
 
-## <a id="ownership"></a>🛡️ Privacy & Ownership
+## <a id="credentials"></a>🔑 Required Credentials & Configuration
 
-If you don't own the hardware and the code running your network, you don't own your privacy. You're just renting a temporary privilege from a company that will sell you out the second a court order or a profitable data-sharing deal comes along.
+Before deployment, ensure you have the following credentials ready. The script will prompt for these to establish secure communication and automated management.
 
-<details>
-<summary>🔍 Deep Dive: The "Third Party" Trust Gap (NextDNS, Google, Cloudflare)</summary>
+### 1. Registry Authentication (Hardened Images)
+- **Source**: [dhi.io](https://dhi.io) and [Docker Hub](https://hub.docker.com).
+- **Required**: Username and a Personal Access Token (PAT).
+- **Purpose**: Facilitates pulling hardened, minimal-vulnerability container images.
 
-For many, **NextDNS** is the gold standard. I’ve had a great experience with them - it’s convenient, reliable, and has a polished dashboard. But no matter how "trustable" a provider is, you are still handing your entire digital footprint to a third party. If they get a subpoena, or they get bought, or they just change their minds, your data is gone. This stack is for those who want to stop trusting and start owning.
+### 2. DNS & SSL Management (deSEC)
+- **Source**: [deSEC.io](https://desec.io).
+- **Required**: A registered domain (e.g., `yourname.dedyn.io`) and an **API Token**.
+- **Purpose**: Automates Dynamic DNS updates and Let's Encrypt SSL certificate issuance via DNS-01 challenges.
 
-- **The Google Profile**: Google's DNS (8.8.8.8) turns you into a data source. They build profiles on your health, finances, and interests based on every domain you resolve, then sell that access to target you through their massive advertising machine.
-- **The Cloudflare Illusion**: Recent shifts in 2025 have shown that even "neutral" providers like Cloudflare aren't neutral when a government knocks. In Germany, Cloudflare processes global blocks based on local self-regulatory bodies (FSM-Hotline). Their CDN is now ruled a "host," allowing governments to force censorship. Do you really want your "neutral pipe" to be a global censorship tool?
-- **ISP Predation**: Your ISP sees everything. They log, monetize, and sell your history to brokers. They also use DNS hijacking to redirect you to government warning pages. They are the gatekeepers, and they don't have your interests in mind.
-</details>
+### 3. WireGuard Configuration (VPN Provider)
+To route frontend traffic through a VPN, you need a WireGuard configuration file. This stack is optimized for **ProtonVPN**, though other providers utilizing standard WireGuard `.conf` files should also function (untested).
 
-### Independent DNS Resolution (QNAME Minimization)
-This stack cuts out the middleman by using **Unbound** as a recursive resolver with **QNAME Minimization (RFC 7816)** enabled.
+- **Source**: [ProtonVPN Account Dashboard](https://account.protonvpn.com).
+- **Steps**:
+    1. Log in and navigate to **Downloads** in the left sidebar.
+    2. Select **WireGuard configuration**.
+    3. **Region Selection**: You may choose any available region. If you have a paid subscription, select a high-performance server; if utilizing the free tier, select a free region.
+    4. **Name & Options**: Prior to creation, provide a recognizable **name** for the configuration.
+    5. **Port Forwarding**: Ensure you **enable the Port Forwarding toggle** on the dashboard for this configuration before proceeding.
+    6. Click **Create** and download the `.conf` file.
+- **Usage**: Copy the text inside the `.conf` file and paste it when the `zima.sh` script prompts for the "WireGuard Configuration."
+
+### 4. Optional Utility Tokens
+- **GitHub Token**: Required for the **Scribe** Medium frontend to bypass gist rate limits. Generate a "Classic" token with only the `gist` scope at [GitHub Settings](https://github.com/settings/tokens).
+- **Odido Token**: Required for the **Odido Booster** utility. Obtain via the [Odido Authenticator](https://github.com/GuusBackup/Odido.Authenticator) tool.
+
+## <a id="encrypted-dns"></a>⚡ Independent DNS & RFC Compliance
+
+We eliminate middlemen (Google, Cloudflare) by communicating directly with Root DNS servers using **Unbound** with **QNAME Minimization** ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816)) and **DNSSEC** ([RFC 4033](https://datatracker.ietf.org/doc/html/rfc4033)) verification.
 
 <details>
 <summary>🤓 Technical: How Independent DNS and QNAME Minimization work</summary>
 
-- **Talking to the Source**: Instead of using the ISP's "censored phonebook," Unbound talks directly to the **Root DNS servers**. It then follows the chain to the TLD servers (like `.com`) and finally to the **Authoritative Server** - the last server in the chain that actually owns the record.
-- **Why the Authoritative Server?**: It's the only one that needs to know exactly where you're going. By reaching it directly, you ensure no middleman (like Google) is logging your request.
-- **QNAME Minimization**: Most resolvers tell every server in the chain the full domain you're visiting. Unbound only tells the `.com` server it's looking for something in `.com`, and the `stuff.com` server it's looking for `stuff.com`. Your intent remains private until the very last step.
+- **Talking to the Source**: Instead of using an ISP's "censored phonebook," Unbound talks directly to the **Root DNS servers**. It then follows the chain to the TLD servers (like `.com`) and finally to the **Authoritative Server** for the domain.
+- **QNAME Minimization**: Traditional resolvers tell every server in the chain the full domain you're visiting. Unbound only tells the `.com` server it's looking for something in `.com`, and the `example.com` server it's looking for `example.com`. Your intent remains private until the very last step.
 - **DNSSEC Validation**: Every response is verified cryptographically. If an ISP tries to hijack your connection, the system detects the fake signature and blocks it.
 </details>
 
+### RFC-Standard Encrypted DNS (Port 853 / 443)
+Standardized ports ensure seamless compatibility with native OS resolvers without custom configuration.
+
+- **DNS-over-TLS (DOT) [[RFC 7858](https://datatracker.ietf.org/doc/html/rfc7858)]**: Uses Port **853/TCP**. Standard for Android "Private DNS" and system-level Linux resolvers.
+- **DNS-over-QUIC (DOQ) [[RFC 9250](https://datatracker.ietf.org/doc/html/rfc9250)]**: Uses Port **853/UDP**. High-performance encrypted DNS designed for superior latency and stability.
+- **DNS-over-HTTPS (DOH) [[RFC 8484](https://datatracker.ietf.org/doc/html/rfc8484)]**: Uses Port **443/TCP**. Standard for browsers; traffic is indistinguishable from normal HTTPS.
+
 ### Metadata Shielding (ECH)
-We support **Encrypted Client Hello (ECH)**. 
+We support **Encrypted Client Hello (ECH)** to protect the initial stage of your HTTPS connections.
 
 <details>
 <summary>🛡️ Technical: What is ECH and why do you need it?</summary>
 
-In traditional HTTPS, the very first part of the connection (the "Client Hello") contains the domain name you're visiting in plain text (the SNI). This means even though the *content* of your visit is encrypted, your ISP still knows you're on `specific-website.com`.
-
-**ECH** encrypts that initial greeting. It puts a bag over the head of your connection request, ensuring that metadata observers see only that you are connecting to a general infrastructure provider, but not which specific site or service you are using.
+In traditional HTTPS, the very first part of the connection contains the domain name you're visiting in plain text (the SNI). This means even though the *content* is encrypted, your ISP still knows which website you are visiting. **ECH** ([IETF Draft](https://datatracker.ietf.org/doc/html/draft-ietf-tls-esni)) encrypts that initial greeting, ensuring that metadata observers see only a connection to a general infrastructure provider.
 </details>
 
-## <a id="dashboard"></a>🖥️ Management Dashboard
+### Default DNS Filtering
+The stack utilizes a high-performance filtering engine within AdGuard Home. By default, the **Lyceris-chan Blocklist** is configured to neutralize advertisements, telemetry, and malicious domains before they reach your devices.
 
-The Privacy Hub includes a custom-built, Material Design 3 management interface. It's the central nervous system of your privacy stack.
+- **Generation Process**: The list is automatically generated by the [Lyceris-chan DNS Blocklist project](https://github.com/Lyceris-chan/dns-blocklist-generator). It utilizes the industry-standard **Hagezi Multi Pro ++** as its primary foundation, merging it with several additional specialized sources. The generation pipeline executes a deduplication pass and optimizes the final dataset to ensure maximum coverage with minimal resource overhead.
+- **Customization**: Users are encouraged to review the default project for source transparency or to configure custom filtering rules and additional blocklists directly within the AdGuard Home management interface.
 
-### ZimaOS & CasaOS Integration
-The dashboard is fully integrated with the ZimaOS native interface. After deployment, you will find a dedicated **Privacy Hub icon** on your ZimaOS home screen, allowing for one-click access to your system telemetry and controls.
+## <a id="gluetun"></a>🔒 VPN-Routed Frontends (Gluetun)
 
-### What the Dashboard Provides:
-- **Live Telemetry**: Real-time monitoring of your VPN tunnel data usage (RX/TX), both for the current session and all-time.
-- **VPN Control Center**: 
-    - Switch between multiple WireGuard profiles on the fly.
-    - Upload and activate new `.conf` files directly from the UI.
-    - Monitor your public IP and connection health status.
-- **Service Governance**: A visual grid showing the status of every privacy frontend (Invidious, Redlib, etc.) and core infrastructure (AdGuard, Portainer, WireGuard). 
-- **Certificate Awareness**: Deep-dive into your SSL status. See exactly when your Let's Encrypt certificate expires and trigger manual checks if needed.
-- **Deployment Logs**: A live, streaming log of system events, giving you full transparency into what the hub is doing in the background.
-- **Odido Booster Control**: If enabled, manage your mobile data bundles and monitoring thresholds directly.
-- **Redaction Mode**: A privacy toggle that blurs sensitive identifying metrics (like IPs and domain names), perfect for sharing screenshots or troubleshooting without leaking your data.
+When you self-host private frontends without a VPN, your home IP address is directly exposed to the destination servers (e.g., Google or Reddit). While public instances exist to mitigate this, they require you to move your trust to a third-party instance owner who may log your data.
 
-## <a id="architecture"></a>🏗️ Technical Architecture
+Privacy Hub eliminates this trade-off by isolating your local services within a hardened **Gluetun VPN container**, allowing you to be your own proxy:
+- **Self-Managed Trust**: You own the instance and the logs. You no longer have to trust a third-party host with your browsing metadata.
+- **IP & Detail Protection**: Although you are hosting the service, your home IP is never visible to the end provider. All outgoing requests are routed through an anonymous VPN endpoint.
+- **Zero Tracking & Analytics**: The combination of private frontends and a VPN proxy ensures you bypass intrusive corporate logging, behavioral analytics, and telemetry engines.
+- **Kill-Switch Enforcement**: Gluetun strictly enforces a network kill-switch; if the VPN connection drops, all outgoing traffic is immediately terminated to prevent any accidental home IP exposure.
 
-### The DNS Chain
-`Your Device` → `AdGuard Home (Filtering)` → `Unbound (Recursive + QNAME Minimization)` → `Root DNS Servers`
+## <a id="dashboard"></a>🖥️ Management Dashboard: Zero-Leak UI
 
-### The Privacy Path
-`Dashboard (Zero-Leak UI)` → `Nginx Proxy` → `Gluetun (VPN Tunnel)` → `Privacy Frontend` → `External VPN Provider` → `Internet`
+Built on Material Design 3, the dashboard follows a strict zero-tracking philosophy:
+- **Local Assets**: All fonts, icons, and libraries are hosted locally. 
+- **Redaction Mode**: Built-in toggle to mask sensitive metrics (IPs, profiles) for safe display.
+- **Native Integration**: One-click access from the ZimaOS/CasaOS interface via local Material Design icon.
 
 ## <a id="network-config"></a>🌐 Network Configuration
 
-### Standard Setup: ISP Router Only
-If you just have the standard router your ISP gave you, you only need to do one thing:
-1.  **Forward port 51820/UDP** to your ZimaOS machine's local IP.
-This is the only open door. It is cryptographically silent and does not increase your attack surface (see the [Security Model](#security)).
+### Standard Setup
+**Forward port 51820/UDP** to your host's local IP. This is the only exposed port and is cryptographically silent.
 
-### Local "Home" Mode: DNS Rewrites
-When you're at home, you shouldn't have to bounce traffic off a satellite just to see your own dashboard. AdGuard Home uses **DNS Rewrites** to tell your devices the local LAN IP (`192.168.1.100`) instead of your public IP. You get SSL and local speeds without needing a VPN tunnel.
+### Local LAN Mode
+AdGuard Home utilizes **DNS Rewrites** to direct internal traffic to your local IP, ensuring optimal performance and local SSL access.
 
 ## <a id="advanced-setup"></a>📡 Advanced Setup: OpenWrt & Double NAT
 
-If you're running a real router like OpenWrt behind your ISP modem, you are in a **Double NAT** situation. This means your data has to pass through two layers of address translation. You need to fix the routing so your packets actually arrive.
-
-### 1. OpenWrt: Static IP Assignment (DHCP Lease)
-Assign a static lease so your Privacy Hub doesn't wander off to a new IP every time the power cycles.
-1.  Navigate to **Network** → **DHCP and DNS** → **Static Leases**.
-2.  Click **Add**. **Hostname**: `ZimaOS-Privacy-Hub`. **IPv4-Address**: `192.168.1.100`.
-3.  **Save & Apply**.
-
 <details>
-<summary>💻 CLI: UCI Commands for Static Lease</summary>
+<summary>💻 CLI: UCI Commands for OpenWrt Configuration</summary>
 
+If you're running a secondary router like OpenWrt behind your ISP modem, use these commands to fix routing:
+
+**1. Static IP Assignment**
 ```bash
-# Add the static lease (Replace MAC and IP with your own hardware's values)
 uci add dhcp host
 uci set dhcp.@host[-1].name='ZimaOS-Privacy-Hub'
-uci set dhcp.@host[-1].dns='1'
-uci set dhcp.@host[-1].mac='00:11:22:33:44:55' # <--- REPLACE THIS WITH YOUR MAC
-uci set dhcp.@host[-1].ip='192.168.1.100'      # <--- REPLACE THIS WITH YOUR DESIRED IP
+uci set dhcp.@host[-1].mac='00:11:22:33:44:55' # <--- YOUR MAC
+uci set dhcp.@host[-1].ip='192.168.1.100'      # <--- YOUR IP
 uci commit dhcp
 /etc/init.d/dnsmasq restart
 ```
-</details>
 
-### 2. OpenWrt: Port Forwarding & Firewall
-OpenWrt is the gatekeeper. Point the traffic to your machine and then actually open the door.
-1.  **Port Forwarding (DNAT)**: Points the internet request to your ZimaOS.
-2.  **Traffic Rules**: Explicitly tells the firewall that this traffic is allowed.
-
-<details>
-<summary>💻 CLI: UCI Commands for Firewall (Port Forward + Traffic Rule)</summary>
-
+**2. Firewall Port Forwarding (51820/UDP)**
 ```bash
-# 1. Add Port Forwarding (Replace dest_ip with your ZimaOS machine's IP)
 uci add firewall redirect
 uci set firewall.@redirect[-1].name='Forward-WireGuard'
 uci set firewall.@redirect[-1].src='wan'
 uci set firewall.@redirect[-1].proto='udp'
 uci set firewall.@redirect[-1].src_dport='51820'
-uci set firewall.@redirect[-1].dest_ip='192.168.1.100' # <--- REPLACE THIS WITH YOUR IP
+uci set firewall.@redirect[-1].dest_ip='192.168.1.100' # <--- YOUR IP
 uci set firewall.@redirect[-1].dest_port='51820'
 uci set firewall.@redirect[-1].target='DNAT'
 
-# 2. Add Traffic Rule (Allowance)
 uci add firewall rule
 uci set firewall.@rule[-1].name='Allow-WireGuard-Inbound'
 uci set firewall.@rule[-1].src='wan'
@@ -161,91 +159,74 @@ uci set firewall.@rule[-1].proto='udp'
 uci set firewall.@rule[-1].dest_port='51820'
 uci set firewall.@rule[-1].target='ACCEPT'
 
-# Apply the changes
 uci commit firewall
 /etc/init.d/firewall restart
 ```
 </details>
 
-### 3. ISP Modem: Primary Port Forward
-You have to forward the entry point to your OpenWrt router first.
-- **Forward**: `51820/UDP` → **OpenWrt WAN IP**.
-- This completes the chain of custody for your data: `Internet` → `ISP Modem` → `OpenWrt` → `ZimaOS`.
+## <a id="security"></a>🛡️ Security Model
 
-## <a id="security"></a>🛡️ Security Audit & Privacy Standards
+- **Stealth VPN**: The WireGuard port does not respond to unauthenticated packets, remaining invisible to port scans ([WireGuard Protocol](https://www.wireguard.com/protocol/)).
+- **Hardened Infrastructure**: Generic base images (Nginx, databases, runtimes) utilize **DHI hardened versions** which reduce the attack surface by over 70% according to [CIS Benchmarks](https://www.cisecurity.org/benchmark/docker).
+- **Official Specialized Apps**: High-level applications (Gluetun, AdGuard, etc.) utilize their official registry sources to ensure maximum compatibility and up-to-date functionality.
+- **Zero Public Access**: Internal APIs and management interfaces are only accessible via the encrypted VPN tunnel or local network.
 
-### DHI Hardened Images
-Standard images are packed with unnecessary binaries and vulnerabilities. We use **DHI hardened images** (`dhi.io`) which reduce the attack surface by **over 70%** according to CIS Benchmarks. Less junk means fewer ways for someone to break into your house. (Source: [CIS Benchmarks](https://www.cisecurity.org/benchmark/docker))
+## <a id="catalog"></a>📦 Service Catalog & Access
 
-### The "Silent" Security Model (DDoS & Scan Resistance)
-Opening a port for WireGuard does **not** increase your attack surface to DDoS or unauthorized access. 
-- **WireGuard is Silent**: Unlike OpenVPN, WireGuard does not respond to packets it doesn't recognize. If an attacker scans your IP, your port looks **closed**. It won't even send a "go away" packet. 
-- **DDoS Mitigation**: Because it's silent to unauthenticated packets, WireGuard is inherently resistant to scanning. Since it doesn't keep state for unauthorized connections, attackers cannot exhaust your memory with "half-open" connection floods (like SYN floods). You're effectively invisible to internet noise.
-- **Cryptographic Ownership**: You can't "guess" a password. You need a valid 256-bit cryptographic key. Without it, you don't exist to the server.
-- **No Domain-to-Home Path**: Your domain is just a pointer. Since Nginx only listens internally, there is **no way** for someone to connect to your dashboard from the internet without being inside your encrypted tunnel first.
+| Service | Category | Connectivity |
+| :--- | :--- | :--- |
+| **Management Dashboard** | Infrastructure | Port 8081 |
+| **AdGuard Home** | DNS/Filtering | Port 8083 |
+| **WireGuard (WG-Easy)** | Remote Access | **Gateway** (Port 51821) |
+| **Portainer** | Management | Port 9000 |
+| **Invidious** | YouTube | **🔒 VPN Routed** |
+| **Redlib** | Reddit | **🔒 VPN Routed** |
+| **Wikiless** | Wikipedia | **🔒 VPN Routed** |
+| **LibremDB** | Movies/TV | **🔒 VPN Routed** |
+| **Rimgo** | Imgur | **🔒 VPN Routed** |
+| **Scribe** | Medium | **🔒 VPN Routed** |
+| **BreezeWiki** | Fandom | **🔒 VPN Routed** |
+| **AnonOverflow** | Stack Overflow | **🔒 VPN Routed** |
+| **VERT** | File Conversion | Port 5555 |
+| **Odido Booster** | Utility | Port 8085 |
 
-## <a id="remote-access"></a>📡 Remote Access: Taking Your Network With You
+*Note: **WireGuard (WG-Easy)** is the required gateway for maintaining your privacy boundary when away from home.*
 
-Privacy Hub turns your ZimaOS into a portable security boundary. Using **WG-Easy**, you can route all your traffic back through your home from anywhere.
+### Instance Reference & Functionality
 
-- **Bandwidth-Optimized Split Tunneling**: By default, only private traffic and DNS go through the tunnel. 
-- **The HTTPS Myth**: VPN companies love to scare you, but [over 95% of web traffic is HTTPS encrypted](https://transparencyreport.google.com/https/overview). Your ISP can't see inside your packets; HTTPS already handles that. The **real leak is DNS**, which we solve by forcing "phonebook" requests through the tunnel while letting encrypted data go direct for speed.
-- **Seamless Domain Access (dedyn.io)**: Your hostnames (see [Service Access](#ports)) resolve correctly over the VPN, allowing you to use SSL certificates globally.
+#### Infrastructure & Core
+- **Management Dashboard**: The central control plane for the stack. Built with Material Design 3, it provides live telemetry, VPN profile management, and service status monitoring with zero external dependencies.
+- **AdGuard Home**: A network-wide advertisement and tracker filtration engine. It intercepts DNS requests to neutralize telemetry and malicious domains at the source.
+- **WireGuard (WG-Easy)**: A high-performance VPN server that provides secure remote access to your home network. It is the mandatory gateway for utilizing your privacy boundary on external or untrusted networks.
+- **Portainer**: A comprehensive management interface for the Docker environment, facilitating granular control over container orchestration and infrastructure lifecycle.
+- **Unbound**: A validating, recursive, caching DNS resolver. It communicates directly with Root DNS servers, eliminating the need for third-party upstream providers.
+- **Gluetun**: A specialized VPN client that acts as an internal proxy. It isolates privacy frontends and routes their outgoing traffic through an external VPN provider to ensure your home IP remains anonymous.
 
-## <a id="catalog"></a>📦 Service Catalog
+#### Privacy Frontends (VPN-Routed)
+- **Invidious**: Access YouTube content privately. It strips all tracking and advertisements, routes traffic through the VPN to hide your IP, and provides a lightweight interface without proprietary telemetry.
+- **Redlib**: A hardened Reddit frontend. It eliminates tracking pixels, intrusive analytics, and advertisements, ensuring your browsing habits remain confidential and your home IP is never disclosed.
+- **Wikiless**: Wikipedia without the cookies or telemetry. All requests are routed through the VPN to maintain total anonymity.
+- **LibremDB**: Private metadata engine for media collections. Retrieves information without allowing data brokers to profile your interests or track your IP.
+- **Rimgo**: An anonymous Imgur viewer that removes telemetry and tracking scripts while hiding your location behind the VPN proxy.
+- **Scribe**: Read Medium articles without the paywalls, tracking scripts, or IP logging common on the standard platform.
+- **BreezeWiki**: Clean Fandom interface. Neutralizes aggressive advertising networks and prevents tracking scripts from monitoring your visits.
+- **AnonOverflow**: Private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance or IP tracking.
 
-### Core Infrastructure
-- **WireGuard (WG-Easy)**: A VPN server that actually works. Secure remote access without the corporate "cloud" middleman.
-- **AdGuard Home**: Network-wide security and ad-filtering. It stops the trackers before they even touch your device.
-- **Unbound**: A validating, recursive, caching DNS resolver. You talk to the root servers directly. You don't ask for permission.
-- **Gluetun**: VPN client that routes specific service traffic through an external provider you trust.
-- **Nginx & Hub-API**: The dashboard and the brains of the operation. No external dependencies.
+#### Utilities & Automation
+- **VERT**: A local file conversion service that maintains data sovereignty by processing sensitive documents on your own hardware using GPU acceleration.
+- **Odido Booster**: An automated data management utility for Odido users that monitors usage and handles bundle procurement via API.
+- **Watchtower**: A background utility that monitors for container image updates and automates the update process to ensure security patches are applied.
 
-### Privacy Frontends (VPN-Routed)
-- **Invidious**: YouTube without tracking, ads, or Google accounts.
-- **Redlib**: Reddit without the bloat or trackers. 
-- **Wikiless**: Wikipedia without tracking cookies.
-- **LibremDB**: Private metadata engine for movies and TV.
-- **Rimgo**: Anonymous Imgur viewer.
-- **Scribe**: Clutter-free Medium reader.
-- **BreezeWiki**: Tracker-free Fandom interface.
-- **AnonOverflow**: Private Stack Overflow interface.
-
-### Utility Services
-- **VERT & VERTD**: Local-first file conversion with Intel GPU acceleration.
-- **Odido Booster**: Automated data bundle management for Odido users.
-- **Watchtower**: Automated container image updates and cleanup.
-
-## <a id="ports"></a>🔌 Service Access & Port Reference
-
-| Service | LAN Port | Subdomain (HTTPS) | Connectivity |
-| :--- | :--- | :--- | :--- |
-| **Management Dashboard** | `8081` | `https://yourdomain.dedyn.io:8443` | Direct |
-| **AdGuard Home (Admin)** | `8083` | `https://adguard.yourdomain.dedyn.io:8443` | Direct |
-| **Portainer (Docker UI)** | `9000` | `https://portainer.yourdomain.dedyn.io:8443` | Direct |
-| **WireGuard (Web UI)** | `51821` | `https://wireguard.yourdomain.dedyn.io:8443` | Direct |
-| **Invidious** | `3000` | `https://invidious.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
-| **Redlib** | `8080` | `https://redlib.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
-| **Wikiless** | `8180` | `https://wikiless.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
-| **LibremDB** | `3001` | `https://libremdb.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
-| **Rimgo** | `3002` | `https://rimgo.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
-| **Scribe** | `8280` | `https://scribe.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
-| **BreezeWiki** | `8380` | `https://breezewiki.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
-| **AnonOverflow** | `8480` | `https://anonymousoverflow.yourdomain.dedyn.io:8443` | **🔒 VPN Routed** |
-| **VERT** | `5555` | `https://vert.yourdomain.dedyn.io:8443` | Direct |
+### Background Management Scripts
+- **cert-monitor.sh**: Manages the automated SSL certificate lifecycle. It handles Let's Encrypt issuance via DNS-01 challenges and implements rate-limit recovery by deploying temporary self-signed certificates.
+- **wg-ip-monitor.sh**: A proactive network monitor that detects changes in your public IP address. It automatically synchronizes DNS records and restarts the WireGuard endpoint to maintain persistent connectivity.
+- **wg-control.sh**: An administrative control script that facilitates profile switching, status reporting, and service dependency management for the VPN tunnel.
 
 ## <a id="resilience"></a>🏗️ System Resilience
 
-### Reactive SSL Management
-The `cert-monitor.sh` script manages Let's Encrypt certificates. If it hits a rate limit, it detects it, installs a temporary self-signed cert, and retries the moment the window opens.
+- **Automated SSL**: `cert-monitor.sh` manages Let's Encrypt renewals and rate-limit recovery.
+- **Dynamic IP**: `wg-ip-monitor.sh` automatically updates DNS records and VPN endpoints on public IP changes.
 
-### Intelligent IP Monitoring
-`wg-ip-monitor.sh` checks your IP every 5 minutes. If it changes, it updates deSEC and restarts WireGuard. Your ISP's dynamic IP garbage won't knock you offline.
+## <a id="ownership"></a>🤝 Data Ownership
 
-## <a id="community"></a>🤝 Community & Contributions
-
-This project is built on the principles of digital autonomy and transparency. While it was originally developed for ZimaOS, the scripts and configurations are portable and can be adapted for other Linux-based platforms.
-
-- **Fork and Experiment**: I encourage you to fork this repository and make it your own. I’d love to see what you do with it and how you improve the stack.
-- **Contributions**: Pull requests are welcome. If you find a bug, have an idea for a new feature, or want to improve the documentation, don't hesitate to contribute.
-- **Showcase**: If you've built something cool based on this hub, feel free to share it!
+This infrastructure is designed for those who refuse to be a product. By self-hosting this stack, you establish absolute ownership over your data, metadata, and digital footprint. You are no longer a tenant on corporate infrastructure; you are the owner of your network.
