@@ -49,6 +49,16 @@ DOCKER_AUTH_DIR="/tmp/$APP_NAME-docker-auth"
 mkdir -p "$DOCKER_AUTH_DIR"
 sudo chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
 
+# Detect Python interpreter
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON_CMD="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_CMD="python"
+else
+    echo "[CRIT] Python is required but not installed. Please install python3."
+    exit 1
+fi
+
 # Define consistent docker command using custom config for auth
 DOCKER_CMD="sudo env DOCKER_CONFIG=$DOCKER_AUTH_DIR docker"
 
@@ -817,7 +827,7 @@ else
     echo "----------------------------------------------------------"
     
     # Sanitize the configuration file
-    python - "$ACTIVE_WG_CONF" <<'PY'
+    $PYTHON_CMD - "$ACTIVE_WG_CONF" <<'PY'
 from pathlib import Path
 import re
 import sys
@@ -1490,7 +1500,18 @@ if [ "$ACTION" = "activate" ]; then
         # shellcheck disable=SC2086
         docker stop $DEPENDENTS 2>/dev/null || true
         docker compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
-        sleep 5
+        
+        # Wait for gluetun to be healthy (max 30s)
+        i=0
+        while [ $i -lt 30 ]; do
+            HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
+            if [ "$HEALTH" = "healthy" ]; then
+                break
+            fi
+            sleep 1
+            i=$((i+1))
+        done
+
         # shellcheck disable=SC2086
         docker start $DEPENDENTS 2>/dev/null || true
     else
@@ -4300,7 +4321,7 @@ disable_portainer_telemetry() {
     local portainer_url="http://$LAN_IP:$PORT_PORTAINER"
     local auth_payload=""
     local token=""
-    auth_payload=$(python - <<'PY'
+    auth_payload=$($PYTHON_CMD - <<'PY'
 import json, os
 print(json.dumps({"Username": "admin", "Password": os.environ.get("ADMIN_PASS_RAW", "")}))
 PY
@@ -4308,7 +4329,7 @@ PY
 
     for _ in {1..10}; do
         token=$(curl -s --max-time 5 -H "Content-Type: application/json" \
-            -d "$auth_payload" "$portainer_url/api/auth" | python -c "import json,sys; \
+            -d "$auth_payload" "$portainer_url/api/auth" | $PYTHON_CMD -c "import json,sys; \
 data = json.load(sys.stdin); \
 print(data.get('jwt',''))" 2>/dev/null || echo "")
         if [ -n "$token" ]; then
@@ -4358,11 +4379,21 @@ $DOCKER_CMD run -d --name memos --publish "$PORT_MEMOS:5230" --volume "$MEMOS_HO
 
 if $DOCKER_CMD ps | grep -q adguard; then
     log_info "AdGuard Home is operational. Network-wide filtering is active."
-    sleep 5
-    if curl -s --max-time 5 "http://$LAN_IP:$PORT_ADGUARD_WEB" > /dev/null; then
+    log_info "Waiting for AdGuard web interface..."
+    
+    AGH_UP=false
+    for _ in {1..12}; do
+        if curl -s --max-time 5 "http://$LAN_IP:$PORT_ADGUARD_WEB" > /dev/null; then
+            AGH_UP=true
+            break
+        fi
+        sleep 5
+    done
+
+    if [ "$AGH_UP" = true ]; then
         log_info "AdGuard web interface is accessible."
     else
-        log_warn "AdGuard web interface is still initializing."
+        log_warn "AdGuard web interface is still initializing (timeout)."
     fi
 fi
 
