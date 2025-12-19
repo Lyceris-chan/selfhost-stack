@@ -169,7 +169,7 @@ Privacy Hub turns your ZimaOS into a portable security boundary. Using **WG-Easy
 
 - **Bandwidth-Optimized Split Tunneling**: By default, only private traffic and DNS go through the tunnel. 
 - **The HTTPS Myth**: VPN companies love to scare you, but [over 95% of web traffic is HTTPS encrypted](https://transparencyreport.google.com/https/overview). Your ISP can't see inside your packets; HTTPS already handles that. The **real leak is DNS**, which we solve by forcing "phonebook" requests through the tunnel while letting encrypted data go direct for speed.
-- **Seamless Domain Access (dedyn.io)**: Your hostnames (see [Service Access](#-service-access--port-reference)) resolve correctly over the VPN, allowing you to use SSL certificates globally.
+- **Seamless Domain Access (dedyn.io)**: Your hostnames (see [Service Access](#service-access--port-reference)) resolve correctly over the VPN, allowing you to use SSL certificates globally.
 
 ## 📦 Service Catalog
 
