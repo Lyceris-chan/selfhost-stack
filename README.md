@@ -1,6 +1,6 @@
 # 🛡️ ZimaOS Privacy Hub
 
-A self-hosted privacy stack for people who actually want to own their data instead of renting a false sense of security.
+A self-hosted privacy stack for people who want to own their data instead of renting a false sense of security.
 
 ## 📋 Table of Contents
 - [Project Overview](#-project-overview)
@@ -8,8 +8,8 @@ A self-hosted privacy stack for people who actually want to own their data inste
 - [Privacy & Ownership](#-privacy--ownership)
 - [Network Configuration](#-network-configuration)
 - [Advanced Setup: OpenWrt & Double NAT](#-advanced-setup-openwrt--double-nat)
-- [Remote Access: Taking Your Network With You](#-remote-access-taking-your-network-with-you)
 - [Security Audit & Privacy Standards](#-security-audit--privacy-standards)
+- [Remote Access: Taking Your Network With You](#-remote-access-taking-your-network-with-you)
 - [Service Catalog](#-service-catalog)
 - [Service Access & Port Reference](#-service-access--port-reference)
 - [System Resilience](#-system-resilience)
@@ -36,41 +36,63 @@ chmod +x zima.sh
 
 If you don't own the hardware and the code running your network, you don't own your privacy. You're just renting a temporary privilege from a company that will sell you out the second a court order or a profitable data-sharing deal comes along.
 
-### The "Third Party" Trust Gap
-For many, NextDNS is the gold standard. I’ve had a great experience with them - it’s convenient, reliable, and has a polished dashboard. But no matter how "trustable" a provider is, you are still handing your entire digital footprint to a third party. If they get a subpoena, or they get bought, or they just change their minds, your data is gone. This stack is for people who want to stop trusting and start owning.
+<details>
+<summary>🔍 Deep Dive: The "Third Party" Trust Gap (NextDNS, Google, Cloudflare)</summary>
+
+For many, **NextDNS** is the gold standard. I’ve had a great experience with them - it’s convenient, reliable, and has a polished dashboard. But no matter how "trustable" a provider is, you are still handing your entire digital footprint to a third party. If they get a subpoena, or they get bought, or they just change their minds, your data is gone. This stack is for those who want to stop trusting and start owning.
 
 - **The Google Profile**: Google's DNS (8.8.8.8) turns you into a data source. They build profiles on your health, finances, and interests based on every domain you resolve, then sell that access to target you through their massive advertising machine.
 - **The Cloudflare Illusion**: Recent shifts in 2025 have shown that even "neutral" providers like Cloudflare aren't neutral when a government knocks. In Germany, Cloudflare processes global blocks based on local self-regulatory bodies (FSM-Hotline). Their CDN is now ruled a "host," allowing governments to force censorship. Do you really want your "neutral pipe" to be a global censorship tool?
 - **ISP Predation**: Your ISP sees everything. They log, monetize, and sell your history to brokers. They also use DNS hijacking to redirect you to government warning pages. They are the gatekeepers, and they don't have your interests in mind.
+</details>
 
 ### Independent DNS Resolution (QNAME Minimization)
 This stack cuts out the middleman by using **Unbound** as a recursive resolver with **QNAME Minimization (RFC 7816)** enabled.
-- **How it works**: Most resolvers tell every server in the chain the full domain you're visiting. Unbound only tells the `.com` server it's looking for something in `.com`, and the `stuff.com` server it's looking for `stuff.com`. 
-- **Direct Talk**: Unbound talks directly to the Root DNS servers. You aren't using the ISP's "censored phonebook." You're talking to the source.
-- **The Result**: No single server in the chain - besides the last authoritative one - ever knows the full domain you're trying to reach. Your intent remains private.
-- **DNSSEC Validation**: Every response is verified cryptographically. If an ISP tries to hijack your connection, the system detects the signature mismatch and blocks it.
 
-### ECH & Modern Standards
-We support **Encrypted Client Hello (ECH)**. It shields your metadata, ensuring that even the "handshake" of your connection is invisible to snooping eyes.
+<details>
+<summary>🤓 Technical: How Independent DNS and QNAME Minimization work</summary>
+
+- **Talking to the Source**: Instead of using the ISP's "censored phonebook," Unbound talks directly to the **Root DNS servers**. It then follows the chain to the TLD servers (like `.com`) and finally to the **Authoritative Server** - the last server in the chain that actually owns the record.
+- **Why the Authoritative Server?**: It's the only one that needs to know exactly where you're going. By reaching it directly, you ensure no middleman (like Google) is logging your request.
+- **QNAME Minimization**: Most resolvers tell every server in the chain the full domain you're visiting. Unbound only tells the `.com` server it's looking for something in `.com`, and the `stuff.com` server it's looking for `stuff.com`. Your intent remains private until the very last step.
+- **DNSSEC Validation**: Every response is verified cryptographically. If an ISP tries to hijack your connection, the system detects the fake signature and blocks it.
+</details>
+
+### Metadata Shielding (ECH)
+We support **Encrypted Client Hello (ECH)**. 
+
+<details>
+<summary>🛡️ Technical: What is ECH and why do you need it?</summary>
+
+In traditional HTTPS, the very first part of the connection (the "Client Hello") contains the domain name you're visiting in plain text (the SNI). This means even though the *content* of your visit is encrypted, your ISP still knows you're on `specific-website.com`.
+
+**ECH** encrypts that initial greeting. It puts a bag over the head of your connection request, ensuring that metadata observers see only that you are connecting to a general infrastructure provider, but not which specific site or service you are using.
+</details>
+
+## 🏗️ Technical Architecture
+
+### The DNS Chain
+`Your Device` → `AdGuard Home (Filtering)` → `Unbound (Recursive + QNAME Minimization)` → `Root DNS Servers`
+
+### The Privacy Path
+`Dashboard (Zero-Leak UI)` → `Nginx Proxy` → `Gluetun (VPN Tunnel)` → `Privacy Frontend` → `External VPN Provider` → `Internet`
 
 ## 🌐 Network Configuration
 
 ### Standard Setup: ISP Router Only
 If you just have the standard router your ISP gave you, you only need to do one thing:
 1.  **Forward port 51820/UDP** to your ZimaOS machine's local IP.
-This is the only open door. As explained in the [Security Model](#-security-audit--privacy-standards), this port is cryptographically silent and does not increase your attack surface.
+This is the only open door. It is cryptographically silent and does not increase your attack surface (see the [Security Model](#-security-audit--privacy-standards)).
 
 ### Local "Home" Mode: DNS Rewrites
-When you're at home, you shouldn't have to bounce traffic off a satellite just to see your own dashboard. 
-- **How it works**: AdGuard Home uses **DNS Rewrites**. When your device asks for `yourdomain.dedyn.io`, it's given the local LAN IP (`192.168.1.100`) instead of your public IP.
-- **The Result**: You get to use your SSL certificate and local speeds without needing a VPN tunnel.
+When you're at home, you shouldn't have to bounce traffic off a satellite just to see your own dashboard. AdGuard Home uses **DNS Rewrites** to tell your devices the local LAN IP (`192.168.1.100`) instead of your public IP. You get SSL and local speeds without needing a VPN tunnel.
 
 ## 📡 Advanced Setup: OpenWrt & Double NAT
 
-If you're running a real router like OpenWrt behind your ISP modem, you are in a **Double NAT** situation. This means your data has to pass through two layers of address translation before reaching your machine. You need to fix the routing so your packets actually arrive.
+If you're running a real router like OpenWrt behind your ISP modem, you are in a **Double NAT** situation. This means your data has to pass through two layers of address translation. You need to fix the routing so your packets actually arrive.
 
 ### 1. OpenWrt: Static IP Assignment (DHCP Lease)
-Assign a static lease so your Privacy Hub doesn't wander off to a different IP every time the power cycles.
+Assign a static lease so your Privacy Hub doesn't wander off to a new IP every time the power cycles.
 1.  Navigate to **Network** → **DHCP and DNS** → **Static Leases**.
 2.  Click **Add**. **Hostname**: `ZimaOS-Privacy-Hub`. **IPv4-Address**: `192.168.1.100`.
 3.  **Save & Apply**.
@@ -128,37 +150,25 @@ You have to forward the entry point to your OpenWrt router first.
 - **Forward**: `51820/UDP` → **OpenWrt WAN IP**.
 - This completes the chain of custody for your data: `Internet` → `ISP Modem` → `OpenWrt` → `ZimaOS`.
 
-## 📡 Remote Access: Taking Your Network With You
-
-Privacy Hub isn't just for your house; it's a portable security boundary. Using **WG-Easy (WireGuard)**, you can route all your traffic back through your ZimaOS from anywhere.
-
-### Bandwidth-Optimized Split Tunneling
-By default, we use **Split Tunneling**. This means only your private traffic and DNS go through the tunnel. 
-
-VPN companies love to scare you into thinking your ISP seeing your data is a disaster. It's 2025. [Over 95% of web traffic is HTTPS encrypted](https://transparencyreport.google.com/https/overview). Your ISP can see you're connected to an IP, but they can't see what's inside the packet. HTTPS already took care of that.
-
-The **real leak** is DNS. If you don't own your DNS, your ISP logs every domain you visit. By using split tunneling:
-- **Efficiency**: Your heavy, already-encrypted traffic (Netflix, updates) goes direct. You save bandwidth and don't lag.
-- **Privacy**: Your DNS is still forced through AdGuard Home and Unbound. Your "phonebook" requests are never seen or sold.
-
-### Why use WireGuard for Remote Access?
-- **Public Wi-Fi Safety**: Don't trust the airport Wi-Fi. Encrypt your DNS and internal traffic.
-- **Accessing Local Services**: Use internal IPs (like `http://192.168.1.100:8081`) as if you were at home.
-- **Seamless Domain Access (dedyn.io)**: Your hostnames (see [Service Access](#-service-access--port-reference)) resolve correctly over the VPN, allowing you to use SSL certificates globally.
-
 ## 🛡️ Security Audit & Privacy Standards
 
 ### DHI Hardened Images
-We don't use standard "official" images where we can avoid it. We use **DHI hardened images** (`dhi.io`). 
-- **Why?**: Standard images are packed with "convenience" tools that are actually just security holes waiting to be exploited. Hardened images are stripped down to the absolute bare essentials.
-- **The Stats**: Hardened images can reduce the attack surface by **over 70%** by removing unnecessary binaries and libraries. Less code means fewer bugs, and fewer bugs mean fewer ways for someone to break into your house. (Source: [CIS Benchmarks](https://www.cisecurity.org/benchmark/docker))
+Standard images are packed with unnecessary binaries and vulnerabilities. We use **DHI hardened images** (`dhi.io`) which reduce the attack surface by **over 70%** according to CIS Benchmarks. Less junk means fewer ways for someone to break into your house. (Source: [CIS Benchmarks](https://www.cisecurity.org/benchmark/docker))
 
 ### The "Silent" Security Model (DDoS & Scan Resistance)
-Opening a port for WireGuard does **not** expose your home to DDoS or unauthorized access. In fact, this setup is significantly more secure than typical corporate "cloud" logins.
-- **WireGuard is Silent**: Unlike OpenVPN or SSH, WireGuard does not respond to packets it doesn't recognize. If an attacker scans your IP, your port 51820 looks **closed**. It won't even send a "go away" packet. 
-- **DDoS Mitigation**: Because WireGuard is silent to unauthenticated packets, it is inherently resistant to most DDoS and scanning attacks. Since it doesn't keep state for unauthorized connections, an attacker can't exhaust your machine's memory with "half-open" connections (like a SYN flood). You're effectively invisible to the "noise" of the internet.
+Opening a port for WireGuard does **not** increase your attack surface to DDoS or unauthorized access. 
+- **WireGuard is Silent**: Unlike OpenVPN, WireGuard does not respond to packets it doesn't recognize. If an attacker scans your IP, your port looks **closed**. It won't even send a "go away" packet. 
+- **DDoS Mitigation**: Because it's silent to unauthenticated packets, WireGuard is inherently resistant to scanning. Since it doesn't keep state for unauthorized connections, attackers cannot exhaust your memory with "half-open" connection floods (like SYN floods). You're effectively invisible to internet noise.
 - **Cryptographic Ownership**: You can't "guess" a password. You need a valid 256-bit cryptographic key. Without it, you don't exist to the server.
-- **No Domain-to-Home Path**: Your domain is just a pointer. Since Nginx only listens internally and the only entry point is the secure tunnel, there is **no way** for someone to connect to your dashboard from the internet without being inside your tunnel first. You aren't just hidden; you're unreachable.
+- **No Domain-to-Home Path**: Your domain is just a pointer. Since Nginx only listens internally, there is **no way** for someone to connect to your dashboard from the internet without being inside your encrypted tunnel first.
+
+## 📡 Remote Access: Taking Your Network With You
+
+Privacy Hub turns your ZimaOS into a portable security boundary. Using **WG-Easy**, you can route all your traffic back through your home from anywhere.
+
+- **Bandwidth-Optimized Split Tunneling**: By default, only private traffic and DNS go through the tunnel. 
+- **The HTTPS Myth**: VPN companies love to scare you, but [over 95% of web traffic is HTTPS encrypted](https://transparencyreport.google.com/https/overview). Your ISP can't see inside your packets; HTTPS already handles that. The **real leak is DNS**, which we solve by forcing "phonebook" requests through the tunnel while letting encrypted data go direct for speed.
+- **Seamless Domain Access (dedyn.io)**: Your hostnames (see [Service Access](#-service-access--port-reference)) resolve correctly over the VPN, allowing you to use SSL certificates globally.
 
 ## 📦 Service Catalog
 
@@ -168,11 +178,6 @@ Opening a port for WireGuard does **not** expose your home to DDoS or unauthoriz
 - **Unbound**: A validating, recursive, caching DNS resolver. You talk to the root servers directly. You don't ask for permission.
 - **Gluetun**: VPN client that routes specific service traffic through an external provider you trust.
 - **Nginx & Hub-API**: The dashboard and the brains of the operation. No external dependencies.
-
-### Security & Resilience
-- **Reliable Local Fonts**: Font CSS files are served locally. Why let Google track your IP just because you wanted a nice-looking font?
-- **Reactive SSL**: Automated Let's Encrypt management with proactive rate-limit recovery.
-- **IP Monitoring**: Real-time detection of public IP changes with automated DNS synchronization.
 
 ### Privacy Frontends (VPN-Routed)
 - **Invidious**: YouTube without tracking, ads, or Google accounts.
