@@ -31,18 +31,26 @@ done
 
 # --- SECTION 1: ENVIRONMENT VALIDATION & DIRECTORY SETUP ---
 # Verify core dependencies before proceeding.
-if ! command -v docker >/dev/null 2>&1; then
-    echo "[CRIT] Docker is not installed. System cannot proceed."
-    exit 1
-fi
+REQUIRED_COMMANDS="docker curl git crontab iptables flock openssl"
+for cmd in $REQUIRED_COMMANDS; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "[CRIT] '$cmd' is required but not installed. Please install it."
+        exit 1
+    fi
+done
 
-if ! command -v docker compose version >/dev/null 2>&1; then
+# Docker Compose Check (Plugin or Standalone)
+if docker compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE_CMD="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+    if docker-compose version >/dev/null 2>&1; then
+        DOCKER_COMPOSE_CMD="docker-compose"
+    else
+        echo "[CRIT] Docker Compose is installed but not executable."
+        exit 1
+    fi
+else
     echo "[CRIT] Docker Compose v2 is required. Please update your environment."
-    exit 1
-fi
-
-if ! command -v curl >/dev/null 2>&1; then
-    echo "[CRIT] 'curl' is required but not installed. Please install it."
     exit 1
 fi
 
@@ -71,6 +79,7 @@ DOCKER_CMD="sudo env DOCKER_CONFIG=$DOCKER_AUTH_DIR docker"
 SRC_DIR="$BASE_DIR/sources"
 ENV_DIR="$BASE_DIR/env"
 CONFIG_DIR="$BASE_DIR/config"
+DATA_DIR="$BASE_DIR/data"
 COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
 DASHBOARD_FILE="$BASE_DIR/dashboard.html"
 GLUETUN_ENV_FILE="$BASE_DIR/gluetun.env"
@@ -112,7 +121,7 @@ WG_API_SCRIPT="$BASE_DIR/wg-api.sh"
 CERT_MONITOR_SCRIPT="$BASE_DIR/cert-monitor.sh"
 
 # Memos storage
-MEMOS_HOST_DIR="${HOME}/.memos"
+MEMOS_HOST_DIR="/DATA/AppData/memos"
 mkdir -p "$MEMOS_HOST_DIR"
 
 # Logging Functions
@@ -276,7 +285,7 @@ clean_environment() {
         log_warn "FORCE CLEAN ENABLED (-c): All existing data, configurations, and volumes will be permanently removed."
     fi
 
-    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos libremdb rimgo breezewiki anonymousoverflow scribe vert vertd"
+    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd"
     
     FOUND_CONTAINERS=""
     for c in $TARGET_CONTAINERS; do
@@ -531,6 +540,7 @@ for img in $CRITICAL_IMAGES; do
 done
 
 mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR/unbound" "$AGH_CONF_DIR" "$NGINX_CONF_DIR" "$WG_PROFILES_DIR"
+mkdir -p "$DATA_DIR/postgres" "$DATA_DIR/redis" "$DATA_DIR/wireguard" "$DATA_DIR/adguard-work" "$DATA_DIR/portainer" "$DATA_DIR/odido" "$DATA_DIR/companion"
 
 setup_fonts
 
@@ -965,7 +975,7 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     DESEC_RESPONSE=$(curl -s -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
         -H "Authorization: Token $DESEC_TOKEN" \
         -H "Content-Type: application/json" \
-        -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}]" 2>&1 || echo "CURL_ERROR")
+        -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}]" 2>&1 || echo "CURL_ERROR")
     
     PUBLIC_IP_ESCAPED="${PUBLIC_IP//./\\.}"
     if [[ "$DESEC_RESPONSE" == "CURL_ERROR" ]]; then
@@ -1430,7 +1440,7 @@ fi
 mkdir -p "$SRC_DIR/hub-api"
 cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
 FROM dhi.io/python:3.11-alpine3.22-dev
-RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd
+RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl
 WORKDIR /app
 CMD ["python", "server.py"]
 EOF
@@ -1522,7 +1532,7 @@ if [ "$ACTION" = "activate" ]; then
         done
 
         # shellcheck disable=SC2086
-        docker start $DEPENDENTS 2>/dev/null || true
+        docker compose -f /app/docker-compose.yml up -d --force-recreate $DEPENDENTS 2>/dev/null || true
     else
         echo "Error: Profile not found"
         exit 1
@@ -1954,13 +1964,6 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 })
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/request-ssl-check':
-            try:
-                # Manually trigger the monitor script in the background
-                subprocess.Popen(["/usr/local/bin/cert-monitor.sh"])
-                self._send_json({"success": True, "message": "SSL background check triggered"})
-            except Exception as e:
-                self._send_json({"error": str(e)}, 500)
         elif self.path == '/profiles':
             try:
                 files = [f.replace('.conf', '') for f in os.listdir(PROFILES_DIR) if f.endswith('.conf')]
@@ -2107,6 +2110,13 @@ chmod +x "$WG_API_SCRIPT"
 # --- SECTION 13: ORCHESTRATION LAYER (DOCKER COMPOSE) ---
 # Compile the unified multi-container definition for the complete privacy stack.
 log_info "Compiling Orchestration Layer (docker-compose.yml)..."
+
+VERTD_DEVICES=""
+if [ -d "/dev/dri" ]; then
+    VERTD_DEVICES="    devices:
+      - /dev/dri"
+fi
+
 cat > "$COMPOSE_FILE" <<EOF
 networks:
   frontnet:
@@ -2114,15 +2124,6 @@ networks:
     ipam:
       config:
         - subnet: $DOCKER_SUBNET
-
-volumes:
-  postgresdata:
-  companioncache:
-  redis-data:
-  wg-config:
-  adguard-work:
-  portainer-data:
-  odido-data:
 
 services:
   hub-api:
@@ -2175,7 +2176,7 @@ services:
       - ODIDO_TOKEN=$ODIDO_TOKEN
       - PORT=80
     volumes:
-      - odido-data:/data
+      - $DATA_DIR/odido:/data
     restart: unless-stopped
     deploy:
       resources:
@@ -2274,7 +2275,7 @@ services:
     command: -H unix:///var/run/docker.sock
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
-    volumes: ["/var/run/docker.sock:/var/run/docker.sock", "portainer-data:/data"]
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock", "$DATA_DIR/portainer:/data"]
     # Admin password is saved in protonpass_import.csv for initial setup
     restart: unless-stopped
     deploy:
@@ -2293,7 +2294,7 @@ services:
       - "$LAN_IP:443:443/udp"
       - "$LAN_IP:853:853/tcp"
       - "$LAN_IP:853:853/udp"
-    volumes: ["adguard-work:/opt/adguardhome/work", "$AGH_CONF_DIR:/opt/adguardhome/conf"]
+    volumes: ["$DATA_DIR/adguard-work:/opt/adguardhome/work", "$AGH_CONF_DIR:/opt/adguardhome/conf"]
     depends_on:
       - unbound
     restart: unless-stopped
@@ -2331,7 +2332,7 @@ services:
       - WG_DEVICE=eth0
       - WG_POST_UP=iptables -t nat -I POSTROUTING 1 -s 10.8.0.0/24 -j MASQUERADE; iptables -A FORWARD -i wg0 -j ACCEPT; iptables -A FORWARD -o wg0 -j ACCEPT
       - WG_POST_DOWN=iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE; iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o wg0 -j ACCEPT
-    volumes: ["wg-config:/etc/wireguard"]
+    volumes: ["$DATA_DIR/wireguard:/etc/wireguard"]
     cap_add: [NET_ADMIN, SYS_MODULE]
     restart: unless-stopped
     deploy:
@@ -2377,7 +2378,7 @@ services:
     labels:
       - "casaos.skip=true"
     network_mode: "service:gluetun"
-    volumes: ["redis-data:/data"]
+    volumes: ["$DATA_DIR/redis:/data"]
     healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 5}
     restart: always
     deploy:
@@ -2424,7 +2425,7 @@ services:
     network_mode: "service:gluetun"
     environment: {POSTGRES_DB: invidious, POSTGRES_USER: kemal, POSTGRES_PASSWORD: kemal}
     volumes:
-      - postgresdata:/var/lib/postgresql/data
+      - $DATA_DIR/postgres:/var/lib/postgresql/data
       - $SRC_DIR/invidious/config/sql:/config/sql
       - $SRC_DIR/invidious/docker/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U kemal -d invidious"], interval: 10s, timeout: 5s, retries: 5}
@@ -2450,7 +2451,7 @@ services:
       - ALL
     read_only: true
     volumes:
-      - companioncache:/var/tmp/youtubei.js:rw
+      - $DATA_DIR/companion:/var/tmp/youtubei.js:rw
     security_opt:
       - no-new-privileges:true
     depends_on: {gluetun: {condition: service_healthy}}
@@ -2519,9 +2520,8 @@ services:
       - "casaos.skip=true"
     environment:
       - PUBLIC_URL=$VERTD_PUB_URL
-    # Intel GPU support
-    devices:
-      - /dev/dri
+    # Intel GPU support (conditionally added)
+$VERTD_DEVICES
     restart: unless-stopped
     deploy:
       resources:
@@ -2585,7 +2585,7 @@ x-casaos:
       recursive DNS with AdGuard filtering, and VPN-isolated privacy frontends
       (Invidious, Redlib, etc.) that reduce tracking and prevent home IP exposure.
   icon: http://$LAN_IP:8081/fonts/privacy-hub.svg
-EOF
+
 
 # --- SECTION 14: DASHBOARD & UI GENERATION ---
 # Generate the Material Design 3 management dashboard.
@@ -4119,6 +4119,7 @@ fi
 
 cat > "$CERT_MONITOR_SCRIPT" <<EOF
 #!/usr/bin/env bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 AGH_CONF_DIR="$AGH_CONF_DIR"
 DESEC_TOKEN="$DESEC_MONITOR_TOKEN"
 DESEC_DOMAIN="$DESEC_DOMAIN"
@@ -4243,6 +4244,7 @@ echo "$EXISTING_CRON" | grep -v "$CERT_MONITOR_SCRIPT" | { cat; echo "*/5 * * * 
 # Detect public IP changes and synchronize DNS records and VPN endpoints.
 cat > "$MONITOR_SCRIPT" <<EOF
 #!/usr/bin/env bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 COMPOSE_FILE="$COMPOSE_FILE"
 CURRENT_IP_FILE="$CURRENT_IP_FILE"
 LOG_FILE="$IP_LOG_FILE"
@@ -4278,7 +4280,7 @@ if [ "$NEW_IP" != "$OLD_IP" ]; then
         DESEC_RESPONSE=$(curl -s -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
             -H "Authorization: Token $DESEC_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$NEW_IP\"]}]" 2>&1 || echo "CURL_ERROR")
+            -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$NEW_IP\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$NEW_IP\"]}]" 2>&1 || echo "CURL_ERROR")
         
         NEW_IP_ESCAPED=$(echo "$NEW_IP" | sed 's/\./\\./g')
         if [[ "$DESEC_RESPONSE" == "CURL_ERROR" ]]; then
@@ -4336,52 +4338,10 @@ check_iptables() {
     fi
 }
 
-disable_portainer_telemetry() {
-    log_info "Disabling Portainer CE anonymous analytics..."
-    local portainer_url="http://$LAN_IP:$PORT_PORTAINER"
-    local auth_payload=""
-    local token=""
-    auth_payload=$($PYTHON_CMD - <<'PY'
-import json, os
-print(json.dumps({"Username": "admin", "Password": os.environ.get("ADMIN_PASS_RAW", "")}))
-PY
-)
-
-    for _ in {1..10}; do
-        token=$(curl -s --max-time 5 -H "Content-Type: application/json" \
-            -d "$auth_payload" "$portainer_url/api/auth" | $PYTHON_CMD -c "import json,sys; \
-data = json.load(sys.stdin); \
-print(data.get('jwt',''))" 2>/dev/null || echo "")
-        if [ -n "$token" ]; then
-            break
-        fi
-        sleep 3
-    done
-
-    if [ -z "$token" ]; then
-        log_warn "Portainer telemetry toggle skipped (unable to authenticate yet)."
-        return 0
-    fi
-
-    if curl -s --max-time 5 -X PUT "$portainer_url/api/settings" \
-        -H "Authorization: Bearer $token" \
-        -H "Content-Type: application/json" \
-        -d '{"EnableTelemetry":false}' >/dev/null; then
-        log_info "Portainer anonymous analytics disabled."
-    else
-        log_warn "Portainer telemetry toggle failed. Disable it in Settings → General."
-    fi
-}
-
 echo "=========================================================="
 echo "DEPLOYMENT COMPLETE: INFRASTRUCTURE IS OPERATIONAL"
 echo "=========================================================="
 sudo modprobe tun || true
-
-if $DOCKER_CMD ps -a --format '{{.Names}}' | grep -q "^libremdb$"; then
-    log_info "Removing legacy libremdb container in favor of memos..."
-    $DOCKER_CMD rm -f libremdb 2>/dev/null || true
-fi
 
 sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
 
@@ -4413,8 +4373,6 @@ echo "[+] Finalizing environment (cleaning up dangling images)..."
 $DOCKER_CMD image prune -f
 
 $DOCKER_CMD restart portainer 2>/dev/null || true
-sleep 5
-disable_portainer_telemetry
 
 echo "=========================================================="
 echo "SYSTEM DEPLOYED: PRIVATE INFRASTRUCTURE ESTABLISHED"
