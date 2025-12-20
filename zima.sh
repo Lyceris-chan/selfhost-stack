@@ -1931,11 +1931,9 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/certificate-status':
             try:
-                # Read from the acme.sh status file if it exists, or check certificate expiry
                 cert_file = "/etc/adguard/conf/ssl.crt"
                 status = {"type": "None", "subject": "--", "issuer": "--", "expires": "--", "status": "No Certificate"}
                 if os.path.exists(cert_file):
-                    # Use openssl to get cert info
                     res = subprocess.run(['openssl', 'x509', '-in', cert_file, '-noout', '-subject', '-issuer', '-dates'], capture_output=True, text=True)
                     if res.returncode == 0:
                         lines = res.stdout.split('\n')
@@ -1944,14 +1942,27 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             if line.startswith('subject='): status['subject'] = line.replace('subject=', '').strip()
                             if line.startswith('issuer='): status['issuer'] = line.replace('issuer=', '').strip()
                             if line.startswith('notAfter='): status['expires'] = line.replace('notAfter=', '').strip()
-                        status["status"] = "Valid"
+                        
+                        # Check for self-signed
+                        if status['subject'] == status['issuer'] or "PrivacyHub" in status['issuer']:
+                            status["status"] = "Self-Signed (Local)"
+                        else:
+                            status["status"] = "Valid (Trusted)"
                 
-                # Check for failure logs
-                log_file = "/app/.ssl_error"
+                # Check for acme.sh failure logs for more info
+                log_file = "/etc/adguard/conf/certbot/last_run.log"
                 if os.path.exists(log_file):
                     with open(log_file, 'r') as f:
-                        status["error"] = f.read().strip()
-                        status["status"] = "Error"
+                        log_content = f.read()
+                        if "Verify error" in log_content or "Challenge failed" in log_content:
+                            status["error"] = "deSEC verification failed. Check your token and domain."
+                            status["status"] = "Issuance Failed"
+                        elif "Rate limit" in log_content or "too many certificates" in log_content:
+                            status["error"] = "Let's Encrypt rate limit reached. Retrying later."
+                            status["status"] = "Rate Limited"
+                        elif "Invalid token" in log_content:
+                            status["error"] = "Invalid deSEC token."
+                            status["status"] = "Auth Error"
                 
                 self._send_json(status)
             except Exception as e:
@@ -2699,6 +2710,17 @@ cat > "$DASHBOARD_FILE" <<EOF
         
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
+        a {
+            color: var(--md-sys-color-primary);
+            text-decoration: none;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
+        }
+        
+        a:hover {
+            opacity: 0.8;
+            text-decoration: underline;
+        }
+        
         body {
             background: var(--md-sys-color-surface);
             color: var(--md-sys-color-on-surface);
@@ -3076,7 +3098,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         }
         /* External link icon for Portainer chips */
         .portainer-link::after {
-            content: '\e895'; /* Material Symbol 'open_in_new' */
+            content: '\e89e'; /* Material Symbol 'open_in_new' */
             font-family: 'Material Symbols Rounded';
             position: absolute;
             right: 8px;
@@ -3356,7 +3378,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         </div>
 
         <div class="section-label">DNS Configuration</div>
-        <div class="grid-3">
+        <div class="grid-2">
             <div class="card">
                 <h3>Certificate Status</h3>
                 <div id="cert-status-content" style="padding-top: 12px;">
@@ -3365,9 +3387,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label">Issuer</span><span class="stat-value sensitive" id="cert-issuer">Loading...</span></div>
                     <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label">Expires</span><span class="stat-value sensitive" id="cert-to">Loading...</span></div>
                     <div id="ssl-failure-info" style="display:none; margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
-                        <div class="body-small" style="font-weight:bold; margin-bottom:4px;">Issuance Failure</div>
+                        <div class="body-small" style="font-weight:bold; margin-bottom:4px;">Status Message</div>
                         <div class="body-small" id="ssl-failure-reason">--</div>
-                        <div class="body-small" id="ssl-retry-time" style="margin-top:4px; opacity:0.8;">--</div>
                     </div>
                 </div>
                 <div id="cert-status-badge" class="chip" style="margin-top: auto; width: fit-content;" data-tooltip="Overall health of the SSL certificate issuance pipeline">...</div>
@@ -4102,50 +4123,53 @@ cat >> "$DASHBOARD_FILE" <<EOF
         async function fetchCertStatus() {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
                 const res = await fetch(API + "/certificate-status", { signal: controller.signal });
                 clearTimeout(timeoutId);
                 
                 if (res.status === 401) throw new Error("401");
-                
                 const data = await res.json();
 
-                const certType = document.getElementById('cert-type');
-                const subject = document.getElementById('cert-subject');
-                const issuer = document.getElementById('cert-issuer');
-                const validTo = document.getElementById('cert-to');
-                const badge = document.getElementById('cert-status-badge');
-
-                if (data.error) {
-                    certType.textContent = "Error";
-                    subject.textContent = data.error;
-                    issuer.textContent = "--";
-                    validTo.textContent = "--";
-                    badge.textContent = "Unknown";
-                    badge.className = "chip";
-                    return;
-                }
+                document.getElementById('cert-type').textContent = data.type || "--";
+                document.getElementById('cert-subject').textContent = data.subject || "--";
+                document.getElementById('cert-issuer').textContent = data.issuer || "--";
+                document.getElementById('cert-to').textContent = data.expires || "--";
                 
-                certType.textContent = data.type;
-                subject.textContent = data.subject;
-                issuer.textContent = data.issuer;
-                validTo.textContent = data.valid_to;
-
-                const isTrusted = data.type === "Let's Encrypt";
-                const domain = isTrusted ? data.subject : "";
+                const badge = document.getElementById('cert-status-badge');
+                badge.textContent = data.status || "Unknown";
+                
+                if (data.status && data.status.includes("Valid")) {
+                    badge.className = "chip vpn"; // Use primary-container color
+                } else if (data.status && data.status.includes("Self-Signed")) {
+                    badge.className = "chip admin"; // Use secondary-container color
+                } else {
+                    badge.className = "chip tertiary";
+                }
                 
                 const failInfo = document.getElementById('ssl-failure-info');
-                if (!isTrusted && data.failure_reason) {
+                const trustedInfo = document.getElementById('dns-setup-trusted');
+                const untrustedInfo = document.getElementById('dns-setup-untrusted');
+
+                if (data.error) {
                     failInfo.style.display = 'block';
-                    document.getElementById('ssl-failure-reason').textContent = data.failure_reason;
-                    if (data.retry_after) {
-                        document.getElementById('ssl-retry-time').textContent = "Retry after: " + data.retry_after;
-                    } else {
-                        document.getElementById('ssl-retry-time').textContent = "Retrying periodically...";
-                    }
+                    document.getElementById('ssl-failure-reason').textContent = data.error;
+                    if (trustedInfo) trustedInfo.style.display = 'none';
+                    if (untrustedInfo) untrustedInfo.style.display = 'block';
                 } else {
                     failInfo.style.display = 'none';
+                    if (data.status && data.status.includes("Trusted")) {
+                        if (trustedInfo) trustedInfo.style.display = 'block';
+                        if (untrustedInfo) untrustedInfo.style.display = 'none';
+                    } else {
+                        if (trustedInfo) trustedInfo.style.display = 'none';
+                        if (untrustedInfo) untrustedInfo.style.display = 'block';
+                    }
                 }
+            } catch(e) { 
+                console.error('Cert status fetch error:', e); 
+                document.getElementById('cert-status-badge').textContent = "Fetch Error";
+            }
+        }
 
                 if (isTrusted) {
                     badge.textContent = "✓ Globally Trusted";
