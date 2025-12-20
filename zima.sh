@@ -775,7 +775,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     fi
 
     # Safely generate Portainer hash (bcrypt)
-    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "portainer" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "admin" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
     if [[ "$PORTAINER_PASS_HASH" == "FAILED" ]]; then
         log_crit "Failed to generate Portainer password hash. Check Docker status."
         exit 1
@@ -805,7 +805,7 @@ else
     # Generate Portainer hash if missing from existing .secrets
     if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
         log_info "Generating missing Portainer hash..."
-        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "portainer" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "admin" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
         echo "PORTAINER_PASS_HASH=$PORTAINER_PASS_HASH" >> "$BASE_DIR/.secrets"
     fi
     if [ -z "${ODIDO_API_KEY:-}" ]; then
@@ -2306,7 +2306,7 @@ services:
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
-    command: -H unix:///var/run/docker.sock --admin-user "portainer" --admin-password "$PORTAINER_HASH_COMPOSE"
+    command: -H unix:///var/run/docker.sock --admin-password "$PORTAINER_HASH_COMPOSE"
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
     volumes: ["/var/run/docker.sock:/var/run/docker.sock", "$DATA_DIR/portainer:/data"]
@@ -3591,7 +3591,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         el.style.opacity = '1';
                         el.style.cursor = 'pointer';
                         el.dataset.tooltip = "Manage " + containerName + " in Portainer";
-                        el.innerHTML = originalText + ' <span class="material-symbols-rounded" style="font-size:16px; vertical-align:middle; margin-left:4px; pointer-events:none;">open_in_new</span>';
+                        el.innerHTML = originalText + ' <span class="material-symbols-rounded" style="font-size:16px; vertical-align:middle; margin-left:4px; pointer-events:none;">&#xe89e;</span>';
                         
                         // Use a fresh onclick handler
                         el.onclick = function(e) {
@@ -4580,7 +4580,7 @@ if [ "$AUTO_PASSWORD" = true ]; then
         # Authenticate to get JWT (user was initialized via --admin-password CLI flag)
         AUTH_RESPONSE=$(curl -s -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
             -H "Content-Type: application/json" \
-            -d "{\"Username\":\"portainer\",\"Password\":\"$ADMIN_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
+            -d "{\"Username\":\"admin\",\"Password\":\"$ADMIN_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
         
         if echo "$AUTH_RESPONSE" | grep -q "jwt"; then
             PORTAINER_JWT=$(echo "$AUTH_RESPONSE" | grep -oP '"jwt":"\K[^"]+')
@@ -4687,10 +4687,9 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo "Administrative Password: $ADMIN_PASS_RAW (Use for Dashboard/Portainer/Services)"
     echo "VPN Web UI Password: $VPN_PASS_RAW"
     echo "AdGuard Home Password: $AGH_PASS_RAW"
-    echo "AdGuard Home Username: adguard"
-    echo "Portainer Username: portainer"
-    echo "Odido Booster API Key: $ODIDO_API_KEY"
-    echo ""
+        echo "AdGuard Home Username: $AGH_USER"
+        echo "Portainer Username: admin"
+        echo "Odido Booster API Key: $ODIDO_API_KEY"    echo ""
     echo "IMPORT TO PROTON PASS:"
     echo "A CSV file has been generated for easy import into Proton Pass:"
     echo "$BASE_DIR/protonpass_import.csv"
