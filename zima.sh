@@ -3639,7 +3639,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
         function navigate(el, e) {
             if (e && (e.target.closest('.portainer-link') || e.target.closest('.btn') || e.target.closest('.chip'))) return;
             const url = el.getAttribute('data-url');
-            if (url) window.open(url, '_blank');
+            if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+                window.open(url, '_blank');
+            }
         }
 
         function generateRandomId() {
