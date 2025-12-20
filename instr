@@ -1,4 +1,0 @@
-- [x] improve the layout as the Endpoint Provisioning part looks out of place with that single chip just being there
-- [x] the manage portainer chips have a broken icon or whatever it is 
-- [x] it says Fetch Error for the certificate status make it more informative have it correctly identify the locally generated one show the reason the desec one may have failed be it the user not proving a config or a rate limit or whatever the logs say
-- [x] ensure all text is properly readable 
