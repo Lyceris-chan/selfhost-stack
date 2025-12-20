@@ -2174,9 +2174,9 @@ services:
     environment:
       - HUB_API_KEY=$ODIDO_API_KEY
       - DOCKER_CONFIG=/root/.docker
-    entrypoint: ["/bin/sh", "-c", "touch /app/.data_usage /app/.wge_data_usage && python -u /app/server.py"]
+    entrypoint: ["/bin/sh", "-c", "mkdir -p /app && touch /app/deployment.log /app/.data_usage /app/.wge_data_usage && python -u /app/server.py"]
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "55555"]
+      test: ["CMD", "nc", "-z", "localhost", "55555"]
       interval: 20s
       timeout: 10s
       retries: 5
@@ -3378,14 +3378,16 @@ cat > "$DASHBOARD_FILE" <<EOF
             <div class="card">
                 <h3>deSEC Configuration</h3>
                 <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
-                <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. user.dedyn.io)" style="margin-bottom:12px;">
-                <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;">
-                <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
-                    Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
-                </p>
-                <div style="text-align:right;">
-                    <button onclick="saveDesecConfig()" class="btn btn-tonal">Save deSEC Config</button>
-                </div>
+                <form onsubmit="saveDesecConfig(); return false;">
+                    <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. user.dedyn.io)" style="margin-bottom:12px;">
+                    <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;">
+                    <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
+                        Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
+                    </p>
+                    <div style="text-align:right;">
+                        <button type="submit" class="btn btn-tonal">Save deSEC Config</button>
+                    </div>
+                </form>
             </div>
             <div class="card">
                 <h3>Device DNS Settings</h3>
@@ -3472,20 +3474,22 @@ cat >> "$DASHBOARD_FILE" <<EOF
             <div class="card">
                 <h3>Configuration</h3>
                 <p class="body-medium description">Authentication and automation settings for backend services:</p>
-                <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;">
-                <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
-                    The <strong>Dashboard API Key</strong> (HUB_API_KEY) is required to authorize sensitive actions like saving settings. You can find this in your <code>.secrets</code> file on the host.
-                </p>
-                <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;">
-                <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
-                    Obtain your OAuth token using the <a href="https://github.com/GuusBackup/Odido.Authenticator" target="_blank" style="color: var(--md-sys-color-primary);">Odido Authenticator</a>.
-                </p>
-                <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;">
-                <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;">
-                <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;">
-                <div style="text-align:right;">
-                    <button onclick="saveOdidoConfig()" class="btn btn-tonal">Save Configuration</button>
-                </div>
+                <form onsubmit="saveOdidoConfig(); return false;">
+                    <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;">
+                    <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
+                        The <strong>Dashboard API Key</strong> (HUB_API_KEY) is required to authorize sensitive actions like saving settings. You can find this in your <code>.secrets</code> file on the host.
+                    </p>
+                    <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;">
+                    <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
+                        Obtain your OAuth token using the <a href="https://github.com/GuusBackup/Odido.Authenticator" target="_blank" style="color: var(--md-sys-color-primary);">Odido Authenticator</a>.
+                    </p>
+                    <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;">
+                    <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;">
+                    <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;">
+                    <div style="text-align:right;">
+                        <button type="submit" class="btn btn-tonal">Save Configuration</button>
+                    </div>
+                </form>
             </div>
         </div>
 
