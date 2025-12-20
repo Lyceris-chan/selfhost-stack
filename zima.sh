@@ -775,7 +775,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     fi
 
     # Safely generate Portainer hash (bcrypt)
-    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "admin" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "portainer" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
     if [[ "$PORTAINER_PASS_HASH" == "FAILED" ]]; then
         log_crit "Failed to generate Portainer password hash. Check Docker status."
         exit 1
@@ -805,7 +805,7 @@ else
     # Generate Portainer hash if missing from existing .secrets
     if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
         log_info "Generating missing Portainer hash..."
-        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "admin" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "portainer" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
         echo "PORTAINER_PASS_HASH=$PORTAINER_PASS_HASH" >> "$BASE_DIR/.secrets"
     fi
     if [ -z "${ODIDO_API_KEY:-}" ]; then
@@ -2293,7 +2293,7 @@ services:
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
-    command: -H unix:///var/run/docker.sock --admin-password "$PORTAINER_HASH_COMPOSE"
+    command: -H unix:///var/run/docker.sock --admin-user "portainer" --admin-password "$PORTAINER_HASH_COMPOSE"
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
     volumes: ["/var/run/docker.sock:/var/run/docker.sock", "$DATA_DIR/portainer:/data"]
@@ -2708,7 +2708,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
-            line-height: 1.5;
+            line-height: 1.6;
             -webkit-font-smoothing: antialiased;
         }
 
@@ -2852,15 +2852,14 @@ cat > "$DASHBOARD_FILE" <<EOF
         .card {
             background: var(--md-sys-color-surface-container-low);
             border-radius: var(--md-sys-shape-corner-extra-large);
-            padding: 32px; /* Increased padding */
+            padding: 32px;
             text-decoration: none;
             color: inherit;
             transition: all var(--md-sys-duration-medium) var(--md-sys-motion-easing-emphasized);
             position: relative;
             display: flex;
             flex-direction: column;
-            min-height: 220px; /* Increased min-height */
-            border: none;
+            min-height: 240px;
             overflow: visible; 
             box-sizing: border-box;
             box-shadow: var(--md-sys-elevation-1);
@@ -2874,7 +2873,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             border-radius: inherit;
             background: var(--md-sys-color-on-surface);
             opacity: 0;
-            transition: opacity var(--md-sys-motion-duration-short) linear;
+            transition: opacity var(--md-sys-duration-short) linear;
             pointer-events: none;
             z-index: 1;
         }
@@ -2883,7 +2882,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         .card:hover { 
             background: var(--md-sys-color-surface-container);
             box-shadow: var(--md-sys-elevation-2);
-            transform: translateY(-2px);
+            transform: translateY(-4px);
         }
         
         .card:active::before { opacity: var(--md-sys-state-pressed-opacity); }
@@ -2892,25 +2891,28 @@ cat > "$DASHBOARD_FILE" <<EOF
         .card-header {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 12px;
-            gap: 12px;
-            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 20px;
+            gap: 16px;
+            flex-wrap: wrap; /* Allowed wrap for small screens */
         }
 
         .card h2 {
             margin: 0;
-            font-size: 22px; /* Title Large */
+            font-size: 22px;
             font-weight: 400;
             color: var(--md-sys-color-on-surface);
             line-height: 28px;
             flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .card .description {
-            font-size: 14px; /* Body Medium */
+            font-size: 14px;
             color: var(--md-sys-color-on-surface-variant);
-            margin-bottom: 16px;
+            margin-bottom: 24px; /* Increased spacing */
             line-height: 20px;
             flex-grow: 1;
         }
@@ -3533,7 +3535,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         el.onclick = function(e) {
                             e.preventDefault();
                             e.stopPropagation();
-                            window.open(PORTAINER_URL + "/#!/1/docker/containers/" + containerIds[containerName], '_blank');
+                            const url = PORTAINER_URL + "/#!/1/docker/containers/" + containerIds[containerName];
+                            window.open(url, '_blank');
+                            return false;
                         };
                         el.style.cursor = 'pointer';
                         el.dataset.tooltip = "Manage " + containerName + " in Portainer";
@@ -4398,7 +4402,7 @@ Name,URL,Username,Password,Note
 Privacy Hub Dashboard,http://$LAN_IP:$PORT_DASHBOARD_WEB,admin,$ADMIN_PASS_RAW,Primary management interface for the Privacy Hub stack.
 AdGuard Home,http://$LAN_IP:$PORT_ADGUARD_WEB,adguard,$AGH_PASS_RAW,Network-wide advertisement and tracker filtration.
 WireGuard VPN UI,http://$LAN_IP:$PORT_WG_WEB,admin,$VPN_PASS_RAW,WireGuard remote access management interface.
-Portainer UI,http://$LAN_IP:$PORT_PORTAINER,admin,$ADMIN_PASS_RAW,Docker container management interface.
+Portainer UI,http://$LAN_IP:$PORT_PORTAINER,portainer,$ADMIN_PASS_RAW,Docker container management interface.
 Odido Booster API,,dashboard,$ODIDO_API_KEY,API key for the automated Odido data bundle booster.
 deSEC DNS API,,$DESEC_DOMAIN,$DESEC_TOKEN,API token for deSEC dynamic DNS management.
 GitHub Scribe Token,,$SCRIBE_GH_USER,$SCRIBE_GH_TOKEN,GitHub Personal Access Token for Scribe Medium frontend.
@@ -4444,7 +4448,7 @@ if [ "$AUTO_PASSWORD" = true ]; then
         # Authenticate to get JWT (user was initialized via --admin-password CLI flag)
         AUTH_RESPONSE=$(curl -s -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
             -H "Content-Type: application/json" \
-            -d "{\"Username\":\"admin\",\"Password\":\"$ADMIN_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
+            -d "{\"Username\":\"portainer\",\"Password\":\"$ADMIN_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
         
         if echo "$AUTH_RESPONSE" | grep -q "jwt"; then
             PORTAINER_JWT=$(echo "$AUTH_RESPONSE" | grep -oP '"jwt":"\K[^"]+')
@@ -4544,6 +4548,7 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo "VPN Web UI Password: $VPN_PASS_RAW"
     echo "AdGuard Home Password: $AGH_PASS_RAW"
     echo "AdGuard Home Username: adguard"
+    echo "Portainer Username: portainer"
     echo "Odido Booster API Key: $ODIDO_API_KEY"
     echo ""
     echo "IMPORT TO PROTON PASS:"
