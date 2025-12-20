@@ -2835,19 +2835,19 @@ cat > "$DASHBOARD_FILE" <<EOF
         .card {
             background: var(--md-sys-color-surface-container-low);
             border-radius: var(--md-sys-shape-corner-extra-large);
-            padding: 24px;
+            padding: 32px; /* Increased padding */
             text-decoration: none;
             color: inherit;
-            transition: all var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+            transition: all var(--md-sys-duration-medium) var(--md-sys-motion-easing-emphasized);
             position: relative;
             display: flex;
             flex-direction: column;
-            min-height: 200px; /* Increased min-height */
+            min-height: 220px; /* Increased min-height */
             border: none;
             overflow: visible; 
             box-sizing: border-box;
             box-shadow: var(--md-sys-elevation-1);
-            height: 100%; /* Ensure uniform height in grid */
+            height: 100%;
         }
         
         .card::before {
