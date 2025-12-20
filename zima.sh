@@ -2742,20 +2742,19 @@ cat > "$DASHBOARD_FILE" <<EOF
         .header-row {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
+            align-items: center;
             gap: 24px;
             flex-wrap: wrap;
         }
 
         .header-row > div:first-child {
-            flex: 1 1 320px;
-            min-width: 240px;
+            flex: 1 1 auto;
         }
         
         h1 {
             font-family: 'Google Sans Flex', 'Google Sans', sans-serif;
             font-weight: 400;
-            font-size: 45px; /* Display Medium */
+            font-size: 45px;
             line-height: 52px;
             margin: 0;
             color: var(--md-sys-color-primary);
@@ -2763,7 +2762,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         }
         
         .subtitle {
-            font-size: 22px; /* Title Large */
+            font-size: 22px;
             color: var(--md-sys-color-on-surface-variant);
             margin-top: 12px;
             font-weight: 400;
@@ -2821,22 +2820,25 @@ cat > "$DASHBOARD_FILE" <<EOF
         /* Section Labels */
         .section-label {
             color: var(--md-sys-color-primary);
-            font-size: 14px; /* Title Small */
+            font-size: 14px;
             font-weight: 500;
             letter-spacing: 0.1px;
-            margin: 48px 0 12px 4px;
+            margin: 48px 0 16px 4px;
             text-transform: none;
         }
         
         .section-label:first-of-type {
-            margin-top: 24px;
+            margin-top: 8px;
         }
         
         .section-hint {
-            font-size: 14px; /* Body Medium */
+            font-size: 14px;
             color: var(--md-sys-color-on-surface-variant);
             margin: 0 0 24px 4px;
             letter-spacing: 0.25px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
         }
         
         /* Grid Layouts */
@@ -3133,28 +3135,27 @@ cat > "$DASHBOARD_FILE" <<EOF
         [data-tooltip] { 
             position: relative; 
         }
-        [data-tooltip]::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%) translateY(-8px);
+        
+        .tooltip-box {
+            position: fixed;
             background: var(--md-sys-color-inverse-surface);
             color: var(--md-sys-color-inverse-on-surface);
-            padding: 6px 10px;
-            border-radius: 6px;
+            padding: 8px 12px;
+            border-radius: 8px;
             font-size: 12px;
-            white-space: pre;
-            opacity: 0;
-            pointer-events: none;
-            transition: all var(--md-sys-motion-duration-short) ease;
-            z-index: 9999;
+            font-weight: 400;
+            line-height: 16px;
+            max-width: 280px;
+            z-index: 10000;
             box-shadow: var(--md-sys-elevation-2);
+            pointer-events: none;
+            opacity: 0;
+            display: none;
+            transition: opacity 150ms var(--md-sys-motion-easing-emphasized);
+            text-align: center;
         }
-        [data-tooltip]:hover::after { 
-            opacity: 1; 
-            transform: translateX(-50%) translateY(-12px);
-        }
+        
+        .tooltip-box.visible { opacity: 1; }
 
         /* Ensure parent elements don't clip tooltips */
         .card, .chip, .status-indicator, li, span, div {
@@ -4117,6 +4118,55 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
         
         document.addEventListener('DOMContentLoaded', () => {
+            // Tooltip Initialization
+            const tooltipBox = document.createElement('div');
+            tooltipBox.className = 'tooltip-box';
+            document.body.appendChild(tooltipBox);
+
+            document.addEventListener('mouseover', (e) => {
+                const target = e.target.closest('[data-tooltip]');
+                if (!target) return;
+
+                tooltipBox.textContent = target.dataset.tooltip;
+                tooltipBox.style.display = 'block';
+                // Trigger reflow
+                tooltipBox.offsetHeight;
+                tooltipBox.classList.add('visible');
+
+                const rect = target.getBoundingClientRect();
+                const boxRect = tooltipBox.getBoundingClientRect();
+                
+                let top = rect.top - boxRect.height - 12;
+                let left = rect.left + (rect.width / 2) - (boxRect.width / 2);
+
+                // Edge collision detection (with 12px safety margin)
+                if (top < 12) top = rect.bottom + 12;
+                if (left < 12) left = 12;
+                if (left + boxRect.width > window.innerWidth - 12) {
+                    left = window.innerWidth - boxRect.width - 12;
+                }
+                
+                // Final safety: ensure it doesn't go off bottom
+                if (top + boxRect.height > window.innerHeight - 12) {
+                    top = window.innerHeight - boxRect.height - 12;
+                }
+
+                tooltipBox.style.top = top + 'px';
+                tooltipBox.style.left = left + 'px';
+            });
+
+            document.addEventListener('mouseout', (e) => {
+                if (e.target.closest('[data-tooltip]')) {
+                    tooltipBox.classList.remove('visible');
+                    // Hide after transition
+                    setTimeout(() => {
+                        if (!tooltipBox.classList.contains('visible')) {
+                            tooltipBox.style.display = 'none';
+                        }
+                    }, 150);
+                }
+            });
+
             // Pre-populate Odido API key from deployment
             if (DEFAULT_ODIDO_API_KEY && !localStorage.getItem('odido_api_key')) {
                 localStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
