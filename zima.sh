@@ -117,7 +117,7 @@ MONITOR_SCRIPT="$BASE_DIR/wg-ip-monitor.sh"
 IP_LOG_FILE="$BASE_DIR/wg-ip-monitor.log"
 CURRENT_IP_FILE="$BASE_DIR/.current_public_ip"
 WG_CONTROL_SCRIPT="$BASE_DIR/wg-control.sh"
-WG_API_SCRIPT="$BASE_DIR/wg-api.sh"
+WG_API_SCRIPT="$BASE_DIR/wg-api.py"
 CERT_MONITOR_SCRIPT="$BASE_DIR/cert-monitor.sh"
 
 # Memos storage
@@ -3394,7 +3394,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
                 <form onsubmit="saveDesecConfig(); return false;">
                     <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. user.dedyn.io)" style="margin-bottom:12px;">
-                    <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;">
+                    <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;" autocomplete="current-password">
                     <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
                         Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
                     </p>
@@ -3493,7 +3493,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
                         The <strong>Dashboard API Key</strong> (HUB_API_KEY) is required to authorize sensitive actions like saving settings. You can find this in your <code>.secrets</code> file on the host.
                     </p>
-                    <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;">
+                    <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;" autocomplete="current-password">
                     <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
                         Obtain your OAuth token using the <a href="https://github.com/GuusBackup/Odido.Authenticator" target="_blank" style="color: var(--md-sys-color-primary);">Odido Authenticator</a>.
                     </p>
@@ -3601,6 +3601,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
                             const url = PORTAINER_URL + "/#!/1/docker/containers/" + cid;
                             window.open(url, '_blank');
                             return false;
+                        };
+                        // Also disable navigation if the user clicks the chip but not the text
+                        el.parentNode.onclick = function(e) {
+                            if (e.target.closest('.portainer-link')) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }
                         };
                     } else {
                         el.style.opacity = '0.5';
@@ -4697,7 +4704,7 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo "=========================================================="
     echo "GENERATED CREDENTIALS"
     echo "=========================================================="
-    echo "Administrative Password: $ADMIN_PASS_RAW (Use for Dashboard/Portainer/Services)"
+    echo "Administrative Password: $ADMIN_PASS_RAW (Use for Dashboard/Portainer)"
     echo "VPN Web UI Password: $VPN_PASS_RAW"
     echo "AdGuard Home Password: $AGH_PASS_RAW"
             echo "AdGuard Home Username: $AGH_USER"
