@@ -6,7 +6,8 @@
 - [x] the dashboard should detect the self signed cert and prompt the user to use one by desec and the ... under certificate status doesnt have an info tooltip so its not very informative as to whats up
 - [x] console logs say Uncaught SyntaxError: Unexpected token '}' (at (index):1585:13)
 - [x] rename redaction mode to something better 
-- [x] fix Portainer accessibility (remove invalid --admin-user flag)
+- [x] fix Portainer accessibility (use array command format, add --no-analytics)
+- [x] ensure old Portainer container is removed before recreation
 - [x] update Portainer username to 'admin' (default)
-- [x] fix Portainer chip icon rendering (use hex codepoint)
+- [x] fix Portainer chip icon rendering (use inline SVG)
 - [x] verify Portainer telemetry disabling through code

@@ -2306,7 +2306,7 @@ services:
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
-    command: -H unix:///var/run/docker.sock --admin-password "$PORTAINER_HASH_COMPOSE"
+    command: ["-H", "unix:///var/run/docker.sock", "--admin-password", "$PORTAINER_HASH_COMPOSE", "--no-analytics"]
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
     volumes: ["/var/run/docker.sock:/var/run/docker.sock", "$DATA_DIR/portainer:/data"]
@@ -3591,7 +3591,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         el.style.opacity = '1';
                         el.style.cursor = 'pointer';
                         el.dataset.tooltip = "Manage " + containerName + " in Portainer";
-                        el.innerHTML = originalText + ' <span class="material-symbols-rounded" style="font-size:16px; vertical-align:middle; margin-left:4px; pointer-events:none;">&#xe89e;</span>';
+                        el.innerHTML = originalText + ' <svg style="width:16px; height:16px; vertical-align:middle; margin-left:4px; fill:currentColor; pointer-events:none;" viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>';
                         
                         // Use a fresh onclick handler
                         el.onclick = function(e) {
@@ -4561,6 +4561,9 @@ echo "=========================================================="
 echo "DEPLOYMENT COMPLETE: INFRASTRUCTURE IS OPERATIONAL"
 echo "=========================================================="
 sudo modprobe tun || true
+
+# Explicitly remove portainer if it exists to ensure flags are updated
+sudo docker rm -f portainer 2>/dev/null || true
 
 sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
 
