@@ -3102,11 +3102,11 @@ cat > "$DASHBOARD_FILE" <<EOF
         }
         /* External link icon for Portainer chips */
         .portainer-link::after {
-            content: '\e89e'; /* Material Symbol 'open_in_new' */
+            content: 'open_in_new'; 
             font-family: 'Material Symbols Rounded';
             position: absolute;
             right: 8px;
-            font-size: 16px;
+            font-size: 18px;
             top: 50%;
             transform: translateY(-50%);
             pointer-events: none;
@@ -3298,7 +3298,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
                 </div>
                 <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for safe display">
-                    <span class="label-large">Redaction Mode</span>
+                    <span class="label-large">Privacy Shield</span>
                     <div class="switch-track">
                         <div class="switch-thumb"></div>
                     </div>
@@ -3308,53 +3308,53 @@ cat > "$DASHBOARD_FILE" <<EOF
 
         <div class="section-label">Applications</div>
         <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span class="chip" data-tooltip="Services isolated within a secure VPN tunnel (Gluetun). This allows you to host your own private instances—removing the need to trust third-party hosts—while ensuring your home IP remains hidden from end-service providers.">🔒 VPN Protected</span>
-            <span class="chip" data-tooltip="Local services accessed directly through the internal network interface.">📍 Direct Access</span>
-            <span class="chip tertiary" data-tooltip="Advanced infrastructure control and container telemetry via Portainer.">🛠️ Infrastructure</span>
+            <span class="chip" data-tooltip="Services isolated within a secure VPN tunnel (Gluetun). This allows you to host your own private instances—removing the need to trust third-party hosts—while ensuring your home IP remains hidden from end-service providers.">VPN Protected</span>
+            <span class="chip" data-tooltip="Local services accessed directly through the internal network interface.">Direct Access</span>
+            <span class="chip tertiary" data-tooltip="Advanced infrastructure control and container telemetry via Portainer.">Infrastructure</span>
         </div>
         <div class="grid-3">
             <a id="link-invidious" href="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true" data-container="invidious">
-                <div class="card-header"><h2>Invidious</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <div class="card-header"><h2>Invidious</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance</span></div>
             </a>
             <a id="link-redlib" href="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib">
-                <div class="card-header"><h2>Redlib</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <div class="card-header"><h2>Redlib</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance</span></div>
             </a>
             <a id="link-wikiless" href="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true" data-container="wikiless">
-                <div class="card-header"><h2>Wikiless</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <div class="card-header"><h2>Wikiless</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance</span></div>
             </a>
             <a id="link-memos" href="http://$LAN_IP:$PORT_MEMOS" class="card" data-check="true" data-container="memos">
-                <div class="card-header"><h2>Memos</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <div class="card-header"><h2>Memos</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container">Direct Access</span></div>
             </a>
             <a id="link-rimgo" href="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true" data-container="rimgo">
-                <div class="card-header"><h2>Rimgo</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <div class="card-header"><h2>Rimgo</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance</span></div>
             </a>
             <a id="link-scribe" href="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true" data-container="scribe">
-                <div class="card-header"><h2>Scribe</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <div class="card-header"><h2>Scribe</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance</span></div>
             </a>
             <a id="link-breezewiki" href="http://$LAN_IP:$PORT_BREEZEWIKI/" class="card" data-check="true" data-container="breezewiki">
-                <div class="card-header"><h2>BreezeWiki</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <div class="card-header"><h2>BreezeWiki</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance</span></div>
             </a>
             <a id="link-anonymousoverflow" href="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true" data-container="anonymousoverflow">
-                <div class="card-header"><h2>AnonOverflow</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <div class="card-header"><h2>AnonOverflow</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance</span></div>
             </a>
             <a id="link-vert" href="http://$LAN_IP:$PORT_VERT" class="card" data-check="true" data-container="vert">
-                <div class="card-header"><h2>VERT</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <div class="card-header"><h2>VERT</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container">Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion">GPU Accelerated</span></div>
             </a>
@@ -3362,21 +3362,21 @@ cat > "$DASHBOARD_FILE" <<EOF
 
         <div class="section-label">System Management</div>
         <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span class="chip" data-tooltip="Core infrastructure management and gateway orchestration">⚙️ Core Services</span>
+            <span class="chip" data-tooltip="Core infrastructure management and gateway orchestration">Core Services</span>
         </div>
         <div class="grid-3">
             <a id="link-adguard" href="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card" data-check="true" data-container="adguard">
-                <div class="card-header"><h2>AdGuard Home</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <div class="card-header"><h2>AdGuard Home</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container">Local Access</span><span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span></div>
             </a>
             <a id="link-portainer" href="http://$LAN_IP:$PORT_PORTAINER" class="card" data-check="true" data-container="portainer">
-                <div class="card-header"><h2>Portainer</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <div class="card-header"><h2>Portainer</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container">Local Access</span></div>
             </a>
             <a id="link-wg-easy" href="http://$LAN_IP:$PORT_WG_WEB" class="card" data-check="true" data-container="wg-easy">
-                <div class="card-header"><h2>WireGuard</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <div class="card-header"><h2>WireGuard</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">The primary gateway for <strong>secure remote access</strong>. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container">Local Access</span></div>
             </a>
@@ -3417,9 +3417,11 @@ cat > "$DASHBOARD_FILE" <<EOF
             </div>
             <div class="card">
                 <h3>Device DNS Settings</h3>
-                <p class="body-medium description">Utilize these RFC-compliant encrypted endpoints to maintain digital independence. We utilize standard ports (853) to ensure seamless compatibility with native OS resolvers:</p>
+                <p class="body-medium description">Utilize these RFC-compliant encrypted endpoints to maintain digital independence:</p>
                 <div class="code-label" data-tooltip="Standard unencrypted DNS (Port 53). Recommended only for use within your local LAN.">Standard IPv4 (Local LAN Only)</div>
                 <div class="code-block sensitive">$LAN_IP:53</div>
+                <div class="code-label" data-tooltip="DNS-over-QUIC (DOQ) - RFC 9250. Port 853. High-performance encrypted DNS designed for superior latency and stability.">Secure DOQ (Modern Clients)</div>
+                <div class="code-block sensitive">quic://$LAN_IP</div>
 EOF
 if [ -n "$DESEC_DOMAIN" ]; then
     cat >> "$DASHBOARD_FILE" <<EOF
@@ -3427,8 +3429,6 @@ if [ -n "$DESEC_DOMAIN" ]; then
                 <div class="code-block sensitive">https://$DESEC_DOMAIN/dns-query</div>
                 <div class="code-label" data-tooltip="DNS-over-TLS (DOT) - RFC 7858. Port 853. The industry standard for Android 'Private DNS' and system resolvers.">Secure DOT (Android / System)</div>
                 <div class="code-block sensitive">$DESEC_DOMAIN:853</div>
-                <div class="code-label" data-tooltip="DNS-over-QUIC (DOQ) - RFC 9250. Port 853. High-performance encrypted DNS designed for superior latency and stability.">Secure DOQ (Modern Clients)</div>
-                <div class="code-block sensitive">quic://$DESEC_DOMAIN</div>
             </div>
             <div class="card">
                 <h3>Endpoint Provisioning</h3>
@@ -3440,10 +3440,10 @@ if [ -n "$DESEC_DOMAIN" ]; then
                     </ol>
                     <div class="code-label" style="margin-top:12px;">Mobile Private DNS Hostname</div>
                     <div class="code-block sensitive" style="margin-top:4px;">$DESEC_DOMAIN</div>
-                    <p class="body-small" style="color:var(--md-sys-color-success); margin-top:12px;">✓ Verified Certificate Authority</p>
+                    <p class="body-small" style="color:var(--md-sys-color-success); margin-top:12px;">Verified Certificate Authority</p>
                 </div>
                 <div id="dns-setup-untrusted" style="display:none;">
-                    <p class="body-medium description" style="color:var(--md-sys-color-error);">⚠ Limited Encrypted DNS Coverage</p>
+                    <p class="body-medium description" style="color:var(--md-sys-color-error);">Limited Encrypted DNS Coverage</p>
                     <p class="body-small description">Android 'Private DNS' requires a FQDN. Falling back to IPv4 binding.</p>
                     <div class="code-label">Primary Gateway</div>
                     <div class="code-block sensitive">$LAN_IP</div>
@@ -3465,7 +3465,7 @@ else
                     <li>Remote Access: Utilize WireGuard VPN interface</li>
                 </ol>
                 <div class="code-block sensitive" style="margin-top:12px;">$LAN_IP</div>
-                <p class="body-small" style="color:var(--md-sys-color-error); margin-top:12px;">⚠ Self-Signed (Browser Interstitials Expected)</p>
+                <p class="body-small" style="color:var(--md-sys-color-warning); margin-top:12px;">Self-Signed (Local Certificate)</p>
             </div>
 EOF
 fi
@@ -3534,7 +3534,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             </div>
         </div>
 
-        <div class="section-label">System Status & Information</div>
+        <div class="section-label">System & Logs</div>
         <div class="grid-2">
             <div class="card">
                 <h3>System Information</h3>
@@ -3542,24 +3542,15 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace">/DATA/AppData/privacy-hub/.secrets</span></div>
                 <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace">/DATA/AppData/privacy-hub/config</span></div>
                 <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
-                <div class="stat-row"><span class="stat-label">Redaction Mode</span><span class="stat-value">Client-side only</span></div>
+                <div class="stat-row"><span class="stat-label">Privacy Shield</span><span class="stat-value">Active (Client-side)</span></div>
                 <p class="body-small" style="margin-top: auto; color: var(--md-sys-color-on-surface-variant);">
                     See the <a href="https://github.com/Lyceris-chan/selfhost-stack#credentials" target="_blank" style="color: var(--md-sys-color-primary);">README</a> for full details on obtaining required credentials.
                 </p>
                 <p class="body-small" style="margin-top: 8px; color: var(--md-sys-color-on-surface-variant);">Note: Changes to .secrets may require a stack restart to take full effect.</p>
             </div>
             <div class="card">
-                <h3>System Logs</h3>
-                <div id="log-container" class="log-container">Loading deployment logs...</div>
-                <div style="text-align:right; margin-top:16px;">
-                    <button onclick="fetchLogs()" class="btn btn-tonal">Refresh Logs</button>
-                </div>
-            </div>
-        </div>
-        <div class="grid">
-            <div class="card full-width">
-                <h3>Deployment History</h3>
-                <div id="log-container" class="log-container sensitive"></div>
+                <h3>System & Deployment Logs</h3>
+                <div id="log-container" class="log-container sensitive">Loading logs...</div>
                 <div id="log-status" class="body-small" style="color:var(--md-sys-color-on-surface-variant); text-align:right; margin-top:8px;">Connecting...</div>
             </div>
         </div>
@@ -4166,55 +4157,45 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 document.getElementById('cert-to').textContent = data.expires || "--";
                 
                 const badge = document.getElementById('cert-status-badge');
+                const isTrusted = data.status && data.status.includes("Trusted");
+                const isSelfSigned = data.status && data.status.includes("Self-Signed");
+                const domain = isTrusted ? data.subject : "";
+
                 badge.textContent = data.status || "Unknown";
                 
-                if (data.status && data.status.includes("Valid")) {
+                if (isTrusted) {
                     badge.className = "chip vpn"; // Use primary-container color
-                } else if (data.status && data.status.includes("Self-Signed")) {
+                    badge.dataset.tooltip = "✓ Globally Trusted: Valid certificate from Let's Encrypt.";
+                } else if (isSelfSigned) {
                     badge.className = "chip admin"; // Use secondary-container color
+                    badge.dataset.tooltip = "⚠ Self-Signed (Local): Devices will show security warnings. deSEC configuration recommended.";
                 } else {
                     badge.className = "chip tertiary";
+                    badge.dataset.tooltip = "Status unknown or certificate missing.";
                 }
                 
                 const failInfo = document.getElementById('ssl-failure-info');
                 const trustedInfo = document.getElementById('dns-setup-trusted');
                 const untrustedInfo = document.getElementById('dns-setup-untrusted');
+                const retryBtn = document.getElementById('ssl-retry-btn');
 
                 if (data.error) {
                     failInfo.style.display = 'block';
                     document.getElementById('ssl-failure-reason').textContent = data.error;
                     if (trustedInfo) trustedInfo.style.display = 'none';
                     if (untrustedInfo) untrustedInfo.style.display = 'block';
+                    if (retryBtn) retryBtn.style.display = 'inline-flex';
                 } else {
                     failInfo.style.display = 'none';
-                    if (data.status && data.status.includes("Trusted")) {
+                    if (isTrusted) {
                         if (trustedInfo) trustedInfo.style.display = 'block';
                         if (untrustedInfo) untrustedInfo.style.display = 'none';
+                        if (retryBtn) retryBtn.style.display = 'none';
                     } else {
                         if (trustedInfo) trustedInfo.style.display = 'none';
                         if (untrustedInfo) untrustedInfo.style.display = 'block';
+                        if (retryBtn) retryBtn.style.display = 'inline-flex';
                     }
-                }
-            } catch(e) { 
-                console.error('Cert status fetch error:', e); 
-                document.getElementById('cert-status-badge').textContent = "Fetch Error";
-            }
-        }
-
-                if (isTrusted) {
-                    badge.textContent = "✓ Globally Trusted";
-                    badge.title = "This certificate is automatically trusted by all devices without installing root CAs.";
-                    badge.className = "chip vpn"; // Success style
-                    document.getElementById('dns-setup-trusted').style.display = 'block';
-                    document.getElementById('dns-setup-untrusted').style.display = 'none';
-                    document.getElementById('ssl-retry-btn').style.display = 'none';
-                } else {
-                    badge.textContent = "⚠ Self-Signed / Untrusted";
-                    badge.title = "DoH/DoT/DoQ will likely fail on mobile devices. deSEC recommended for trusted SSL.";
-                    badge.className = "chip admin"; // Warning style
-                    document.getElementById('dns-setup-trusted').style.display = 'none';
-                    document.getElementById('dns-setup-untrusted').style.display = 'block';
-                    document.getElementById('ssl-retry-btn').style.display = 'inline-flex';
                 }
 
                 // Automated Link Switching Logic
@@ -4243,11 +4224,15 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         el.href = id === 'breezewiki' ? baseIpUrl + '/' : baseIpUrl;
                     }
                 }
-
-            } catch (e) {
-                console.error('Cert status fetch error:', e);
-                document.getElementById('cert-type').textContent = "Fetch Error";
+            } catch(e) { 
+                console.error('Cert status fetch error:', e); 
+                const badge = document.getElementById('cert-status-badge');
+                if (badge) {
+                    badge.textContent = "Fetch Error";
+                    badge.dataset.tooltip = "Could not communicate with the backend API.";
+                }
             }
+        }
         }
 
         async function requestSslCheck() {
