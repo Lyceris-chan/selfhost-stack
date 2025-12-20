@@ -3090,7 +3090,6 @@ cat > "$DASHBOARD_FILE" <<EOF
             cursor: pointer;
             transition: all var(--md-sys-motion-duration-short) linear;
             position: relative;
-            padding-right: 32px; /* Increased space for icon */
             pointer-events: auto;
             z-index: 10;
         }
@@ -3099,17 +3098,6 @@ cat > "$DASHBOARD_FILE" <<EOF
             color: var(--md-sys-color-on-secondary-container);
             border-color: transparent;
             opacity: 0.9;
-        }
-        /* External link icon for Portainer chips */
-        .portainer-link::after {
-            content: 'open_in_new'; 
-            font-family: 'Material Symbols Rounded';
-            position: absolute;
-            right: 8px;
-            font-size: 18px;
-            top: 50%;
-            transform: translateY(-50%);
-            pointer-events: none;
         }
         
         .btn-action {
@@ -3298,7 +3286,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
                 </div>
                 <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for safe display">
-                    <span class="label-large">Privacy Shield</span>
+                    <span class="label-large">Safe Display Mode</span>
                     <div class="switch-track">
                         <div class="switch-thumb"></div>
                     </div>
@@ -3542,7 +3530,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace">/DATA/AppData/privacy-hub/.secrets</span></div>
                 <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace">/DATA/AppData/privacy-hub/config</span></div>
                 <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
-                <div class="stat-row"><span class="stat-label">Privacy Shield</span><span class="stat-value">Active (Client-side)</span></div>
+                <div class="stat-row"><span class="stat-label">Safe Display</span><span class="stat-value">Active (Client-side)</span></div>
                 <p class="body-small" style="margin-top: auto; color: var(--md-sys-color-on-surface-variant);">
                     See the <a href="https://github.com/Lyceris-chan/selfhost-stack#credentials" target="_blank" style="color: var(--md-sys-color-primary);">README</a> for full details on obtaining required credentials.
                 </p>
@@ -3567,7 +3555,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const parts = window.location.hostname.split('.');
                 if (parts.length >= 2) {
                     const domain = parts.slice(-2).join('.');
-                    return "https://portainer." + domain;
+                    const port = window.location.port ? ":" + window.location.port : "";
+                    return "https://portainer." + domain + port;
                 }
             }
             return "http://$LAN_IP:$PORT_PORTAINER";
@@ -3595,10 +3584,14 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 document.querySelectorAll('.portainer-link').forEach(el => {
                     const containerName = el.dataset.container;
                     const cid = containerIds[containerName];
+                    const originalText = el.getAttribute('data-original-text') || el.textContent.trim();
+                    if (!el.getAttribute('data-original-text')) el.setAttribute('data-original-text', originalText);
+
                     if (cid) {
                         el.style.opacity = '1';
                         el.style.cursor = 'pointer';
                         el.dataset.tooltip = "Manage " + containerName + " in Portainer";
+                        el.innerHTML = originalText + ' <span class="material-symbols-rounded" style="font-size:16px; vertical-align:middle; margin-left:4px; pointer-events:none;">open_in_new</span>';
                         
                         // Use a fresh onclick handler
                         el.onclick = function(e) {
@@ -3613,6 +3606,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         el.style.opacity = '0.5';
                         el.style.cursor = 'default';
                         el.dataset.tooltip = "Container " + containerName + " not found";
+                        el.textContent = originalText;
                         el.onclick = (e) => { e.preventDefault(); e.stopPropagation(); };
                     }
                 });
@@ -4233,7 +4227,6 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 }
             }
         }
-        }
 
         async function requestSslCheck() {
             const btn = document.getElementById('ssl-retry-btn');
@@ -4598,6 +4591,14 @@ if [ "$AUTO_PASSWORD" = true ]; then
                 -H "Authorization: Bearer $PORTAINER_JWT" \
                 -H "Content-Type: application/json" \
                 -d '{"AllowAnalytics": false, "EnableTelemetry": false}' > /dev/null
+            
+            # Verify settings
+            CHECK_SETTINGS=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/settings")
+            if echo "$CHECK_SETTINGS" | grep -q '"AllowAnalytics":false' && echo "$CHECK_SETTINGS" | grep -q '"EnableTelemetry":false'; then
+                log_info "Portainer privacy settings verified successfully."
+            else
+                log_warn "Portainer privacy settings verification failed. Check Portainer UI manually."
+            fi
             log_info "Portainer automation complete."
         else
             log_warn "Failed to authenticate with Portainer for telemetry disabling: $AUTH_RESPONSE"

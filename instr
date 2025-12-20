@@ -1,0 +1,10 @@
+- [x] no need for both system logs and deployment logs combine them with a reasonable name into just logs
+- [x] the manage container button still doesnt work properly
+- [x] the dashboard still says detecting 
+- [x] the local access, private instance text still has a box next to it in the text 
+- [x] include DOQ as well on the dashboard for DNS settings
+- [x] the dashboard should detect the self signed cert and prompt the user to use one by desec and the ... under certificate status doesnt have an info tooltip so its not very informative as to whats up
+- [x] console logs say Uncaught SyntaxError: Unexpected token '}' (at (index):1585:13)
+- [x] rename redaction mode to something better 
+- [x] fix Portainer accessibility issue
+- [x] verify Portainer telemetry disabling through code
