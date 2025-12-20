@@ -1405,6 +1405,7 @@ if [ -f "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE" ]; then
     sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
     sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
     sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
+    sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
     log_info "Patched Scribe Dockerfile to use hardened base images."
 fi
 
@@ -1435,6 +1436,7 @@ if [ -f "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" ]; then
     # Use -dev variant to ensure pip and build tools are present
     sed -i 's|^FROM python:.*-alpine|FROM dhi.io/python:3.11-alpine3.22-dev|g' "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE"
     sed -i "s|readlink -f /usr/local/bin/python3|python -c 'import os,sys; print(os.path.realpath(sys.executable))'|" "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE"
+    sed -i 's|ENTRYPOINT \["/entrypoint.sh"\]|ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]|g' "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE"
     log_info "Patched Odido Booster Dockerfile to use DHI hardened images."
 fi
 
