@@ -775,7 +775,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     fi
 
     # Safely generate Portainer hash (bcrypt)
-    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "admin" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "portainer" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
     if [[ "$PORTAINER_PASS_HASH" == "FAILED" ]]; then
         log_crit "Failed to generate Portainer password hash. Check Docker status."
         exit 1
@@ -805,7 +805,7 @@ else
     # Generate Portainer hash if missing from existing .secrets
     if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
         log_info "Generating missing Portainer hash..."
-        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "admin" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "portainer" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
         echo "PORTAINER_PASS_HASH=$PORTAINER_PASS_HASH" >> "$BASE_DIR/.secrets"
     fi
     if [ -z "${ODIDO_API_KEY:-}" ]; then
@@ -4588,14 +4588,24 @@ if [ "$AUTO_PASSWORD" = true ]; then
         if echo "$AUTH_RESPONSE" | grep -q "jwt"; then
             PORTAINER_JWT=$(echo "$AUTH_RESPONSE" | grep -oP '"jwt":"\K[^"]+')
             
-            # Disable Telemetry/Analytics
+            # 1. Disable Telemetry/Analytics
             log_info "Disabling Portainer anonymous telemetry..."
             curl -s -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/settings" \
                 -H "Authorization: Bearer $PORTAINER_JWT" \
                 -H "Content-Type: application/json" \
                 -d '{"AllowAnalytics": false, "EnableTelemetry": false}' > /dev/null
             
+            # 2. Change admin username to 'portainer'
+            log_info "Updating Portainer administrator username..."
+            # Portainer user ID 1 is always the initial admin
+            curl -s -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/users/1" \
+                -H "Authorization: Bearer $PORTAINER_JWT" \
+                -H "Content-Type: application/json" \
+                -d '{"Username": "portainer"}' > /dev/null
+            
             # Verify settings
+            # Note: We must re-auth if we want to verify using the NEW username, 
+            # but we can verify settings with the old JWT if it hasn't expired.
             CHECK_SETTINGS=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/settings")
             if echo "$CHECK_SETTINGS" | grep -q '"AllowAnalytics":false' && echo "$CHECK_SETTINGS" | grep -q '"EnableTelemetry":false'; then
                 log_info "Portainer privacy settings verified successfully."
@@ -4604,7 +4614,7 @@ if [ "$AUTO_PASSWORD" = true ]; then
             fi
             log_info "Portainer automation complete."
         else
-            log_warn "Failed to authenticate with Portainer for telemetry disabling: $AUTH_RESPONSE"
+            log_warn "Failed to authenticate with Portainer for automation: $AUTH_RESPONSE"
         fi
     else
         log_warn "Portainer did not become ready in time for automated settings synchronization."
@@ -4690,9 +4700,9 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo "Administrative Password: $ADMIN_PASS_RAW (Use for Dashboard/Portainer/Services)"
     echo "VPN Web UI Password: $VPN_PASS_RAW"
     echo "AdGuard Home Password: $AGH_PASS_RAW"
-        echo "AdGuard Home Username: $AGH_USER"
-        echo "Portainer Username: admin"
-        echo "Odido Booster API Key: $ODIDO_API_KEY"    echo ""
+            echo "AdGuard Home Username: $AGH_USER"
+            echo "Portainer Username: portainer"
+            echo "Odido Booster API Key: $ODIDO_API_KEY"    echo ""
     echo "IMPORT TO PROTON PASS:"
     echo "A CSV file has been generated for easy import into Proton Pass:"
     echo "$BASE_DIR/protonpass_import.csv"
