@@ -1332,6 +1332,7 @@ if [ -f "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE" ]; then
     sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
     sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
     sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i 's|CMD \["src/wikiless.js"\]|CMD ["node", "src/wikiless.js"]|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
     log_info "Patched Wikiless Dockerfile to use DHI hardened images."
 fi
 
