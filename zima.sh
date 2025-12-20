@@ -1154,7 +1154,7 @@ user_rules:
   - "@@||protonvpn.net^"
   - "@@||dns.desec.io^"
   - "@@||desec.io^"
-  # Default DNS blocklist powered by Lyceris-chan/dns-blocklist-generator
+  # Default DNS blocklist powered by sleepy list ([Lyceris-chan/dns-blocklist-generator](https://github.com/Lyceris-chan/dns-blocklist-generator))
 filters:
   - enabled: true
     url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/refs/heads/main/blocklist.txt
@@ -1863,7 +1863,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
 
     def _check_auth(self):
         # Allow GET status/profiles without auth for the dashboard if local
-        if self.command == 'GET' and self.path in ['/status', '/profiles', '/containers', '/certificate-status', '/events']:
+        if self.command == 'GET' and self.path in ['/', '/status', '/profiles', '/containers', '/certificate-status', '/events']:
             return True
         
         # Watchtower notification (comes from docker network, simple path check)
@@ -2825,9 +2825,9 @@ cat > "$DASHBOARD_FILE" <<EOF
         }
         
         /* Grid Layouts */
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-bottom: 24px; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; margin-bottom: 32px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-bottom: 32px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 32px; }
         @media (max-width: 1100px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
         @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
         
@@ -2842,11 +2842,12 @@ cat > "$DASHBOARD_FILE" <<EOF
             position: relative;
             display: flex;
             flex-direction: column;
-            min-height: 180px;
+            min-height: 200px; /* Increased min-height */
             border: none;
             overflow: visible; 
             box-sizing: border-box;
             box-shadow: var(--md-sys-elevation-1);
+            height: 100%; /* Ensure uniform height in grid */
         }
         
         .card::before {
@@ -3506,6 +3507,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         async function fetchContainerIds() {
             try {
                 const res = await fetch(API + "/containers");
+                if (res.status === 401) throw new Error("401");
                 const data = await res.json();
                 containerIds = data.containers || {};
                 // Update all portainer links
@@ -3571,6 +3573,11 @@ cat >> "$DASHBOARD_FILE" <<EOF
             try {
                 const res = await fetch(API + "/status", { signal: controller.signal });
                 clearTimeout(timeoutId);
+                
+                if (res.status === 401) {
+                    throw new Error("401 Unauthorized");
+                }
+                
                 const data = await res.json();
                 const g = data.gluetun;
                 const vpnStatus = document.getElementById('vpn-status');
@@ -3651,13 +3658,14 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 }
             } catch(e) { 
                 console.error('Status fetch error:', e);
-                // On error, mark all services as offline
+                // On error, mark all services as offline with reason
+                const errorMsg = e.message && e.message.includes('401') ? "Offline (Unauthorized)" : "Offline (API Error)";
                 document.querySelectorAll('.card[data-check="true"]').forEach(c => {
                     const dot = c.querySelector('.status-dot');
                     const txt = c.querySelector('.status-text');
                     if (dot && txt) {
                         dot.className = "status-dot down";
-                        txt.textContent = "Offline (API Error)";
+                        txt.textContent = errorMsg;
                         txt.classList.remove('text-success');
                     }
                 });
@@ -3853,6 +3861,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         async function fetchProfiles() {
             try {
                 const res = await fetch(API + "/profiles");
+                if (res.status === 401) throw new Error("401");
                 const data = await res.json();
                 const el = document.getElementById('profile-list');
                 el.innerHTML = '';
@@ -3983,6 +3992,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const timeoutId = setTimeout(() => controller.abort(), 5000);
                 const res = await fetch(API + "/certificate-status", { signal: controller.signal });
                 clearTimeout(timeoutId);
+                
+                if (res.status === 401) throw new Error("401");
+                
                 const data = await res.json();
 
                 const certType = document.getElementById('cert-type');
@@ -4350,6 +4362,47 @@ echo "=========================================================="
 sudo modprobe tun || true
 
 sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
+
+# --- SECTION 16.1: PORTAINER AUTOMATION ---
+if [ "$AUTO_PASSWORD" = true ]; then
+    log_info "Initializing Portainer administrative user..."
+    PORTAINER_READY=false
+    for _ in {1..12}; do
+        if curl -s --max-time 2 "http://$LAN_IP:$PORT_PORTAINER/api/system/status" > /dev/null; then
+            PORTAINER_READY=true
+            break
+        fi
+        sleep 5
+    done
+
+    if [ "$PORTAINER_READY" = true ]; then
+        # Initialize Admin User
+        INIT_RESPONSE=$(curl -s -X POST "http://$LAN_IP:$PORT_PORTAINER/api/users/admin/init" \
+            -H "Content-Type: application/json" \
+            -d "{\"Username\":\"admin\",\"Password\":\"$ADMIN_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
+        
+        if echo "$INIT_RESPONSE" | grep -q "jwt"; then
+            log_info "Portainer administrative user initialized successfully."
+            PORTAINER_JWT=$(echo "$INIT_RESPONSE" | grep -oP '"jwt":"\K[^"]+')
+            
+            # Disable Telemetry/Analytics
+            log_info "Disabling Portainer anonymous telemetry..."
+            curl -s -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/settings" \
+                -H "Authorization: Bearer $PORTAINER_JWT" \
+                -H "Content-Type: application/json" \
+                -d '{"AllowAnalytics": false}' > /dev/null
+        elif echo "$INIT_RESPONSE" | grep -q "Admin user already exists"; then
+            log_warn "Portainer admin user already exists. Skipping initialization."
+        else
+            log_warn "Failed to initialize Portainer: $INIT_RESPONSE"
+        fi
+    else
+        log_warn "Portainer did not become ready in time for automated setup."
+    fi
+else
+    echo -e "\e[33m[NOTE]\e[0m Please manually initialize Portainer at http://$LAN_IP:$PORT_PORTAINER"
+    echo -e "\e[33m[NOTE]\e[0m Remember to disable 'Anonymous statistics' in Portainer settings for maximum privacy."
+fi
 
 if $DOCKER_CMD ps | grep -q adguard; then
     log_info "AdGuard Home is operational. Network-wide filtering is active."
