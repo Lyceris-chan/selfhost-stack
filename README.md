@@ -151,9 +151,11 @@ Privacy Hub eliminates this trade-off by isolating your local services within a 
 
 Built on Material Design 3, the dashboard follows a strict zero-tracking philosophy:
 - **Local Assets**: All fonts, icons, and libraries are hosted locally. 
+- **Dynamic Configuration**: Manage **deSEC dynamic DNS** and **WireGuard profiles** directly from the UI without manual CLI intervention.
 - **Redaction Mode**: Built-in toggle to mask sensitive metrics (IPs, profiles) for safe display.
 - **Native Integration**: One-click access from the ZimaOS/CasaOS interface via local Material Design icon.
 - **Visibility**: Service health badges, certificate status, and a live deployment log help surface what’s wrong when something fails.
+- **Secrets Access**: Informs users where to find their generated credentials (`/DATA/AppData/privacy-hub/.secrets`) on the host system.
 
 ## <a id="network-config"></a>🌐 Network Configuration
 

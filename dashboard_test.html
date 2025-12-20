@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZimaOS Privacy Hub</title>
+    <!-- Local privacy friendly fonts (Hosted Locally) -->
+    <link href="fonts/gs.css" rel="stylesheet">
+    <link href="fonts/cc.css" rel="stylesheet">
+    <link href="fonts/ms.css" rel="stylesheet">
+    <style>
+        /* ============================================
+           Material 3 Dark Theme - Strict Implementation
+           Reference: https://m3.material.io/
+           ============================================ */
+        
+        :root {
+            color-scheme: dark;
+            /* M3 Dark Theme Color Tokens */
+            --md-sys-color-primary: #D0BCFF;
+            --md-sys-color-on-primary: #381E72;
+            --md-sys-color-primary-container: #4F378B;
+            --md-sys-color-on-primary-container: #EADDFF;
+            /* Secondary */
+            --md-sys-color-secondary: #CCC2DC;
+            --md-sys-color-on-secondary: #332D41;
+            --md-sys-color-secondary-container: #4A4458;
+            --md-sys-color-on-secondary-container: #E8DEF8;
+            /* Tertiary */
+            --md-sys-color-tertiary: #EFB8C8;
+            --md-sys-color-on-tertiary: #492532;
+            --md-sys-color-tertiary-container: #633B48;
+            --md-sys-color-on-tertiary-container: #FFD8E4;
+            /* Error */
+            --md-sys-color-error: #F2B8B5;
+            --md-sys-color-on-error: #601410;
+            --md-sys-color-error-container: #8C1D18;
+            --md-sys-color-on-error-container: #F9DEDC;
+            /* Surface */
+            --md-sys-color-surface: #141218;
+            --md-sys-color-on-surface: #E6E1E5;
+            --md-sys-color-surface-variant: #49454F;
+            --md-sys-color-on-surface-variant: #CAC4D0;
+            --md-sys-color-surface-container-low: #1D1B20;
+            --md-sys-color-surface-container: #211F26;
+            --md-sys-color-surface-container-high: #2B2930;
+            --md-sys-color-surface-container-highest: #36343B;
+            --md-sys-color-surface-bright: #3B383E;
+            /* Outline */
+            --md-sys-color-outline: #938F99;
+            --md-sys-color-outline-variant: #49454F;
+            /* Inverse */
+            --md-sys-color-inverse-surface: #E6E1E5;
+            --md-sys-color-inverse-on-surface: #313033;
+            /* Custom success */
+            --md-sys-color-success: #A8DAB5;
+            --md-sys-color-on-success: #003912;
+            --md-sys-color-success-container: #00522B;
+            /* Custom warning */
+            --md-sys-color-warning: #FFCC80;
+            --md-sys-color-on-warning: #4A2800;
+
+            /* MD3 Expressive Motion */
+            --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0.0, 0, 1.0);
+            --md-sys-motion-duration-short: 150ms;
+            --md-sys-motion-duration-medium: 300ms;
+            
+            /* MD3 Expressive Shapes */
+            --md-sys-shape-corner-extra-large: 28px;
+            --md-sys-shape-corner-large: 16px;
+            --md-sys-shape-corner-medium: 12px;
+            --md-sys-shape-corner-small: 8px;
+            --md-sys-shape-corner-full: 100px;
+
+            /* Elevation */
+            --md-sys-elevation-1: 0 1px 3px 1px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.3);
+            --md-sys-elevation-2: 0 2px 6px 2px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.3);
+            
+            /* State Opacities */
+            --md-sys-state-hover-opacity: 0.08;
+            --md-sys-state-focus-opacity: 0.12;
+            --md-sys-state-pressed-opacity: 0.12;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            background: var(--md-sys-color-surface);
+            color: var(--md-sys-color-on-surface);
+            font-family: 'Google Sans Flex', 'Google Sans', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .code-block, .log-container, .text-field, .stat-value, .monospace {
+            font-family: 'Cascadia Code', 'Consolas', monospace;
+        }
+        
+        .material-symbols-rounded {
+            font-family: 'Material Symbols Rounded';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container { max-width: 1280px; width: 100%; margin: 0 auto; position: relative; }
+        
+        /* Header */
+        header {
+            margin-bottom: 56px;
+            padding: 16px 0;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .header-row > div:first-child {
+            flex: 1 1 auto;
+        }
+        
+        h1 {
+            font-family: 'Google Sans Flex', 'Google Sans', sans-serif;
+            font-weight: 400;
+            font-size: 45px;
+            line-height: 52px;
+            margin: 0;
+            color: var(--md-sys-color-primary);
+            letter-spacing: 0;
+        }
+        
+        .subtitle {
+            font-size: 22px;
+            color: var(--md-sys-color-on-surface-variant);
+            margin-top: 12px;
+            font-weight: 400;
+            letter-spacing: 0;
+        }
+
+        .label-large {
+            font-size: 14px;
+            line-height: 20px;
+            font-weight: 500;
+            letter-spacing: 0.1px;
+        }
+
+        .body-medium {
+            font-size: 14px;
+            line-height: 20px;
+            letter-spacing: 0.25px;
+        }
+
+        .body-small {
+            font-size: 12px;
+            line-height: 16px;
+            letter-spacing: 0.4px;
+        }
+
+        .code-label {
+            font-size: 12px;
+            line-height: 16px;
+            letter-spacing: 0.4px;
+            font-weight: 500;
+            color: var(--md-sys-color-on-surface-variant);
+            margin-top: 12px;
+        }
+
+        .profile-hint {
+            color: var(--md-sys-color-on-surface-variant);
+            margin-top: 12px;
+        }
+
+        .feedback {
+            margin-top: 12px;
+            padding: 8px 12px;
+            border-radius: var(--md-sys-shape-corner-medium);
+            background: var(--md-sys-color-surface-container-highest);
+            color: var(--md-sys-color-on-surface-variant);
+            font-size: 12px;
+            line-height: 16px;
+            letter-spacing: 0.4px;
+        }
+
+        .feedback.info { border: 1px solid var(--md-sys-color-outline-variant); }
+        .feedback.success { background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success); }
+        .feedback.error { background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
+        
+        /* Section Labels */
+        .section-label {
+            color: var(--md-sys-color-primary);
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.1px;
+            margin: 48px 0 16px 4px;
+            text-transform: none;
+        }
+        
+        .section-label:first-of-type {
+            margin-top: 8px;
+        }
+        
+        .section-hint {
+            font-size: 14px;
+            color: var(--md-sys-color-on-surface-variant);
+            margin: 0 0 24px 4px;
+            letter-spacing: 0.25px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        
+        /* Grid Layouts */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; margin-bottom: 32px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-bottom: 32px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 32px; }
+        @media (max-width: 1100px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+        
+        /* MD3 Component Refinements - Elevated Cards */
+        .card {
+            background: var(--md-sys-color-surface-container-low);
+            border-radius: var(--md-sys-shape-corner-extra-large);
+            padding: 32px; /* Increased padding */
+            text-decoration: none;
+            color: inherit;
+            transition: all var(--md-sys-duration-medium) var(--md-sys-motion-easing-emphasized);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            min-height: 220px; /* Increased min-height */
+            border: none;
+            overflow: visible; 
+            box-sizing: border-box;
+            box-shadow: var(--md-sys-elevation-1);
+            height: 100%;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: var(--md-sys-color-on-surface);
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .card:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        .card:hover { 
+            background: var(--md-sys-color-surface-container);
+            box-shadow: var(--md-sys-elevation-2);
+            transform: translateY(-2px);
+        }
+        
+        .card:active::before { opacity: var(--md-sys-state-pressed-opacity); }
+        .card.full-width { grid-column: 1 / -1; }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .card h2 {
+            margin: 0;
+            font-size: 22px; /* Title Large */
+            font-weight: 400;
+            color: var(--md-sys-color-on-surface);
+            line-height: 28px;
+            flex: 1;
+        }
+
+        .card .description {
+            font-size: 14px; /* Body Medium */
+            color: var(--md-sys-color-on-surface-variant);
+            margin-bottom: 16px;
+            line-height: 20px;
+            flex-grow: 1;
+        }
+        
+        .card h3 {
+            margin: 0 0 16px 0;
+            font-size: 16px; /* Title Medium */
+            font-weight: 500;
+            color: var(--md-sys-color-on-surface);
+            line-height: 24px;
+            letter-spacing: 0.15px;
+        }
+        
+        /* MD3 Assist Chips */
+        .chip-box { 
+            display: flex; 
+            gap: 8px; 
+            flex-wrap: wrap; 
+            padding-top: 12px;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            height: 32px;
+            padding: 0 16px;
+            border-radius: 8px;
+            font-size: 14px; /* Label Large */
+            font-weight: 500;
+            letter-spacing: 0.1px;
+            text-decoration: none;
+            transition: all var(--md-sys-motion-duration-short) linear;
+            border: 1px solid var(--md-sys-color-outline);
+            background: transparent;
+            color: var(--md-sys-color-on-surface);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .chip::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: currentColor;
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
+        }
+        
+        .chip:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        
+        .chip.vpn { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border: none; }
+        .chip.admin { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border: none; }
+        .chip.tertiary { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); border: none; }
+        
+        /* Status Indicator */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--md-sys-color-surface-container-highest);
+            padding: 6px 12px;
+            border-radius: var(--md-sys-shape-corner-full);
+            font-size: 12px;
+            color: var(--md-sys-color-on-surface-variant);
+            width: fit-content;
+            flex-shrink: 0;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--md-sys-color-outline);
+        }
+        
+        .status-dot.up { background: var(--md-sys-color-success); box-shadow: 0 0 8px var(--md-sys-color-success); }
+        .status-dot.down { background: var(--md-sys-color-error); box-shadow: 0 0 8px var(--md-sys-color-error); }
+        .status-dot.healthy { background: var(--md-sys-color-success); box-shadow: 0 0 8px var(--md-sys-color-success); }
+        .status-dot.starting { background: var(--md-sys-color-warning); box-shadow: 0 0 8px var(--md-sys-color-warning); }
+        .status-dot.unhealthy { background: var(--md-sys-color-error); box-shadow: 0 0 8px var(--md-sys-color-error); }
+        
+        /* MD3 Text Fields */
+        .text-field {
+            width: 100%;
+            background: var(--md-sys-color-surface-container-highest);
+            border: none;
+            border-bottom: 1px solid var(--md-sys-color-on-surface-variant);
+            color: var(--md-sys-color-on-surface);
+            padding: 16px;
+            border-radius: 4px 4px 0 0;
+            font-size: 16px;
+            box-sizing: border-box;
+            outline: none;
+            transition: all var(--md-sys-motion-duration-short) linear;
+        }
+        
+        .text-field:focus {
+            border-bottom: 2px solid var(--md-sys-color-primary);
+            background: var(--md-sys-color-surface-container-highest);
+        }
+        
+        textarea.text-field { min-height: 120px; resize: vertical; }
+        
+        /* MD3 Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0 24px;
+            height: 40px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.1px;
+            cursor: pointer;
+            transition: all var(--md-sys-motion-duration-short) linear;
+            border: none;
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+            font-family: inherit;
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: currentColor;
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
+        }
+        
+        .btn:hover::before { opacity: 0.08; }
+        
+        .btn-filled { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); box-shadow: var(--md-sys-elevation-1); }
+        .btn-tonal { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+        .btn-outlined { background: transparent; color: var(--md-sys-color-primary); border: 1px solid var(--md-sys-color-outline); }
+        .btn-tertiary { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+        
+        .btn-icon:hover {
+            background: rgba(202, 196, 208, 0.08);
+            border-color: var(--md-sys-color-outline);
+        }
+        
+        .portainer-link {
+            text-decoration: none;
+            cursor: pointer;
+            transition: all var(--md-sys-motion-duration-short) linear;
+            position: relative;
+            padding-right: 28px; /* Space for the icon */
+        }
+        .portainer-link:hover {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            border-color: transparent;
+        }
+        /* External link icon for Portainer chips */
+        .portainer-link::after {
+            content: '\e895'; /* Material Symbol 'open_in_new' */
+            font-family: 'Material Symbols Rounded';
+            position: absolute;
+            right: 8px;
+            font-size: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .btn-action {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            border-radius: var(--md-sys-shape-corner-medium);
+            box-shadow: var(--md-sys-elevation-1);
+        }
+        
+        .btn-icon { width: 40px; height: 40px; padding: 0; border-radius: 20px; }
+        .btn-icon svg { width: 24px; height: 24px; fill: currentColor; }
+        
+        /* MD3 Switch */
+        .switch-container {
+            display: inline-flex;
+            align-items: center;
+            gap: 16px;
+            cursor: pointer;
+            padding: 8px 0;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        .switch-track {
+            width: 52px;
+            height: 32px;
+            background: var(--md-sys-color-surface-container-highest);
+            border: 2px solid var(--md-sys-color-outline);
+            border-radius: 16px;
+            position: relative;
+            transition: all var(--md-sys-motion-duration-short) linear;
+        }
+
+        .switch-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--md-sys-color-outline);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 6px;
+            transform: translateY(-50%);
+            transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .switch-container.active .switch-track { background: var(--md-sys-color-primary); border-color: var(--md-sys-color-primary); }
+        .switch-container.active .switch-thumb { width: 24px; height: 24px; left: 24px; background: var(--md-sys-color-on-primary); }
+
+        /* Tooltips */
+        [data-tooltip] { 
+            position: relative; 
+        }
+        [data-tooltip]::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-8px);
+            background: var(--md-sys-color-inverse-surface);
+            color: var(--md-sys-color-inverse-on-surface);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 16px;
+            width: max-content;
+            max-width: 240px;
+            white-space: normal;
+            opacity: 0;
+            pointer-events: none;
+            transition: all var(--md-sys-motion-duration-short) ease;
+            z-index: 9999;
+            box-shadow: var(--md-sys-elevation-2);
+            text-align: center;
+        }
+        [data-tooltip]:hover::after { 
+            opacity: 1; 
+            transform: translateX(-50%) translateY(-12px);
+        }
+
+        /* Tooltip safety alignment for edges */
+        .grid .card:nth-child(3n) [data-tooltip]::after { left: auto; right: 0; transform: translateY(-8px); }
+        .grid .card:nth-child(3n):hover [data-tooltip]::after { transform: translateY(-12px); }
+        .grid .card:nth-child(3n-2) [data-tooltip]::after { left: 0; transform: translateY(-8px); }
+        .grid .card:nth-child(3n-2):hover [data-tooltip]::after { transform: translateY(-12px); }
+        
+        header [data-tooltip]::after { left: auto; right: 0; transform: translateY(-8px); }
+        header [data-tooltip]:hover::after { transform: translateY(-12px); }
+
+        /* Ensure parent elements don't clip tooltips */
+        .card, .chip, .status-indicator, li, span, div {
+            /* Tooltip container safety */
+        }
+        
+        .card {
+            /* ... existing ... */
+            overflow: visible; /* Changed from hidden to allow tooltips to escape */
+        }
+        
+        /* Prevent card content overlapping */
+        .card > * {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .card::before {
+            /* ... existing ... */
+            z-index: 1;
+        }
+
+        .log-container {
+            background: var(--md-sys-color-surface-container-highest);
+            border-radius: var(--md-sys-shape-corner-large);
+            padding: 16px;
+            height: 320px;
+            overflow-y: auto;
+            font-size: 13px;
+            color: var(--md-sys-color-on-surface-variant);
+        }
+        
+        .code-block {
+            background: var(--md-sys-color-surface-container-highest);
+            border-radius: var(--md-sys-shape-corner-small);
+            padding: 14px 16px;
+            font-size: 13px;
+            color: var(--md-sys-color-primary);
+            margin: 8px 0;
+            overflow-x: auto;
+        }
+        
+        .sensitive { transition: filter 400ms var(--md-sys-motion-easing-emphasized); }
+        .privacy-mode .sensitive { filter: blur(6px); opacity: 0.4; }
+
+        .sensitive-masked { opacity: 0.7; letter-spacing: 0.3px; }
+        
+        .text-success { color: var(--md-sys-color-success); }
+        .success { color: var(--md-sys-color-success); }
+        .error { color: var(--md-sys-color-error); }
+        .stat-row { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px; 
+            font-size: 14px; 
+            gap: 12px;
+        }
+        .stat-label { 
+            color: var(--md-sys-color-on-surface-variant); 
+            flex: 1 1 160px;
+        }
+        .stat-value {
+            text-align: right;
+            flex: 1 1 200px;
+            overflow-wrap: anywhere;
+        }
+        
+        .progress-track { background: var(--md-sys-color-surface-container-highest); border-radius: 4px; height: 8px; margin: 16px 0; overflow: hidden; }
+        .progress-indicator { background: var(--md-sys-color-primary); height: 100%; transition: width var(--md-sys-motion-duration-medium) linear; }
+        
+        .btn-group { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--md-sys-color-outline-variant); gap: 12px; flex-wrap: wrap; }
+        .list-item-text { cursor: pointer; flex: 1 1 220px; font-weight: 500; overflow-wrap: anywhere; }
+
+        @media (max-width: 720px) {
+            body { padding: 16px; }
+            h1 { font-size: 36px; line-height: 42px; }
+            .subtitle { font-size: 18px; line-height: 24px; }
+        }
+
+        @media (max-width: 600px) {
+            .header-row { gap: 16px; }
+            .switch-container { width: 100%; justify-content: space-between; }
+            .stat-row, .list-item { flex-direction: column; align-items: flex-start; }
+            .stat-value { text-align: left; }
+            .card-header { align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-row">
+                <div>
+                    <h1>Privacy Hub</h1>
+                    <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
+                </div>
+                <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for safe display">
+                    <span class="label-large">Redaction Mode</span>
+                    <div class="switch-track">
+                        <div class="switch-thumb"></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="section-label">Applications</div>
+        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <span class="chip" data-tooltip="Services isolated within a secure VPN tunnel (Gluetun). This allows you to host your own private instances—removing the need to trust third-party hosts—while ensuring your home IP remains hidden from end-service providers.">🔒 VPN Protected</span>
+            <span class="chip" data-tooltip="Local services accessed directly through the internal network interface.">📍 Direct Access</span>
+            <span class="chip tertiary" data-tooltip="Advanced infrastructure control and container telemetry via Portainer.">🛠️ Infrastructure</span>
+        </div>
+        <div class="grid-3">
+            <a id="link-invidious" href="http://192.168.1.100:3000" class="card" data-check="true" data-container="invidious">
+                <div class="card-header"><h2>Invidious</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance</span></div>
+            </a>
+            <a id="link-redlib" href="http://192.168.1.100:8080" class="card" data-check="true" data-container="redlib">
+                <div class="card-header"><h2>Redlib</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance</span></div>
+            </a>
+            <a id="link-wikiless" href="http://192.168.1.100:8180" class="card" data-check="true" data-container="wikiless">
+                <div class="card-header"><h2>Wikiless</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance</span></div>
+            </a>
+            <a id="link-memos" href="http://192.168.1.100:5230" class="card" data-check="true" data-container="memos">
+                <div class="card-header"><h2>Memos</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container">Direct Access</span></div>
+            </a>
+            <a id="link-rimgo" href="http://192.168.1.100:3002" class="card" data-check="true" data-container="rimgo">
+                <div class="card-header"><h2>Rimgo</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance</span></div>
+            </a>
+            <a id="link-scribe" href="http://192.168.1.100:8280" class="card" data-check="true" data-container="scribe">
+                <div class="card-header"><h2>Scribe</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance</span></div>
+            </a>
+            <a id="link-breezewiki" href="http://192.168.1.100:8380/" class="card" data-check="true" data-container="breezewiki">
+                <div class="card-header"><h2>BreezeWiki</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance</span></div>
+            </a>
+            <a id="link-anonymousoverflow" href="http://192.168.1.100:8480" class="card" data-check="true" data-container="anonymousoverflow">
+                <div class="card-header"><h2>AnonOverflow</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance</span></div>
+            </a>
+            <a id="link-vert" href="http://192.168.1.100:5555" class="card" data-check="true" data-container="vert">
+                <div class="card-header"><h2>VERT</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container">Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion">GPU Accelerated</span></div>
+            </a>
+        </div>
+
+        <div class="section-label">System Management</div>
+        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <span class="chip" data-tooltip="Core infrastructure management and gateway orchestration">⚙️ Core Services</span>
+        </div>
+        <div class="grid-3">
+            <a id="link-adguard" href="http://192.168.1.100:8083" class="card" data-check="true" data-container="adguard">
+                <div class="card-header"><h2>AdGuard Home</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container">Local Access</span><span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span></div>
+            </a>
+            <a id="link-portainer" href="http://192.168.1.100:9000" class="card" data-check="true" data-container="portainer">
+                <div class="card-header"><h2>Portainer</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.</p>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container">Local Access</span></div>
+            </a>
+            <a id="link-wg-easy" href="http://192.168.1.100:51821" class="card" data-check="true" data-container="wg-easy">
+                <div class="card-header"><h2>WireGuard</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Detecting...</span></div></div>
+                <p class="description">The primary gateway for <strong>secure remote access</strong>. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container">Local Access</span></div>
+            </a>
+        </div>
+
+        <div class="section-label">DNS Configuration</div>
+        <div class="grid-3">
+            <div class="card">
+                <h3>Certificate Status</h3>
+                <div id="cert-status-content" style="padding-top: 12px;">
+                    <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label">Type</span><span class="stat-value" id="cert-type">Loading...</span></div>
+                    <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label">Domain</span><span class="stat-value sensitive" id="cert-subject">Loading...</span></div>
+                    <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label">Issuer</span><span class="stat-value sensitive" id="cert-issuer">Loading...</span></div>
+                    <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label">Expires</span><span class="stat-value sensitive" id="cert-to">Loading...</span></div>
+                    <div id="ssl-failure-info" style="display:none; margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
+                        <div class="body-small" style="font-weight:bold; margin-bottom:4px;">Issuance Failure</div>
+                        <div class="body-small" id="ssl-failure-reason">--</div>
+                        <div class="body-small" id="ssl-retry-time" style="margin-top:4px; opacity:0.8;">--</div>
+                    </div>
+                </div>
+                <div id="cert-status-badge" class="chip" style="margin-top: auto; width: fit-content;">...</div>
+                <button id="ssl-retry-btn" class="btn btn-icon btn-action" style="display:none;" data-tooltip="Force Let's Encrypt re-attempt" onclick="requestSslCheck()">
+                    <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.07 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/></svg>
+                </button>
+            </div>
+            <div class="card">
+                <h3>Device DNS Settings</h3>
+                <p class="body-medium description">Utilize these RFC-compliant encrypted endpoints to maintain digital independence. We utilize standard ports (853) to ensure seamless compatibility with native OS resolvers:</p>
+                <div class="code-label" data-tooltip="Standard unencrypted DNS (Port 53). Recommended only for use within your local LAN.">Standard IPv4 (Local LAN Only)</div>
+                <div class="code-block sensitive">192.168.1.100:53</div>

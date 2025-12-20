@@ -1521,18 +1521,17 @@ ACTIVE_CONF="/active-wg.conf"
 NAME_FILE="/app/.active_profile_name"
 LOCK_FILE="/app/.wg-control.lock"
 
-# Use flock to prevent concurrent runs
 exec 9>"$LOCK_FILE"
-if ! flock -n 9; then
-    echo "Error: Another control operation is in progress"
-    exit 1
-fi
 
 sanitize_json_string() {
     printf '%s' "$1" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\n\r'
 }
 
 if [ "$ACTION" = "activate" ]; then
+    if ! flock -n 9; then
+        echo "Error: Another control operation is in progress"
+        exit 1
+    fi
     if [ -f "$PROFILES_DIR/$PROFILE_NAME.conf" ]; then
         ln -sf "$PROFILES_DIR/$PROFILE_NAME.conf" "$ACTIVE_CONF"
         echo "$PROFILE_NAME" > "$NAME_FILE"
@@ -1559,6 +1558,10 @@ if [ "$ACTION" = "activate" ]; then
         exit 1
     fi
 elif [ "$ACTION" = "delete" ]; then
+    if ! flock -n 9; then
+        echo "Error: Another control operation is in progress"
+        exit 1
+    fi
     if [ -f "$PROFILES_DIR/$PROFILE_NAME.conf" ]; then
         rm "$PROFILES_DIR/$PROFILE_NAME.conf"
     fi
@@ -1928,61 +1931,59 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/certificate-status':
             try:
-                cert_path = "/etc/adguard/conf/ssl.crt"
-                if not os.path.exists(cert_path):
-                    self._send_json({"error": "Certificate not found"}, 404)
-                    return
+                # Read from the acme.sh status file if it exists, or check certificate expiry
+                cert_file = "/etc/adguard/conf/ssl.crt"
+                status = {"type": "None", "subject": "--", "issuer": "--", "expires": "--", "status": "No Certificate"}
+                if os.path.exists(cert_file):
+                    # Use openssl to get cert info
+                    res = subprocess.run(['openssl', 'x509', '-in', cert_file, '-noout', '-subject', '-issuer', '-dates'], capture_output=True, text=True)
+                    if res.returncode == 0:
+                        lines = res.stdout.split('\n')
+                        status["type"] = "RSA/ECC"
+                        for line in lines:
+                            if line.startswith('subject='): status['subject'] = line.replace('subject=', '').strip()
+                            if line.startswith('issuer='): status['issuer'] = line.replace('issuer=', '').strip()
+                            if line.startswith('notAfter='): status['expires'] = line.replace('notAfter=', '').strip()
+                        status["status"] = "Valid"
                 
-                result = subprocess.run(
-                    ['openssl', 'x509', '-in', cert_path, '-noout', '-subject', '-issuer', '-dates'],
-                    capture_output=True, text=True, timeout=10
-                )
-                output = result.stdout.strip()
+                # Check for failure logs
+                log_file = "/app/.ssl_error"
+                if os.path.exists(log_file):
+                    with open(log_file, 'r') as f:
+                        status["error"] = f.read().strip()
+                        status["status"] = "Error"
                 
-                # Simple parsing of the openssl output
-                subject_match = re.search(r'subject=.*?CN\s*=\s*(.*)', output)
-                issuer_match = re.search(r'issuer=.*?CN\s*=\s*(.*)', output)
-                not_before_match = re.search(r'notBefore=(.*)', output)
-                not_after_match = re.search(r'notAfter=(.*)', output)
+                self._send_json(status)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/config-desec' and self.command == 'POST':
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = json.loads(self.rfile.read(content_length))
+                domain = post_data.get('domain')
+                token = post_data.get('token')
                 
-                subject = subject_match.group(1).strip() if subject_match else "Unknown"
-                issuer = issuer_match.group(1).strip() if issuer_match else "Unknown"
-                
-                cert_type = "Let's Encrypt" if any(x in issuer for x in ["Let's Encrypt", "R3", "ISRG"]) else "Self-Signed"
-
-                failure_reason = None
-                retry_after = None
-                
-                # Check for failure logs if self-signed
-                if cert_type == "Self-Signed":
-                    log_path = "/etc/adguard/conf/certbot/last_run.log"
-                    if os.path.exists(log_path):
-                        with open(log_path, 'r') as f:
-                            log_content = f.read()
-                            # Parse retry time
-                            retry_match = re.search(r'retry after ([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]+ UTC)', log_content, re.IGNORECASE)
-                            if retry_match:
-                                retry_after = retry_match.group(1)
-                            
-                            # Extract a concise error message (look for common acme.sh errors)
-                            if "rateLimited" in log_content:
-                                failure_reason = "Let's Encrypt Rate Limit Reached"
-                            elif "dns_desec" in log_content and "Error" in log_content:
-                                failure_reason = "deSEC DNS API Authentication Failed"
-                            elif "validation failed" in log_content.lower():
-                                failure_reason = "Domain Validation Failed"
-                            else:
-                                failure_reason = "Unknown acme.sh failure (see logs)"
-
-                self._send_json({
-                    "subject": subject,
-                    "issuer": issuer,
-                    "valid_from": not_before_match.group(1).strip() if not_before_match else "Unknown",
-                    "valid_to": not_after_match.group(1).strip() if not_after_match else "Unknown",
-                    "type": cert_type,
-                    "failure_reason": failure_reason,
-                    "retry_after": retry_after
-                })
+                if domain or token:
+                    # Update .secrets or similar file
+                    secrets_file = "/app/.secrets"
+                    secrets = {}
+                    if os.path.exists(secrets_file):
+                        with open(secrets_file, 'r') as f:
+                            for line in f:
+                                if '=' in line:
+                                    k, v = line.strip().split('=', 1)
+                                    secrets[k] = v
+                    
+                    if domain: secrets['DESEC_DOMAIN'] = domain
+                    if token: secrets['DESEC_TOKEN'] = token
+                    
+                    with open(secrets_file, 'w') as f:
+                        for k, v in secrets.items():
+                            f.write(f"{k}={v}\n")
+                    
+                    self._send_json({"success": True})
+                else:
+                    self._send_json({"error": "Missing domain or token"}, 400)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/profiles':
@@ -3227,12 +3228,24 @@ cat > "$DASHBOARD_FILE" <<EOF
             overflow-wrap: anywhere;
         }
         
-        .progress-track { background: var(--md-sys-color-surface-container-highest); border-radius: 4px; height: 8px; margin: 16px 0; overflow: hidden; }
-        .progress-indicator { background: var(--md-sys-color-primary); height: 100%; transition: width var(--md-sys-motion-duration-medium) linear; }
-        
         .btn-group { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--md-sys-color-outline-variant); gap: 12px; flex-wrap: wrap; }
-        .list-item-text { cursor: pointer; flex: 1 1 220px; font-weight: 500; overflow-wrap: anywhere; }
+        .list-item { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 12px 16px; 
+            margin: 0 -16px;
+            border-bottom: 1px solid var(--md-sys-color-outline-variant); 
+            gap: 16px; 
+            flex-wrap: wrap;
+            transition: background-color var(--md-sys-motion-duration-short) linear;
+            border-radius: var(--md-sys-shape-corner-small);
+        }
+        .list-item:hover {
+            background-color: rgba(230, 225, 229, 0.08);
+        }
+        .list-item:last-child { border-bottom: none; }
+        .list-item-text { cursor: pointer; flex: 1 1 220px; font-weight: 500; overflow-wrap: anywhere; font-size: 16px; letter-spacing: 0.5px; }
 
         @media (max-width: 720px) {
             body { padding: 16px; }
@@ -3357,10 +3370,22 @@ cat > "$DASHBOARD_FILE" <<EOF
                         <div class="body-small" id="ssl-retry-time" style="margin-top:4px; opacity:0.8;">--</div>
                     </div>
                 </div>
-                <div id="cert-status-badge" class="chip" style="margin-top: auto; width: fit-content;">...</div>
+                <div id="cert-status-badge" class="chip" style="margin-top: auto; width: fit-content;" data-tooltip="Overall health of the SSL certificate issuance pipeline">...</div>
                 <button id="ssl-retry-btn" class="btn btn-icon btn-action" style="display:none;" data-tooltip="Force Let's Encrypt re-attempt" onclick="requestSslCheck()">
                     <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.07 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/></svg>
                 </button>
+            </div>
+            <div class="card">
+                <h3>deSEC Configuration</h3>
+                <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
+                <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. user.dedyn.io)" style="margin-bottom:12px;">
+                <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;">
+                <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
+                    Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
+                </p>
+                <div style="text-align:right;">
+                    <button onclick="saveDesecConfig()" class="btn btn-tonal">Save deSEC Config</button>
+                </div>
             </div>
             <div class="card">
                 <h3>Device DNS Settings</h3>
@@ -3435,28 +3460,32 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         <div class="stat-row"><span class="stat-label">Threshold</span><span class="stat-value" id="odido-threshold">--</span></div>
                         <div class="stat-row"><span class="stat-label">Consumption Rate</span><span class="stat-value" id="odido-rate">--</span></div>
                         <div class="stat-row"><span class="stat-label">API Status</span><span class="stat-value" id="odido-api-status">--</span></div>
-                        <div class="progress-track"><div class="progress-indicator" id="odido-bar" style="width:0%"></div></div>
                         <div class="btn-group" style="justify-content:center;">
                             <button onclick="buyOdidoBundle()" class="btn btn-tertiary" id="odido-buy-btn">Buy Bundle</button>
                             <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh</button>
                             <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
                         </div>
-                        <div id="odido-buy-status" class="feedback"></div>
                     </div>
                     <div id="odido-loading" style="color:var(--md-sys-color-on-surface-variant);">Loading...</div>
                 </div>
             </div>
             <div class="card">
                 <h3>Configuration</h3>
+                <p class="body-medium description">Authentication and automation settings for backend services:</p>
                 <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;">
-                <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token (auto-fetches User ID)" style="margin-bottom:12px;">
+                <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
+                    The <strong>Dashboard API Key</strong> (HUB_API_KEY) is required to authorize sensitive actions like saving settings. You can find this in your <code>.secrets</code> file on the host.
+                </p>
+                <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;">
+                <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
+                    Obtain your OAuth token using the <a href="https://github.com/GuusBackup/Odido.Authenticator" target="_blank" style="color: var(--md-sys-color-primary);">Odido Authenticator</a>.
+                </p>
                 <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;">
                 <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;">
                 <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;">
                 <div style="text-align:right;">
                     <button onclick="saveOdidoConfig()" class="btn btn-tonal">Save Configuration</button>
                 </div>
-                <div id="odido-config-status" class="feedback info"></div>
             </div>
         </div>
 
@@ -3465,38 +3494,36 @@ cat >> "$DASHBOARD_FILE" <<EOF
             <div class="card">
                 <h3>Upload Profile</h3>
                 <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;">
-                <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..."></textarea>
+                <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..." style="margin-bottom:16px;"></textarea>
                 <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled">Upload & Activate</button></div>
-                <div id="upload-status" class="feedback info"></div>
             </div>
             <div class="card profile-card">
-                <h3>Manage Profiles</h3>
-                <div id="profile-list">Loading...</div>
-                <p class="body-small profile-hint">Click name to activate.</p>
+                <h3 data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available Profiles</h3>
+                <div id="profile-list" style="flex-grow: 1;">Loading...</div>
+                <p class="body-small profile-hint" style="margin-top: auto; padding-top: 12px;">Click name to activate.</p>
             </div>
         </div>
 
-        <div class="section-label">System Status & Logs</div>
+        <div class="section-label">System Status & Information</div>
         <div class="grid-2">
             <div class="card">
-                <h3>Gluetun (Frontend Proxy)</h3>
-                <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value" id="vpn-status">--</span></div>
-                <div class="stat-row"><span class="stat-label">Active Profile</span><span class="stat-value success" id="vpn-active">--</span></div>
-                <div class="stat-row"><span class="stat-label">VPN Endpoint</span><span class="stat-value sensitive" id="vpn-endpoint">--</span></div>
-                <div class="stat-row"><span class="stat-label">Public IP</span><span class="stat-value sensitive" id="vpn-public-ip">--</span></div>
-                <div class="stat-row"><span class="stat-label">Connection</span><span class="stat-value" id="vpn-connection">--</span></div>
-                <div class="stat-row"><span class="stat-label">This Session</span><span class="stat-value"><span id="vpn-session-rx">0 B</span> ↓ / <span id="vpn-session-tx">0 B</span> ↑</span></div>
-                <div class="stat-row"><span class="stat-label">All Time</span><span class="stat-value"><span id="vpn-total-rx">0 B</span> ↓ / <span id="vpn-total-tx">0 B</span> ↑</span></div>
+                <h3>System Information</h3>
+                <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
+                <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace">/DATA/AppData/privacy-hub/.secrets</span></div>
+                <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace">/DATA/AppData/privacy-hub/config</span></div>
+                <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
+                <div class="stat-row"><span class="stat-label">Redaction Mode</span><span class="stat-value">Client-side only</span></div>
+                <p class="body-small" style="margin-top: auto; color: var(--md-sys-color-on-surface-variant);">
+                    See the <a href="https://github.com/Lyceris-chan/selfhost-stack#credentials" target="_blank" style="color: var(--md-sys-color-primary);">README</a> for full details on obtaining required credentials.
+                </p>
+                <p class="body-small" style="margin-top: 8px; color: var(--md-sys-color-on-surface-variant);">Note: Changes to .secrets may require a stack restart to take full effect.</p>
             </div>
             <div class="card">
-                <h3>WG-Easy (External Access)</h3>
-                <div class="stat-row"><span class="stat-label">Service Status</span><span class="stat-value" id="wge-status">--</span></div>
-                <div class="stat-row"><span class="stat-label">External IP</span><span class="stat-value sensitive" id="wge-host">--</span></div>
-                <div class="stat-row"><span class="stat-label">UDP Port</span><span class="stat-value">51820</span></div>
-                <div class="stat-row"><span class="stat-label">Total Clients</span><span class="stat-value" id="wge-clients">--</span></div>
-                <div class="stat-row"><span class="stat-label">Connected Now</span><span class="stat-value" id="wge-connected">--</span></div>
-                <div class="stat-row"><span class="stat-label">This Session</span><span class="stat-value"><span id="wge-session-rx">0 B</span> ↓ / <span id="wge-session-tx">0 B</span> ↑</span></div>
-                <div class="stat-row"><span class="stat-label">All Time</span><span class="stat-value"><span id="wge-total-rx">0 B</span> ↓ / <span id="wge-total-tx">0 B</span> ↑</span></div>
+                <h3>System Logs</h3>
+                <div id="log-container" class="log-container">Loading deployment logs...</div>
+                <div style="text-align:right; margin-top:16px;">
+                    <button onclick="fetchLogs()" class="btn btn-tonal">Refresh Logs</button>
+                </div>
             </div>
         </div>
         <div class="grid">
@@ -3587,9 +3614,37 @@ cat >> "$DASHBOARD_FILE" <<EOF
             });
         }
         
+        async function saveDesecConfig() {
+            const domain = document.getElementById('desec-domain-input').value.trim();
+            const token = document.getElementById('desec-token-input').value.trim();
+            if (!domain && !token) {
+                alert("Please provide domain or token");
+                return;
+            }
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(API + "/config-desec", {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ domain, token })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    alert("deSEC configuration saved! Certificates will be updated in the background.");
+                    document.getElementById('desec-domain-input').value = '';
+                    document.getElementById('desec-token-input').value = '';
+                } else {
+                    throw new Error(result.error || "Unknown error");
+                }
+            } catch (e) {
+                alert("Failed to save deSEC config: " + e.message);
+            }
+        }
+        
         async function fetchStatus() {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
             try {
                 const res = await fetch(API + "/status", { signal: controller.signal });
                 clearTimeout(timeoutId);
@@ -3693,9 +3748,12 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
         
         async function fetchOdidoStatus() {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
             try {
                 const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(ODIDO_API + "/status", { headers });
+                const res = await fetch(ODIDO_API + "/status", { headers, signal: controller.signal });
+                clearTimeout(timeoutId);
                 if (!res.ok) {
                     const data = await res.json().catch(() => ({}));
                     document.getElementById('odido-loading').style.display = 'none';
@@ -3743,15 +3801,20 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const maxData = config.bundle_size_mb || 1024;
                 const percent = Math.min(100, (remaining / maxData) * 100);
                 const bar = document.getElementById('odido-bar');
-                bar.style.width = percent + "%";
-                bar.className = 'progress-indicator';
-                if (remaining < threshold) bar.classList.add('critical');
-                else if (remaining < threshold * 2) bar.classList.add('low');
+                if (bar) {
+                    bar.style.width = percent + "%";
+                    bar.className = 'progress-indicator';
+                    if (remaining < threshold) bar.classList.add('critical');
+                    else if (remaining < threshold * 2) bar.classList.add('low');
+                }
             } catch(e) {
                 // Network error or service unavailable - show not-configured with error info
-                document.getElementById('odido-loading').style.display = 'none';
-                document.getElementById('odido-not-configured').style.display = 'block';
-                document.getElementById('odido-configured').style.display = 'none';
+                const loading = document.getElementById('odido-loading');
+                if (loading) loading.style.display = 'none';
+                const notConf = document.getElementById('odido-not-configured');
+                if (notConf) notConf.style.display = 'block';
+                const conf = document.getElementById('odido-configured');
+                if (conf) conf.style.display = 'none';
                 console.error('Odido status error:', e);
             }
         }
@@ -3773,8 +3836,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
             
             // If OAuth token provided, fetch User ID automatically via hub-api API (uses curl)
             if (oauthToken) {
-                st.textContent = 'Fetching User ID from Odido API...';
-                st.style.color = 'var(--p)';
+                if (st) {
+                    st.textContent = 'Fetching User ID from Odido API...';
+                    st.style.color = 'var(--p)';
+                }
                 try {
                     const res = await fetch(API + "/odido-userid", {
                         method: 'POST',
@@ -3786,14 +3851,18 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     if (result.user_id) {
                         data.odido_user_id = result.user_id;
                         data.odido_token = oauthToken;
-                        st.textContent = "User ID fetched: " + result.user_id;
-                        st.style.color = 'var(--ok)';
+                        if (st) {
+                            st.textContent = "User ID fetched: " + result.user_id;
+                            st.style.color = 'var(--ok)';
+                        }
                     } else {
                         throw new Error('Could not extract User ID from Odido API response');
                     }
                 } catch(e) {
-                    st.textContent = "Failed to fetch User ID: " + e.message;
-                    st.style.color = 'var(--err)';
+                    if (st) {
+                        st.textContent = "Failed to fetch User ID: " + e.message;
+                        st.style.color = 'var(--err)';
+                    }
                     return;
                 }
             }
@@ -3803,12 +3872,16 @@ cat >> "$DASHBOARD_FILE" <<EOF
             if (leadTime) data.lead_time_minutes = parseInt(leadTime);
             
             if (Object.keys(data).length === 0) {
-                st.textContent = 'Please fill in at least one field';
-                st.style.color = 'var(--err)';
+                if (st) {
+                    st.textContent = 'Please fill in at least one field';
+                    st.style.color = 'var(--err)';
+                }
                 return;
             }
-            st.textContent = 'Saving configuration...';
-            st.style.color = 'var(--p)';
+            if (st) {
+                st.textContent = 'Saving configuration...';
+                st.style.color = 'var(--p)';
+            }
             try {
                 const headers = { 'Content-Type': 'application/json' };
                 if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
@@ -3819,8 +3892,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 });
                 const result = await res.json();
                 if (result.detail) throw new Error(result.detail);
-                st.textContent = 'Configuration saved!';
-                st.style.color = 'var(--ok)';
+                if (st) {
+                    st.textContent = 'Configuration saved!';
+                    st.style.color = 'var(--ok)';
+                }
                 document.getElementById('odido-api-key').value = '';
                 document.getElementById('odido-oauth-token').value = '';
                 document.getElementById('odido-bundle-code-input').value = '';
@@ -3828,8 +3903,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 document.getElementById('odido-lead-time-input').value = '';
                 fetchOdidoStatus();
             } catch(e) {
-                st.textContent = e.message;
-                st.style.color = 'var(--err)';
+                if (st) {
+                    st.textContent = e.message;
+                    st.style.color = 'var(--err)';
+                }
             }
         }
         
@@ -3837,8 +3914,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const st = document.getElementById('odido-buy-status');
             const btn = document.getElementById('odido-buy-btn');
             btn.disabled = true;
-            st.textContent = 'Purchasing bundle from Odido...';
-            st.style.color = 'var(--p)';
+            if (st) {
+                st.textContent = 'Purchasing bundle from Odido...';
+                st.style.color = 'var(--p)';
+            }
             try {
                 const headers = { 'Content-Type': 'application/json' };
                 if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
@@ -3849,32 +3928,42 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 });
                 const result = await res.json();
                 if (result.detail) throw new Error(result.detail);
-                st.textContent = 'Bundle purchased successfully!';
-                st.style.color = 'var(--ok)';
+                if (st) {
+                    st.textContent = 'Bundle purchased successfully!';
+                    st.style.color = 'var(--ok)';
+                }
                 setTimeout(fetchOdidoStatus, 2000);
             } catch(e) {
-                st.textContent = e.message;
-                st.style.color = 'var(--err)';
+                if (st) {
+                    st.textContent = e.message;
+                    st.style.color = 'var(--err)';
+                }
             }
             btn.disabled = false;
         }
         
         async function refreshOdidoRemaining() {
             const st = document.getElementById('odido-buy-status');
-            st.textContent = 'Fetching from Odido API...';
-            st.style.color = 'var(--p)';
+            if (st) {
+                st.textContent = 'Fetching from Odido API...';
+                st.style.color = 'var(--p)';
+            }
             try {
                 const headers = {};
                 if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
                 const res = await fetch(ODIDO_API + "/odido/remaining", { headers });
                 const result = await res.json();
                 if (result.detail) throw new Error(result.detail);
-                st.textContent = "Live data: " + Math.round(result.remaining_mb || 0) + " MB remaining";
-                st.style.color = 'var(--ok)';
+                if (st) {
+                    st.textContent = "Live data: " + Math.round(result.remaining_mb || 0) + " MB remaining";
+                    st.style.color = 'var(--ok)';
+                }
                 setTimeout(fetchOdidoStatus, 1000);
             } catch(e) {
-                st.textContent = e.message;
-                st.style.color = 'var(--err)';
+                if (st) {
+                    st.textContent = e.message;
+                    st.style.color = 'var(--err)';
+                }
             }
         }
         
@@ -3912,8 +4001,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const nameInput = document.getElementById('prof-name').value;
             const config = document.getElementById('prof-conf').value;
             const st = document.getElementById('upload-status');
-            if(!config) { st.textContent="Error: Config content missing"; return; }
-            st.textContent = "Uploading...";
+            if(!config) { if(st) st.textContent="Error: Config content missing"; else alert("Error: Config content missing"); return; }
+            if(st) st.textContent = "Uploading...";
             try {
                 const headers = { 'Content-Type': 'application/json' };
                 if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
@@ -3925,15 +4014,15 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const upData = await upRes.json();
                 if(upData.error) throw new Error(upData.error);
                 const activeName = upData.name;
-                st.textContent = "Activating " + activeName + "...";
+                if(st) st.textContent = "Activating " + activeName + "...";
                 await fetch(API + "/activate", { 
                     method:'POST', 
                     headers: headers,
                     body:JSON.stringify({name: activeName}) 
                 });
-                st.textContent = "Success! VPN restarting.";
+                if(st) st.textContent = "Success! VPN restarting."; else alert("Success! VPN restarting.");
                 fetchProfiles(); document.getElementById('prof-name').value=""; document.getElementById('prof-conf').value="";
-            } catch(e) { st.textContent = e.message; }
+            } catch(e) { if(st) st.textContent = e.message; else alert(e.message); }
         }
         
         async function activateProfile(name) {
@@ -4122,6 +4211,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
         
         document.addEventListener('DOMContentLoaded', () => {
+            // Load deSEC config if available
+            fetch(API + "/status").then(r => r.json()).then(data => {
+                if (data.gluetun && data.gluetun.desec_domain) {
+                    document.getElementById('desec-domain-input').placeholder = data.gluetun.desec_domain;
+                }
+            }).catch(() => {});
+
             // Tooltip Initialization
             const tooltipBox = document.createElement('div');
             tooltipBox.className = 'tooltip-box';
@@ -4185,7 +4281,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             initPrivacyMode();
             fetchContainerIds();
             fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream();
-            setInterval(fetchStatus, 5000);
+            setInterval(fetchStatus, 15000);
             setInterval(fetchOdidoStatus, 60000);  // Reduced polling frequency to respect Odido API
             setInterval(fetchContainerIds, 60000);
         });
@@ -4458,7 +4554,7 @@ if [ "$AUTO_PASSWORD" = true ]; then
             curl -s -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/settings" \
                 -H "Authorization: Bearer $PORTAINER_JWT" \
                 -H "Content-Type: application/json" \
-                -d '{"AllowAnalytics": false}' > /dev/null
+                -d '{"AllowAnalytics": false, "EnableTelemetry": false}' > /dev/null
             log_info "Portainer automation complete."
         else
             log_warn "Failed to authenticate with Portainer for telemetry disabling: $AUTH_RESPONSE"
@@ -4544,7 +4640,7 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo "=========================================================="
     echo "GENERATED CREDENTIALS"
     echo "=========================================================="
-    echo "Administrative Password: $ADMIN_PASS_RAW (Use for Portainer/Services)"
+    echo "Administrative Password: $ADMIN_PASS_RAW (Use for Dashboard/Portainer/Services)"
     echo "VPN Web UI Password: $VPN_PASS_RAW"
     echo "AdGuard Home Password: $AGH_PASS_RAW"
     echo "AdGuard Home Username: adguard"
