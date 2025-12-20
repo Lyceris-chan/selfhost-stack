@@ -1916,15 +1916,16 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/containers':
             try:
-                # Get container IDs for Portainer links
+                # Get container IDs for Portainer links - use long IDs for better compatibility
                 result = subprocess.run(
-                    ['docker', 'ps', '-a', '--format', '{{.Names}}\t{{.ID}}'],
+                    ['docker', 'ps', '-a', '--no-trunc', '--format', '{{.Names}}\t{{.ID}}'],
                     capture_output=True, text=True, timeout=10
                 )
                 containers = {}
                 for line in result.stdout.strip().split('\n'):
                     if '\t' in line:
                         name, cid = line.split('\t', 1)
+                        # Portainer URLs typically work best with long IDs
                         containers[name] = cid
                 self._send_json({"containers": containers})
             except Exception as e:
@@ -3089,12 +3090,15 @@ cat > "$DASHBOARD_FILE" <<EOF
             cursor: pointer;
             transition: all var(--md-sys-motion-duration-short) linear;
             position: relative;
-            padding-right: 28px; /* Space for the icon */
+            padding-right: 32px; /* Increased space for icon */
+            pointer-events: auto;
+            z-index: 10;
         }
         .portainer-link:hover {
             background: var(--md-sys-color-secondary-container);
             color: var(--md-sys-color-on-secondary-container);
             border-color: transparent;
+            opacity: 0.9;
         }
         /* External link icon for Portainer chips */
         .portainer-link::after {
@@ -3102,9 +3106,10 @@ cat > "$DASHBOARD_FILE" <<EOF
             font-family: 'Material Symbols Rounded';
             position: absolute;
             right: 8px;
-            font-size: 14px;
+            font-size: 16px;
             top: 50%;
             transform: translateY(-50%);
+            pointer-events: none;
         }
         
         .btn-action {
@@ -3563,7 +3568,21 @@ cat >> "$DASHBOARD_FILE" <<EOF
     <script>
         const API = "/api";
         const ODIDO_API = "/odido-api/api";
-        const PORTAINER_URL = "http://$LAN_IP:$PORT_PORTAINER";
+        
+        function getPortainerBaseUrl() {
+            if (window.location.hostname !== '$LAN_IP' && !window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+                // We are likely on a domain (e.g. hub.example.com)
+                // Try to infer portainer subdomain based on the current hostname
+                const parts = window.location.hostname.split('.');
+                if (parts.length >= 2) {
+                    const domain = parts.slice(-2).join('.');
+                    return "https://portainer." + domain;
+                }
+            }
+            return "http://$LAN_IP:$PORT_PORTAINER";
+        }
+
+        const PORTAINER_URL = getPortainerBaseUrl();
         const DEFAULT_ODIDO_API_KEY = "$ODIDO_API_KEY";
         let storedOdidoKey = localStorage.getItem('odido_api_key');
         // Ensure the dashboard always uses the latest deployment key
@@ -3577,22 +3596,33 @@ cat >> "$DASHBOARD_FILE" <<EOF
         async function fetchContainerIds() {
             try {
                 const res = await fetch(API + "/containers");
-                if (res.status === 401) throw new Error("401");
+                if (!res.ok) throw new Error("API " + res.status);
                 const data = await res.json();
                 containerIds = data.containers || {};
+                
                 // Update all portainer links
                 document.querySelectorAll('.portainer-link').forEach(el => {
                     const containerName = el.dataset.container;
-                    if (containerIds[containerName]) {
+                    const cid = containerIds[containerName];
+                    if (cid) {
+                        el.style.opacity = '1';
+                        el.style.cursor = 'pointer';
+                        el.dataset.tooltip = "Manage " + containerName + " in Portainer";
+                        
+                        // Use a fresh onclick handler
                         el.onclick = function(e) {
                             e.preventDefault();
                             e.stopPropagation();
-                            const url = PORTAINER_URL + "/#!/1/docker/containers/" + containerIds[containerName];
+                            e.stopImmediatePropagation();
+                            const url = PORTAINER_URL + "/#!/1/docker/containers/" + cid;
                             window.open(url, '_blank');
                             return false;
                         };
-                        el.style.cursor = 'pointer';
-                        el.dataset.tooltip = "Manage " + containerName + " in Portainer";
+                    } else {
+                        el.style.opacity = '0.5';
+                        el.style.cursor = 'default';
+                        el.dataset.tooltip = "Container " + containerName + " not found";
+                        el.onclick = (e) => { e.preventDefault(); e.stopPropagation(); };
                     }
                 });
             } catch(e) { console.error('Container fetch error:', e); }
