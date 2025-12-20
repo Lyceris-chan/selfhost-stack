@@ -101,6 +101,8 @@ chmod +x zima.sh
 # Options:
 # -c : Environment reset (Nuke all data/configs)
 # -p : Automated credential generation
+# -x : Environment reset and exit (no deployment)
+# -h/--help : Show usage
 ```
 
 ## <a id="encrypted-dns"></a>⚡ Independent DNS & RFC Compliance

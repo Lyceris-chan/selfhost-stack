@@ -1,3 +1,6 @@
 node_modules/
 .DS_Store
 *.log
+tmp/
+tests/VERIFICATION_REPORT.md
+tests/deployment_input.txt
