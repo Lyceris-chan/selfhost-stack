@@ -1,7 +1,6 @@
-- [x] Administrative Password: 2RFJWwrSD7sACGCsZwryU67W (Use for Dashboard/Portainer)
-- [x] the manage container in portainer links still open the service instead 
-- [x] the dashboard is still saying cant connect api error / connecting 
-- [x] DOM Input elements should have autocomplete attributes (suggested: "current-password")
-- [x] console logs syntax errors and 502 Bad Gateway
-- [x] thoroughly test the dashboard and ensure all requirements are met 
-- [x] rename Administrative Password to Portainer Password and verify code with shellcheck
+- [x] provided generated portainer password doesnt work
+- [x] private instance chip etc still doesnt go to portainer properly
+- [x] dashboard is still saying offline api error
+- [x] fix autocomplete attributes for username/domain fields
+- [x] investigate and fix 502 Bad Gateway for API calls
+- [x] fix SyntaxError in dashboard fetch (unexpected token '<')

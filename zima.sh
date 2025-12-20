@@ -775,7 +775,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     fi
 
     # Safely generate Portainer hash (bcrypt)
-    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "portainer" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "admin" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
     if [[ "$PORTAINER_PASS_HASH" == "FAILED" ]]; then
         log_crit "Failed to generate Portainer password hash. Check Docker status."
         exit 1
@@ -805,7 +805,7 @@ else
     # Generate Portainer hash if missing from existing .secrets
     if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
         log_info "Generating missing Portainer hash..."
-        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "portainer" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "admin" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
         echo "PORTAINER_PASS_HASH=$PORTAINER_PASS_HASH" >> "$BASE_DIR/.secrets"
     fi
     if [ -z "${ODIDO_API_KEY:-}" ]; then
@@ -1259,25 +1259,26 @@ server {
     }
 
     location /api/ {
-        set \$hub_api_upstream http://hub-api:55555/;
-        proxy_pass \$hub_api_upstream;
+        proxy_pass http://hub-api:55555/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_buffering off;
         proxy_cache off;
-        proxy_connect_timeout 10s;
-        proxy_read_timeout 60s;
+        proxy_connect_timeout 30s;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 30s;
     }
 
     location /odido-api/ {
-        set \$odido_upstream http://odido-booster:80/;
-        proxy_pass \$odido_upstream;
+        proxy_pass http://odido-booster:80/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_connect_timeout 30s;
+        proxy_read_timeout 120s;
     }
 }
 EOF
@@ -1857,20 +1858,32 @@ def extract_profile_name(config):
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
+    allow_reuse_address = True
 
 class APIHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        # Restore logging to see requests
-        print(f"[{self.date_time_string()}] {format % args}")
+        # Log to deployment history for better visibility
+        msg = f"[{self.date_time_string()}] {format % args}\n"
+        try:
+            with open(LOG_FILE, 'a') as f:
+                f.write(msg)
+        except:
+            pass
+        print(msg.strip())
     
     def _send_json(self, data, code=200):
-        self.send_response(code)
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-API-Key')
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode('utf-8'))
+        try:
+            body = json.dumps(data).encode('utf-8')
+            self.send_response(code)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-API-Key')
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception as e:
+            print(f"Error sending JSON: {e}")
 
     def do_OPTIONS(self):
         self.send_response(200)
@@ -2186,7 +2199,7 @@ services:
     environment:
       - HUB_API_KEY=$ODIDO_API_KEY
       - DOCKER_CONFIG=/root/.docker
-    entrypoint: ["/bin/sh", "-c", "mkdir -p /app && touch /app/deployment.log /app/.data_usage /app/.wge_data_usage && python -u /app/server.py"]
+    entrypoint: ["/bin/sh", "-c", "mkdir -p /app && touch /app/deployment.log /app/.data_usage /app/.wge_data_usage && python3 -u /app/server.py"]
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "55555"]
       interval: 20s
@@ -2888,6 +2901,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             box-sizing: border-box;
             box-shadow: var(--md-sys-elevation-1);
             height: 100%;
+            cursor: pointer;
         }
         
         .card::before {
@@ -3301,51 +3315,51 @@ cat > "$DASHBOARD_FILE" <<EOF
             <span class="chip tertiary" data-tooltip="Advanced infrastructure control and container telemetry via Portainer.">Infrastructure</span>
         </div>
         <div class="grid-3">
-            <a id="link-invidious" href="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true" data-container="invidious">
+            <div id="link-invidious" data-url="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true" data-container="invidious" onclick="navigate(this, event)">
                 <div class="card-header"><h2>Invidious</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance</span></div>
-            </a>
-            <a id="link-redlib" href="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib">
+            </div>
+            <div id="link-redlib" data-url="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib" onclick="navigate(this, event)">
                 <div class="card-header"><h2>Redlib</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance</span></div>
-            </a>
-            <a id="link-wikiless" href="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true" data-container="wikiless">
+            </div>
+            <div id="link-wikiless" data-url="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true" data-container="wikiless" onclick="navigate(this, event)">
                 <div class="card-header"><h2>Wikiless</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance</span></div>
-            </a>
-            <a id="link-memos" href="http://$LAN_IP:$PORT_MEMOS" class="card" data-check="true" data-container="memos">
+            </div>
+            <div id="link-memos" data-url="http://$LAN_IP:$PORT_MEMOS" class="card" data-check="true" data-container="memos" onclick="navigate(this, event)">
                 <div class="card-header"><h2>Memos</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container">Direct Access</span></div>
-            </a>
-            <a id="link-rimgo" href="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true" data-container="rimgo">
+            </div>
+            <div id="link-rimgo" data-url="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true" data-container="rimgo" onclick="navigate(this, event)">
                 <div class="card-header"><h2>Rimgo</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance</span></div>
-            </a>
-            <a id="link-scribe" href="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true" data-container="scribe">
+            </div>
+            <div id="link-scribe" data-url="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true" data-container="scribe" onclick="navigate(this, event)">
                 <div class="card-header"><h2>Scribe</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance</span></div>
-            </a>
-            <a id="link-breezewiki" href="http://$LAN_IP:$PORT_BREEZEWIKI/" class="card" data-check="true" data-container="breezewiki">
+            </div>
+            <div id="link-breezewiki" data-url="http://$LAN_IP:$PORT_BREEZEWIKI/" class="card" data-check="true" data-container="breezewiki" onclick="navigate(this, event)">
                 <div class="card-header"><h2>BreezeWiki</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance</span></div>
-            </a>
-            <a id="link-anonymousoverflow" href="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true" data-container="anonymousoverflow">
+            </div>
+            <div id="link-anonymousoverflow" data-url="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true" data-container="anonymousoverflow" onclick="navigate(this, event)">
                 <div class="card-header"><h2>AnonOverflow</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance</span></div>
-            </a>
-            <a id="link-vert" href="http://$LAN_IP:$PORT_VERT" class="card" data-check="true" data-container="vert">
+            </div>
+            <div id="link-vert" data-url="http://$LAN_IP:$PORT_VERT" class="card" data-check="true" data-container="vert" onclick="navigate(this, event)">
                 <div class="card-header"><h2>VERT</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container">Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion">GPU Accelerated</span></div>
-            </a>
+            </div>
         </div>
 
         <div class="section-label">System Management</div>
@@ -3353,21 +3367,21 @@ cat > "$DASHBOARD_FILE" <<EOF
             <span class="chip" data-tooltip="Core infrastructure management and gateway orchestration">Core Services</span>
         </div>
         <div class="grid-3">
-            <a id="link-adguard" href="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card" data-check="true" data-container="adguard">
+            <div id="link-adguard" data-url="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card" data-check="true" data-container="adguard" onclick="navigate(this, event)">
                 <div class="card-header"><h2>AdGuard Home</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container">Local Access</span><span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span></div>
-            </a>
-            <a id="link-portainer" href="http://$LAN_IP:$PORT_PORTAINER" class="card" data-check="true" data-container="portainer">
+            </div>
+            <div id="link-portainer" data-url="http://$LAN_IP:$PORT_PORTAINER" class="card" data-check="true" data-container="portainer" onclick="navigate(this, event)">
                 <div class="card-header"><h2>Portainer</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container">Local Access</span></div>
-            </a>
-            <a id="link-wg-easy" href="http://$LAN_IP:$PORT_WG_WEB" class="card" data-check="true" data-container="wg-easy">
+            </div>
+            <div id="link-wg-easy" data-url="http://$LAN_IP:$PORT_WG_WEB" class="card" data-check="true" data-container="wg-easy" onclick="navigate(this, event)">
                 <div class="card-header"><h2>WireGuard</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
                 <p class="description">The primary gateway for <strong>secure remote access</strong>. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
                 <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container">Local Access</span></div>
-            </a>
+            </div>
         </div>
 
         <div class="section-label">DNS Configuration</div>
@@ -3393,7 +3407,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <h3>deSEC Configuration</h3>
                 <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
                 <form onsubmit="saveDesecConfig(); return false;">
-                    <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. user.dedyn.io)" style="margin-bottom:12px;">
+                    <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. user.dedyn.io)" style="margin-bottom:12px;" autocomplete="username">
                     <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;" autocomplete="current-password">
                     <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
                         Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
@@ -3489,7 +3503,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <h3>Configuration</h3>
                 <p class="body-medium description">Authentication and automation settings for backend services:</p>
                 <form onsubmit="saveOdidoConfig(); return false;">
-                    <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;">
+                    <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;" autocomplete="username">
                     <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
                         The <strong>Dashboard API Key</strong> (HUB_API_KEY) is required to authorize sensitive actions like saving settings. You can find this in your <code>.secrets</code> file on the host.
                     </p>
@@ -3602,19 +3616,16 @@ cat >> "$DASHBOARD_FILE" <<EOF
                             window.open(url, '_blank');
                             return false;
                         };
-                        // Also disable navigation if the user clicks the chip but not the text
-                        el.parentNode.onclick = function(e) {
-                            if (e.target.closest('.portainer-link')) {
-                                e.preventDefault();
-                                e.stopPropagation();
-                            }
-                        };
                     } else {
                         el.style.opacity = '0.5';
                         el.style.cursor = 'default';
                         el.dataset.tooltip = "Container " + containerName + " not found";
                         el.textContent = originalText;
-                        el.onclick = (e) => { e.preventDefault(); e.stopPropagation(); };
+                        el.onclick = (e) => { 
+                            e.preventDefault(); 
+                            e.stopPropagation(); 
+                            e.stopImmediatePropagation();
+                        };
                     }
                 });
             } catch(e) { console.error('Container fetch error:', e); }
@@ -3625,6 +3636,12 @@ cat >> "$DASHBOARD_FILE" <<EOF
         let maskedProfileId = '';
         const profileMaskMap = {};
         
+        function navigate(el, e) {
+            if (e && (e.target.closest('.portainer-link') || e.target.closest('.btn') || e.target.closest('.chip'))) return;
+            const url = el.getAttribute('data-url');
+            if (url) window.open(url, '_blank');
+        }
+
         function generateRandomId() {
             const chars = 'abcdef0123456789';
             let id = '';
@@ -4569,10 +4586,22 @@ echo "DEPLOYMENT COMPLETE: INFRASTRUCTURE IS OPERATIONAL"
 echo "=========================================================="
 sudo modprobe tun || true
 
-# Explicitly remove portainer if it exists to ensure flags are updated
-sudo docker rm -f portainer 2>/dev/null || true
+# Explicitly remove portainer and hub-api if they exist to ensure clean state
+log_info "Ensuring clean start for core API services..."
+sudo docker rm -f portainer hub-api 2>/dev/null || true
 
-sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
+sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans --force-recreate hub-api dashboard portainer
+
+log_info "Verifying Hub API responsiveness..."
+sleep 5
+API_TEST=$(curl -s -o /dev/null -w "%{http_code}" "http://$LAN_IP:$PORT_DASHBOARD_WEB/api/status" || echo "FAILED")
+if [ "$API_TEST" = "200" ]; then
+    log_info "Hub API is responsive."
+elif [ "$API_TEST" = "401" ]; then
+    log_info "Hub API is responsive (Unauthorized as expected)."
+else
+    log_warn "Hub API returned $API_TEST. The dashboard may show 'Offline (API Error)' initially."
+fi
 
 # --- SECTION 16.1: PORTAINER AUTOMATION ---
 if [ "$AUTO_PASSWORD" = true ]; then
@@ -4588,9 +4617,16 @@ if [ "$AUTO_PASSWORD" = true ]; then
 
     if [ "$PORTAINER_READY" = true ]; then
         # Authenticate to get JWT (user was initialized via --admin-password CLI flag)
+        # Try 'admin' first, then 'portainer' (in case it was already renamed in a previous run)
         AUTH_RESPONSE=$(curl -s -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
             -H "Content-Type: application/json" \
             -d "{\"Username\":\"admin\",\"Password\":\"$ADMIN_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
+        
+        if ! echo "$AUTH_RESPONSE" | grep -q "jwt"; then
+            AUTH_RESPONSE=$(curl -s -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
+                -H "Content-Type: application/json" \
+                -d "{\"Username\":\"portainer\",\"Password\":\"$ADMIN_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
+        fi
         
         if echo "$AUTH_RESPONSE" | grep -q "jwt"; then
             PORTAINER_JWT=$(echo "$AUTH_RESPONSE" | grep -oP '"jwt":"\K[^"]+')
@@ -4603,12 +4639,13 @@ if [ "$AUTO_PASSWORD" = true ]; then
                 -d '{"AllowAnalytics": false, "EnableTelemetry": false}' > /dev/null
             
             # 2. Change admin username to 'portainer'
-            log_info "Updating Portainer administrator username..."
+            log_info "Updating Portainer administrator username to 'portainer'..."
             # Portainer user ID 1 is always the initial admin
             curl -s -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/users/1" \
                 -H "Authorization: Bearer $PORTAINER_JWT" \
                 -H "Content-Type: application/json" \
                 -d '{"Username": "portainer"}' > /dev/null
+            log_info "Portainer username updated successfully."
             
             # Verify settings
             # Note: We must re-auth if we want to verify using the NEW username, 
@@ -4707,10 +4744,9 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo "Portainer Password: $ADMIN_PASS_RAW"
     echo "VPN Web UI Password: $VPN_PASS_RAW"
         echo "AdGuard Home Password: $AGH_PASS_RAW"
-        echo "AdGuard Home Username: $AGH_USER"
-        echo "Portainer Username: portainer"
-        echo "Odido Booster API Key: $ODIDO_API_KEY"
-        echo ""
+            echo "AdGuard Home Username: $AGH_USER"
+            echo "Portainer Username: portainer (Fallback: admin)"
+            echo "Odido Booster API Key: $ODIDO_API_KEY"        echo ""
         echo "IMPORT TO PROTON PASS:"
     echo "A CSV file has been generated for easy import into Proton Pass:"
     echo "$BASE_DIR/protonpass_import.csv"
