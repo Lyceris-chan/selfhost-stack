@@ -1225,6 +1225,9 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
+    # Use Docker DNS resolver
+    resolver 127.0.0.11 valid=30s;
+
     # If the host matches a service subdomain, proxy it
     location / {
         proxy_set_header Host \$host;
@@ -1241,8 +1244,8 @@ server {
     }
 
     location /api/ {
-        resolver 127.0.0.11 valid=30s;
-        proxy_pass http://hub-api:55555/;
+        set \$hub_api_upstream http://hub-api:55555/;
+        proxy_pass \$hub_api_upstream;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -1254,8 +1257,8 @@ server {
     }
 
     location /odido-api/ {
-        resolver 127.0.0.11 valid=30s;
-        proxy_pass http://odido-booster:80/;
+        set \$odido_upstream http://odido-booster:80/;
+        proxy_pass \$odido_upstream;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
