@@ -773,6 +773,13 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         log_crit "Failed to generate AdGuard password hash. Check Docker status."
         exit 1
     fi
+
+    # Safely generate Portainer hash (bcrypt)
+    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "admin" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    if [[ "$PORTAINER_PASS_HASH" == "FAILED" ]]; then
+        log_crit "Failed to generate Portainer password hash. Check Docker status."
+        exit 1
+    fi
     
     cat > "$BASE_DIR/.secrets" <<EOF
 VPN_PASS_RAW=$VPN_PASS_RAW
@@ -780,6 +787,7 @@ AGH_PASS_RAW=$AGH_PASS_RAW
 ADMIN_PASS_RAW=$ADMIN_PASS_RAW
 WG_HASH_CLEAN=$WG_HASH_CLEAN
 AGH_PASS_HASH=$AGH_PASS_HASH
+PORTAINER_PASS_HASH=$PORTAINER_PASS_HASH
 DESEC_DOMAIN=$DESEC_DOMAIN
 DESEC_TOKEN=$DESEC_TOKEN
 SCRIBE_GH_USER=$SCRIBE_GH_USER
@@ -793,6 +801,12 @@ else
     if [ -z "${ADMIN_PASS_RAW:-}" ]; then
         ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
         echo "ADMIN_PASS_RAW=$ADMIN_PASS_RAW" >> "$BASE_DIR/.secrets"
+    fi
+    # Generate Portainer hash if missing from existing .secrets
+    if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
+        log_info "Generating missing Portainer hash..."
+        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm httpd:alpine htpasswd -B -n -b "admin" "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+        echo "PORTAINER_PASS_HASH=$PORTAINER_PASS_HASH" >> "$BASE_DIR/.secrets"
     fi
     if [ -z "${ODIDO_API_KEY:-}" ]; then
         ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
@@ -1175,6 +1189,7 @@ fi
 
 # Prepare escaped hash for docker-compose (v2 requires $$ for literal $)
 WG_HASH_COMPOSE="${WG_HASH_CLEAN//\$/\$\$}"
+PORTAINER_HASH_COMPOSE="${PORTAINER_PASS_HASH//\$/\$\$}"
 
 cat > "$NGINX_CONF" <<EOF
 error_log /dev/stderr info;
@@ -2278,7 +2293,7 @@ services:
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
-    command: -H unix:///var/run/docker.sock
+    command: -H unix:///var/run/docker.sock --admin-password "$PORTAINER_HASH_COMPOSE"
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
     volumes: ["/var/run/docker.sock:/var/run/docker.sock", "$DATA_DIR/portainer:/data"]
@@ -4365,7 +4380,7 @@ sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -
 
 # --- SECTION 16.1: PORTAINER AUTOMATION ---
 if [ "$AUTO_PASSWORD" = true ]; then
-    log_info "Initializing Portainer administrative user..."
+    log_info "Synchronizing Portainer administrative settings..."
     PORTAINER_READY=false
     for _ in {1..12}; do
         if curl -s --max-time 2 "http://$LAN_IP:$PORT_PORTAINER/api/system/status" > /dev/null; then
@@ -4376,14 +4391,13 @@ if [ "$AUTO_PASSWORD" = true ]; then
     done
 
     if [ "$PORTAINER_READY" = true ]; then
-        # Initialize Admin User
-        INIT_RESPONSE=$(curl -s -X POST "http://$LAN_IP:$PORT_PORTAINER/api/users/admin/init" \
+        # Authenticate to get JWT (user was initialized via --admin-password CLI flag)
+        AUTH_RESPONSE=$(curl -s -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
             -H "Content-Type: application/json" \
             -d "{\"Username\":\"admin\",\"Password\":\"$ADMIN_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
         
-        if echo "$INIT_RESPONSE" | grep -q "jwt"; then
-            log_info "Portainer administrative user initialized successfully."
-            PORTAINER_JWT=$(echo "$INIT_RESPONSE" | grep -oP '"jwt":"\K[^"]+')
+        if echo "$AUTH_RESPONSE" | grep -q "jwt"; then
+            PORTAINER_JWT=$(echo "$AUTH_RESPONSE" | grep -oP '"jwt":"\K[^"]+')
             
             # Disable Telemetry/Analytics
             log_info "Disabling Portainer anonymous telemetry..."
@@ -4391,16 +4405,15 @@ if [ "$AUTO_PASSWORD" = true ]; then
                 -H "Authorization: Bearer $PORTAINER_JWT" \
                 -H "Content-Type: application/json" \
                 -d '{"AllowAnalytics": false}' > /dev/null
-        elif echo "$INIT_RESPONSE" | grep -q "Admin user already exists"; then
-            log_warn "Portainer admin user already exists. Skipping initialization."
+            log_info "Portainer automation complete."
         else
-            log_warn "Failed to initialize Portainer: $INIT_RESPONSE"
+            log_warn "Failed to authenticate with Portainer for telemetry disabling: $AUTH_RESPONSE"
         fi
     else
-        log_warn "Portainer did not become ready in time for automated setup."
+        log_warn "Portainer did not become ready in time for automated settings synchronization."
     fi
 else
-    echo -e "\e[33m[NOTE]\e[0m Please manually initialize Portainer at http://$LAN_IP:$PORT_PORTAINER"
+    echo -e "\e[33m[NOTE]\e[0m Administrative credentials for Portainer are available in: $BASE_DIR/.secrets"
     echo -e "\e[33m[NOTE]\e[0m Remember to disable 'Anonymous statistics' in Portainer settings for maximum privacy."
 fi
 
