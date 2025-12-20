@@ -3,4 +3,5 @@
 - [x] the dashboard is still saying cant connect api error / connecting 
 - [x] DOM Input elements should have autocomplete attributes (suggested: "current-password")
 - [x] console logs syntax errors and 502 Bad Gateway
-- [x] thoroughly test the dashboard and ensure all requirements are met
+- [x] thoroughly test the dashboard and ensure all requirements are met 
+- [x] rename Administrative Password to Portainer Password and verify code with shellcheck
