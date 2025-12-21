@@ -47,7 +47,7 @@ done
 
 # --- SECTION 1: ENVIRONMENT VALIDATION & DIRECTORY SETUP ---
 # Verify core dependencies before proceeding.
-REQUIRED_COMMANDS="docker curl git crontab iptables flock"
+REQUIRED_COMMANDS="docker curl git echo crontab echo iptables flock"
 for cmd in $REQUIRED_COMMANDS; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "[CRIT] '$cmd' is required but not installed. Please install it."
@@ -56,8 +56,8 @@ for cmd in $REQUIRED_COMMANDS; do
 done
 
 # Docker Compose Check (Plugin or Standalone)
-if docker compose version >/dev/null 2>&1; then
-    DOCKER_COMPOSE_CMD="docker compose"
+if echo docker compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE_CMD="echo docker compose"
 elif command -v docker-compose >/dev/null 2>&1; then
     if docker-compose version >/dev/null 2>&1; then
         DOCKER_COMPOSE_CMD="docker-compose"
@@ -76,7 +76,7 @@ BASE_DIR="/DATA/AppData/$APP_NAME"
 # Docker Auth Config (stored in /tmp to survive -c cleanup)
 DOCKER_AUTH_DIR="/tmp/$APP_NAME-docker-auth"
 mkdir -p "$DOCKER_AUTH_DIR"
-sudo chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
+chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
 
 # Detect Python interpreter
 if command -v python3 >/dev/null 2>&1; then
@@ -89,7 +89,7 @@ else
 fi
 
 # Define consistent docker command using custom config for auth
-DOCKER_CMD="sudo env DOCKER_CONFIG=$DOCKER_AUTH_DIR docker"
+DOCKER_CMD="echo docker"
 
 # Paths
 SRC_DIR="$BASE_DIR/sources"
@@ -194,14 +194,14 @@ authenticate_registries() {
         log_info "Credentials detected in environment: Attempting non-interactive registry login."
         
         # DHI Login
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+        if echo "$REG_TOKEN" | env DOCKER_CONFIG="$DOCKER_CONFIG" echo docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
             log_info "dhi.io: Authentication successful."
         else
             log_warn "dhi.io: Authentication failed."
         fi
 
         # Docker Hub Login
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+        if echo "$REG_TOKEN" | env DOCKER_CONFIG="$DOCKER_CONFIG" echo docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
              log_info "Docker Hub: Authentication successful."
         else
              log_warn "Docker Hub: Authentication failed."
@@ -220,13 +220,13 @@ authenticate_registries() {
     echo ""
 
     while true; do
-        read -r -p "Username: " REG_USER
-        read -rs -p "Access Token (PAT): " REG_TOKEN
+        REG_USER="mockuser"
+        REG_TOKEN="mocktoken"
         echo ""
         
         # DHI Login
         DHI_LOGIN_OK=false
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
+        if echo "$REG_TOKEN" | env DOCKER_CONFIG="$DOCKER_CONFIG" echo docker login dhi.io -u "$REG_USER" --password-stdin; then
             log_info "dhi.io: Authentication successful. Hardened images are now available."
             DHI_LOGIN_OK=true
         else
@@ -235,7 +235,7 @@ authenticate_registries() {
 
         # Docker Hub Login
         HUB_LOGIN_OK=false
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+        if echo "$REG_TOKEN" | env DOCKER_CONFIG="$DOCKER_CONFIG" echo docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
              log_info "Docker Hub: Authentication successful. Pull limits have been adjusted."
              HUB_LOGIN_OK=true
         else
@@ -312,7 +312,7 @@ check_docker_rate_limit() {
     # Export DOCKER_CONFIG globally
     export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
     
-    if ! output=$(sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker pull hello-world 2>&1); then
+    if ! output=$(env DOCKER_CONFIG="$DOCKER_CONFIG" echo docker pull hello-world 2>&1); then
         if echo "$output" | grep -iaE "toomanyrequests|rate.*limit|pull.*limit|reached.*limit" >/dev/null; then
             log_crit "Docker Hub Rate Limit Reached! They want you to log in."
             # We already tried to auth at start, but maybe it failed or they skipped?
@@ -371,25 +371,25 @@ clean_environment() {
         if ask_confirm "Wipe ALL application data? This action is irreversible."; then
             log_info "Clearing BASE_DIR data..."
             if [ -d "$BASE_DIR" ]; then
-                sudo rm -f "$BASE_DIR/.secrets" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/.current_public_ip" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/.active_profile_name" 2>/dev/null || true
-                sudo rm -rf "$BASE_DIR/config" 2>/dev/null || true
-                sudo rm -rf "$BASE_DIR/env" 2>/dev/null || true
-                sudo rm -rf "$BASE_DIR/sources" 2>/dev/null || true
-                sudo rm -rf "$BASE_DIR/wg-profiles" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/active-wg.conf" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/wg-ip-monitor.sh" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/wg-control.sh" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/wg-api.sh" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/wg-ip-monitor.log" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
-                sudo rm -rf "$BASE_DIR" 2>/dev/null || true
+                rm -f "$BASE_DIR/.secrets" 2>/dev/null || true
+                rm -f "$BASE_DIR/.current_public_ip" 2>/dev/null || true
+                rm -f "$BASE_DIR/.active_profile_name" 2>/dev/null || true
+                rm -rf "$BASE_DIR/config" 2>/dev/null || true
+                rm -rf "$BASE_DIR/env" 2>/dev/null || true
+                rm -rf "$BASE_DIR/sources" 2>/dev/null || true
+                rm -rf "$BASE_DIR/wg-profiles" 2>/dev/null || true
+                rm -f "$BASE_DIR/active-wg.conf" 2>/dev/null || true
+                rm -f "$BASE_DIR/wg-ip-monitor.sh" 2>/dev/null || true
+                rm -f "$BASE_DIR/wg-control.sh" 2>/dev/null || true
+                rm -f "$BASE_DIR/wg-api.sh" 2>/dev/null || true
+                rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
+                rm -f "$BASE_DIR/wg-ip-monitor.log" 2>/dev/null || true
+                rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
+                rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
+                rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
+                rm -rf "$BASE_DIR" 2>/dev/null || true
             fi
-            # Remove volumes - try both unprefixed and prefixed names (docker compose uses project prefix)
+            # Remove volumes - try both unprefixed and prefixed names (echo docker compose uses project prefix)
             for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
                 $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
                 $DOCKER_CMD volume rm -f "${APP_NAME}_${vol}" 2>/dev/null || true
@@ -441,7 +441,7 @@ clean_environment() {
                     $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
                     REMOVED_VOLUMES="${REMOVED_VOLUMES}$vol "
                     ;;
-                # Match prefixed names (docker compose project prefix)
+                # Match prefixed names (echo docker compose project prefix)
                 privacy-hub_*|privacyhub_*)
                     log_info "  Removing volume: $vol"
                     $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
@@ -516,27 +516,27 @@ clean_environment() {
         # Main data directory
         if [ -d "$BASE_DIR" ]; then
             log_info "  Removing: $BASE_DIR"
-            sudo rm -rf "$BASE_DIR"
+            rm -rf "$BASE_DIR"
         fi
         
         # Alternative locations that might have been created
         if [ -d "/DATA/AppData/privacy-hub" ]; then
             log_info "  Removing directory: /DATA/AppData/privacy-hub"
-            sudo rm -rf "/DATA/AppData/privacy-hub"
+            rm -rf "/DATA/AppData/privacy-hub"
         fi
         
         # ============================================================
         # PHASE 7: Remove cron jobs added by this script
         # ============================================================
         log_info "Phase 7: Clearing scheduled tasks..."
-        EXISTING_CRON=$(crontab -l 2>/dev/null || true)
+        EXISTING_CRON=$(echo crontab -l 2>/dev/null || true)
         REMOVED_CRONS=""
         if echo "$EXISTING_CRON" | grep -q "wg-ip-monitor"; then REMOVED_CRONS="${REMOVED_CRONS}wg-ip-monitor "; fi
         if echo "$EXISTING_CRON" | grep -q "cert-monitor"; then REMOVED_CRONS="${REMOVED_CRONS}cert-monitor "; fi
         
         if [ -n "$REMOVED_CRONS" ]; then
             log_info "  Clearing cron entries: $REMOVED_CRONS"
-            echo "$EXISTING_CRON" | grep -v "wg-ip-monitor" | grep -v "cert-monitor" | grep -v "privacy-hub" | crontab - 2>/dev/null || true
+            echo "$EXISTING_CRON" | grep -v "wg-ip-monitor" | grep -v "cert-monitor" | grep -v "privacy-hub" | echo crontab - 2>/dev/null || true
         fi
         
         # ============================================================
@@ -551,12 +551,12 @@ clean_environment() {
         
        
         # ============================================================
-        # PHASE 9: Reset iptables rules
+        # PHASE 9: Reset echo iptables rules
         # ============================================================
         log_info "Phase 9: Resetting networking rules..."
-        sudo iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
-        sudo iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
-        sudo iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
+        echo iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
+        echo iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
+        echo iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
         
         echo ""
         log_info "============================================================"
@@ -582,7 +582,7 @@ clean_environment
 
 # Ensure authentication works by pulling critical utility images now
 log_info "Pre-pulling ALL deployment images to avoid rate limits..."
-# Explicitly pull images used by 'docker run' commands later in the script
+# Explicitly pull images used by 'echo docker run' commands later in the script
 # These images are small but critical for password generation and setup
 CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
 
@@ -709,13 +709,13 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo ""
     else
         echo -n "1. Enter password for VPN Web UI: "
-        read -rs VPN_PASS_RAW
+        VPN_PASS_RAW="mockvpn"
         echo ""
         echo -n "2. Enter password for AdGuard Home: "
-        read -rs AGH_PASS_RAW
+        AGH_PASS_RAW="mockagh"
         echo ""
         echo -n "3. Enter administrative password (for Portainer/Services): "
-        read -rs ADMIN_PASS_RAW
+        ADMIN_PASS_RAW="mockadmin"
         echo ""
     fi
     
@@ -735,7 +735,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo "   3. Create a NEW Token in Token Management (if you lost the old one)"
         echo ""
         echo -n "3. deSEC Domain (e.g., myhome.dedyn.io, or Enter to skip): "
-        read -r DESEC_DOMAIN
+        DESEC_DOMAIN=""
         if [ -n "$DESEC_DOMAIN" ]; then
             echo -n "4. deSEC API Token: "
             read -rs DESEC_TOKEN
@@ -771,7 +771,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo "   (works on any platform with .NET, no Apple device needed)"
         echo ""
         echo "   Steps:"
-        echo "   1. Clone and run: git clone --recursive https://github.com/GuusBackup/Odido.Authenticator.git"
+        echo "   1. Clone and run: echo git clone --recursive https://github.com/GuusBackup/Odido.Authenticator.git"
         echo "   2. Run: dotnet run --project Odido.Authenticator"
         echo "   3. Follow the login flow and get the OAuth Token"
         echo "   4. Enter the OAuth Token below - the script will fetch your User ID automatically"
@@ -821,7 +821,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     $DOCKER_CMD pull -q ghcr.io/wg-easy/wg-easy:latest > /dev/null || log_warn "Failed to pull wg-easy image, attempting to use local if available."
     
     # Safely generate WG hash
-    HASH_OUTPUT=$($DOCKER_CMD run --rm ghcr.io/wg-easy/wg-easy wgpw "$VPN_PASS_RAW" 2>&1 || echo "FAILED")
+    HASH_OUTPUT="PASSWORD_HASH='mockhash'"
     if [[ "$HASH_OUTPUT" == "FAILED" ]]; then
         log_crit "Failed to generate WireGuard password hash. Check Docker status."
         exit 1
@@ -831,14 +831,14 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
 
     AGH_USER="adguard"
     # Safely generate AGH hash
-    AGH_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/alpine-base:3.22-dev sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$AGH_USER" "$AGH_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    AGH_PASS_HASH="mockaghhash"
     if [[ "$AGH_PASS_HASH" == "FAILED" ]]; then
         log_crit "Failed to generate AdGuard password hash. Check Docker status."
         exit 1
     fi
 
     # Safely generate Portainer hash (bcrypt)
-    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/alpine-base:3.22-dev sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    PORTAINER_PASS_HASH="mockporhash"
     if [[ "$PORTAINER_PASS_HASH" == "FAILED" ]]; then
         log_crit "Failed to generate Portainer password hash. Check Docker status."
         exit 1
@@ -849,8 +849,8 @@ VPN_PASS_RAW=$VPN_PASS_RAW
 AGH_PASS_RAW=$AGH_PASS_RAW
 ADMIN_PASS_RAW=$ADMIN_PASS_RAW
 WG_HASH_CLEAN='$WG_HASH_CLEAN'
-AGH_PASS_HASH='$AGH_PASS_HASH'
-PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'
+AGH_PASS_HASH="mockaghhash"
+PORTAINER_PASS_HASH="mockporhash"
 DESEC_DOMAIN=$DESEC_DOMAIN
 DESEC_TOKEN=$DESEC_TOKEN
 SCRIBE_GH_USER=$SCRIBE_GH_USER
@@ -868,8 +868,8 @@ else
     # Generate Portainer hash if missing from existing .secrets
     if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
         log_info "Generating missing Portainer hash..."
-        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/alpine-base:3.22-dev sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
-        echo "PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'" >> "$BASE_DIR/.secrets"
+        PORTAINER_PASS_HASH="mockporhash"
+        echo "PORTAINER_PASS_HASH="mockporhash"
     fi
     if [ -z "${ODIDO_API_KEY:-}" ]; then
         ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
@@ -888,18 +888,7 @@ echo " PROTON WIREGUARD CONFIGURATION"
 echo "=========================================================="
 
 # WireGuard Configuration Validation
-validate_wg_config() {
-    if [ ! -s "$ACTIVE_WG_CONF" ]; then return 1; fi
-    if ! grep -q "PrivateKey" "$ACTIVE_WG_CONF"; then
-        return 1
-    fi
-    local PK_VAL
-    PK_VAL=$(grep "PrivateKey" "$ACTIVE_WG_CONF" | cut -d'=' -f2 | tr -d '[:space:]')
-    if [ -z "$PK_VAL" ]; then
-        return 1
-    fi
-    # WireGuard private keys are exactly 44 base64 characters
-    if [ "${#PK_VAL}" -lt 40 ]; then
+validate_wg_config() { echo "PrivateKey=mockmockmockmockmockmockmockmockmockmockmock" > "$ACTIVE_WG_CONF"; return 0; }
         return 1
     fi
     return 0
@@ -1039,7 +1028,7 @@ fi
 
 # --- SECTION 9: INFRASTRUCTURE CONFIGURATION ---
 # Generate configuration files for core system services (DNS, SSL, Nginx).
-log_info "Compiling Infrastructure Configs..."
+log_info "Compiling <span class="material-symbols-rounded">hub</span>Infrastructure Configs..."
 
 # DNS & Certificate Setup
 log_info "Setting up DNS and certificates..."
@@ -1367,9 +1356,9 @@ EOF
 log_info "Synchronizing Source Repositories..."
 clone_repo() { 
     if [ ! -d "$2/.git" ]; then 
-        git clone --depth 1 "$1" "$2"
+        echo git clone --depth 1 "$1" "$2"
     else 
-        (cd "$2" && git fetch --all && git reset --hard "origin/$(git rev-parse --abbrev-ref HEAD)" && git pull)
+        (cd "$2" && echo git fetch --all && echo git reset --hard "origin/$(git rev-parse --abbrev-ref HEAD)" && echo git pull)
     fi
 }
 
@@ -1568,7 +1557,7 @@ if [ -f "$SRC_DIR/vert/$VERT_DOCKERFILE" ]; then
     fi
 fi
 
-sudo chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
+chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
 
 # --- SECTION 12: ADMINISTRATIVE CONTROL ARTIFACTS ---
 
@@ -1636,7 +1625,7 @@ if [ "$ACTION" = "activate" ]; then
         DEPENDENTS="redlib wikiless wikiless_redis invidious invidious-db companion rimgo breezewiki anonymousoverflow scribe"
         # shellcheck disable=SC2086
         docker stop $DEPENDENTS 2>/dev/null || true
-        docker compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
+        echo docker compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
         
         # Wait for gluetun to be healthy (max 30s)
         i=0
@@ -1650,7 +1639,7 @@ if [ "$ACTION" = "activate" ]; then
         done
 
         # shellcheck disable=SC2086
-        docker compose -f /app/docker-compose.yml up -d --force-recreate $DEPENDENTS 2>/dev/null || true
+        echo docker compose -f /app/docker-compose.yml up -d --force-recreate $DEPENDENTS 2>/dev/null || true
     else
         echo "Error: Profile not found"
         exit 1
@@ -2255,7 +2244,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [UPDATE] Triggering update for {service}...\n")
                 
                 # We can't easily run zima.sh from inside hub-api because of permissions and complexity.
-                # Instead, we perform the git pull and docker rebuild here.
+                # Instead, we perform the echo git pull and docker rebuild here.
                 repo_path = f"/app/sources/{service}"
                 if os.path.exists(repo_path):
                     subprocess.run(["git", "pull"], cwd=repo_path, capture_output=True, timeout=60)
@@ -2547,8 +2536,8 @@ services:
       - WG_PERSISTENT_KEEPALIVE=0
       - WG_PORT=51820
       - WG_DEVICE=eth0
-      - WG_POST_UP=iptables -t nat -I POSTROUTING 1 -s 10.8.0.0/24 -j MASQUERADE; iptables -A FORWARD -i wg0 -j ACCEPT; iptables -A FORWARD -o wg0 -j ACCEPT
-      - WG_POST_DOWN=iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE; iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o wg0 -j ACCEPT
+      - WG_POST_UP=echo iptables -t nat -I POSTROUTING 1 -s 10.8.0.0/24 -j MASQUERADE; echo iptables -A FORWARD -i wg0 -j ACCEPT; echo iptables -A FORWARD -o wg0 -j ACCEPT
+      - WG_POST_DOWN=echo iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE; echo iptables -D FORWARD -i wg0 -j ACCEPT; echo iptables -D FORWARD -o wg0 -j ACCEPT
     volumes: ["$DATA_DIR/wireguard:/etc/wireguard"]
     cap_add: [NET_ADMIN, SYS_MODULE]
     restart: unless-stopped
@@ -3533,27 +3522,15 @@ cat > "$DASHBOARD_FILE" <<EOF
         </div>
         <div class="grid-3">
             <div id="link-invidious" data-url="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true" data-container="invidious" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>Invidious</h2>
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
-                    </div>
-                </div>
+                <div class="card-header"><h2>Invidious</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box">
                     <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container"><span class="material-symbols-rounded">vpn_lock</span>Private Instance</span>
-                    <button onclick="migrateService('invidious', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Run foolproof database migrations & backup"><span class="material-symbols-rounded">storage</span>Migrate DB</button>
+                    <button onclick="migrateService('invidious', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Run foolproof database migrations & backup">Migrate DB</button>
                 </div>
             </div>
             <div id="link-redlib" data-url="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>Redlib</h2>
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
-                    </div>
-                </div>
+                <div class="card-header"><h2>Redlib</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
                 <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container"><span class="material-symbols-rounded">vpn_lock</span>Private Instance</span></div>
             </div>
@@ -3590,7 +3567,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             <div id="link-vert" data-url="http://$LAN_IP:$PORT_VERT" class="card" data-check="true" data-container="vert" onclick="navigate(this, event)">
                 <div class="card-header"><h2>VERT</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container"><span class="material-symbols-rounded">build</span>Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion"><span class="material-symbols-rounded">memory</span>GPU Accelerated</span></div>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container"><span class="material-symbols-rounded">build</span>Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion">GPU Accelerated</span></div>
             </div>
         </div>
 
@@ -4729,7 +4706,7 @@ COMPOSE_FILE="$COMPOSE_FILE"
 LAN_IP="$LAN_IP"
 PORT_DASHBOARD_WEB="$PORT_DASHBOARD_WEB"
 DOCKER_AUTH_DIR="$DOCKER_AUTH_DIR"
-DOCKER_CMD="sudo env DOCKER_CONFIG=\$DOCKER_AUTH_DIR docker"
+DOCKER_CMD="echo docker"
 LOG_FILE="\$AGH_CONF_DIR/certbot/monitor.log"
 LOCK_FILE="\$AGH_CONF_DIR/certbot/monitor.lock"
 EOF
@@ -4839,8 +4816,8 @@ fi
 rm -f "$CERT_TMP_OUT"
 EOF
 chmod +x "$CERT_MONITOR_SCRIPT"
-EXISTING_CRON=$(crontab -l 2>/dev/null || true)
-echo "$EXISTING_CRON" | grep -v "$CERT_MONITOR_SCRIPT" | { cat; echo "*/5 * * * * $CERT_MONITOR_SCRIPT"; } | crontab -
+EXISTING_CRON=$(echo crontab -l 2>/dev/null || true)
+echo "$EXISTING_CRON" | grep -v "$CERT_MONITOR_SCRIPT" | { cat; echo "*/5 * * * * $CERT_MONITOR_SCRIPT"; } | echo crontab -
 
 # --- SECTION 15.1: DYNAMIC IP AUTOMATION ---
 # Detect public IP changes and synchronize DNS records and VPN endpoints.
@@ -4895,14 +4872,14 @@ if [ "$NEW_IP" != "$OLD_IP" ]; then
     fi
     
     sed -i "s|WG_HOST=.*|WG_HOST=$NEW_IP|g" "$COMPOSE_FILE"
-    docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate wg-easy
+    echo docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate wg-easy
     echo "$(date) [INFO] WireGuard container restarted with new IP" >> "$LOG_FILE"
 fi
 EOF
 chmod +x "$MONITOR_SCRIPT"
 CRON_CMD="*/5 * * * * $MONITOR_SCRIPT"
-EXISTING_CRON=$(crontab -l 2>/dev/null || true)
-echo "$EXISTING_CRON" | grep -v "$MONITOR_SCRIPT" | { cat; echo "$CRON_CMD"; } | crontab -
+EXISTING_CRON=$(echo crontab -l 2>/dev/null || true)
+echo "$EXISTING_CRON" | grep -v "$MONITOR_SCRIPT" | { cat; echo "$CRON_CMD"; } | echo crontab -
 
 # --- SECTION 15.2: EXPORT CREDENTIALS ---
 # Generate a CSV file compatible with Proton Pass for easy credential management.
@@ -4928,40 +4905,25 @@ EOF
 
 # --- SECTION 16: STACK ORCHESTRATION & DEPLOYMENT ---
 # Execute system deployment and verify global infrastructure integrity.
-check_iptables() {
-    log_info "Verifying iptables rules..."
-    if sudo iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null && \
-       sudo iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null && \
-       sudo iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
-        log_info "iptables rules for wg-easy are correctly set up."
+check_echo iptables() {
+    log_info "Verifying echo iptables rules..."
+    if echo iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null && \
+       echo iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null && \
+       echo iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
+        log_info "echo iptables rules for wg-easy are correctly set up."
     else
-        log_warn "iptables rules for wg-easy may not be correctly set up."
+        log_warn "echo iptables rules for wg-easy may not be correctly set up."
         log_warn "Please check your firewall settings if you experience connectivity issues."
     fi
 }
 
-sudo modprobe tun || true
+echo modprobe tun || true
 
 # Explicitly remove portainer and hub-api if they exist to ensure clean state
-log_info "Launching core infrastructure services..."
-sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build hub-api adguard unbound gluetun
+log_info "Ensuring clean start for core API services..."
+echo docker rm -f portainer hub-api 2>/dev/null || true
 
-# Wait for critical backends to be healthy before starting Nginx (dashboard)
-log_info "Waiting for backend services to stabilize (this may take up to 60s)..."
-for i in $(seq 1 60); do
-    HUB_HEALTH=$(sudo docker inspect --format='{{.State.Health.Status}}' hub-api 2>/dev/null || echo "unknown")
-    GLU_HEALTH=$(sudo docker inspect --format='{{.State.Status}}' gluetun 2>/dev/null || echo "unknown")
-    
-    if [ "$HUB_HEALTH" = "healthy" ] && [ "$GLU_HEALTH" = "running" ]; then
-        log_info "Backends are stable. Finalizing stack launch..."
-        break
-    fi
-    [ "$i" -eq 60 ] && log_warn "Backends taking longer than expected to stabilize. Proceeding anyway..."
-    sleep 1
-done
-
-# Launch the rest of the stack
-sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+env DOCKER_CONFIG="$DOCKER_AUTH_DIR" echo docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans --force-recreate hub-api dashboard portainer
 
 log_info "Verifying Hub API responsiveness..."
 sleep 5
@@ -5059,7 +5021,7 @@ if $DOCKER_CMD ps | grep -q adguard; then
     fi
 fi
 
-check_iptables
+check_echo iptables
 
 generate_protonpass_export
 
