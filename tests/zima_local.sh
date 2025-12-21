@@ -1061,7 +1061,7 @@ fi
 
 # --- SECTION 9: INFRASTRUCTURE CONFIGURATION ---
 # Generate configuration files for core system services (DNS, SSL, Nginx).
-log_info "Compiling Infrastructure Configs..."
+log_info "Compiling <span class="material-symbols-rounded">hub</span> Infrastructure Configs..."
 
 # DNS & Certificate Setup
 log_info "Setting up DNS and certificates..."
@@ -2231,6 +2231,19 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
+        elif self.path == '/restart-stack':
+            try:
+                # Trigger a full stack restart in the background
+                log_file = "/app/deployment.log"
+                with open(log_file, 'a') as f:
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [SYSTEM] Full stack restart triggered via Dashboard.\n")
+                
+                # We use a detached process to avoid killing the API before it responds
+                # The restart will take 20-30 seconds.
+                subprocess.Popen(["/bin/sh", "-c", "sleep 2 && docker compose -f /app/docker-compose.yml restart"])
+                self._send_json({"success": True, "message": "Stack restart initiated"})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         elif self.path == '/update-service':
             try:
                 l = int(self.headers['Content-Length'])
@@ -3139,9 +3152,9 @@ cat > "$DASHBOARD_FILE" <<EOF
         .chip {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px; /* Increased gap for M3 */
             height: 32px;
-            padding: 0 16px;
+            padding: 0 12px;
             border-radius: 8px;
             font-size: 14px; /* Label Large */
             font-weight: 500;
@@ -3153,6 +3166,12 @@ cat > "$DASHBOARD_FILE" <<EOF
             color: var(--md-sys-color-on-surface);
             position: relative;
             overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .chip .material-symbols-rounded {
+            font-size: 18px;
+            pointer-events: none;
         }
         
         .chip::before {
@@ -3169,6 +3188,15 @@ cat > "$DASHBOARD_FILE" <<EOF
         .chip.vpn { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border: none; }
         .chip.admin { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border: none; }
         .chip.tertiary { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); border: none; }
+        
+        /* Category Badges (Informational) */
+        .category-badge {
+            border: none;
+            background: var(--md-sys-color-surface-container-high);
+            color: var(--md-sys-color-on-surface-variant);
+            padding: 0 12px 0 8px;
+            pointer-events: none;
+        }
         
         /* Status Indicator */
         .status-indicator {
@@ -3380,6 +3408,39 @@ cat > "$DASHBOARD_FILE" <<EOF
             overflow-y: auto;
             font-size: 13px;
             color: var(--md-sys-color-on-surface-variant);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            line-height: 1.5;
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .log-entry:last-child { border-bottom: none; }
+        
+        .log-icon {
+            font-size: 18px !important;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .log-content {
+            flex-grow: 1;
+            overflow-wrap: anywhere;
+        }
+
+        .log-time {
+            opacity: 0.5;
+            font-size: 0.85em;
+            white-space: nowrap;
+            flex-shrink: 0;
+            margin-top: 3px;
         }
         
         .code-block {
@@ -3478,7 +3539,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                         <p class="body-medium" id="update-list" style="margin: 8px 0 0 0; color: inherit; opacity: 0.9;">New versions detected for some services.</p>
                     </div>
                     <div style="display: flex; gap: 12px;">
-                        <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);">Update All</button>
+                        <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Pull latest source code and rebuild containers for all pending services.">Update All</button>
                         <button onclick="this.closest('#update-banner').style.display='none'" class="btn btn-outlined" style="border-color: currentColor; color: inherit;">Dismiss</button>
                     </div>
                 </div>
@@ -3487,80 +3548,80 @@ cat > "$DASHBOARD_FILE" <<EOF
 
         <div class="section-label">Applications</div>
         <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span class="chip" data-tooltip="Services isolated within a secure VPN tunnel (Gluetun). This allows you to host your own private instances—removing the need to trust third-party hosts—while ensuring your home IP remains hidden from end-service providers.">VPN Protected</span>
-            <span class="chip" data-tooltip="Local services accessed directly through the internal network interface.">Direct Access</span>
-            <span class="chip tertiary" data-tooltip="Advanced infrastructure control and container telemetry via Portainer.">Infrastructure</span>
+            <span class="chip category-badge" data-tooltip="Services isolated within a secure VPN tunnel (Gluetun). This allows you to host your own private instances—removing the need to trust third-party hosts—while ensuring your home IP remains hidden from end-service providers."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
+            <span class="chip category-badge" data-tooltip="Local services accessed directly through the internal network interface."><span class="material-symbols-rounded">lan</span> Direct Access</span>
+            <span class="chip category-badge" data-tooltip="Advanced infrastructure control and container telemetry via Portainer."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
         </div>
         <div class="grid-3">
             <div id="link-invidious" data-url="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true" data-container="invidious" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Invidious</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
+                <div class="card-header"><h2>Invidious</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box">
-                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance</span>
+                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
                     <button onclick="migrateService('invidious', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Run foolproof database migrations & backup">Migrate DB</button>
                 </div>
             </div>
             <div id="link-redlib" data-url="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Redlib</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
+                <div class="card-header"><h2>Redlib</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance</span></div>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span></div>
             </div>
             <div id="link-wikiless" data-url="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true" data-container="wikiless" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Wikiless</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
+                <div class="card-header"><h2>Wikiless</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance</span></div>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span></div>
             </div>
             <div id="link-memos" data-url="http://$LAN_IP:$PORT_MEMOS" class="card" data-check="true" data-container="memos" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Memos</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
+                <div class="card-header"><h2>Memos</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container">Direct Access</span></div>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container"><span class="material-symbols-rounded">lan</span> Direct Access</span></div>
             </div>
             <div id="link-rimgo" data-url="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true" data-container="rimgo" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Rimgo</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
+                <div class="card-header"><h2>Rimgo</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance</span></div>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span></div>
             </div>
             <div id="link-scribe" data-url="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true" data-container="scribe" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Scribe</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
+                <div class="card-header"><h2>Scribe</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance</span></div>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span></div>
             </div>
             <div id="link-breezewiki" data-url="http://$LAN_IP:$PORT_BREEZEWIKI/" class="card" data-check="true" data-container="breezewiki" onclick="navigate(this, event)">
-                <div class="card-header"><h2>BreezeWiki</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
+                <div class="card-header"><h2>BreezeWiki</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance</span></div>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span></div>
             </div>
             <div id="link-anonymousoverflow" data-url="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true" data-container="anonymousoverflow" onclick="navigate(this, event)">
-                <div class="card-header"><h2>AnonOverflow</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
+                <div class="card-header"><h2>AnonOverflow</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance</span></div>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span></div>
             </div>
             <div id="link-vert" data-url="http://$LAN_IP:$PORT_VERT" class="card" data-check="true" data-container="vert" onclick="navigate(this, event)">
-                <div class="card-header"><h2>VERT</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
+                <div class="card-header"><h2>VERT</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container">Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion">GPU Accelerated</span></div>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container"><span class="material-symbols-rounded">build</span> Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion">GPU Accelerated</span></div>
             </div>
         </div>
 
         <div class="section-label">System Management</div>
         <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span class="chip" data-tooltip="Core infrastructure management and gateway orchestration">Core Services</span>
+            <span class="chip category-badge" data-tooltip="Core infrastructure management and gateway orchestration"><span class="material-symbols-rounded">settings_input_component</span> Core Services</span>
         </div>
         <div class="grid-3">
             <div id="link-adguard" data-url="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card" data-check="true" data-container="adguard" onclick="navigate(this, event)">
-                <div class="card-header"><h2>AdGuard Home</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
+                <div class="card-header"><h2>AdGuard Home</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container">Local Access</span><span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span></div>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container"><span class="material-symbols-rounded">home</span> Local Access</span><span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span></div>
             </div>
             <div id="link-portainer" data-url="http://$LAN_IP:$PORT_PORTAINER" class="card" data-check="true" data-container="portainer" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Portainer</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
+                <div class="card-header"><h2>Portainer</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container">Local Access</span></div>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container"><span class="material-symbols-rounded">home</span> Local Access</span></div>
             </div>
             <div id="link-wg-easy" data-url="http://$LAN_IP:$PORT_WG_WEB" class="card" data-check="true" data-container="wg-easy" onclick="navigate(this, event)">
-                <div class="card-header"><h2>WireGuard</h2><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div></div>
+                <div class="card-header"><h2>WireGuard</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">The primary gateway for <strong>secure remote access</strong>. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container">Local Access</span></div>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container"><span class="material-symbols-rounded">home</span> Local Access</span></div>
             </div>
         </div>
 
@@ -3568,27 +3629,32 @@ cat > "$DASHBOARD_FILE" <<EOF
         <div class="grid-2">
             <div class="card">
                 <h3>Certificate Status</h3>
-                <div id="cert-status-content" style="padding-top: 12px;">
+                <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
                     <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label">Type</span><span class="stat-value" id="cert-type">Loading...</span></div>
                     <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label">Domain</span><span class="stat-value sensitive" id="cert-subject">Loading...</span></div>
                     <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label">Issuer</span><span class="stat-value sensitive" id="cert-issuer">Loading...</span></div>
                     <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label">Expires</span><span class="stat-value sensitive" id="cert-to">Loading...</span></div>
-                    <div id="ssl-failure-info" style="display:none; margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
-                        <div class="body-small" style="font-weight:bold; margin-bottom:4px;">Status Message</div>
-                        <div class="body-small" id="ssl-failure-reason">--</div>
+                    <div id="ssl-failure-info" style="display:none; margin-top: 16px; padding: 16px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: 1px solid var(--md-sys-color-error);">
+                        <div class="body-small" style="font-weight:600; margin-bottom:4px; display: flex; align-items: center; gap: 8px;">
+                            <span class="material-symbols-rounded" style="font-size: 16px;">error</span>
+                            Pipeline Error
+                        </div>
+                        <div class="body-small" id="ssl-failure-reason" style="opacity: 0.9;">--</div>
                     </div>
                 </div>
-                <div id="cert-status-badge" class="chip" style="margin-top: auto; width: fit-content;" data-tooltip="Overall health of the SSL certificate issuance pipeline">...</div>
-                <button id="ssl-retry-btn" class="btn btn-icon btn-action" style="display:none;" data-tooltip="Force Let's Encrypt re-attempt" onclick="requestSslCheck()">
-                    <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.07 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/></svg>
-                </button>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; gap: 16px; flex-wrap: wrap;">
+                    <div id="cert-status-badge" class="chip" style="width: fit-content;" data-tooltip="Overall health of the SSL certificate issuance pipeline">...</div>
+                    <button id="ssl-retry-btn" class="btn btn-icon btn-action" style="display:none;" data-tooltip="Force Let's Encrypt re-attempt" onclick="requestSslCheck()">
+                        <span class="material-symbols-rounded">refresh</span>
+                    </button>
+                </div>
             </div>
             <div class="card">
                 <h3>deSEC Configuration</h3>
                 <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
                 <form onsubmit="saveDesecConfig(); return false;">
-                    <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. user.dedyn.io)" style="margin-bottom:12px;" autocomplete="username">
-                    <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;" autocomplete="current-password">
+                    <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. user.dedyn.io)" style="margin-bottom:12px;" autocomplete="username" data-tooltip="Enter your registered deSEC domain.">
+                    <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="Your deSEC API Token for DNS-01 authentication.">
                     <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
                         Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
                     </p>
@@ -3647,7 +3713,15 @@ else
                     <li>Remote Access: Utilize WireGuard VPN interface</li>
                 </ol>
                 <div class="code-block sensitive" style="margin-top:12px;">$LAN_IP</div>
-                <p class="body-small" style="color:var(--md-sys-color-warning); margin-top:12px;">Self-Signed (Local Certificate)</p>
+                <div style="margin-top: auto; padding-top: 16px;">
+                    <div class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
+                        <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-secondary-container);">warning</span>
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span style="font-weight: 600;">Self-Signed (Local)</span>
+                            <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL.</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 EOF
 fi
@@ -3725,10 +3799,18 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace">/DATA/AppData/privacy-hub/config</span></div>
                 <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
                 <div class="stat-row"><span class="stat-label">Safe Display</span><span class="stat-value">Active (Client-side)</span></div>
-                <p class="body-small" style="margin-top: auto; color: var(--md-sys-color-on-surface-variant);">
+                <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
+                    <button onclick="restartStack()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Reboot all containers in the stack. This takes ~30 seconds and is required for manual .secrets changes to take effect.">
+                        <span class="material-symbols-rounded">restart_alt</span>
+                        Restart Stack
+                    </button>
+                    <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">
+                        Note: Changes to .secrets may require a stack restart to take full effect.
+                    </p>
+                </div>
+                <p class="body-small" style="margin-top: auto; padding-top: 16px; color: var(--md-sys-color-on-surface-variant);">
                     See the <a href="https://github.com/Lyceris-chan/selfhost-stack#credentials" target="_blank" style="color: var(--md-sys-color-primary);">README</a> for full details on obtaining required credentials.
                 </p>
-                <p class="body-small" style="margin-top: 8px; color: var(--md-sys-color-on-surface-variant);">Note: Changes to .secrets may require a stack restart to take full effect.</p>
             </div>
             <div class="card">
                 <h3>System & Deployment Logs</h3>
@@ -4377,11 +4459,72 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const el = document.getElementById('log-container');
             const status = document.getElementById('log-status');
             const evtSource = new EventSource(API + "/events");
-            evtSource.onmessage = function(e) {
+            
+            function parseLogLine(line) {
                 const div = document.createElement('div');
                 div.className = 'log-entry';
-                div.textContent = e.data;
-                el.appendChild(div);
+                
+                let icon = 'info';
+                let iconColor = 'var(--md-sys-color-primary)';
+                let message = line;
+                let timestamp = '';
+
+                // Extract timestamp if present (YYYY-MM-DD HH:MM:SS or [Day, DD Mon YYYY HH:MM:SS GMT])
+                const tsMatch = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/) || line.match(/^\[(.*?)\]/);
+                if (tsMatch) {
+                    timestamp = tsMatch[1];
+                    message = line.replace(tsMatch[0], '').trim();
+                }
+
+                // Human-readable translations
+                if (message.includes('GET /status') || message.includes('GET /api/status')) {
+                    icon = 'analytics';
+                    message = 'System health check processed';
+                } else if (message.includes('GET /events')) {
+                    icon = 'rss_feed';
+                    message = 'Real-time log stream connected';
+                } else if (message.includes('GET /profiles') || message.includes('GET /api/profiles')) {
+                    icon = 'vpn_key';
+                    message = 'Retrieving VPN configuration profiles';
+                } else if (message.includes('POST /activate') || message.includes('POST /api/activate')) {
+                    icon = 'bolt';
+                    message = 'Activating selected VPN profile';
+                } else if (message.includes('GET /certificate-status')) {
+                    icon = 'verified_user';
+                    message = 'Verifying SSL certificate integrity';
+                } else if (message.includes('POST /update-service')) {
+                    icon = 'update';
+                    message = 'Triggering service update/rebuild';
+                } else if (message.includes(' [INFO] ')) {
+                    icon = 'info';
+                    message = message.replace(' [INFO] ', '');
+                } else if (message.includes(' [WARN] ')) {
+                    icon = 'warning';
+                    iconColor = 'var(--md-sys-color-warning)';
+                    message = message.replace(' [WARN] ', '');
+                } else if (message.includes(' [ERROR] ')) {
+                    icon = 'error';
+                    iconColor = 'var(--md-sys-color-error)';
+                    message = message.replace(' [ERROR] ', '');
+                }
+
+                // Handle HTTP status codes in remaining text
+                if (message.includes(' 200 ')) {
+                    message = message.replace(/\"GET .*?\" 200 -?/, 'Success').replace(/\"POST .*?\" 200 -?/, 'Action completed');
+                }
+
+                div.innerHTML = \`
+                    <span class="material-symbols-rounded log-icon" style="color: \${iconColor}">\${icon}</span>
+                    <div class="log-content">\${message}</div>
+                    <span class="log-time">\${timestamp}</span>
+                \`;
+                return div;
+            }
+
+            evtSource.onmessage = function(e) {
+                if (!e.data) return;
+                el.appendChild(parseLogLine(e.data));
+                if (el.childNodes.length > 500) el.removeChild(el.firstChild);
                 el.scrollTop = el.scrollHeight;
             };
             evtSource.onopen = function() { status.textContent = "Live"; status.style.color = "var(--md-sys-color-success)"; };
@@ -4428,7 +4571,21 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 document.getElementById('cert-type').textContent = data.type || "--";
                 document.getElementById('cert-subject').textContent = data.subject || "--";
                 document.getElementById('cert-issuer').textContent = data.issuer || "--";
-                document.getElementById('cert-to').textContent = data.expires || "--";
+                
+                // Make the year slightly bolder
+                const expiresEl = document.getElementById('cert-to');
+                if (data.expires && data.expires !== "--") {
+                    const parts = data.expires.split(' ');
+                    if (parts.length > 0) {
+                        const lastPart = parts[parts.length - 1];
+                        const rest = data.expires.substring(0, data.expires.lastIndexOf(lastPart));
+                        expiresEl.innerHTML = rest + '<span style="font-weight: 600;">' + lastPart + '</span>';
+                    } else {
+                        expiresEl.textContent = data.expires;
+                    }
+                } else {
+                    expiresEl.textContent = "--";
+                }
                 
                 const badge = document.getElementById('cert-status-badge');
                 const isTrusted = data.status && data.status.includes("Trusted");
@@ -4524,6 +4681,55 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 alert("Network error while triggering SSL check.");
             }
             setTimeout(() => { btn.disabled = false; btn.style.opacity = '1'; }, 10000);
+        }
+
+        async function restartStack() {
+            if (!confirm("Are you sure you want to restart the entire stack? The dashboard and all services will be unreachable for approximately 30 seconds.")) return;
+            
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(API + "/restart-stack", {
+                    method: 'POST',
+                    headers
+                });
+                
+                const data = await res.json();
+                if (data.success) {
+                    // Show a persistent overlay or alert
+                    document.body.innerHTML = \`
+                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:var(--md-sys-color-surface); color:var(--md-sys-color-on-surface); font-family:sans-serif; text-align:center; padding:24px;">
+                            <span class="material-symbols-rounded" style="font-size:64px; color:var(--md-sys-color-primary); margin-bottom:24px;">restart_alt</span>
+                            <h1>Restarting Stack...</h1>
+                            <p style="margin-top:16px; opacity:0.8;">The management interface is rebooting. This page will automatically refresh when the services are back online.</p>
+                            <div style="margin-top:32px; width:48px; height:48px; border:4px solid var(--md-sys-color-surface-container-highest); border-top:4px solid var(--md-sys-color-primary); border-radius:50%; animation: spin 1s linear infinite;"></div>
+                            <style>
+                                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                            </style>
+                        </div>
+                    \`;
+                    
+                    // Poll for availability
+                    let attempts = 0;
+                    const checkAvailability = setInterval(async () => {
+                        attempts++;
+                        try {
+                            const ping = await fetch(window.location.href, { mode: 'no-cors' });
+                            clearInterval(checkAvailability);
+                            window.location.reload();
+                        } catch (e) {
+                            if (attempts > 60) {
+                                clearInterval(checkAvailability);
+                                alert("Restart is taking longer than expected. Please refresh the page manually.");
+                            }
+                        }
+                    }, 2000);
+                } else {
+                    throw new Error(data.error || "Unknown error");
+                }
+            } catch (e) {
+                alert("Failed to initiate restart: " + e.message);
+            }
         }
         
         document.addEventListener('DOMContentLoaded', () => {
