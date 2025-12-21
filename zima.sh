@@ -1586,7 +1586,7 @@ DATA_DIR="/app/data"
 BACKUP_DIR="$DATA_DIR/backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
-log() { echo "$(date) [DATABASE] $1"; }
+log() { echo "{\"timestamp\":\"$(date +'%Y-%m-%d %H:%M:%S')\",\"level\":\"DATABASE\",\"category\":\"MAINTENANCE\",\"message\":\"$1\"}"; }
 
 mkdir -p "$BACKUP_DIR"
 
@@ -1613,6 +1613,22 @@ if [ "$SERVICE" = "invidious" ]; then
         log "Applying schema updates..."
         docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
         log "Invidious migration complete."
+    fi
+elif [ "$SERVICE" = "adguard" ]; then
+    if [ "$ACTION" = "clear-logs" ]; then
+        log "Clearing AdGuard Home query logs..."
+        # AdGuard logs are in the work directory (data/adguard-work/querylog.json or similar)
+        # We can trigger it via API or just truncate the log file if we mount it.
+        # Safer way: clear the file in the mounted volume.
+        find "$DATA_DIR/adguard-work" -name "querylog.json" -exec truncate -s 0 {} +
+        log "AdGuard logs cleared."
+    fi
+elif [ "$SERVICE" = "memos" ]; then
+    if [ "$ACTION" = "vacuum" ]; then
+        log "Optimizing Memos database (VACUUM)..."
+        # Memos uses SQLite.
+        docker exec memos sqlite3 /var/opt/memos/memos_prod.db "VACUUM;"
+        log "Memos database optimized."
     fi
 else
     log "No logic defined for $SERVICE."
@@ -1872,17 +1888,24 @@ WGEDATAEOF
     
     # Check individual privacy services status internally
     SERVICES_JSON="{"
+    HEALTH_DETAILS_JSON="{"
     FIRST_SRV=1
     # Added core infrastructure services to the monitoring loop
     for srv in "invidious:3000" "redlib:8080" "wikiless:8180" "memos:5230" "rimgo:3002" "scribe:8280" "breezewiki:10416" "anonymousoverflow:8480" "vert:80" "vertd:24153" "adguard:8083" "portainer:9000" "wg-easy:51821"; do
         s_name=${srv%:*}
         s_port=${srv#*:}
-        [ $FIRST_SRV -eq 0 ] && SERVICES_JSON="$SERVICES_JSON,"
+        [ $FIRST_SRV -eq 0 ] && { SERVICES_JSON="$SERVICES_JSON,"; HEALTH_DETAILS_JSON="$HEALTH_DETAILS_JSON,"; }
         
         # Priority 1: Check Docker container health if it exists
         HEALTH="unknown"
+        DETAILS=""
         if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${s_name}$"; then
-            HEALTH=$(docker inspect --format='{{.State.Health.Status}}' "$s_name" 2>/dev/null || echo "running")
+            STATE_JSON=$(docker inspect --format='{{json .State}}' "$s_name" 2>/dev/null)
+            HEALTH=$(echo "$STATE_JSON" | grep -oP '"Health":.*?"Status":"\K[^"]+' || echo "running")
+            # If unhealthy, extract last error
+            if [ "$HEALTH" = "unhealthy" ]; then
+                DETAILS=$(echo "$STATE_JSON" | grep -oP '"Log":\[\{"Start":".*?","End":".*?","ExitCode":\d+,"Output":"\K[^"]+' | tail -1 | sed 's/\\n/ /g' | sed 's/\\//g')
+            fi
         fi
 
         if [ "$HEALTH" = "healthy" ] || [ "$HEALTH" = "running" ]; then
@@ -1897,7 +1920,7 @@ WGEDATAEOF
             if nc -z -w 2 "$TARGET_HOST" "$s_port" >/dev/null 2>&1; then
                 SERVICES_JSON="$SERVICES_JSON\"$s_name\":\"up\""
             else
-                SERVICES_JSON="$SERVICES_JSON\"$s_name\":\"down\""
+                SERVICES_JSON="$SERVICES_JSON\"$s_name\":\"$HEALTH\""
             fi
         else
             # Fallback to network check
@@ -1912,14 +1935,17 @@ WGEDATAEOF
                 SERVICES_JSON="$SERVICES_JSON\"$s_name\":\"down\""
             fi
         fi
+        HEALTH_DETAILS_JSON="$HEALTH_DETAILS_JSON\"$s_name\":\"$(sanitize_json_string "$DETAILS")\""
         FIRST_SRV=0
     done
     SERVICES_JSON="$SERVICES_JSON}"
+    HEALTH_DETAILS_JSON="$HEALTH_DETAILS_JSON}"
 
-    printf '{"gluetun":{"status":"%s","healthy":%s,"active_profile":"%s","endpoint":"%s","public_ip":"%s","handshake_ago":"%s","session_rx":"%s","session_tx":"%s","total_rx":"%s","total_tx":"%s"},"wgeasy":{"status":"%s","host":"%s","clients":"%s","connected":"%s","session_rx":"%s","session_tx":"%s","total_rx":"%s","total_tx":"%s"},"services":%s}' \
+    printf '{"gluetun":{"status":"%s","healthy":%s,"active_profile":"%s","endpoint":"%s","public_ip":"%s","handshake_ago":"%s","session_rx":"%s","session_tx":"%s","total_rx":"%s","total_tx":"%s"},"wgeasy":{"status":"%s","host":"%s","clients":"%s","connected":"%s","session_rx":"%s","session_tx":"%s","total_rx":"%s","total_tx":"%s"},"services":%s,"health_details":%s}' \
         "$GLUETUN_STATUS" "$GLUETUN_HEALTHY" "$ACTIVE_NAME" "$ENDPOINT" "$PUBLIC_IP" "$HANDSHAKE_AGO" "$SESSION_RX" "$SESSION_TX" "$ALLTIME_RX" "$ALLTIME_TX" \
         "$WGE_STATUS" "$WGE_HOST" "$WGE_CLIENTS" "$WGE_CONNECTED" "$WGE_SESSION_RX" "$WGE_SESSION_TX" "$WGE_TOTAL_RX" "$WGE_TOTAL_TX" \
-        "$SERVICES_JSON"
+        "$SERVICES_JSON" "$HEALTH_DETAILS_JSON"
+fi
 fi
 EOF
 chmod +x "$WG_CONTROL_SCRIPT"
@@ -1963,20 +1989,29 @@ def extract_profile_name(config):
                 return name
     return None
 
+def log_structured(level, message, category="SYSTEM"):
+    """Append a structured JSON log entry."""
+    entry = {
+        "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+        "level": level,
+        "category": category,
+        "message": message
+    }
+    try:
+        with open(LOG_FILE, 'a') as f:
+            f.write(json.dumps(entry) + "\n")
+    except:
+        pass
+    print(f"[{level}] {message}")
+
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
 class APIHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        # Log to deployment history for better visibility
-        msg = f"[{self.date_time_string()}] {format % args}\n"
-        try:
-            with open(LOG_FILE, 'a') as f:
-                f.write(msg)
-        except:
-            pass
-        print(msg.strip())
+        # Log access to structured log for better visibility
+        log_structured("ACCESS", format % args, "NETWORK")
     
     def _send_json(self, data, code=200):
         try:
@@ -2081,6 +2116,32 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({"error": "Service parameter missing"}, 400)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
+        elif self.path.startswith('/clear-logs'):
+            try:
+                from urllib.parse import urlparse, parse_qs
+                query = urlparse(self.path).query
+                params = parse_qs(query)
+                service = params.get('service', [''])[0]
+                if service:
+                    res = subprocess.run(["/usr/local/bin/migrate.sh", service, "clear-logs"], capture_output=True, text=True, timeout=60)
+                    self._send_json({"success": True, "output": res.stdout})
+                else:
+                    self._send_json({"error": "Service parameter missing"}, 400)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path.startswith('/vacuum'):
+            try:
+                from urllib.parse import urlparse, parse_qs
+                query = urlparse(self.path).query
+                params = parse_qs(query)
+                service = params.get('service', [''])[0]
+                if service:
+                    res = subprocess.run(["/usr/local/bin/migrate.sh", service, "vacuum"], capture_output=True, text=True, timeout=60)
+                    self._send_json({"success": True, "output": res.stdout})
+                else:
+                    self._send_json({"error": "Service parameter missing"}, 400)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         elif self.path == '/containers':
             try:
                 # Get container IDs for Portainer links - use long IDs for better compatibility
@@ -2133,6 +2194,17 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             status["status"] = "Auth Error"
                 
                 self._send_json(status)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/logs':
+            try:
+                # Returns the last 100 structured log entries
+                lines = []
+                if os.path.exists(LOG_FILE):
+                    with open(LOG_FILE, 'r') as f:
+                        lines = f.readlines()[-100:]
+                logs = [json.loads(l) for l in lines if l.strip()]
+                self._send_json({"logs": logs})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/config-desec' and self.command == 'POST':
@@ -2268,9 +2340,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
         elif self.path == '/restart-stack':
             try:
                 # Trigger a full stack restart in the background
-                log_file = "/app/deployment.log"
-                with open(log_file, 'a') as f:
-                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [SYSTEM] Full stack restart triggered via Dashboard.\n")
+                log_structured("SYSTEM", "Full stack restart triggered via Dashboard", "ORCHESTRATION")
                 
                 # We use a detached process to avoid killing the API before it responds
                 # The restart will take 20-30 seconds.
@@ -2287,11 +2357,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({"error": "Service name required"}, 400)
                     return
                 
-                # Logic: Pull repo, re-apply patches (handled by running zima.sh or parts of it)
-                # For simplicity and robustness, we trigger a specific update process
-                log_file = "/app/deployment.log"
-                with open(log_file, 'a') as f:
-                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [UPDATE] Triggering update for {service}...\n")
+                log_structured("UPDATE", f"Triggering update for {service}...", "MAINTENANCE")
                 
                 # We can't easily run zima.sh from inside hub-api because of permissions and complexity.
                 # Instead, we perform the git pull and docker rebuild here.
@@ -2872,27 +2938,23 @@ cat > "$DASHBOARD_FILE" <<EOF
         
         :root {
             color-scheme: dark;
-            /* M3 Dark Theme Color Tokens */
+            /* M3 Dark Theme Color Tokens (Default) */
             --md-sys-color-primary: #D0BCFF;
             --md-sys-color-on-primary: #381E72;
             --md-sys-color-primary-container: #4F378B;
             --md-sys-color-on-primary-container: #EADDFF;
-            /* Secondary */
             --md-sys-color-secondary: #CCC2DC;
             --md-sys-color-on-secondary: #332D41;
             --md-sys-color-secondary-container: #4A4458;
             --md-sys-color-on-secondary-container: #E8DEF8;
-            /* Tertiary */
             --md-sys-color-tertiary: #EFB8C8;
             --md-sys-color-on-tertiary: #492532;
             --md-sys-color-tertiary-container: #633B48;
             --md-sys-color-on-tertiary-container: #FFD8E4;
-            /* Error */
             --md-sys-color-error: #F2B8B5;
             --md-sys-color-on-error: #601410;
             --md-sys-color-error-container: #8C1D18;
             --md-sys-color-on-error-container: #F9DEDC;
-            /* Surface */
             --md-sys-color-surface: #141218;
             --md-sys-color-on-surface: #E6E1E5;
             --md-sys-color-surface-variant: #49454F;
@@ -2902,17 +2964,13 @@ cat > "$DASHBOARD_FILE" <<EOF
             --md-sys-color-surface-container-high: #2B2930;
             --md-sys-color-surface-container-highest: #36343B;
             --md-sys-color-surface-bright: #3B383E;
-            /* Outline */
             --md-sys-color-outline: #938F99;
             --md-sys-color-outline-variant: #49454F;
-            /* Inverse */
             --md-sys-color-inverse-surface: #E6E1E5;
             --md-sys-color-inverse-on-surface: #313033;
-            /* Custom success */
             --md-sys-color-success: #A8DAB5;
             --md-sys-color-on-success: #003912;
             --md-sys-color-success-container: #00522B;
-            /* Custom warning */
             --md-sys-color-warning: #FFCC80;
             --md-sys-color-on-warning: #4A2800;
 
@@ -2920,6 +2978,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0.0, 0, 1.0);
             --md-sys-motion-duration-short: 150ms;
             --md-sys-motion-duration-medium: 300ms;
+            --md-sys-motion-duration-long: 500ms;
             
             /* MD3 Expressive Shapes */
             --md-sys-shape-corner-extra-large: 28px;
@@ -2931,11 +2990,55 @@ cat > "$DASHBOARD_FILE" <<EOF
             /* Elevation */
             --md-sys-elevation-1: 0 1px 3px 1px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.3);
             --md-sys-elevation-2: 0 2px 6px 2px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.3);
+            --md-sys-elevation-3: 0 4px 8px 3px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.3);
             
             /* State Opacities */
             --md-sys-state-hover-opacity: 0.08;
             --md-sys-state-focus-opacity: 0.12;
             --md-sys-state-pressed-opacity: 0.12;
+        }
+
+        /* M3 Light Theme Tokens */
+        :root.light-mode {
+            color-scheme: light;
+            --md-sys-color-primary: #6750A4;
+            --md-sys-color-on-primary: #FFFFFF;
+            --md-sys-color-primary-container: #EADDFF;
+            --md-sys-color-on-primary-container: #21005D;
+            --md-sys-color-secondary: #625B71;
+            --md-sys-color-on-secondary: #FFFFFF;
+            --md-sys-color-secondary-container: #E8DEF8;
+            --md-sys-color-on-secondary-container: #1D192B;
+            --md-sys-color-tertiary: #7D5260;
+            --md-sys-color-on-tertiary: #FFFFFF;
+            --md-sys-color-tertiary-container: #FFD8E4;
+            --md-sys-color-on-tertiary-container: #31111D;
+            --md-sys-color-error: #B3261E;
+            --md-sys-color-on-error: #FFFFFF;
+            --md-sys-color-error-container: #F9DEDC;
+            --md-sys-color-on-error-container: #410E0B;
+            --md-sys-color-surface: #FEF7FF;
+            --md-sys-color-on-surface: #1D1B20;
+            --md-sys-color-surface-variant: #E7E0EC;
+            --md-sys-color-on-surface-variant: #49454F;
+            --md-sys-color-surface-container-low: #F7F2FA;
+            --md-sys-color-surface-container: #F3EDF7;
+            --md-sys-color-surface-container-high: #ECE6F0;
+            --md-sys-color-surface-container-highest: #E6E0E9;
+            --md-sys-color-surface-bright: #FEF7FF;
+            --md-sys-color-outline: #79747E;
+            --md-sys-color-outline-variant: #C4C7C5;
+            --md-sys-color-inverse-surface: #313033;
+            --md-sys-color-inverse-on-surface: #F4EFF4;
+            --md-sys-color-success: #2E7D32;
+            --md-sys-color-on-success: #FFFFFF;
+            --md-sys-color-success-container: #C8E6C9;
+            --md-sys-color-warning: #ED6C02;
+            --md-sys-color-on-warning: #FFFFFF;
+            
+            /* Adjust elevations for light mode */
+            --md-sys-elevation-1: 0 1px 2px 0 rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
+            --md-sys-elevation-2: 0 1px 2px 0 rgba(0,0,0,0.3), 0 2px 6px 2px rgba(0,0,0,0.15);
         }
         
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -3494,6 +3597,99 @@ cat > "$DASHBOARD_FILE" <<EOF
             flex-shrink: 0;
             margin-top: 3px;
         }
+
+        /* Snackbar / Toast */
+        .snackbar-container {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .snackbar {
+            min-width: 320px;
+            max-width: 560px;
+            background: var(--md-sys-color-inverse-surface);
+            color: var(--md-sys-color-inverse-on-surface);
+            border-radius: var(--md-sys-shape-corner-small);
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            box-shadow: var(--md-sys-elevation-3);
+            pointer-events: auto;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all var(--md-sys-motion-duration-long) var(--md-sys-motion-easing-emphasized);
+        }
+
+        .snackbar.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .snackbar-content { flex-grow: 1; font-size: 14px; letter-spacing: 0.25px; }
+        .snackbar-action { 
+            color: var(--md-sys-color-primary); 
+            font-weight: 500; 
+            text-transform: uppercase; 
+            cursor: pointer; 
+            font-size: 14px;
+            background: none;
+            border: none;
+            padding: 8px;
+            margin: -8px;
+        }
+
+        /* Theme Toggle */
+        .theme-toggle {
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            background: var(--md-sys-color-surface-container-high);
+            color: var(--md-sys-color-on-surface);
+            transition: all var(--md-sys-motion-duration-short) linear;
+        }
+        
+        .theme-toggle:hover { background: var(--md-sys-color-surface-container-highest); }
+
+        /* Setup Wizard Overlay */
+        .wizard-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(4px);
+            z-index: 30000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .wizard-card {
+            background: var(--md-sys-color-surface-container-high);
+            border-radius: var(--md-sys-shape-corner-extra-large);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+            box-shadow: var(--md-sys-elevation-3);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .wizard-step { display: none; }
+        .wizard-step.active { display: flex; flex-direction: column; gap: 16px; }
         
         .code-block {
             background: var(--md-sys-color-surface-container-highest);
@@ -3574,10 +3770,15 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h1>Privacy Hub</h1>
                     <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
                 </div>
-                <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for safe display">
-                    <span class="label-large">Safe Display Mode</span>
-                    <div class="switch-track">
-                        <div class="switch-thumb"></div>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div class="theme-toggle" onclick="toggleTheme()" data-tooltip="Switch between Light and Dark mode">
+                        <span class="material-symbols-rounded" id="theme-icon">light_mode</span>
+                    </div>
+                    <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for safe display">
+                        <span class="label-large">Safe Display Mode</span>
+                        <div class="switch-track">
+                            <div class="switch-thumb"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3643,7 +3844,10 @@ cat > "$DASHBOARD_FILE" <<EOF
             <div id="link-memos" data-url="http://$LAN_IP:$PORT_MEMOS" class="card" data-check="true" data-container="memos" onclick="navigate(this, event)">
                 <div class="card-header"><h2>Memos</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container"><span class="material-symbols-rounded">lan</span> Direct Access</span></div>
+                <div class="chip-box">
+                    <span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container"><span class="material-symbols-rounded">lan</span> Direct Access</span>
+                    <button onclick="vacuumServiceDb('memos', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Optimize the database by reclaiming unused space (VACUUM). Highly recommended after large deletions."><span class="material-symbols-rounded">compress</span> Optimize DB</button>
+                </div>
             </div>
             <div id="link-rimgo" data-url="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true" data-container="rimgo" onclick="navigate(this, event)">
                 <div class="card-header"><h2>Rimgo</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
@@ -3680,7 +3884,11 @@ cat > "$DASHBOARD_FILE" <<EOF
             <div id="link-adguard" data-url="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card" data-check="true" data-container="adguard" onclick="navigate(this, event)">
                 <div class="card-header"><h2>AdGuard Home</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container"><span class="material-symbols-rounded">home</span> Local Access</span><span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span></div>
+                <div class="chip-box">
+                    <span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container"><span class="material-symbols-rounded">home</span> Local Access</span>
+                    <button onclick="clearServiceLogs('adguard', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Clear the historical DNS query logs to free up space."><span class="material-symbols-rounded">auto_delete</span> Clear Logs</button>
+                    <span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span>
+                </div>
             </div>
             <div id="link-portainer" data-url="http://$LAN_IP:$PORT_PORTAINER" class="card" data-check="true" data-container="portainer" onclick="navigate(this, event)">
                 <div class="card-header"><h2>Portainer</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
@@ -3889,6 +4097,39 @@ cat >> "$DASHBOARD_FILE" <<EOF
         </div>
     </div>
 
+    <!-- Setup Wizard -->
+    <div id="setup-wizard" class="wizard-overlay">
+        <div class="wizard-card">
+            <div id="step-1" class="wizard-step active">
+                <span class="material-symbols-rounded" style="font-size: 48px; color: var(--md-sys-color-primary);">shield</span>
+                <h2>Welcome to Privacy Hub</h2>
+                <p class="body-medium">Let's get your secure infrastructure ready. This wizard will guide you through the essential configuration steps.</p>
+                <div style="text-align: right; margin-top: 12px;">
+                    <button onclick="nextStep(2)" class="btn btn-filled">Get Started</button>
+                </div>
+            </div>
+            <div id="step-2" class="wizard-step">
+                <span class="material-symbols-rounded" style="font-size: 48px; color: var(--md-sys-color-primary);">dns</span>
+                <h2>Domain & SSL</h2>
+                <p class="body-medium">To enable encrypted DNS and valid SSL certificates, you need a deSEC domain.</p>
+                <input type="text" id="wiz-desec-domain" class="text-field" placeholder="yourname.dedyn.io">
+                <input type="password" id="wiz-desec-token" class="text-field sensitive" placeholder="deSEC API Token">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
+                    <button onclick="nextStep(3)" class="btn btn-outlined">Skip for now</button>
+                    <button onclick="saveWizardDesec()" class="btn btn-filled">Save & Continue</button>
+                </div>
+            </div>
+            <div id="step-3" class="wizard-step">
+                <span class="material-symbols-rounded" style="font-size: 48px; color: var(--md-sys-color-success);">check_circle</span>
+                <h2>Almost Ready!</h2>
+                <p class="body-medium">Your basic configuration is saved. You can now upload your WireGuard profiles or manage your applications from the dashboard.</p>
+                <div style="text-align: right; margin-top: 12px;">
+                    <button onclick="closeWizard()" class="btn btn-filled">Finish</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API = "/api";
         const ODIDO_API = "/odido-api/api";
@@ -3990,7 +4231,33 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 if (data.error) throw new Error(data.error);
                 alert("Database cleared successfully!\n\n" + data.output);
             } catch(e) {
-                alert("Action failed: " + e.message);
+                showSnackbar("Action failed: " + e.message);
+            }
+        }
+
+        async function clearServiceLogs(name, event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            if (!confirm("Clear all historical query logs for " + name + "? This cannot be undone.")) return;
+            try {
+                const res = await fetch(API + "/clear-logs?service=" + name);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                showSnackbar("Logs cleared successfully!");
+            } catch(e) {
+                showSnackbar("Failed to clear logs: " + e.message);
+            }
+        }
+
+        async function vacuumServiceDb(name, event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            showSnackbar("Optimizing database... please wait.");
+            try {
+                const res = await fetch(API + "/vacuum?service=" + name);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                showSnackbar("Database optimized successfully!");
+            } catch(e) {
+                showSnackbar("Optimization failed: " + e.message);
             }
         }
         
@@ -4093,7 +4360,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const domain = document.getElementById('desec-domain-input').value.trim();
             const token = document.getElementById('desec-token-input').value.trim();
             if (!domain && !token) {
-                alert("Please provide domain or token");
+                showSnackbar("Please provide domain or token");
                 return;
             }
             try {
@@ -4106,14 +4373,14 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 });
                 const result = await res.json();
                 if (result.success) {
-                    alert("deSEC configuration saved! Certificates will be updated in the background.");
+                    showSnackbar("deSEC configuration saved! Certificates updating in background.");
                     document.getElementById('desec-domain-input').value = '';
                     document.getElementById('desec-token-input').value = '';
                 } else {
                     throw new Error(result.error || "Unknown error");
                 }
             } catch (e) {
-                alert("Failed to save deSEC config: " + e.message);
+                showSnackbar("Failed to save deSEC config: " + e.message);
             }
         }
         
@@ -4206,7 +4473,14 @@ cat >> "$DASHBOARD_FILE" <<EOF
                                 const info = statusLabels[status] || statusLabels['down'];
                                 dot.className = "status-dot " + status;
                                 txt.textContent = info.text;
-                                indicator.dataset.tooltip = info.tip;
+                                
+                                // Show detailed health info if unhealthy
+                                let tooltip = info.tip;
+                                if (status === 'unhealthy' && data.health_details && data.health_details[name]) {
+                                    tooltip = "ERROR: " + data.health_details[name];
+                                }
+                                indicator.dataset.tooltip = tooltip;
+
                                 // Apply text-success class if healthy or up
                                 if (status === 'healthy' || status === 'up') {
                                     txt.classList.add('text-success');
@@ -4617,6 +4891,64 @@ cat >> "$DASHBOARD_FILE" <<EOF
         
         function formatBytes(a,b=2){if(!+a)return"0 B";const c=0>b?0:b,d=Math.floor(Math.log(a)/Math.log(1024));return parseFloat((a/Math.pow(1024,d)).toFixed(c)) + " " + ["B","KiB","MiB","GiB","TiB"][d]}
         
+        // Snackbar implementation
+        const snackbarContainer = document.createElement('div');
+        snackbarContainer.className = 'snackbar-container';
+        document.body.appendChild(snackbarContainer);
+
+        function showSnackbar(message, actionText = '', actionCallback = null) {
+            const snackbar = document.createElement('div');
+            snackbar.className = 'snackbar';
+            
+            let html = \`<div class="snackbar-content">\${message}</div>\`;
+            if (actionText) {
+                html += \`<button class="snackbar-action">\${actionText}</button>\`;
+            }
+            snackbar.innerHTML = html;
+            
+            if (actionCallback) {
+                snackbar.querySelector('.snackbar-action').onclick = () => {
+                    actionCallback();
+                    snackbar.classList.remove('visible');
+                    setTimeout(() => snackbar.remove(), 500);
+                };
+            }
+
+            snackbarContainer.appendChild(snackbar);
+            // Trigger reflow
+            snackbar.offsetHeight;
+            snackbar.classList.add('visible');
+
+            setTimeout(() => {
+                snackbar.classList.remove('visible');
+                setTimeout(() => snackbar.remove(), 500);
+            }, 5000);
+        }
+
+        // Theme management
+        function toggleTheme() {
+            const isLight = document.documentElement.classList.toggle('light-mode');
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            updateThemeIcon();
+            showSnackbar(\`Switched to \${isLight ? 'Light' : 'Dark'} mode\`);
+        }
+
+        function updateThemeIcon() {
+            const icon = document.getElementById('theme-icon');
+            const isLight = document.documentElement.classList.contains('light-mode');
+            if (icon) icon.textContent = isLight ? 'dark_mode' : 'light_mode';
+        }
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            const systemPrefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+            
+            if (savedTheme === 'light' || (!savedTheme && systemPrefersLight)) {
+                document.documentElement.classList.add('light-mode');
+            }
+            updateThemeIcon();
+        }
+
         // Privacy toggle functionality
         function togglePrivacy() {
             const toggle = document.getElementById('privacy-switch');
@@ -4816,13 +5148,58 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
         }
         
+        // Setup Wizard Logic
+        function nextStep(step) {
+            document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+            document.getElementById('step-' + step).classList.add('active');
+        }
+
+        async function saveWizardDesec() {
+            const domain = document.getElementById('wiz-desec-domain').value.trim();
+            const token = document.getElementById('wiz-desec-token').value.trim();
+            if (!domain || !token) {
+                showSnackbar("Both domain and token are required to proceed.");
+                return;
+            }
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(API + "/config-desec", {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ domain, token })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showSnackbar("Configuration saved!");
+                    nextStep(3);
+                } else { throw new Error(result.error); }
+            } catch (e) { showSnackbar("Error: " + e.message); }
+        }
+
+        function closeWizard() {
+            document.getElementById('setup-wizard').style.display = 'none';
+            localStorage.setItem('wizard_completed', 'true');
+        }
+
+        function checkWizard() {
+            const completed = localStorage.getItem('wizard_completed');
+            const domainPlaceholder = document.getElementById('desec-domain-input').placeholder;
+            const hasDomain = domainPlaceholder && domainPlaceholder !== 'yourname.dedyn.io' && domainPlaceholder !== 'Domain (e.g. yourname.dedyn.io)';
+            
+            if (!completed && !hasDomain) {
+                document.getElementById('setup-wizard').style.display = 'flex';
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', () => {
             // Load deSEC config if available
             fetch(API + "/status").then(r => r.json()).then(data => {
                 if (data.gluetun && data.gluetun.desec_domain) {
                     document.getElementById('desec-domain-input').placeholder = data.gluetun.desec_domain;
                 }
-            }).catch(() => {});
+                checkWizard();
+            }).catch(() => { checkWizard(); });
 
             // Tooltip Initialization
             const tooltipBox = document.createElement('div');
@@ -4885,6 +5262,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
             
             initPrivacyMode();
+            initTheme();
             fetchContainerIds();
             fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates();
             setInterval(fetchStatus, 15000);
