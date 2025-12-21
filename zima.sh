@@ -1580,32 +1580,39 @@ cat > "$MIGRATE_SCRIPT" <<'EOF'
 # This script handles automated database schema updates and backups.
 
 SERVICE=$1
+ACTION=$2
 DATA_DIR="/app/data"
 BACKUP_DIR="$DATA_DIR/backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
-log() { echo "$(date) [MIGRATE] $1"; }
+log() { echo "$(date) [DATABASE] $1"; }
 
 mkdir -p "$BACKUP_DIR"
 
 if [ "$SERVICE" = "invidious" ]; then
-    log "Starting Invidious migration..."
-    
-    # 1. Backup existing data
-    if [ -d "$DATA_DIR/postgres" ]; then
-        log "Backing up Invidious database..."
-        docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"
+    if [ "$ACTION" = "clear" ]; then
+        log "CLEARING Invidious database (resetting to defaults)..."
+        # Backup first anyway for safety
+        docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
+        # Drop and recreate
+        docker exec invidious-db dropdb -U kemal invidious
+        docker exec invidious-db createdb -U kemal invidious
+        docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh
+        log "Invidious database cleared."
+    else
+        log "Starting Invidious migration..."
+        # 1. Backup existing data
+        if [ -d "$DATA_DIR/postgres" ]; then
+            log "Backing up Invidious database..."
+            docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"
+        fi
+        # 2. Run migrations
+        log "Applying schema updates..."
+        docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
+        log "Invidious migration complete."
     fi
-
-    # 2. Run migrations
-    # Invidious handles migrations via its init script or on startup if check_tables is true.
-    # We force a run of the init script to ensure missing tables are created.
-    log "Applying schema updates..."
-    docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
-    
-    log "Invidious migration complete."
 else
-    log "No migration logic defined for $SERVICE."
+    log "No logic defined for $SERVICE."
 fi
 EOF
 chmod +x "$MIGRATE_SCRIPT"
@@ -2049,7 +2056,21 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 params = parse_qs(query)
                 service = params.get('service', [''])[0]
                 if service:
-                    res = subprocess.run(["/usr/local/bin/migrate.sh", service], capture_output=True, text=True, timeout=120)
+                    res = subprocess.run(["/usr/local/bin/migrate.sh", service, "migrate"], capture_output=True, text=True, timeout=120)
+                    self._send_json({"success": True, "output": res.stdout})
+                else:
+                    self._send_json({"error": "Service parameter missing"}, 400)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path.startswith('/clear-db'):
+            try:
+                # Usage: /clear-db?service=invidious
+                from urllib.parse import urlparse, parse_qs
+                query = urlparse(self.path).query
+                params = parse_qs(query)
+                service = params.get('service', [''])[0]
+                if service:
+                    res = subprocess.run(["/usr/local/bin/migrate.sh", service, "clear"], capture_output=True, text=True, timeout=120)
                     self._send_json({"success": True, "output": res.stdout})
                 else:
                     self._send_json({"error": "Service parameter missing"}, 400)
@@ -3590,7 +3611,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box">
                     <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
-                    <button onclick="migrateService('invidious', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Run foolproof database migrations. A full backup is created before proceeding."><span class="material-symbols-rounded">storage</span> Migrate DB</button>
+                    <button onclick="migrateService('invidious', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="The database stores your subscriptions, preferences, and cached video metadata. Use this to safely update the database schema. A full backup is created before proceeding."><span class="material-symbols-rounded">storage</span> Migrate DB</button>
+                    <button onclick="clearServiceDb('invidious', event)" class="chip admin" style="cursor:pointer; border:none; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="RESET ALL DATA: This will backup and then permanently clear your subscriptions and preferences, returning the instance to a fresh state."><span class="material-symbols-rounded">delete_sweep</span> Clear DB</button>
                 </div>
             </div>
             <div id="link-redlib" data-url="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib" onclick="navigate(this, event)">
@@ -3691,8 +3713,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <h3>deSEC Configuration</h3>
                 <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
                 <form onsubmit="saveDesecConfig(); return false;">
-                    <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. user.dedyn.io)" style="margin-bottom:12px;" autocomplete="username" data-tooltip="Enter your registered deSEC domain.">
-                    <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="Your deSEC API Token for DNS-01 authentication.">
+                    <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. yourname.dedyn.io)" style="margin-bottom:12px;" autocomplete="username" data-tooltip="Enter your registered deSEC domain (e.g. yourname.dedyn.io). You can create one for free at desec.io.">
+                    <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="The secret API token from your deSEC account used to verify domain ownership.">
                     <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
                         Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
                     </p>
@@ -3819,7 +3841,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <h3>Upload Profile</h3>
                 <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;" data-tooltip="Give your profile a recognizable name.">
                 <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..." style="margin-bottom:16px;" data-tooltip="Paste the contents of your WireGuard .conf file."></textarea>
-                <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile and immediately route traffic through it.">Upload & Activate</button></div>
+                <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile. The VPN service will automatically restart to apply the new configuration (~15 seconds).">Upload & Activate</button></div>
             </div>
             <div class="card profile-card">
                 <h3 data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available Profiles</h3>
@@ -3945,6 +3967,19 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 alert("Migration successful!\n\n" + data.output);
             } catch(e) {
                 alert("Migration failed: " + e.message);
+            }
+        }
+
+        async function clearServiceDb(name, event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            if (!confirm("DANGER: This will permanently DELETE all subscriptions and preferences for " + name + ". A backup will be created, but the service will be reset to defaults. Continue?")) return;
+            try {
+                const res = await fetch(API + "/clear-db?service=" + name);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                alert("Database cleared successfully!\n\n" + data.output);
+            } catch(e) {
+                alert("Action failed: " + e.message);
             }
         }
         
