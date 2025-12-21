@@ -5032,6 +5032,14 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     if (trustedInfo) trustedInfo.style.display = 'none';
                     if (untrustedInfo) untrustedInfo.style.display = 'block';
                     if (retryBtn) retryBtn.style.display = 'inline-flex';
+                    
+                    // Trigger wizard only if it failed due to credentials (Auth Error)
+                    if (data.status === "Auth Error") {
+                        checkWizard(true); // Force wizard if auth failed
+                    } else if (data.status === "Rate Limited" || data.status === "Issuance Failed") {
+                        // Just alert if rate limited or other non-auth failure
+                        showSnackbar("SSL Issue: " + data.error);
+                    }
                 } else {
                     failInfo.style.display = 'none';
                     if (isTrusted) {
@@ -5071,6 +5079,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         el.href = id === 'breezewiki' ? baseIpUrl + '/' : baseIpUrl;
                     }
                 }
+                
+                // General wizard check after fetching cert status
+                checkWizard(false);
             } catch(e) { 
                 console.error('Cert status fetch error:', e); 
                 const badge = document.getElementById('cert-status-badge');
@@ -5182,11 +5193,17 @@ cat >> "$DASHBOARD_FILE" <<EOF
             localStorage.setItem('wizard_completed', 'true');
         }
 
-        function checkWizard() {
+        function checkWizard(force = false) {
             const completed = localStorage.getItem('wizard_completed');
             const domainPlaceholder = document.getElementById('desec-domain-input').placeholder;
             const hasDomain = domainPlaceholder && domainPlaceholder !== 'yourname.dedyn.io' && domainPlaceholder !== 'Domain (e.g. yourname.dedyn.io)';
             
+            if (force) {
+                document.getElementById('setup-wizard').style.display = 'flex';
+                nextStep(2); // Jump to domain step
+                return;
+            }
+
             if (!completed && !hasDomain) {
                 document.getElementById('setup-wizard').style.display = 'flex';
             }
@@ -5198,7 +5215,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 if (data.gluetun && data.gluetun.desec_domain) {
                     document.getElementById('desec-domain-input').placeholder = data.gluetun.desec_domain;
                 }
-                checkWizard();
+                // checkWizard will be called by fetchCertStatus to ensure it has latest SSL info
             }).catch(() => { checkWizard(); });
 
             // Tooltip Initialization
