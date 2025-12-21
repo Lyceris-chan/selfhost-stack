@@ -270,7 +270,7 @@ This stack prioritizes security by utilizing **[1](#quick-explainers)**. The fol
 - **Odido Booster**: Patched to use `dhi.io/python`
 - **VERT / VERTD**: Patched to use `dhi.io/node`, `dhi.io/bun`, and `dhi.io/nginx`
 
-Infrastructure services (Redis, PostgreSQL) also utilize [1](#quick-explainers)-provided hardened images where available.
+Infrastructure services **Redis** (`dhi.io/redis`) and **PostgreSQL** (`dhi.io/postgres`) also utilize [1](#quick-explainers)-provided hardened images.
 
 ---
 *Built with ❤️ for the self-hosting community.*
