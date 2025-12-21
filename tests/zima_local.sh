@@ -2832,7 +2832,7 @@ fi
 if should_deploy "breezewiki"; then
 cat >> "$COMPOSE_FILE" <<EOF
   breezewiki:
-    image: local-breezewiki:alpine
+    image: quay.io/pussthecatorg/breezewiki
     container_name: breezewiki
     network_mode: "service:gluetun"
     environment:

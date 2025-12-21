@@ -4,9 +4,17 @@
 [DONE] explain CDN is content delivery network Zero-Leaks: No external CDNs
 [DONE] include the other flags for the command
 [DONE] remove Coollabs Google Fonts proxy + CDN: and coollabs in general if its still used
-[REVIEW] ensure all repo's and services have their privacy policy added to the readme (scan script vs README)
-[PROGRESS] Tests: bash -n zima.sh zima_test.sh tests/zima_local.sh; shellcheck -x zima.sh zima_test.sh tests/zima_local.sh; sudo ./zima_test.sh -p -y
+[DONE] ensure all repo's and services have their privacy policy added to the readme (scan script vs README)
+[DONE] Tests: bash -n zima.sh zima_test.sh tests/zima_local.sh; shellcheck -x zima.sh zima_test.sh tests/zima_local.sh; sudo ./zima_test.sh -p -y
 [DONE] Guard setup_fonts so missing/empty CSS or missing url() entries won't exit the script; font download failures are now non-fatal.
-[PROGRESS] Re-tested: sudo ./zima_test.sh -p -y after font guard.
+[DONE] Re-tested: sudo ./zima_test.sh -p -y after font guard.
 [DONE] zima.sh basic checks: bash -n zima.sh, shellcheck -x zima.sh, ./zima.sh --help
 [DONE] Quick Explainers now numbered with links to related sections; credentials bullets link back to Quick Explainers.
+[DONE] Fixed breezewiki pull error (replaced local-breezewiki with quay.io image in all scripts).
+[DONE] update docs to remove quick explainer and instead use the small 1 2 3 4 for linking to them 
+[DONE] ensure all cloned repo sources have privacy policies linked in the readme
+[DONE] Updated README.md tables to include all services (Rimgo, BreezeWiki, AnonymousOverflow, Scribe, Odido Booster).
+[DONE] Verified zima.sh logic and image consistency.
+[DONE] Removed long list of "no published privacy policy" entries and GitDab from README.md.
+[DONE] Documented DHI Hardened Builds & Patches in README.md.
+[DONE] Renamed VERT description to clarify "data won't leave your device" instead of "still local".

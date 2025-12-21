@@ -19,10 +19,10 @@ Own your data, route through VPNs, and eliminate tracking with zero external dep
 
 Prepare these ahead of time so setup is smooth:
 
-- **Docker Hub / DHI PAT (required)**: One username + PAT is used for both Docker Hub and `dhi.io`. Use a token with **pull/read** permissions only. This is required to pull hardened images and avoid rate limits. Create it at [Docker Hub Access Tokens](https://hub.docker.com/settings/security). ([Quick explainer](#quick-explainers))
+- **Docker Hub / DHI PAT (required)**: One username + PAT is used for both Docker Hub and `dhi.io`. Use a token with **pull/read** permissions only. This is required to pull hardened images and avoid rate limits. Create it at [Docker Hub Access Tokens](https://hub.docker.com/settings/security). ([1](#quick-explainers), [4](#quick-explainers))
 - **WireGuard config (recommended)**: A `.conf` from your VPN provider if you want VPN-routed frontends (Gluetun). Only ProtonVPN is tested (details below).
-- **deSEC domain + API token (recommended)**: Enables DDNS + trusted SSL. Create a token in your deSEC account at [deSEC](https://desec.io). ([Quick explainer](#quick-explainers))
-- **GitHub token (optional)**: Classic PAT with `gist` scope only, used by the Scribe frontend for gist access. Create it at [GitHub Tokens](https://github.com/settings/tokens). ([Quick explainer](#quick-explainers))
+- **deSEC domain + API token (recommended)**: Enables DDNS + trusted SSL. Create a token in your deSEC account at [deSEC](https://desec.io). ([2](#quick-explainers), [3](#quick-explainers))
+- **GitHub token (optional)**: Classic PAT with `gist` scope only, used by the Scribe frontend for gist access. Create it at [GitHub Tokens](https://github.com/settings/tokens). ([4](#quick-explainers))
 - **Odido OAuth token (optional, NL unlimited data)**: Used by Odido Booster. Get the OAuth token using [Odido Authenticator](https://github.com/GuusBackup/Odido.Authenticator). The Odido API may incur costs or limits; use at your own risk.
 
 <a id="quick-explainers"></a>
@@ -97,7 +97,12 @@ Built with strict adherence to **Material 3** principles, the dashboard provides
 | **[AdGuard Home](https://github.com/AdguardTeam/AdGuardHome)** | Infrastructure | Network-wide DNS filtering & Ad-blocking |
 | **[WireGuard (WG-Easy)](https://github.com/wg-easy/wg-easy)** | Infrastructure | Secure remote access gateway |
 | **[Portainer](https://github.com/portainer/portainer)** | Management | Advanced container orchestration |
-| **[VERT](https://github.com/vert-sh/vert)** | Utility | Local file conversion with optional GPU acceleration (VERTD requires a valid SSL cert due to quirks, still local) |
+| **[VERT](https://github.com/vert-sh/vert)** | Utility | Local file conversion with optional GPU acceleration (VERTD requires a valid SSL cert due to quirks, data won't leave your device) |
+| **[Rimgo](https://codeberg.org/rimgo/rimgo)** | Privacy Frontend | Lightweight Imgur interface |
+| **[BreezeWiki](https://gitdab.com/cadence/breezewiki)** | Privacy Frontend | De-fandomized Wikipedia/Wiki interface |
+| **[AnonymousOverflow](https://github.com/httpjamesm/anonymousoverflow)** | Privacy Frontend | Privacy-focused Stack Overflow viewer |
+| **[Scribe](https://git.sr.ht/~edwardloveall/scribe)** | Privacy Frontend | Alternative Medium frontend |
+| **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)** | Utility | Automated data bundle booster (NL Odido) |
 
 ## 🔗 Service Access (After Deploy)
 
@@ -113,7 +118,12 @@ The dashboard provides one-click launch cards for every service at `http://<LAN_
 | AdGuard Home | `http://<LAN_IP>:8083` | `https://adguard.<domain>:8443/` | DNS filtering UI. |
 | WireGuard (WG-Easy) | `http://<LAN_IP>:51821` | `https://wireguard.<domain>:8443/` | VPN management UI. |
 | Portainer | `http://<LAN_IP>:9000` | `https://portainer.<domain>:8443/` | Container management. |
-| VERT | `http://<LAN_IP>:5555` | `https://vert.<domain>:8443/` | GPU acceleration uses `https://vertd.<domain>:8443/` and needs a valid SSL cert (still local). |
+| VERT | `http://<LAN_IP>:5555` | `https://vert.<domain>:8443/` | GPU acceleration uses `https://vertd.<domain>:8443/` (data won't leave your device). |
+| Rimgo | `http://<LAN_IP>:3002` | `https://rimgo.<domain>:8443/` | VPN-routed; upstream sees VPN IP. |
+| BreezeWiki | `http://<LAN_IP>:8380` | `https://breezewiki.<domain>:8443/` | VPN-routed; upstream sees VPN IP. |
+| AnonOverflow | `http://<LAN_IP>:8480` | `https://anonymousoverflow.<domain>:8443/` | VPN-routed; upstream sees VPN IP. |
+| Scribe | `http://<LAN_IP>:8280` | `https://scribe.<domain>:8443/` | VPN-routed; upstream sees VPN IP. |
+| Odido Booster | `http://<LAN_IP>:8085` | `https://odido.<domain>:8443/` | NL Odido automated booster UI. |
 
 <details>
 <summary><strong>🔧 Add Your Own Services</strong> (advanced, not needed for new users)</summary>
@@ -218,7 +228,7 @@ uci commit firewall
 ## 🔒 Security & Credentials
 
 - **HUB_API_KEY**: Required for sensitive dashboard actions. Can be rotated via UI.
-- **Zero-Leaks**: No external CDNs (content delivery networks) or trackers. We never contact Google directly; fonts are downloaded once during setup (or if the cache is missing) via Fontlay ([privacy policy + source code](https://github.com/miroocloud/fontlay)), then served locally so no further font requests leave your machine. ([CDN explainer](#quick-explainers))
+- **Zero-Leaks**: No external CDNs (content delivery networks) or trackers. We never contact Google directly; fonts are downloaded once during setup (or if the cache is missing) via Fontlay ([privacy policy + source code](https://github.com/miroocloud/fontlay)), then served locally so no further font requests leave your machine. ([5](#quick-explainers))
 - **Redaction Mode**: "Safe Display Mode" blurs IPs and sensitive metadata for screenshots.
 - **Secrets**: Core credentials stored in `/DATA/AppData/privacy-hub/.secrets`.
 
@@ -245,52 +255,22 @@ When you run with `-p` (auto-passwords), the script generates a Proton Pass impo
 | deSEC DNS API | (none) | your deSEC domain | deSEC API token | Dynamic DNS + SSL automation. |
 | GitHub Scribe Token | (none) | GitHub username | GitHub token | Scribe gist access. |
 
-<details>
-<summary><strong>External Services & Privacy Policies</strong></summary>
-
-- **Public IP detection (used for DDNS and VPN sync)**:
-  - [ipify.org](https://www.ipify.org/)
-  - [ip-api.com](https://ip-api.com/docs/legal)
-- **Fonts proxy and CDN**:
-  - Fontlay Google Fonts proxy + CDN: [privacy policy + source code](https://github.com/miroocloud/fontlay)
-- **DNS & SSL automation**:
-  - deSEC API: [privacy policy](https://desec.io/privacy-policy)
-- **Container registries**:
-  - Docker Hub (includes DHI pulls): [privacy policy](https://www.docker.com/legal/docker-privacy-policy/)
-  - GitHub Container Registry (GHCR): [privacy policy](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement)
-  - Quay.io: [privacy policy](https://quay.io/privacy)
-  - Codeberg registry: [privacy policy](https://codeberg.org/privacy)
 - **Source repositories (build-from-source + update checks)**:
   - GitHub: [privacy policy](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement)
   - SourceHut: [privacy policy](https://man.sr.ht/privacy.md)
-- **Blocklist source**:
-  - GitHub raw (sleepy list): [privacy policy](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement)
-- **Odido API**:
-  - Odido privacy policy: [privacy policy](https://www.odido.nl/privacy)
-- **Service privacy policies (or no published policy)**:
-  - AdGuard Home: [privacy policy](https://adguard.com/en/privacy/home.html)
-  - Portainer: [privacy policy](https://www.portainer.io/legal/privacy-policy)
-  - WireGuard (WG-Easy): no published privacy policy; [repo](https://github.com/wg-easy/wg-easy)
-  - Invidious: no published privacy policy; [repo](https://github.com/iv-org/invidious)
-  - Redlib: no published privacy policy; [repo](https://github.com/redlib-org/redlib)
-  - Wikiless: no published privacy policy; [repo](https://github.com/Metastem/Wikiless)
-  - Memos: no published privacy policy; [repo](https://github.com/usememos/memos)
-  - Rimgo: no published privacy policy; [repo](https://codeberg.org/rimgo/rimgo)
-  - Scribe: no published privacy policy; [repo](https://git.sr.ht/~edwardloveall/scribe)
-  - BreezeWiki: no published privacy policy; [repo](https://gitdab.com/cadence/breezewiki)
-  - AnonOverflow: no published privacy policy; [repo](https://github.com/httpjamesm/anonymousoverflow)
-  - VERT / VERTD: no published privacy policy; [repo](https://github.com/vert-sh/vert)
-  - Gluetun: no published privacy policy; [repo](https://github.com/qdm12/gluetun)
-  - Unbound: no published privacy policy; [project page](https://nlnetlabs.nl/projects/unbound/about/)
-  - Watchtower: no published privacy policy; [repo](https://github.com/containrrr/watchtower)
-  - Odido Booster: no published privacy policy; [repo](https://github.com/Lyceris-chan/odido-bundle-booster)
-  - Invidious Companion: no published privacy policy; [repo](https://github.com/iv-org/invidious-companion)
-  - Redis: no published privacy policy; [project page](https://redis.io/)
-  - PostgreSQL: no published privacy policy; [project page](https://www.postgresql.org/)
-  - Nginx (dashboard host): no published privacy policy; [project page](https://nginx.org/)
-  - Hub API (local service): no published privacy policy; [source](https://github.com/Lyceris-chan/selfhost-stack)
 
-</details>
+### DHI Hardened Builds & Patches
+
+This stack prioritizes security by utilizing **Docker Hardened Images (DHI)**. The following services are either built directly from DHI base images or patched during setup to replace standard images with hardened alternatives:
+
+- **Dashboard**: Built on `dhi.io/nginx`
+- **Hub API**: Built on `dhi.io/python`
+- **Wikiless**: Patched to use `dhi.io/node` and `dhi.io/alpine-base`
+- **Scribe**: Patched to use `dhi.io/node` and `dhi.io/alpine-base`
+- **Odido Booster**: Patched to use `dhi.io/python`
+- **VERT / VERTD**: Patched to use `dhi.io/node`, `dhi.io/bun`, and `dhi.io/nginx`
+
+Infrastructure services (Redis, PostgreSQL) also utilize DHI-provided hardened images where available.
 
 ---
 *Built with ❤️ for the self-hosting community.*
