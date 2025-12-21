@@ -19,10 +19,10 @@ Own your data, route through VPNs, and eliminate tracking with zero external dep
 
 Prepare these ahead of time so setup is smooth:
 
-- **Docker Hub / DHI PAT (required)**: One username + PAT is used for both Docker Hub and `dhi.io`. Use a token with **pull/read** permissions only. This is required to pull hardened images and avoid rate limits. Create it at [Docker Hub Access Tokens](https://hub.docker.com/settings/security). ([1](#quick-explainers), [4](#quick-explainers))
+- **Docker Hub / [1](#quick-explainers) [4](#quick-explainers) (required)**: One username + [4](#quick-explainers) is used for both Docker Hub and `dhi.io`. Use a token with **pull/read** permissions only. This is required to pull hardened images and avoid rate limits. Create it at [Docker Hub Access Tokens](https://hub.docker.com/settings/security). ([1](#quick-explainers), [4](#quick-explainers))
 - **WireGuard config (recommended)**: A `.conf` from your VPN provider if you want VPN-routed frontends (Gluetun). Only ProtonVPN is tested (details below).
-- **deSEC domain + API token (recommended)**: Enables DDNS + trusted SSL. Create a token in your deSEC account at [deSEC](https://desec.io). ([2](#quick-explainers), [3](#quick-explainers))
-- **GitHub token (optional)**: Classic PAT with `gist` scope only, used by the Scribe frontend for gist access. Create it at [GitHub Tokens](https://github.com/settings/tokens). ([4](#quick-explainers))
+- **deSEC domain + API token (recommended)**: Enables [2](#quick-explainers) + [3](#quick-explainers). Create a token in your deSEC account at [deSEC](https://desec.io). ([2](#quick-explainers), [3](#quick-explainers))
+- **GitHub token (optional)**: [4](#quick-explainers) with `gist` scope only, used by the Scribe frontend for gist access. Create it at [GitHub Tokens](https://github.com/settings/tokens). ([4](#quick-explainers))
 - **Odido OAuth token (optional, NL unlimited data)**: Used by Odido Booster. Get the OAuth token using [Odido Authenticator](https://github.com/GuusBackup/Odido.Authenticator). The Odido API may incur costs or limits; use at your own risk.
 
 <a id="quick-explainers"></a>
@@ -82,9 +82,9 @@ Built with strict adherence to **Material 3** principles, the dashboard provides
 - **Human Logs**: Cryptic system logs translated into plain English with meaningful icons.
 - **Theme Support**: Native Light/Dark mode with system preference detection.
 - **Maintenance**: One-click database optimization, log clearing, and schema migrations.
-- **Easy Access**: Launch any service from a single dashboard with auto-switching links when SSL is configured.
+- **Easy Access**: Launch any service from a single dashboard with auto-switching links when [3](#quick-explainers) is configured.
 - **Sensitive Actions**: No login is required to view the dashboard, but sensitive actions require the dashboard API key from `.secrets`.
-- **Secure Setup**: Integrated wizard for first-time deSEC and SSL configuration.
+- **Secure Setup**: Integrated wizard for first-time deSEC and [3](#quick-explainers) configuration.
 
 ## 📦 Included Services
 
@@ -97,7 +97,7 @@ Built with strict adherence to **Material 3** principles, the dashboard provides
 | **[AdGuard Home](https://github.com/AdguardTeam/AdGuardHome)** | Infrastructure | Network-wide DNS filtering & Ad-blocking |
 | **[WireGuard (WG-Easy)](https://github.com/wg-easy/wg-easy)** | Infrastructure | Secure remote access gateway |
 | **[Portainer](https://github.com/portainer/portainer)** | Management | Advanced container orchestration |
-| **[VERT](https://github.com/vert-sh/vert)** | Utility | Local file conversion with optional GPU acceleration (VERTD requires a valid SSL cert due to quirks, data won't leave your device) |
+| **[VERT](https://github.com/vert-sh/vert)** | Utility | Local file conversion with optional GPU acceleration (VERTD requires a valid [3](#quick-explainers) cert due to quirks, data won't leave your device) |
 | **[Rimgo](https://codeberg.org/rimgo/rimgo)** | Privacy Frontend | Lightweight Imgur interface |
 | **[BreezeWiki](https://gitdab.com/cadence/breezewiki)** | Privacy Frontend | De-fandomized Wikipedia/Wiki interface |
 | **[AnonymousOverflow](https://github.com/httpjamesm/anonymousoverflow)** | Privacy Frontend | Privacy-focused Stack Overflow viewer |
@@ -163,7 +163,7 @@ Add a card in the dashboard HTML (SECTION 14 in `zima.sh`):
 - Add a `portainer-link` chip if you want one-click container management.
 - Add a `metrics-myservice` block if you want CPU/memory chips to show.
 
-Then add the service to the `const services = { ... }` map so the dashboard can auto-switch links to `https://<subdomain>.<domain>:8443/` when SSL is configured.
+Then add the service to the `const services = { ... }` map so the dashboard can auto-switch links to `https://<subdomain>.<domain>:8443/` when [3](#quick-explainers) is configured.
 
 ### 4) Watchtower Updates
 
@@ -183,7 +183,7 @@ The Update banner checks git repos under `/app/sources/<service>`. If you want y
 Forward port **51820/UDP** to your host's local IP. This is the only exposed port and is cryptographically silent.
 
 ### Local LAN Mode
-AdGuard Home utilizes DNS rewrites to direct internal traffic to your local IP, ensuring optimal performance and local SSL access.
+AdGuard Home utilizes DNS rewrites to direct internal traffic to your local IP, ensuring optimal performance and local [3](#quick-explainers) access.
 
 ## 📡 Advanced Setup: OpenWrt & Double NAT
 
@@ -228,14 +228,14 @@ uci commit firewall
 ## 🔒 Security & Credentials
 
 - **HUB_API_KEY**: Required for sensitive dashboard actions. Can be rotated via UI.
-- **Zero-Leaks**: No external CDNs (content delivery networks) or trackers. We never contact Google directly; fonts are downloaded once during setup (or if the cache is missing) via Fontlay ([privacy policy + source code](https://github.com/miroocloud/fontlay)), then served locally so no further font requests leave your machine. ([5](#quick-explainers))
+- **Zero-Leaks**: No external [5](#quick-explainers) or trackers. We never contact Google directly; fonts are downloaded once during setup (or if the cache is missing) via Fontlay ([privacy policy + source code](https://github.com/miroocloud/fontlay)), then served locally so no further font requests leave your machine. ([5](#quick-explainers))
 - **Redaction Mode**: "Safe Display Mode" blurs IPs and sensitive metadata for screenshots.
 - **Secrets**: Core credentials stored in `/DATA/AppData/privacy-hub/.secrets`.
 
 ### API Keys & Cost Notes
 
-- **deSEC**: Domain + API token for dynamic DNS and SSL automation.
-- **Docker Hub / DHI**: Username + PAT for registry pulls and rate-limit avoidance.
+- **deSEC**: Domain + API token for [2](#quick-explainers) and [3](#quick-explainers) automation.
+- **Docker Hub / [1](#quick-explainers)**: Username + [4](#quick-explainers) for registry pulls and rate-limit avoidance.
 - **Odido Booster (NL unlimited data)**: OAuth token + user ID for Dutch Odido customers using the booster. The Odido API may incur costs or limits you are not expecting; use at your own risk.
 - **Optional**: GitHub token (gist scope) for the Scribe frontend.
 
@@ -252,7 +252,7 @@ When you run with `-p` (auto-passwords), the script generates a Proton Pass impo
 | AdGuard Home | `http://<LAN_IP>:8083` | `adguard` | AdGuard password | DNS filtering UI. |
 | WireGuard VPN UI | `http://<LAN_IP>:51821` | `admin` | WireGuard UI password | Remote access management. |
 | Portainer UI | `http://<LAN_IP>:9000` | `portainer` | Portainer password | Container management. |
-| deSEC DNS API | (none) | your deSEC domain | deSEC API token | Dynamic DNS + SSL automation. |
+| deSEC DNS API | (none) | your deSEC domain | deSEC API token | [2](#quick-explainers) + [3](#quick-explainers) automation. |
 | GitHub Scribe Token | (none) | GitHub username | GitHub token | Scribe gist access. |
 
 - **Source repositories (build-from-source + update checks)**:
@@ -261,7 +261,7 @@ When you run with `-p` (auto-passwords), the script generates a Proton Pass impo
 
 ### DHI Hardened Builds & Patches
 
-This stack prioritizes security by utilizing **Docker Hardened Images (DHI)**. The following services are either built directly from DHI base images or patched during setup to replace standard images with hardened alternatives:
+This stack prioritizes security by utilizing **[1](#quick-explainers)**. The following services are either built directly from [1](#quick-explainers) base images or patched during setup to replace standard images with hardened alternatives:
 
 - **Dashboard**: Built on `dhi.io/nginx`
 - **Hub API**: Built on `dhi.io/python`
@@ -270,7 +270,7 @@ This stack prioritizes security by utilizing **Docker Hardened Images (DHI)**. T
 - **Odido Booster**: Patched to use `dhi.io/python`
 - **VERT / VERTD**: Patched to use `dhi.io/node`, `dhi.io/bun`, and `dhi.io/nginx`
 
-Infrastructure services (Redis, PostgreSQL) also utilize DHI-provided hardened images where available.
+Infrastructure services (Redis, PostgreSQL) also utilize [1](#quick-explainers)-provided hardened images where available.
 
 ---
 *Built with ❤️ for the self-hosting community.*
