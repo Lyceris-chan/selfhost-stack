@@ -179,7 +179,7 @@ The Update banner checks git repos under `/app/sources/<service>`. If you want y
 
 ## 🖥️ System Requirements
 
-Ensure your host meets these specifications for optimal performance, especially during build processes for services like Invidious and Wikiless.
+Ensure your host meets these specifications for optimal performance, especially during build processes for services like Invidious, Wikiless, and BreezeWiki.
 
 | Specification | Minimum | Recommended |
 | :--- | :--- | :--- |
@@ -189,7 +189,7 @@ Ensure your host meets these specifications for optimal performance, especially 
 | **OS** | Linux (Debian/Ubuntu/Alpine) | Linux (Debian/Ubuntu/Alpine) |
 | **Architecture** | amd64 / arm64 | amd64 |
 
-> **Note:** Building containers from source (e.g., Invidious, Wikiless) can be resource-intensive. If you are on the minimum specs, builds may take significantly longer.
+> **Note:** Building containers from source (e.g., Invidious, Wikiless, BreezeWiki) can be resource-intensive. If you are on the minimum specs, builds may take significantly longer.
 
 ## 🌐 Network Configuration
 

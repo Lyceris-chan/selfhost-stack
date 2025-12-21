@@ -1270,7 +1270,7 @@ map \$http_host \$backend {
     adguard.$DESEC_DOMAIN    http://adguard:8083;
     portainer.$DESEC_DOMAIN  http://portainer:9000;
     wireguard.$DESEC_DOMAIN  http://$LAN_IP:51821;
-    odido.$DESEC_DOMAIN      http://odido-booster:80;
+    odido.$DESEC_DOMAIN      http://odido-booster:8080;
     
     # Handle the 8443 port in the host header
     "invidious.$DESEC_DOMAIN:8443"  http://gluetun:3000;
@@ -1286,7 +1286,7 @@ map \$http_host \$backend {
     "adguard.$DESEC_DOMAIN:8443"    http://adguard:8083;
     "portainer.$DESEC_DOMAIN:8443"  http://portainer:9000;
     "wireguard.$DESEC_DOMAIN:8443"  http://$LAN_IP:51821;
-    "odido.$DESEC_DOMAIN:8443"      http://odido-booster:80;
+    "odido.$DESEC_DOMAIN:8443"      http://odido-booster:8080;
 }
 
 server {
@@ -1330,7 +1330,7 @@ server {
     }
 
     location /odido-api/ {
-        proxy_pass http://odido-booster:80/;
+        proxy_pass http://odido-booster:8080/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -1511,11 +1511,30 @@ if [ -z "$ODIDO_DOCKERFILE" ]; then
     ODIDO_DOCKERFILE="Dockerfile"
 fi
 if [ -f "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" ]; then
-    # Use -dev variant to ensure pip and build tools are present
-    sed -i 's|^FROM python:.*-alpine|FROM dhi.io/python:3.11-alpine3.22-dev|g' "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE"
-    sed -i "s|readlink -f /usr/local/bin/python3|python -c 'import os,sys; print(os.path.realpath(sys.executable))'|" "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE"
-    sed -i 's|ENTRYPOINT \["/entrypoint.sh"\]|ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]|g' "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE"
-    log_info "Patched Odido Booster Dockerfile to use DHI hardened images."
+    cat > "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" <<'ODIDOEOF'
+FROM dhi.io/python:3.11-alpine3.22-dev
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    APP_DIR=/app \
+    APP_DATA_DIR=/data \
+    PORT=8080
+
+RUN apk add --no-cache su-exec sqlite-libs sqlite-dev build-base
+
+WORKDIR $APP_DIR
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY entrypoint.sh /entrypoint.sh
+
+EXPOSE 8080
+
+ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]
+CMD ["python", "-m", "app.main"]
+ODIDOEOF
+    log_info "Overwrote Odido Booster Dockerfile to use DHI hardened images and non-privileged port."
 fi
 
 mkdir -p "$SRC_DIR/hub-api"
@@ -2490,12 +2509,12 @@ cat >> "$COMPOSE_FILE" <<EOF
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
     networks: [frontnet]
-    ports: ["$LAN_IP:8085:80"]
+    ports: ["$LAN_IP:8085:8080"]
     environment:
       - API_KEY=$ODIDO_API_KEY
       - ODIDO_USER_ID=$ODIDO_USER_ID
       - ODIDO_TOKEN=$ODIDO_TOKEN
-      - PORT=80
+      - PORT=8080
     volumes:
       - $DATA_DIR/odido:/data
     restart: unless-stopped
