@@ -1620,19 +1620,23 @@ fi
 clone_repo "https://gitdab.com/cadence/breezewiki" "$SRC_DIR/breezewiki"
 # Patch BreezeWiki to use DHI Alpine image
 BREEZEWIKI_DOCKERFILE="Dockerfile.alpine"
-if [ ! -f "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE" ]; then
-    log_warn "BreezeWiki Dockerfile.alpine not found. Creating it..."
+if [ -f "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE" ]; then
+    log_info "Updating BreezeWiki Dockerfile.alpine..."
+else
+    log_info "Creating BreezeWiki Dockerfile.alpine..."
+fi
+
     cat > "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE" <<'BWEOF'
 FROM dhi.io/alpine-base:3.22-dev
 WORKDIR /app
 
-# Install dependencies
+# Install system dependencies
 RUN apk add --no-cache \
     git \
     racket \
     ca-certificates \
     curl \
-    sqlite \
+    sqlite-libs \
     fontconfig \
     cairo \
     libjpeg-turbo \
@@ -1641,17 +1645,14 @@ RUN apk add --no-cache \
 
 COPY . .
 
-# Install dependencies and build binary
-RUN raco pkg install --batch --auto --no-docs --skip-installed --no-setup compiler-lib /app
-# Note: raco exe can be slow, but it creates a standalone binary
-RUN raco exe -o breezewiki dist.rkt
+# Install Racket dependencies using req-lib (matches official Quay build)
+RUN raco pkg install --batch --auto --no-docs --skip-installed req-lib
+RUN raco req -d
 
 EXPOSE 10416
-CMD ["./breezewiki"]
+CMD ["racket", "dist.rkt"]
 BWEOF
-    log_info "Created BreezeWiki Dockerfile.alpine."
-fi
-
+log_info "BreezeWiki Dockerfile.alpine is ready."
 if [ -f "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE" ]; then
     sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
     sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
@@ -2152,12 +2153,12 @@ if [ "$SERVICE" = "breezewiki" ] || [ "$SERVICE" = "all" ]; then
     cat > "$SRC_ROOT/breezewiki/Dockerfile.alpine" <<'BWEOF'
 FROM dhi.io/alpine-base:3.22-dev
 WORKDIR /app
-RUN apk add --no-cache git racket ca-certificates curl sqlite fontconfig cairo libjpeg-turbo glib pango
+RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango
 COPY . .
-RUN raco pkg install --batch --auto --no-docs --skip-installed --no-setup compiler-lib /app
-RUN raco exe -o breezewiki dist.rkt
+RUN raco pkg install --batch --auto --no-docs --skip-installed req-lib
+RUN raco req -d
 EXPOSE 10416
-CMD ["./breezewiki"]
+CMD ["racket", "dist.rkt"]
 BWEOF
 fi
 PATCHEOF
