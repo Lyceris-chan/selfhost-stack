@@ -22,10 +22,10 @@ function parseSecrets(filePath) {
   }
 }
 
-function getPortainerUrl(dashboardPath) {
+function getPortainerUrl(DASHBOARD_URL) {
   if (process.env.PORTAINER_URL) return process.env.PORTAINER_URL;
-  if (dashboardPath.startsWith('file://')) return 'http://127.0.0.1:9000';
-  const url = new URL(dashboardPath);
+  if (DASHBOARD_URL.startsWith('file://')) return 'http://127.0.0.1:9000';
+  const url = new URL(DASHBOARD_URL);
   return `${url.protocol}//${url.hostname}:9000`;
 }
 
@@ -81,7 +81,7 @@ async function attemptPortainerLogin(page, username, password) {
   return !stillLogin;
 }
 
-async function checkPortainerTelemetry(browser, dashboardPath) {
+async function checkPortainerTelemetry(browser, DASHBOARD_URL) {
   const secretsPath = process.env.SECRETS_PATH || '/DATA/AppData/privacy-hub/.secrets';
   const secrets = parseSecrets(secretsPath);
   const password = process.env.PORTAINER_PASSWORD || secrets.ADMIN_PASS_RAW || '';
@@ -96,7 +96,7 @@ async function checkPortainerTelemetry(browser, dashboardPath) {
     return { status: 'FAIL', details: 'Portainer password missing' };
   }
 
-  const portainerUrl = getPortainerUrl(dashboardPath);
+  const portainerUrl = getPortainerUrl(DASHBOARD_URL);
   const page = await browser.newPage();
 
   try {
@@ -159,8 +159,10 @@ async function checkPortainerTelemetry(browser, dashboardPath) {
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
   
-  const dashboardPath = process.env.DASHBOARD_URL || ('file://' + path.resolve('/tmp/privacy-hub/dashboard.html'));
-  console.log('Testing dashboard at:', dashboardPath);
+  // Configuration
+const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://10.0.10.248:8081';
+const API_BASE_URL = process.env.API_BASE_URL || 'http://10.0.10.248:8081/api';
+  console.log('Testing dashboard at:', DASHBOARD_URL);
 
   const results = {
     checks: [],
@@ -178,13 +180,13 @@ async function checkPortainerTelemetry(browser, dashboardPath) {
     const page = await browser.newPage();
     await page.setViewport({ width: viewport.width, height: viewport.height });
 
-    const usesRemote = !dashboardPath.startsWith('file://');
+    const usesRemote = !DASHBOARD_URL.startsWith('file://');
     const consoleErrors = [];
     page.on('console', msg => {
       if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
 
-    await page.goto(dashboardPath, { waitUntil: 'networkidle2' });
+    await page.goto(DASHBOARD_URL, { waitUntil: 'networkidle2' });
     await page.waitForSelector('.status-text', { timeout: 15000 });
 
     // Check for API status (avoid offline error states)
@@ -368,7 +370,7 @@ async function checkPortainerTelemetry(browser, dashboardPath) {
     await page.close();
   }
 
-  const telemetryCheck = await checkPortainerTelemetry(browser, dashboardPath);
+  const telemetryCheck = await checkPortainerTelemetry(browser, DASHBOARD_URL);
   results.checks.push({
     name: 'Portainer Telemetry Disabled (UI)',
     status: telemetryCheck.status,

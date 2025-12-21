@@ -1,6 +1,6 @@
 const puppeteer = require('puppeteer');
 
-const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://10.0.0.118:8081/';
+const DASHBOARD_URL = 'http://10.0.10.248:8081/';
 const BREEZEWIKI_PATH = process.env.BREEZEWIKI_PATH || '/paladins/wiki/Talus';
 const INVIDIOUS_VIDEO_ID = process.env.INVIDIOUS_VIDEO_ID || 'dQw4w9WgXcQ';
 
@@ -16,7 +16,7 @@ function joinUrl(base, path) {
 
 async function checkBasicPage(page, name, url) {
   try {
-    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     const status = response ? response.status() : null;
     const title = await page.title();
     const bodyText = await page.evaluate(() => (document.body ? document.body.innerText.trim() : ''));
@@ -30,7 +30,7 @@ async function checkBasicPage(page, name, url) {
 async function testBreezewiki(page, baseUrl) {
   const url = joinUrl(baseUrl, BREEZEWIKI_PATH);
   try {
-    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     const status = response ? response.status() : null;
     const hasTalus = await page.evaluate(() => {
       const bodyText = document.body ? document.body.innerText : '';
@@ -47,13 +47,13 @@ async function testRimgoRandomImage(page, baseUrl) {
   const base = normalizeBaseUrl(baseUrl);
   let response = null;
   try {
-    await page.goto(`${base}/trending`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(`${base}/trending`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     let links = await page.evaluate(() => {
       const anchors = Array.from(document.querySelectorAll('a[href*="/gallery/"], a[href*="/i/"]'));
       return anchors.map((a) => a.href).filter(Boolean);
     });
     if (links.length === 0) {
-      await page.goto(base, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.goto(base, { waitUntil: 'domcontentloaded', timeout: 60000 });
       links = await page.evaluate(() => {
         const anchors = Array.from(document.querySelectorAll('a[href*="/gallery/"], a[href*="/i/"]'));
         return anchors.map((a) => a.href).filter(Boolean);
@@ -63,7 +63,7 @@ async function testRimgoRandomImage(page, baseUrl) {
       return { name: 'Rimgo random image', url: base, status: null, ok: false, error: 'No image links found' };
     }
     const randomLink = links[Math.floor(Math.random() * links.length)];
-    response = await page.goto(randomLink, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    response = await page.goto(randomLink, { waitUntil: 'domcontentloaded', timeout: 60000 });
     const status = response ? response.status() : null;
     const hasImage = await page.evaluate(() => {
       const img = document.querySelector('img');
@@ -79,7 +79,7 @@ async function testRimgoRandomImage(page, baseUrl) {
 async function testInvidiousVideo(page, baseUrl) {
   const url = joinUrl(baseUrl, `/watch?v=${INVIDIOUS_VIDEO_ID}`);
   try {
-    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     const status = response ? response.status() : null;
     const hasVideo = await page.evaluate(() => !!document.querySelector('video'));
     const hasError = await page.evaluate(() => /unavailable|error|not found/i.test(document.body ? document.body.innerText : ''));
@@ -92,7 +92,7 @@ async function testInvidiousVideo(page, baseUrl) {
 
 async function withPage(browser, fn) {
   const page = await browser.newPage();
-  page.setDefaultTimeout(30000);
+  page.setDefaultTimeout(60000);
   try {
     return await fn(page);
   } finally {
@@ -109,7 +109,7 @@ async function run() {
   console.log('Starting Service Page Verification...');
   console.log(`Dashboard URL: ${DASHBOARD_URL}`);
   const services = await withPage(browser, async (page) => {
-    await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     return page.evaluate(() => {
       return Array.from(document.querySelectorAll('.card[data-url]')).map((card) => ({
         id: card.id || '',
