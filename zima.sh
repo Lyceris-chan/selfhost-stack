@@ -1610,7 +1610,17 @@ if [ -f "$SRC_DIR/vert/$VERT_DOCKERFILE" ]; then
     fi
 fi
 
-sudo chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
+clone_repo "https://gitdab.com/cadence/breezewiki" "$SRC_DIR/breezewiki"
+# Patch BreezeWiki to use DHI Alpine image
+BREEZEWIKI_DOCKERFILE="Dockerfile.alpine"
+if [ -f "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE" ]; then
+    sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
+    sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
+    sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
+    log_info "Patched BreezeWiki Dockerfile to use DHI hardened images."
+fi
+
+sudo chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$SRC_DIR/breezewiki" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
 
 # --- SECTION 12: ADMINISTRATIVE CONTROL ARTIFACTS ---
 
@@ -3152,7 +3162,9 @@ fi
 if should_deploy "breezewiki"; then
 cat >> "$COMPOSE_FILE" <<EOF
   breezewiki:
-    image: quay.io/pussthecatorg/breezewiki
+    build:
+      context: $SRC_DIR/breezewiki
+      dockerfile: Dockerfile.alpine
     container_name: breezewiki
     network_mode: "service:gluetun"
     environment:

@@ -177,6 +177,20 @@ The Update banner checks git repos under `/app/sources/<service>`. If you want y
 
 </details>
 
+## 🖥️ System Requirements
+
+Ensure your host meets these specifications for optimal performance, especially during build processes for services like Invidious and Wikiless.
+
+| Specification | Minimum | Recommended |
+| :--- | :--- | :--- |
+| **CPU** | 2 vCPU | 4 vCPU (or higher) |
+| **RAM** | 2 GB | 4 GB+ |
+| **Storage** | 20 GB | 40 GB+ (SSD preferred) |
+| **OS** | Linux (Debian/Ubuntu/Alpine) | Linux (Debian/Ubuntu/Alpine) |
+| **Architecture** | amd64 / arm64 | amd64 |
+
+> **Note:** Building containers from source (e.g., Invidious, Wikiless) can be resource-intensive. If you are on the minimum specs, builds may take significantly longer.
+
 ## 🌐 Network Configuration
 
 ### Standard Setup
@@ -267,6 +281,7 @@ This stack prioritizes security by utilizing **[1](#quick-explainers)**. The fol
 - **Hub API**: Built on `dhi.io/python`
 - **Wikiless**: Patched to use `dhi.io/node` and `dhi.io/alpine-base`
 - **Scribe**: Patched to use `dhi.io/node` and `dhi.io/alpine-base`
+- **BreezeWiki**: Patched to use `dhi.io/alpine-base`
 - **Odido Booster**: Patched to use `dhi.io/python`
 - **VERT / VERTD**: Patched to use `dhi.io/node`, `dhi.io/bun`, and `dhi.io/nginx`
 
