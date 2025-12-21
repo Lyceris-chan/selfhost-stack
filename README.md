@@ -19,6 +19,7 @@ Digital privacy begins with hardware and code ownership. This project provides a
 - [Security Model](#security)
 - [Services & Ports](#catalog)
 - [System Resilience](#resilience)
+- [Automated Maintenance & Updates](#maintenance)
 - [Data Ownership](#ownership)
 
 ## <a id="overview"></a>🌟 Project Overview
@@ -227,6 +228,7 @@ uci commit firewall
         - **Python**: `dhi.io/python:3.11-alpine3.22-dev` (Enforced for Hub-API and Odido Booster).
         - **Node.js/Bun**: Build pipelines for Wikiless, Scribe, and VERT are patched to use `dhi.io/node:20-alpine3.22-dev` and `dhi.io/bun:1-alpine3.22-dev`.
         - **Alpine Base**: All services utilizing Alpine are automatically repinned to `dhi.io/alpine-base:3.22-dev` to ensure a minimal, hardened OS layer.
+- **Watchtower Safety**: To prevent registry updates from overwriting your custom patches, all built-from-source services (Invidious, Scribe, Wikiless, Vert, etc.) are explicitly labeled with `com.centurylinklabs.watchtower.enable=false`.
 - **Official Specialized Apps**: High-level applications (Gluetun, AdGuard, etc.) utilize their official registry sources to ensure maximum compatibility and up-to-date functionality.
 - **Zero Public Access**: Internal APIs and management interfaces are only accessible via the encrypted VPN tunnel or local network.
 
@@ -264,7 +266,7 @@ All links below point to official project pages or maintainer repositories (no G
 - **[Gluetun](https://github.com/qdm12/gluetun)**: A specialized VPN client that acts as an internal proxy. It isolates privacy frontends and routes their outgoing traffic through an external VPN provider to ensure your home IP remains anonymous.
 
 #### Privacy Frontends (VPN-Routed)
-- **[Invidious](https://github.com/iv-org/invidious)**: Access YouTube content privately (Port 3000). It strips all tracking and advertisements, routes traffic through the VPN to hide your IP, and provides a lightweight interface without proprietary telemetry.
+- **[Invidious](https://github.com/iv-org/invidious)**: Access YouTube content privately (Port 3000). It strips all tracking and advertisements, routes traffic through the VPN to hide your IP, and provides a lightweight interface without proprietary telemetry. Includes automated **database migration** tools via Dashboard.
 - **[Redlib](https://github.com/redlib-org/redlib)**: A hardened Reddit frontend (Port 8080). It eliminates tracking pixels, intrusive analytics, and advertisements, ensuring your browsing habits remain confidential and your home IP is never disclosed.
 - **[Wikiless](https://github.com/Metastem/Wikiless)**: Wikipedia without the cookies or telemetry (Port 8180). All requests are routed through the VPN to maintain total anonymity.
 - **[Rimgo](https://codeberg.org/rimgo/rimgo)**: An anonymous Imgur viewer (Port 3002) that removes telemetry and tracking scripts while hiding your location behind the VPN proxy.
@@ -282,6 +284,23 @@ All links below point to official project pages or maintainer repositories (no G
 - **cert-monitor.sh**: Manages the automated SSL certificate lifecycle. It handles Let's Encrypt issuance via DNS-01 challenges and implements rate-limit recovery by deploying temporary self-signed certificates.
 - **wg-ip-monitor.sh**: A proactive network monitor that detects changes in your public IP address. It automatically synchronizes DNS records and restarts the WireGuard endpoint to maintain persistent connectivity.
 - **wg-control.sh**: An administrative control script that facilitates profile switching, status reporting, and service dependency management for the VPN tunnel.
+
+### 5. Non-Interactive Deployment (CI/CD)
+To run the deployment without interactive prompts (e.g., in a script or remote environment), provide registry credentials via environment variables and use the `-y` (auto-confirm) and `-p` (auto-password) flags:
+
+```bash
+export REG_USER="your_docker_user"
+export REG_TOKEN="your_docker_pat"
+# Provide WireGuard config via file redirection if needed
+./zima.sh -p -y < my_wg_config.conf
+```
+
+## <a id="maintenance"></a>🛠️ Automated Maintenance & Updates
+Privacy Hub includes built-in orchestration logic to keep your services up-to-date and healthy:
+
+- **Updates Available Banner**: The dashboard backend (`hub-api`) automatically checks your source repositories for pending updates via `git fetch`. A reactive banner will appear at the top of the dashboard if updates are detected.
+- **One-Click Rebuilds**: Clicking "Update All" on the banner triggers an automated `git pull`, re-applies custom security patches, and rebuilds the containers without manual intervention.
+- **Foolproof Migrations**: Patched services like Invidious include a dedicated **"Migrate DB"** button on their dashboard card. This script (`migrate.sh`) automatically backs up your PostgreSQL data to `/DATA/AppData/privacy-hub/data/backups/` before performing schema updates, ensuring your data is always safe.
 
 ## <a id="resilience"></a>🏗️ System Resilience
 
