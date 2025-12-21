@@ -270,29 +270,66 @@ setup_fonts() {
         return 0
     fi
 
-    # URLs
-    URL_GS="https://api.fonts.coollabs.io/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
-    URL_CC="https://api.fonts.coollabs.io/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
-    URL_MS="https://api.fonts.coollabs.io/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+    # URLs (Coollabs primary, Fontlay fallback)
+    URL_GS_PRIMARY="https://api.fonts.coollabs.io/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
+    URL_CC_PRIMARY="https://api.fonts.coollabs.io/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
+    URL_MS_PRIMARY="https://api.fonts.coollabs.io/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+    URL_GS_FALLBACK="https://fontlay.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
+    URL_CC_FALLBACK="https://fontlay.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
+    URL_MS_FALLBACK="https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
 
-    # Download CSS
-    curl -s "$URL_GS" > "$FONTS_DIR/gs.css"
-    curl -s "$URL_CC" > "$FONTS_DIR/cc.css"
-    curl -s "$URL_MS" > "$FONTS_DIR/ms.css"
+    download_css() {
+        local dest="$1"
+        local primary="$2"
+        local fallback="$3"
+        local varname="$4"
+        local used="$primary"
+        if ! curl -fsSL "$primary" -o "$dest"; then
+            log_warn "Primary font source failed: $primary"
+            if curl -fsSL "$fallback" -o "$dest"; then
+                used="$fallback"
+                log_info "Using fallback font source: $fallback"
+            else
+                log_warn "Fallback font source failed: $fallback"
+            fi
+        fi
+        printf -v "$varname" '%s' "$used"
+    }
+
+    css_origin() {
+        echo "$1" | sed -E 's#(https?://[^/]+).*#\1#'
+    }
+
+    download_css "$FONTS_DIR/gs.css" "$URL_GS_PRIMARY" "$URL_GS_FALLBACK" GS_CSS_URL
+    download_css "$FONTS_DIR/cc.css" "$URL_CC_PRIMARY" "$URL_CC_FALLBACK" CC_CSS_URL
+    download_css "$FONTS_DIR/ms.css" "$URL_MS_PRIMARY" "$URL_MS_FALLBACK" MS_CSS_URL
 
     # Parse and download woff2 files for each CSS file
     cd "$FONTS_DIR"
+    declare -A CSS_ORIGINS
+    CSS_ORIGINS[gs.css]="$(css_origin "$GS_CSS_URL")"
+    CSS_ORIGINS[cc.css]="$(css_origin "$CC_CSS_URL")"
+    CSS_ORIGINS[ms.css]="$(css_origin "$MS_CSS_URL")"
     for css_file in gs.css cc.css ms.css; do
+        css_origin="${CSS_ORIGINS[$css_file]}"
         # Extract URLs from url(...) - handle optional quotes
         grep -o "url([^)]*)" "$css_file" | sed 's/url(//;s/)//' | tr -d "'\"" | sort | uniq | while read -r url; do
             if [ -z "$url" ]; then continue; fi
             filename=$(basename "$url")
             # Strip everything after ?
             clean_name="${filename%%\?*}"
+            fetch_url="$url"
+            if [[ "$url" == //* ]]; then
+                fetch_url="https:$url"
+            elif [[ "$url" == /* ]]; then
+                fetch_url="${css_origin}${url}"
+            elif [[ "$url" != http* ]]; then
+                fetch_url="${css_origin}/${url}"
+            fi
             
             if [ ! -f "$clean_name" ]; then
                 # log_info "Downloading font: $clean_name"
-                curl -sL "$url" -o "$clean_name"
+                curl -sL "$fetch_url" -o "$clean_name"
             fi
             
             # Escape URL for sed: escape / and & and |
@@ -697,7 +734,7 @@ else
     log_info "Detected LAN IP ($DETECTION_HINT): $LAN_IP"
 fi
 
-PUBLIC_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ip-api.com/line?fields=query || curl -s --max-time 5 https://eth0.me || echo "$LAN_IP")
+PUBLIC_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ip-api.com/line?fields=query || echo "$LAN_IP")
 echo "$PUBLIC_IP" > "$CURRENT_IP_FILE"
 
 # --- SECTION 5: AUTHENTICATION & CREDENTIAL MANAGEMENT ---
@@ -1968,12 +2005,34 @@ import subprocess
 import time
 import sqlite3
 import threading
+import urllib.request
+import urllib.parse
 
 PORT = 55555
 PROFILES_DIR = "/profiles"
 CONTROL_SCRIPT = "/usr/local/bin/wg-control.sh"
 LOG_FILE = "/app/deployment.log"
 DB_FILE = "/app/data/logs.db"
+FONTS_DIR = "/fonts"
+
+FONT_SOURCES = {
+    "gs.css": [
+        "https://api.fonts.coollabs.io/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap",
+        "https://fontlay.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap",
+    ],
+    "cc.css": [
+        "https://api.fonts.coollabs.io/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap",
+        "https://fontlay.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap",
+    ],
+    "ms.css": [
+        "https://api.fonts.coollabs.io/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap",
+        "https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap",
+    ],
+}
+FONT_ORIGINS = [
+    "https://api.fonts.coollabs.io",
+    "https://fontlay.com",
+]
 
 def init_db():
     """Initialize the SQLite database for logs and metrics."""
@@ -2056,6 +2115,113 @@ def log_structured(level, message, category="SYSTEM"):
         print(f"DB Log Error: {e}")
     
     print(f"[{level}] {message}")
+
+def log_fonts(message, level="SYSTEM"):
+    try:
+        log_structured(level, message, "FONTS")
+    except Exception:
+        print(f"[{level}] {message}")
+
+def download_text(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "privacy-hub/1.0"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        if getattr(resp, "status", 200) >= 400:
+            raise Exception(f"HTTP {resp.status}")
+        return resp.read().decode("utf-8", errors="replace")
+
+def download_binary(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "privacy-hub/1.0"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        if getattr(resp, "status", 200) >= 400:
+            raise Exception(f"HTTP {resp.status}")
+        return resp.read()
+
+def ensure_fonts():
+    if os.path.exists(FONTS_DIR) and not os.path.isdir(FONTS_DIR):
+        log_fonts(f"Font path is not a directory: {FONTS_DIR}", "WARN")
+        return
+    os.makedirs(FONTS_DIR, exist_ok=True)
+
+    for css_name, sources in FONT_SOURCES.items():
+        css_path = os.path.join(FONTS_DIR, css_name)
+        css_text = ""
+
+        if not os.path.exists(css_path) or os.path.getsize(css_path) == 0:
+            css_text = None
+            for url in sources:
+                try:
+                    css_text = download_text(url)
+                    with open(css_path, "w", encoding="utf-8") as f:
+                        f.write(css_text)
+                    log_fonts(f"Downloaded {css_name} from {url}")
+                    break
+                except Exception as e:
+                    log_fonts(f"Failed to download {css_name} from {url}: {e}", "WARN")
+            if not css_text:
+                continue
+
+        if not css_text:
+            try:
+                with open(css_path, "r", encoding="utf-8") as f:
+                    css_text = f.read()
+            except Exception as e:
+                log_fonts(f"Failed to read {css_name}: {e}", "WARN")
+                continue
+
+        if "url(" not in css_text:
+            continue
+
+        urls_in_css = re.findall(r"url\(([^)]+)\)", css_text)
+        if not urls_in_css:
+            continue
+
+        updated = False
+        for raw in urls_in_css:
+            cleaned = raw.strip().strip("\"'")
+            if not cleaned or cleaned.startswith("data:"):
+                continue
+
+            filename = os.path.basename(cleaned.split("?")[0])
+            if not filename:
+                continue
+
+            local_path = os.path.join(FONTS_DIR, filename)
+            if not os.path.exists(local_path):
+                candidates = []
+                if cleaned.startswith("//"):
+                    candidates = [f"https:{cleaned}"]
+                elif cleaned.startswith("http"):
+                    candidates = [cleaned]
+                else:
+                    for origin in FONT_ORIGINS:
+                        candidates.append(urllib.parse.urljoin(origin + "/", cleaned.lstrip("/")))
+
+                last_err = None
+                for candidate in candidates:
+                    try:
+                        data = download_binary(candidate)
+                        with open(local_path, "wb") as f:
+                            f.write(data)
+                        log_fonts(f"Downloaded font {filename} from {candidate}")
+                        last_err = None
+                        break
+                    except Exception as e:
+                        last_err = e
+
+                if last_err is not None and not os.path.exists(local_path):
+                    log_fonts(f"Failed to download font {filename}: {last_err}", "WARN")
+                    continue
+
+            if raw != filename:
+                css_text = css_text.replace(raw, filename)
+                updated = True
+
+        if updated:
+            try:
+                with open(css_path, "w", encoding="utf-8") as f:
+                    f.write(css_text)
+            except Exception as e:
+                log_fonts(f"Failed to update {css_name}: {e}", "WARN")
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
@@ -2526,6 +2692,11 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
 if __name__ == "__main__":
     print(f"Starting API server on port {PORT}...")
     init_db()
+
+    try:
+        ensure_fonts()
+    except Exception as e:
+        log_structured("WARN", f"Font sync failed: {e}", "FONTS")
     
     # Start metrics collector thread
     t = threading.Thread(target=metrics_collector, daemon=True)
@@ -2603,6 +2774,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$BASE_DIR/.wge_data_usage:/app/.wge_data_usage"
       - "$AGH_CONF_DIR:/etc/adguard/conf"
       - "$DOCKER_AUTH_DIR:/root/.docker:ro"
+      - "$FONTS_DIR:/fonts"
       - "$SRC_DIR:/app/sources"
     environment:
       - HUB_API_KEY=$ODIDO_API_KEY
@@ -3117,7 +3289,7 @@ x-casaos:
       A comprehensive self-hosted privacy stack for people who want to own their data
       instead of renting a false sense of security. Includes WireGuard VPN access,
       recursive DNS with AdGuard filtering, and VPN-isolated privacy frontends
-      (Invidious, Redlib, etc.) that reduce tracking and prevent home IP exposure.
+      \(Invidious, Redlib, etc.\) that reduce tracking and prevent home IP exposure.
   icon: http://$LAN_IP:8081/fonts/privacy-hub.svg
 EOF
 
@@ -5785,7 +5957,7 @@ if ! flock -n 9; then
     exit 0
 fi
 
-NEW_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ip-api.com/line?fields=query || curl -s --max-time 5 https://eth0.me || echo "FAILED")
+NEW_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ip-api.com/line?fields=query || echo "FAILED")
 
 if [[ ! "$NEW_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "$(date) [ERROR] Failed to get valid public IP (Response: $NEW_IP)" >> "$LOG_FILE"
@@ -5835,11 +6007,9 @@ generate_protonpass_export() {
     # We use this generic format for maximum compatibility.
     cat > "$export_file" <<EOF
 Name,URL,Username,Password,Note
-Privacy Hub Dashboard,http://$LAN_IP:$PORT_DASHBOARD_WEB,admin,$ADMIN_PASS_RAW,Primary management interface for the Privacy Hub stack.
 AdGuard Home,http://$LAN_IP:$PORT_ADGUARD_WEB,adguard,$AGH_PASS_RAW,Network-wide advertisement and tracker filtration.
 WireGuard VPN UI,http://$LAN_IP:$PORT_WG_WEB,admin,$VPN_PASS_RAW,WireGuard remote access management interface.
 Portainer UI,http://$LAN_IP:$PORT_PORTAINER,portainer,$ADMIN_PASS_RAW,Docker container management interface.
-Odido Booster API,,dashboard,$ODIDO_API_KEY,API key for the automated Odido data bundle booster.
 deSEC DNS API,,$DESEC_DOMAIN,$DESEC_TOKEN,API token for deSEC dynamic DNS management.
 GitHub Scribe Token,,$SCRIBE_GH_USER,$SCRIBE_GH_TOKEN,GitHub Personal Access Token for Scribe Medium frontend.
 EOF
