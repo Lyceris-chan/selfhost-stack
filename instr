@@ -261,3 +261,5 @@ Dashboard URL: http://10.0.0.118:8081/
 - Code Quality: Python backend code in zima.sh follows idiomatic patterns with robust error handling for subprocess execution.
 - Final Integration: All 12 services confirm correct memory allocation and Watchtower exclusion in generated orchestration files.
 [progress] 2025-12-21T02:30:00Z Fixed YAML unmarshal error caused by duplicate 'labels' key in 'vert' service in both zima.sh and zima_local.sh. Verified valid orchestration file generation.
+[progress] 2025-12-21T02:45:00Z Relocated "DEPLOYMENT COMPLETE" message to the end of zima.sh and zima_local.sh to prevent premature success reports.
+[progress] 2025-12-21T02:45:00Z Fixed AUTO_CONFIRM (-y) logic in zima.sh to correctly bypass all cleanup prompts regardless of mode.

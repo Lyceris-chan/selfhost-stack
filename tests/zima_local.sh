@@ -4804,9 +4804,6 @@ check_iptables() {
     fi
 }
 
-echo "=========================================================="
-echo "DEPLOYMENT COMPLETE: INFRASTRUCTURE IS OPERATIONAL"
-echo "=========================================================="
 sudo modprobe tun || true
 
 # Explicitly remove portainer and hub-api if they exist to ensure clean state
@@ -4978,3 +4975,9 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo "Please save these credentials. They are also stored in: $BASE_DIR/.secrets"
 fi
 echo "=========================================================="
+
+echo ""
+echo "=========================================================="
+echo "🛡️  DEPLOYMENT COMPLETE: INFRASTRUCTURE IS OPERATIONAL"
+echo "=========================================================="
+echo ""

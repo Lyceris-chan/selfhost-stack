@@ -164,7 +164,7 @@ log_crit() {
 # --- SECTION 2: CLEANUP & ENVIRONMENT RESET ---
 # Functions to clear out existing garbage for a clean start.
 ask_confirm() {
-    if [ "$FORCE_CLEAN" = true ] && [ "$AUTO_CONFIRM" = true ]; then return 0; fi
+    if [ "$AUTO_CONFIRM" = true ]; then return 0; fi
     read -r -p "$1 [y/N]: " response
     case "$response" in
         [yY][eE][sS]|[yY]) return 0 ;;
@@ -4849,12 +4849,8 @@ check_iptables() {
     else
         log_warn "iptables rules for wg-easy may not be correctly set up."
         log_warn "Please check your firewall settings if you experience connectivity issues."
-    fi
 }
 
-echo "=========================================================="
-echo "DEPLOYMENT COMPLETE: INFRASTRUCTURE IS OPERATIONAL"
-echo "=========================================================="
 sudo modprobe tun || true
 
 # Explicitly remove portainer and hub-api if they exist to ensure clean state
@@ -5026,3 +5022,9 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo "Please save these credentials. They are also stored in: $BASE_DIR/.secrets"
 fi
 echo "=========================================================="
+
+echo ""
+echo "=========================================================="
+echo "🛡️  DEPLOYMENT COMPLETE: INFRASTRUCTURE IS OPERATIONAL"
+echo "=========================================================="
+echo ""
