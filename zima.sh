@@ -198,69 +198,47 @@ authenticate_registries() {
     # Export DOCKER_CONFIG globally
     export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
     
-    # Non-interactive login via environment variables
-    if [ -n "${REG_USER:-}" ] && [ -n "${REG_TOKEN:-}" ]; then
-        log_info "Credentials detected in environment: Attempting non-interactive registry login."
-        
-        # DHI Login
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-            log_info "dhi.io: Authentication successful."
-        else
-            log_warn "dhi.io: Authentication failed."
-        fi
-
-        # Docker Hub Login
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-             log_info "Docker Hub: Authentication successful."
-        else
-             log_warn "Docker Hub: Authentication failed."
-        fi
-        return 0
-    fi
-
-    # If running with AUTO_CONFIRM but no credentials, warn but proceed to prompt 
-    # unless we are in a strictly non-interactive environment (which we can't easily detect).
-    # To satisfy the requirement that -p/-y shouldn't bypass this, we always prompt if vars are missing.
-
-    echo ""
-    echo "--- REGISTRY AUTHENTICATION ---"
-    echo "Please provide your credentials for dhi.io and Docker Hub."
-    echo "A single token is utilized for both registries to streamline configuration."
-    echo ""
-
-    while true; do
-        read -r -p "Username: " REG_USER
-        read -rs -p "Access Token (PAT): " REG_TOKEN
-        echo ""
-        
-        # DHI Login
-        DHI_LOGIN_OK=false
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
-            log_info "dhi.io: Authentication successful. Hardened images are now available."
-            DHI_LOGIN_OK=true
-        else
-            log_crit "dhi.io: Authentication failed. Please verify your credentials."
-        fi
-
-        # Docker Hub Login
-        HUB_LOGIN_OK=false
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-             log_info "Docker Hub: Authentication successful. Pull limits have been adjusted."
-             HUB_LOGIN_OK=true
-        else
-             log_warn "Docker Hub: Authentication failed. Pull rates may be limited for anonymous requests."
-        fi
-
-        if [ "$DHI_LOGIN_OK" = true ]; then
-            if [ "$HUB_LOGIN_OK" = false ]; then
-                log_warn "Proceeding with DHI authentication only."
+        # Non-interactive login via environment variables
+        if [ -n "${REG_USER:-}" ] && [ -n "${REG_TOKEN:-}" ]; then
+            log_info "Credentials detected in environment: Attempting non-interactive registry login."
+            
+            # DHI Login
+            if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+                log_info "dhi.io: Authentication successful."
+            else
+                log_warn "dhi.io: Authentication failed."
+            fi
+    
+            # Docker Hub Login
+            if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+                 log_info "Docker Hub: Authentication successful."
+            else
+                 log_warn "Docker Hub: Authentication failed."
             fi
             return 0
         fi
-
-        if ! ask_confirm "Authentication failed. Would you like to retry?"; then return 1; fi
-    done
-}
+    
+        # If running with AUTO_CONFIRM but no credentials, warn but proceed to prompt 
+        echo ""
+        echo "--- REGISTRY AUTHENTICATION ---"
+        echo "Please provide your credentials for dhi.io and Docker Hub."
+        echo ""
+    
+        while true; do
+            read -r -p "Username: " REG_USER
+            read -rs -p "Access Token (PAT): " REG_TOKEN
+            echo ""
+            
+            # DHI Login
+            if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
+                log_info "dhi.io: Authentication successful."
+                return 0
+            else
+                log_crit "dhi.io: Authentication failed."
+            fi
+    
+            if ! ask_confirm "Authentication failed. Would you like to retry?"; then return 1; fi
+        done}
 
 setup_fonts() {
     log_info "Downloading local assets to ensure dashboard privacy and eliminate third-party dependencies."
@@ -962,8 +940,7 @@ else
     echo "----------------------------------------------------------"
     cat > "$ACTIVE_WG_CONF"
     echo "" >> "$ACTIVE_WG_CONF" 
-    echo "----------------------------------------------------------"
-    
+    echo "----------------------------------------------------------"    
     # Sanitize the configuration file
     $PYTHON_CMD - "$ACTIVE_WG_CONF" <<'PY'
 from pathlib import Path
@@ -2456,8 +2433,11 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 class APIHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        # Log access to structured log for better visibility
-        log_structured("ACCESS", format % args, "NETWORK")
+        # Filter out common health check and static asset logs to reduce noise
+        msg = format % args
+        if any(x in msg for x in ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'HTTP/1.1" 200', 'HTTP/1.1" 304']):
+            return
+        log_structured("INFO", msg, "NETWORK")
     
     def _send_json(self, data, code=200):
         try:
@@ -3871,9 +3851,8 @@ cat > "$DASHBOARD_FILE" <<EOF
             color: var(--md-sys-color-on-surface);
             line-height: 28px;
             flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            overflow: visible;
+            white-space: normal;
         }
 
         .nav-arrow {
@@ -4463,13 +4442,12 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h2>Invidious</h2>
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('invidious', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <button onclick="openServiceSettings('invidious', event)" class="btn btn-icon" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box">
-                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance -></span>
                     <div id="metrics-invidious" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4480,31 +4458,31 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>Redlib</h2>
                     <div style="display: flex; align-items: center; gap: 12px;">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('redlib', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('redlib', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance -></span>
                     <div id="metrics-redlib" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-wikiless" data-url="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true" data-container="wikiless" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Wikiless</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('wikiless', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>Wikiless</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('wikiless', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance -></span>
                     <div id="metrics-wikiless" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-memos" data-url="http://$LAN_IP:$PORT_MEMOS" class="card" data-check="true" data-container="memos" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Memos</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('memos', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>Memos</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('memos', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
                 <div class="chip-box">
-                    <span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container"><span class="material-symbols-rounded">lan</span> Direct Access</span>
+                    <span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container">Direct Access -></span>
                     <button onclick="vacuumServiceDb('memos', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Optimize the database by reclaiming unused space (VACUUM). Highly recommended after large deletions."><span class="material-symbols-rounded">compress</span> Optimize DB</button>
                 
                     <div id="metrics-memos" class="chip-box" style="padding-top:0; display:none;">
@@ -4513,45 +4491,45 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div></div>
             </div>
             <div id="link-rimgo" data-url="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true" data-container="rimgo" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Rimgo</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('rimgo', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>Rimgo</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('rimgo', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance -></span>
                     <div id="metrics-rimgo" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-scribe" data-url="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true" data-container="scribe" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Scribe</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('scribe', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>Scribe</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('scribe', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance -></span>
                     <div id="metrics-scribe" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-breezewiki" data-url="http://$LAN_IP:$PORT_BREEZEWIKI/" class="card" data-check="true" data-container="breezewiki" onclick="navigate(this, event)">
-                <div class="card-header"><h2>BreezeWiki</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('breezewiki', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>BreezeWiki</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('breezewiki', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance -></span>
                     <div id="metrics-breezewiki" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-anonymousoverflow" data-url="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true" data-container="anonymousoverflow" onclick="navigate(this, event)">
-                <div class="card-header"><h2>AnonOverflow</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('anonymousoverflow', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>AnonOverflow</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('anonymousoverflow', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance -></span>
                     <div id="metrics-anonymousoverflow" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-vert" data-url="http://$LAN_IP:$PORT_VERT" class="card" data-check="true" data-container="vert" onclick="navigate(this, event)">
-                <div class="card-header"><h2>VERT</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('vert', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>VERT</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('vert', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container"><span class="material-symbols-rounded">build</span> Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion"><span class="material-symbols-rounded">memory</span> GPU Accelerated</span>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container">Utility -></span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion"><span class="material-symbols-rounded">memory</span> GPU Accelerated</span>
                     <div id="metrics-vert" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4565,10 +4543,10 @@ cat > "$DASHBOARD_FILE" <<EOF
         </div>
         <div class="grid-3">
             <div id="link-adguard" data-url="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card" data-check="true" data-container="adguard" onclick="navigate(this, event)">
-                <div class="card-header"><h2>AdGuard Home</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('adguard', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>AdGuard Home</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('adguard', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
                 <div class="chip-box">
-                    <span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container"><span class="material-symbols-rounded">home</span> Local Access</span>
+                    <span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container">Local Access -></span>
                     <button onclick="clearServiceLogs('adguard', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Clear the historical DNS query logs to free up space."><span class="material-symbols-rounded">auto_delete</span> Clear Logs</button>
                     <span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span>
                 
@@ -4578,18 +4556,18 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div></div>
             </div>
             <div id="link-portainer" data-url="http://$LAN_IP:$PORT_PORTAINER" class="card" data-check="true" data-container="portainer" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Portainer</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('portainer', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>Portainer</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('portainer', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container"><span class="material-symbols-rounded">home</span> Local Access</span>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container">Local Access -></span>
                     <div id="metrics-portainer" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-wg-easy" data-url="http://$LAN_IP:$PORT_WG_WEB" class="card" data-check="true" data-container="wg-easy" onclick="navigate(this, event)">
-                <div class="card-header"><h2>WireGuard</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('wg-easy', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>WireGuard</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('wg-easy', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">The primary gateway for <strong>secure remote access</strong>. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container"><span class="material-symbols-rounded">home</span> Local Access</span>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container">Local Access -></span>
                     <div id="metrics-wg-easy" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4813,10 +4791,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         </div>
     </div>
 
-    <!-- Setup Wizard -->
-    <div id="setup-wizard" class="wizard-overlay">
-        <!-- ... existing ... -->
-    </div>
+    <!-- Setup Wizard removed (Automated Deployment) -->
 
     <!-- Service Management Modal -->
     <div id="service-modal" class="modal-overlay">
@@ -4869,7 +4844,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
         async function fetchUpdates() {
             try {
-                const res = await fetch(API + "/updates");
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/updates", { headers });
                 if (!res.ok) return;
                 const data = await res.json();
                 const updates = data.updates || {};
@@ -5026,7 +5002,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         el.style.opacity = '1';
                         el.style.cursor = 'pointer';
                         el.dataset.tooltip = "Manage " + containerName + " in Portainer";
-                        el.innerHTML = originalText + ' <svg style="width:16px; height:16px; vertical-align:middle; margin-left:4px; fill:currentColor; pointer-events:none;" viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>';
+                        el.textContent = originalText;
                         
                         // Use a fresh onclick handler
                         el.onclick = function(e) {
@@ -5131,11 +5107,24 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
         }
         
+        let containerMetrics = {};
+
+        async function fetchMetrics() {
+            try {
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/metrics", { headers });
+                if (!res.ok) return;
+                const data = await res.json();
+                containerMetrics = data.metrics || {};
+            } catch(e) {}
+        }
+
         async function fetchStatus() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000);
             try {
-                const res = await fetch(API + "/status", { signal: controller.signal });
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/status", { headers, signal: controller.signal });
                 clearTimeout(timeoutId);
                 
                 if (res.status === 401) {
@@ -5487,7 +5476,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
         
         async function fetchProfiles() {
             try {
-                const res = await fetch(API + "/profiles");
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/profiles", { headers });
                 if (res.status === 401) throw new Error("401");
                 const data = await res.json();
                 const el = document.getElementById('profile-list');
@@ -5577,16 +5567,21 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const evtSource = new EventSource(API + "/events");
             
             function parseLogLine(line) {
-                const div = document.createElement('div');
-                div.className = 'log-entry';
-                
                 let logData = null;
                 try {
                     logData = JSON.parse(line);
                 } catch(e) {
-                    // Fallback for raw lines
                     logData = { message: line, level: 'INFO', category: 'SYSTEM', timestamp: '' };
                 }
+
+                // Filter out common noise
+                const m = logData.message || "";
+                if (m.includes('GET /status') || m.includes('GET /metrics') || m.includes('GET /containers') || m.includes('GET /updates') || m.includes('GET /logs') || m.includes('GET /certificate-status') || m.includes('HTTP/1.1" 200') || m.includes('HTTP/1.1" 304')) {
+                    return null;
+                }
+                
+                const div = document.createElement('div');
+                div.className = 'log-entry';
                 
                 let icon = 'info';
                 let iconColor = 'var(--md-sys-color-primary)';
@@ -5623,7 +5618,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
             evtSource.onmessage = function(e) {
                 if (!e.data) return;
-                el.appendChild(parseLogLine(e.data));
+                const entry = parseLogLine(e.data);
+                if (!entry) return;
+                el.appendChild(entry);
                 if (el.childNodes.length > 500) el.removeChild(el.firstChild);
                 el.scrollTop = el.scrollHeight;
             };
@@ -5936,19 +5933,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
 
         function checkWizard(force = false) {
-            const completed = localStorage.getItem('wizard_completed');
-            const domainPlaceholder = document.getElementById('desec-domain-input').placeholder;
-            const hasDomain = domainPlaceholder && domainPlaceholder !== 'yourname.dedyn.io' && domainPlaceholder !== 'Domain (e.g. yourname.dedyn.io)';
-            
-            if (force) {
-                document.getElementById('setup-wizard').style.display = 'flex';
-                nextStep(2); // Jump to domain step
-                return;
-            }
-
-            if (!completed && !hasDomain) {
-                document.getElementById('setup-wizard').style.display = 'flex';
-            }
+            // Wizard disabled - deployment is fully automated
+            return;
         }
         
         document.addEventListener('DOMContentLoaded', () => {
@@ -6395,10 +6381,11 @@ $DOCKER_CMD restart portainer 2>/dev/null || true
 echo "=========================================================="
 echo "SYSTEM DEPLOYED: PRIVATE INFRASTRUCTURE ESTABLISHED"
 echo "=========================================================="
+echo "[NOTE] Please disable browser-based 'privacy' extensions for this local address."
+echo "[NOTE] Some extensions may interfere with local dashboard telemetry."
+echo ""
 echo "MANAGEMENT DASHBOARD:"
 echo "http://$LAN_IP:$PORT_DASHBOARD_WEB"
-echo -e "\e[33m[NOTE]\e[0m Please disable browser-based 'privacy' extensions for this local address."
-echo -e "\e[33m[NOTE]\e[0m Some extensions may interfere with local dashboard telemetry."
 echo ""
 echo "ADGUARD HOME (DNS CONTROL):"
 echo "http://$LAN_IP:$PORT_ADGUARD_WEB"

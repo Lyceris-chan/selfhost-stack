@@ -1,0 +1,28 @@
+make it so the script output is formatted as > 
+==========================================================
+SYSTEM DEPLOYED: PRIVATE INFRASTRUCTURE ESTABLISHED
+==========================================================
+[NOTE] Please disable browser-based 'privacy' extensions for this local address.
+[NOTE] Some extensions may interfere with local dashboard telemetry.
+
+MANAGEMENT DASHBOARD:
+http://192.168.69.206:8081
+
+not all logs were translated to human logs i still saw some code 200 logs improve this
+
+im getting offline api error 
+(index):2461 Uncaught ReferenceError: fetchMetrics is not defined
+    at HTMLDocument.<anonymous> ((index):2461:118)
+:8081/api/updates:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+:8081/odido-api/api/status:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+(index):1688 Status fetch error: ReferenceError: containerMetrics is not defined
+    at fetchStatus ((index):1676:47)
+fetchStatus @ (index):1688
+
+
+the dashboard shows 2 settings cog per chip and the service text is cut off
+the wizard causes a blank screen on the portal
+the buttons still say vpn_lock Private Instance and change the arrow to be like this -> 
+
+
+
