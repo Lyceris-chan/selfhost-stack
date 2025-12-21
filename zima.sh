@@ -3565,7 +3565,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                         <p class="body-medium" id="update-list" style="margin: 8px 0 0 0; color: inherit; opacity: 0.9;">New versions detected for some services.</p>
                     </div>
                     <div style="display: flex; gap: 12px;">
-                        <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);">Update All</button>
+                        <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Pull latest source code and rebuild containers for all pending services.">Update All</button>
                         <button onclick="this.closest('#update-banner').style.display='none'" class="btn btn-outlined" style="border-color: currentColor; color: inherit;">Dismiss</button>
                     </div>
                 </div>
@@ -3590,7 +3590,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box">
                     <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
-                    <button onclick="migrateService('invidious', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Run foolproof database migrations & backup"><span class="material-symbols-rounded">storage</span> Migrate DB</button>
+                    <button onclick="migrateService('invidious', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Run foolproof database migrations. A full backup is created before proceeding."><span class="material-symbols-rounded">storage</span> Migrate DB</button>
                 </div>
             </div>
             <div id="link-redlib" data-url="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib" onclick="navigate(this, event)">
@@ -3691,8 +3691,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <h3>deSEC Configuration</h3>
                 <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
                 <form onsubmit="saveDesecConfig(); return false;">
-                    <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. user.dedyn.io)" style="margin-bottom:12px;" autocomplete="username">
-                    <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;" autocomplete="current-password">
+                    <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. user.dedyn.io)" style="margin-bottom:12px;" autocomplete="username" data-tooltip="Enter your registered deSEC domain.">
+                    <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="Your deSEC API Token for DNS-01 authentication.">
                     <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
                         Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
                     </p>
@@ -3724,14 +3724,14 @@ if [ -n "$DESEC_DOMAIN" ]; then
                         <li data-tooltip="For legacy devices within your home network."><b>Local:</b> Standard IP binding.</li>
                         <li data-tooltip="Requires establishing the WireGuard VPN tunnel when away from home."><b>Remote:</b> Establish VPN tunnel for secure access.</li>
                     </ol>
-                    <div class="code-label" style="margin-top:12px;">Mobile Private DNS Hostname</div>
+                    <div class="code-label" style="margin-top:12px;" data-tooltip="Use this hostname in your Android 'Private DNS' settings.">Mobile Private DNS Hostname</div>
                     <div class="code-block sensitive" style="margin-top:4px;">$DESEC_DOMAIN</div>
                     <p class="body-small" style="color:var(--md-sys-color-success); margin-top:12px;">Verified Certificate Authority</p>
                 </div>
                 <div id="dns-setup-untrusted" style="display:none;">
                     <p class="body-medium description" style="color:var(--md-sys-color-error);">Limited Encrypted DNS Coverage</p>
                     <p class="body-small description">Android 'Private DNS' requires a FQDN. Falling back to IPv4 binding.</p>
-                    <div class="code-label">Primary Gateway</div>
+                    <div class="code-label" data-tooltip="The local IP address of your privacy hub.">Primary Gateway</div>
                     <div class="code-block sensitive">$LAN_IP</div>
                 </div>
             </div>
@@ -3795,17 +3795,17 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <h3>Configuration</h3>
                 <p class="body-medium description">Authentication and automation settings for backend services:</p>
                 <form onsubmit="saveOdidoConfig(); return false;">
-                    <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;" autocomplete="username">
+                    <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;" autocomplete="username" data-tooltip="The HUB_API_KEY from your .secrets file.">
                     <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
                         The <strong>Dashboard API Key</strong> (HUB_API_KEY) is required to authorize sensitive actions like saving settings. You can find this in your <code>.secrets</code> file on the host.
                     </p>
-                    <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;" autocomplete="current-password">
+                    <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="OAuth token for Odido API authentication.">
                     <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
                         Obtain your OAuth token using the <a href="https://github.com/GuusBackup/Odido.Authenticator" target="_blank" style="color: var(--md-sys-color-primary);">Odido Authenticator</a>.
                     </p>
-                    <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;">
-                    <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;">
-                    <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;">
+                    <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;" data-tooltip="The product code for your data bundle.">
+                    <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;" data-tooltip="Automatic renewal triggers when data falls below this level.">
+                    <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;" data-tooltip="Minutes before expiration to trigger renewal.">
                     <div style="text-align:right;">
                         <button type="submit" class="btn btn-tonal">Save Configuration</button>
                     </div>
@@ -3817,9 +3817,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
         <div class="grid-2">
             <div class="card">
                 <h3>Upload Profile</h3>
-                <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;">
-                <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..." style="margin-bottom:16px;"></textarea>
-                <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled">Upload & Activate</button></div>
+                <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;" data-tooltip="Give your profile a recognizable name.">
+                <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..." style="margin-bottom:16px;" data-tooltip="Paste the contents of your WireGuard .conf file."></textarea>
+                <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile and immediately route traffic through it.">Upload & Activate</button></div>
             </div>
             <div class="card profile-card">
                 <h3 data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available Profiles</h3>
@@ -3838,7 +3838,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
                 <div class="stat-row"><span class="stat-label">Safe Display</span><span class="stat-value">Active (Client-side)</span></div>
                 <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
-                    <button onclick="restartStack()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Reboot all containers in the stack. Use this after manual .secrets changes.">
+                    <button onclick="restartStack()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Reboot all containers in the stack. This takes ~30 seconds and is required for manual .secrets changes to take effect.">
                         <span class="material-symbols-rounded">restart_alt</span>
                         Restart Stack
                     </button>
