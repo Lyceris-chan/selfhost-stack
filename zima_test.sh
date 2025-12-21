@@ -3409,6 +3409,39 @@ cat > "$DASHBOARD_FILE" <<EOF
             overflow-y: auto;
             font-size: 13px;
             color: var(--md-sys-color-on-surface-variant);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            line-height: 1.5;
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .log-entry:last-child { border-bottom: none; }
+        
+        .log-icon {
+            font-size: 18px !important;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .log-content {
+            flex-grow: 1;
+            overflow-wrap: anywhere;
+        }
+
+        .log-time {
+            opacity: 0.5;
+            font-size: 0.85em;
+            white-space: nowrap;
+            flex-shrink: 0;
+            margin-top: 3px;
         }
         
         .code-block {
@@ -4424,22 +4457,60 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const div = document.createElement('div');
                 div.className = 'log-entry';
                 
-                // Simple parsing for common log patterns
-                if (line.includes('[INFO]')) {
-                    div.style.color = 'var(--md-sys-color-on-surface)';
-                    line = line.replace('[INFO]', '<span style="color:var(--md-sys-color-primary); font-weight:600;">[INFO]</span>');
-                } else if (line.includes('[WARN]')) {
-                    div.style.color = 'var(--md-sys-color-warning)';
-                    line = line.replace('[WARN]', '<span style="color:var(--md-sys-color-warning); font-weight:600;">[WARN]</span>');
-                } else if (line.includes('[ERROR]')) {
-                    div.style.color = 'var(--md-sys-color-error)';
-                    line = line.replace('[ERROR]', '<span style="color:var(--md-sys-color-error); font-weight:600;">[ERROR]</span>');
+                let icon = 'info';
+                let iconColor = 'var(--md-sys-color-primary)';
+                let message = line;
+                let timestamp = '';
+
+                // Extract timestamp if present (YYYY-MM-DD HH:MM:SS or [Day, DD Mon YYYY HH:MM:SS GMT])
+                const tsMatch = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/) || line.match(/^\[(.*?)\]/);
+                if (tsMatch) {
+                    timestamp = tsMatch[1];
+                    message = line.replace(tsMatch[0], '').trim();
                 }
-                
-                // Dim timestamps
-                line = line.replace(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/, '<span style="opacity:0.5; font-size:0.9em;">$1</span>');
-                
-                div.innerHTML = line;
+
+                // Human-readable translations
+                if (message.includes('GET /status') || message.includes('GET /api/status')) {
+                    icon = 'analytics';
+                    message = 'System health check processed';
+                } else if (message.includes('GET /events')) {
+                    icon = 'rss_feed';
+                    message = 'Real-time log stream connected';
+                } else if (message.includes('GET /profiles') || message.includes('GET /api/profiles')) {
+                    icon = 'vpn_key';
+                    message = 'Retrieving VPN configuration profiles';
+                } else if (message.includes('POST /activate') || message.includes('POST /api/activate')) {
+                    icon = 'bolt';
+                    message = 'Activating selected VPN profile';
+                } else if (message.includes('GET /certificate-status')) {
+                    icon = 'verified_user';
+                    message = 'Verifying SSL certificate integrity';
+                } else if (message.includes('POST /update-service')) {
+                    icon = 'update';
+                    message = 'Triggering service update/rebuild';
+                } else if (message.includes(' [INFO] ')) {
+                    icon = 'info';
+                    message = message.replace(' [INFO] ', '');
+                } else if (message.includes(' [WARN] ')) {
+                    icon = 'warning';
+                    iconColor = 'var(--md-sys-color-warning)';
+                    message = message.replace(' [WARN] ', '');
+                } else if (message.includes(' [ERROR] ')) {
+                    icon = 'error';
+                    iconColor = 'var(--md-sys-color-error)';
+                    message = message.replace(' [ERROR] ', '');
+                }
+
+                // Handle HTTP status codes in remaining text
+                if (message.includes(' 200 ')) {
+                    message = message.replace(/\"GET .*?\" 200 -?/, 'Success').replace(/\"POST .*?\" 200 -?/, 'Action completed');
+                }
+
+                div.innerHTML = \`
+                    <span class="material-symbols-rounded log-icon" style="color: \${iconColor}">\${icon}</span>
+                    <div class="log-content">\${message}</div>
+                    <span class="log-time">\${timestamp}</span>
+                \`;
                 return div;
             }
 
