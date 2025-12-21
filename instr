@@ -285,3 +285,8 @@ Dashboard URL: http://10.0.0.118:8081/
 - Simulation confirmed wait loop logic correctly monitors backend stability.
 - Final stack launch (remove-orphans) correctly initializes all remaining frontends and utilities.
 - UX: Success message and credential display correctly follow full system stabilization.
+### Final Refinements & Documentation - Sun Dec 21 04:05:00 UTC 2025
+- Finalized staged orchestration logic: resolved dashboard 503 errors by ensuring critical backends (API, DNS, VPN) are health-checked and stable before Nginx initialization.
+- Comprehensive Documentation: Updated README.md to clarify the dual-update strategy (Watchtower for registry vs Dashboard for builds) and patch persistence.
+- Verified Script Integrity: Completed a full non-interactive simulation of zima.sh, confirming all orchestration steps, resource limits, and UI components are correctly implemented.
+- Log Sequence Audit: Confirmed success messages and credential displays are correctly ordered at the end of the deployment flow.
