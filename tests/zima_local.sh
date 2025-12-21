@@ -1569,6 +1569,7 @@ cat > "$MIGRATE_SCRIPT" <<'EOF'
 
 SERVICE=$1
 ACTION=$2
+BACKUP=$3 # "yes" or "no"
 DATA_DIR="/app/data"
 BACKUP_DIR="$DATA_DIR/backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -1580,8 +1581,10 @@ mkdir -p "$BACKUP_DIR"
 if [ "$SERVICE" = "invidious" ]; then
     if [ "$ACTION" = "clear" ]; then
         log "CLEARING Invidious database (resetting to defaults)..."
-        # Backup first anyway for safety
-        docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
+        if [ "$BACKUP" != "no" ]; then
+            log "Creating safety backup..."
+            docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
+        fi
         # Drop and recreate
         docker exec invidious-db dropdb -U kemal invidious
         docker exec invidious-db createdb -U kemal invidious
@@ -1590,7 +1593,7 @@ if [ "$SERVICE" = "invidious" ]; then
     else
         log "Starting Invidious migration..."
         # 1. Backup existing data
-        if [ -d "$DATA_DIR/postgres" ]; then
+        if [ "$BACKUP" != "no" ] && [ -d "$DATA_DIR/postgres" ]; then
             log "Backing up Invidious database..."
             docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"
         fi
@@ -2038,13 +2041,14 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
         elif self.path.startswith('/migrate'):
             try:
-                # Usage: /migrate?service=invidious
+                # Usage: /migrate?service=invidious&backup=yes
                 from urllib.parse import urlparse, parse_qs
                 query = urlparse(self.path).query
                 params = parse_qs(query)
                 service = params.get('service', [''])[0]
+                do_backup = params.get('backup', ['yes'])[0]
                 if service:
-                    res = subprocess.run(["/usr/local/bin/migrate.sh", service, "migrate"], capture_output=True, text=True, timeout=120)
+                    res = subprocess.run(["/usr/local/bin/migrate.sh", service, "migrate", do_backup], capture_output=True, text=True, timeout=120)
                     self._send_json({"success": True, "output": res.stdout})
                 else:
                     self._send_json({"error": "Service parameter missing"}, 400)
@@ -2052,13 +2056,14 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
         elif self.path.startswith('/clear-db'):
             try:
-                # Usage: /clear-db?service=invidious
+                # Usage: /clear-db?service=invidious&backup=yes
                 from urllib.parse import urlparse, parse_qs
                 query = urlparse(self.path).query
                 params = parse_qs(query)
                 service = params.get('service', [''])[0]
+                do_backup = params.get('backup', ['yes'])[0]
                 if service:
-                    res = subprocess.run(["/usr/local/bin/migrate.sh", service, "clear"], capture_output=True, text=True, timeout=120)
+                    res = subprocess.run(["/usr/local/bin/migrate.sh", service, "clear", do_backup], capture_output=True, text=True, timeout=120)
                     self._send_json({"success": True, "output": res.stdout})
                 else:
                     self._send_json({"error": "Service parameter missing"}, 400)
@@ -3579,8 +3584,12 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box">
                     <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
-                    <button onclick="migrateService('invidious', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="The database stores your subscriptions, preferences, and cached video metadata. Use this to safely update the database schema. A full backup is created before proceeding."><span class="material-symbols-rounded">storage</span> Migrate DB</button>
-                    <button onclick="clearServiceDb('invidious', event)" class="chip admin" style="cursor:pointer; border:none; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="RESET ALL DATA: This will backup and then permanently clear your subscriptions and preferences, returning the instance to a fresh state."><span class="material-symbols-rounded">delete_sweep</span> Clear DB</button>
+                    <button onclick="migrateService('invidious', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="The database stores your subscriptions, preferences, and cached video metadata. Use this to safely update the database schema."><span class="material-symbols-rounded">storage</span> Migrate DB</button>
+                    <button onclick="clearServiceDb('invidious', event)" class="chip admin" style="cursor:pointer; border:none; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="RESET ALL DATA: This permanently clears your subscriptions and preferences, returning the instance to a fresh state."><span class="material-symbols-rounded">delete_sweep</span> Clear DB</button>
+                    <label class="body-small" style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-left: 4px; color: var(--md-sys-color-on-surface-variant);" data-tooltip="Highly recommended: automatically create a safety backup before performing database operations.">
+                        <input type="checkbox" id="invidious-backup-toggle" checked style="accent-color: var(--md-sys-color-primary); width: 16px; height: 16px; cursor: pointer;">
+                        Auto-Backup
+                    </label>
                 </div>
             </div>
             <div id="link-redlib" data-url="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib" onclick="navigate(this, event)">
@@ -3921,9 +3930,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
         async function migrateService(name, event) {
             if (event) { event.preventDefault(); event.stopPropagation(); }
-            if (!confirm("Run foolproof migration for " + name + "? This will create a database backup first.")) return;
+            const doBackup = document.getElementById('invidious-backup-toggle')?.checked ? 'yes' : 'no';
+            if (!confirm("Run foolproof migration for " + name + "?" + (doBackup === 'yes' ? " This will create a database backup first." : " WARNING: No backup will be created."))) return;
             try {
-                const res = await fetch(API + "/migrate?service=" + name);
+                const res = await fetch(API + "/migrate?service=" + name + "&backup=" + doBackup);
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
                 alert("Migration successful!\n\n" + data.output);
@@ -3934,9 +3944,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
         async function clearServiceDb(name, event) {
             if (event) { event.preventDefault(); event.stopPropagation(); }
-            if (!confirm("DANGER: This will permanently DELETE all subscriptions and preferences for " + name + ". A backup will be created, but the service will be reset to defaults. Continue?")) return;
+            const doBackup = document.getElementById('invidious-backup-toggle')?.checked ? 'yes' : 'no';
+            if (!confirm("DANGER: This will permanently DELETE all subscriptions and preferences for " + name + "." + (doBackup === 'yes' ? " A backup will be created first." : " WARNING: NO BACKUP WILL BE CREATED.") + " Continue?")) return;
             try {
-                const res = await fetch(API + "/clear-db?service=" + name);
+                const res = await fetch(API + "/clear-db?service=" + name + "&backup=" + doBackup);
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
                 alert("Database cleared successfully!\n\n" + data.output);
