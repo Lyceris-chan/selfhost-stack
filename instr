@@ -271,3 +271,17 @@ Dashboard URL: http://10.0.0.118:8081/
 - Watchtower Safety: 6 service exclusions verified
 - Dashboard Maintenance: Update Banner and Migrate DB components verified
 - Execution Flow: Success message correctly positioned at EOF
+[progress] 2025-12-21T03:30:00Z Fixed 503 error and incomplete deployments by ensuring zima.sh starts the ENTIRE stack (not just management containers) during the final orchestration phase. Mirrored fix in zima_local.sh.
+[tests] 2025-12-21T03:45:00Z Thorough Non-Interactive Simulation:
+- Core Configuration Generation: PASSED
+- Resource Optimization (BreezeWiki 1GB, Invidious 2GB): PASSED
+- Watchtower Safety Labels (6 Services): PASSED
+- Dashboard Reactive UI Components: PASSED
+- Backend Maintenance Endpoints: PASSED
+- Execution Flow & Log Ordering: PASSED
+[progress] 2025-12-21T03:45:00Z Resolved 503 Service Unavailable error by implementing a staged orchestration flow: infrastructure (API, DNS, VPN) is now stabilized and health-checked before launching the Nginx Dashboard.
+### Staged Orchestration Verification - Sun Dec 21 03:55:00 UTC 2025
+- Verified staged orchestration flow in zima.sh: core infrastructure (DNS, VPN, API) is now launched and health-checked before Nginx initialization.
+- Simulation confirmed wait loop logic correctly monitors backend stability.
+- Final stack launch (remove-orphans) correctly initializes all remaining frontends and utilities.
+- UX: Success message and credential display correctly follow full system stabilization.

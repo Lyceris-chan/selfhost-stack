@@ -4841,10 +4841,14 @@ check_iptables() {
 sudo modprobe tun || true
 
 # Explicitly remove portainer and hub-api if they exist to ensure clean state
-log_info "Ensuring clean start for core API services..."
-sudo docker rm -f portainer hub-api 2>/dev/null || true
+log_info "Launching core infrastructure services..."
+echo docker compose -f "$COMPOSE_FILE" up -d --build hub-api adguard unbound gluetun
 
-echo docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans --force-recreate hub-api dashboard portainer
+# Mock wait for backends
+log_info "Waiting for backend services to stabilize..."
+
+# Launch the rest of the stack
+echo docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
 log_info "Verifying Hub API responsiveness..."
 sleep 5

@@ -4856,10 +4856,25 @@ check_iptables() {
 sudo modprobe tun || true
 
 # Explicitly remove portainer and hub-api if they exist to ensure clean state
-log_info "Ensuring clean start for core API services..."
-sudo docker rm -f portainer hub-api 2>/dev/null || true
+log_info "Launching core infrastructure services..."
+sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build hub-api adguard unbound gluetun
 
-sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans --force-recreate hub-api dashboard portainer
+# Wait for critical backends to be healthy before starting Nginx (dashboard)
+log_info "Waiting for backend services to stabilize (this may take up to 60s)..."
+for i in $(seq 1 60); do
+    HUB_HEALTH=$(sudo docker inspect --format='{{.State.Health.Status}}' hub-api 2>/dev/null || echo "unknown")
+    GLU_HEALTH=$(sudo docker inspect --format='{{.State.Status}}' gluetun 2>/dev/null || echo "unknown")
+    
+    if [ "$HUB_HEALTH" = "healthy" ] && [ "$GLU_HEALTH" = "running" ]; then
+        log_info "Backends are stable. Finalizing stack launch..."
+        break
+    fi
+    [ "$i" -eq 60 ] && log_warn "Backends taking longer than expected to stabilize. Proceeding anyway..."
+    sleep 1
+done
+
+# Launch the rest of the stack
+sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
 log_info "Verifying Hub API responsiveness..."
 sleep 5
