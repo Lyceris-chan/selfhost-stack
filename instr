@@ -209,7 +209,7 @@ Dashboard URL: http://10.0.0.118:8081/
 [progress] 2025-12-20T22:38:00Z Updated Nginx configuration generation to use variable for odido-booster upstream, preventing startup failure when optional service is missing.
 [progress] 2025-12-20T22:45:00Z Deployment successful via ./zima_local.sh -p -y with non-interactive WireGuard config injection. Dashboard is reachable at http://10.0.10.248:8081.
 [progress] 2025-12-20T22:48:00Z Activated WireGuard profile "JP-FREE#18" via Hub API. Full stack initialization in progress.
-[progress] 2025-12-20T22:55:00Z Implemented non-interactive registry login using provided credentials (laciachan) when -y is used.
+[progress] 2025-12-20T22:55:00Z Implemented non-interactive registry login using provided environment variables when -y is used.
 [progress] 2025-12-20T22:55:00Z Replaced mock image pull loop with actual docker pull loop in zima.sh and zima_local.sh.
 [tests] 2025-12-20T22:48:00Z node test_dashboard_v2.js (DASHBOARD_URL=http://10.0.10.248:8081) - PASS
 [progress] 2025-12-20T23:10:00Z Switched to main branch and merged changes.

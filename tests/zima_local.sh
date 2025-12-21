@@ -190,22 +190,24 @@ authenticate_registries() {
     export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
     
     if [ "$AUTO_CONFIRM" = true ]; then
-        log_info "Auto-confirm enabled: Using provided credentials for non-interactive registry login."
-        REG_USER="laciachan"
-        REG_TOKEN="DOCKER_TOKEN_PLACEHOLDER"
-        
-        # DHI Login
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-            log_info "dhi.io: Authentication successful."
-        else
-            log_warn "dhi.io: Authentication failed."
-        fi
+        if [ -n "${REG_USER:-}" ] && [ -n "${REG_TOKEN:-}" ]; then
+            log_info "Auto-confirm enabled: Using environment variables for non-interactive registry login."
+            
+            # DHI Login
+            if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+                log_info "dhi.io: Authentication successful."
+            else
+                log_warn "dhi.io: Authentication failed."
+            fi
 
-        # Docker Hub Login
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-             log_info "Docker Hub: Authentication successful."
+            # Docker Hub Login
+            if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+                 log_info "Docker Hub: Authentication successful."
+            else
+                 log_warn "Docker Hub: Authentication failed."
+            fi
         else
-             log_warn "Docker Hub: Authentication failed."
+            log_info "Auto-confirm enabled: No credentials provided via environment. Skipping automated registry login."
         fi
         return 0
     fi
