@@ -2780,8 +2780,6 @@ $VERTD_DEVICES
       - PUB_DISABLE_DONATIONS=true
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_VERT:$PORT_INT_VERT"]
-    labels:
-      - "casaos.skip=true"
     depends_on:
       vertd: {condition: service_started}
     restart: unless-stopped
