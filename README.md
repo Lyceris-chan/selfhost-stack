@@ -296,11 +296,13 @@ export REG_TOKEN="your_docker_pat"
 ```
 
 ## <a id="maintenance"></a>🛠️ Automated Maintenance & Updates
-Privacy Hub includes built-in orchestration logic to keep your services up-to-date and healthy:
+Privacy Hub utilizes a dual-update strategy to keep your services healthy while protecting your custom hardening:
 
-- **Updates Available Banner**: The dashboard backend (`hub-api`) automatically checks your source repositories for pending updates via `git fetch`. A reactive banner will appear at the top of the dashboard if updates are detected.
-- **One-Click Rebuilds**: Clicking "Update All" on the banner triggers an automated `git pull`, re-applies custom security patches, and rebuilds the containers without manual intervention.
-- **Foolproof Migrations**: Patched services like Invidious include a dedicated **"Migrate DB"** button on their dashboard card. This script (`migrate.sh`) automatically backs up your PostgreSQL data to `/DATA/AppData/privacy-hub/data/backups/` before performing schema updates, ensuring your data is always safe.
+- **Registry Images (Official)**: Standard containers like Gluetun, AdGuard Home, and Memos are automatically updated by **Watchtower** on a nightly basis (3 AM).
+- **Custom Containers (Build-from-Source)**: Services that require local builds or security patches (Invidious, Wikiless, Scribe, VERT, etc.) are **ignored by Watchtower** to prevent registry versions from overwriting your local modifications.
+    - **Updates Available Banner**: The `hub-api` backend monitors these source repositories. If a remote update is detected, a reactive banner appears on the Dashboard.
+    - **One-Click Rebuilds**: Clicking "Update All" on the banner triggers an automated `git pull`, **re-applies all DHI security patches**, and rebuilds the containers locally. This ensures your stack stays modern without losing your privacy configurations.
+- **Foolproof Migrations**: Patched services include a dedicated **"Migrate DB"** button. This script (`migrate.sh`) automatically backs up your PostgreSQL data to `/DATA/AppData/privacy-hub/data/backups/` before performing schema updates.
 
 ## <a id="resilience"></a>🏗️ System Resilience
 
