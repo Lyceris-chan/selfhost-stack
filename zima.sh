@@ -30,19 +30,26 @@ for arg in "$@"; do
     fi
 done
 
-FORCE_CLEAN=false
-CLEAN_ONLY=false
 AUTO_PASSWORD=false
+CLEAN_EXIT=false
+RESET_ENV=false
 AUTO_CONFIRM=false
-while getopts "cpxyh" opt; do
-  case ${opt} in
-    c) FORCE_CLEAN=true ;;
-    x) CLEAN_ONLY=true; FORCE_CLEAN=true ;;
-    p) AUTO_PASSWORD=true ;;
-    y) AUTO_CONFIRM=true ;;
-    h) usage; exit 0 ;;
-    *) usage; exit 1 ;;
-  esac
+SELECTED_SERVICES=""
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -c) RESET_ENV=true ;;
+        -x) CLEAN_EXIT=true; RESET_ENV=true ;;
+        -p) AUTO_PASSWORD=true ;;
+        -y) AUTO_CONFIRM=true ;;
+        -s|--services) SELECTED_SERVICES="$2"; shift ;;
+        -h|--help) 
+            echo "Usage: ./zima.sh [-c (reset environment)] [-x (reset environment and exit)] [-p (automated password generation)] [-y (auto-confirm)] [-s|--services (comma-separated list)] [-h|--help)"
+            exit 0
+            ;;
+        *) echo "Unknown parameter: $1"; exit 1 ;;
+    esac
+    shift
 done
 
 # --- SECTION 1: ENVIRONMENT VALIDATION & DIRECTORY SETUP ---
@@ -1959,49 +1966,95 @@ import os
 import re
 import subprocess
 import time
+import sqlite3
+import threading
 
 PORT = 55555
 PROFILES_DIR = "/profiles"
 CONTROL_SCRIPT = "/usr/local/bin/wg-control.sh"
 LOG_FILE = "/app/deployment.log"
+DB_FILE = "/app/data/logs.db"
 
+def init_db():
+    """Initialize the SQLite database for logs and metrics."""
+    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS logs
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  level TEXT, category TEXT, message TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS metrics
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  container TEXT, cpu_percent REAL, mem_usage REAL, mem_limit REAL)''')
+    conn.commit()
+    conn.close()
 
-def extract_profile_name(config):
-    """Extract profile name from WireGuard config."""
-    lines = config.split('\n')
-    in_peer = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped.lower() == '[peer]':
-            in_peer = True
-            continue
-        if in_peer and stripped.startswith('#'):
-            name = stripped.lstrip('#').strip()
-            if name:
-                return name
-        if in_peer and stripped.startswith('['):
-            break
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith('#'):
-            name = stripped.lstrip('#').strip()
-            if name and '=' not in name:
-                return name
-    return None
+def metrics_collector():
+    """Background thread to collect container metrics."""
+    while True:
+        try:
+            res = subprocess.run(
+                ['docker', 'stats', '--no-stream', '--format', '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemLimit}}'],
+                capture_output=True, text=True, timeout=30
+            )
+            if res.returncode == 0:
+                conn = sqlite3.connect(DB_FILE)
+                c = conn.cursor()
+                for line in res.stdout.strip().split('\n'):
+                    if not line: continue
+                    parts = line.split('\t')
+                    if len(parts) == 4:
+                        name, cpu_str, mem_use_str, mem_lim_str = parts
+                        cpu = float(cpu_str.replace('%', ''))
+                        
+                        def to_mb(val):
+                            val = val.upper()
+                            if 'GIB' in val: return float(val.replace('GIB', '')) * 1024
+                            if 'MIB' in val: return float(val.replace('MIB', ''))
+                            if 'KIB' in val: return float(val.replace('KIB', '')) / 1024
+                            if 'B' in val: return float(val.replace('B', '')) / 1024 / 1024
+                            return 0.0
+
+                        mem_usage = to_mb(mem_use_str.split(' / ')[0])
+                        mem_limit = to_mb(mem_lim_str)
+                        
+                        c.execute("INSERT INTO metrics (container, cpu_percent, mem_usage, mem_limit) VALUES (?, ?, ?, ?)",
+                                  (name, cpu, mem_usage, mem_limit))
+                
+                c.execute("DELETE FROM metrics WHERE timestamp < datetime('now', '-1 hour')")
+                conn.commit()
+                conn.close()
+        except Exception as e:
+            print(f"Metrics Error: {e}")
+        time.sleep(15)
 
 def log_structured(level, message, category="SYSTEM"):
-    """Append a structured JSON log entry."""
+    """Log to both file and SQLite."""
     entry = {
         "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
         "level": level,
         "category": category,
         "message": message
     }
+    # Log to file
     try:
         with open(LOG_FILE, 'a') as f:
             f.write(json.dumps(entry) + "\n")
-    except:
-        pass
+    except: pass
+    
+    # Log to DB
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute("INSERT INTO logs (level, category, message) VALUES (?, ?, ?)",
+                  (level, category, message))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"DB Log Error: {e}")
+    
     print(f"[{level}] {message}")
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -2196,15 +2249,47 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json(status)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/logs':
+        elif self.path.startswith('/logs'):
             try:
-                # Returns the last 100 structured log entries
-                lines = []
-                if os.path.exists(LOG_FILE):
-                    with open(LOG_FILE, 'r') as f:
-                        lines = f.readlines()[-100:]
-                logs = [json.loads(l) for l in lines if l.strip()]
+                from urllib.parse import urlparse, parse_qs
+                query = urlparse(self.path).query
+                params = parse_qs(query)
+                level = params.get('level', [None])[0]
+                category = params.get('category', [None])[0]
+                
+                conn = sqlite3.connect(DB_FILE)
+                c = conn.cursor()
+                sql = "SELECT timestamp, level, category, message FROM logs"
+                args = []
+                if level or category:
+                    sql += " WHERE"
+                    if level:
+                        sql += " level = ?"
+                        args.append(level)
+                    if category:
+                        if level: sql += " AND"
+                        sql += " category = ?"
+                        args.append(category)
+                sql += " ORDER BY id DESC LIMIT 100"
+                c.execute(sql, tuple(args))
+                rows = c.fetchall()
+                conn.close()
+                
+                logs = [{"timestamp": r[0], "level": r[1], "category": r[2], "message": r[3]} for r in rows]
                 self._send_json({"logs": logs})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/metrics':
+            try:
+                conn = sqlite3.connect(DB_FILE)
+                c = conn.cursor()
+                # Get latest metrics for each container
+                c.execute('''SELECT container, cpu_percent, mem_usage, mem_limit 
+                             FROM metrics WHERE id IN (SELECT MAX(id) FROM metrics GROUP BY container)''')
+                rows = c.fetchall()
+                conn.close()
+                metrics = {r[0]: {"cpu": r[1], "mem": r[2], "limit": r[3]} for r in rows}
+                self._send_json({"metrics": metrics})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/config-desec' and self.command == 'POST':
@@ -2381,6 +2466,31 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({"error": res.stderr}, 500)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
+        elif self.path == '/rotate-api-key' and self.command == 'POST':
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = json.loads(self.rfile.read(content_length))
+                new_key = post_data.get('new_key')
+                if new_key:
+                    secrets_file = "/app/.secrets"
+                    secrets = {}
+                    if os.path.exists(secrets_file):
+                        with open(secrets_file, 'r') as f:
+                            for line in f:
+                                if '=' in line:
+                                    k, v = line.strip().split('=', 1)
+                                    secrets[k] = v
+                    secrets['HUB_API_KEY'] = new_key
+                    with open(secrets_file, 'w') as f:
+                        for k, v in secrets.items():
+                            f.write(f"{k}={v}\n")
+                    
+                    log_structured("SECURITY", "Dashboard API key rotated", "AUTH")
+                    self._send_json({"success": True})
+                else:
+                    self._send_json({"error": "New key required"}, 400)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         elif self.path == '/odido-userid':
             try:
                 l = int(self.headers['Content-Length'])
@@ -2415,6 +2525,12 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"Starting API server on port {PORT}...")
+    init_db()
+    
+    # Start metrics collector thread
+    t = threading.Thread(target=metrics_collector, daemon=True)
+    t.start()
+    
     if not os.path.exists(LOG_FILE):
         os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
         open(LOG_FILE, 'a').close()
@@ -2427,6 +2543,21 @@ chmod +x "$WG_API_SCRIPT"
 # --- SECTION 13: ORCHESTRATION LAYER (DOCKER COMPOSE) ---
 # Compile the unified multi-container definition for the complete privacy stack.
 log_info "Compiling Orchestration Layer (docker-compose.yml)..."
+
+# Helper function to check if a service should be deployed
+should_deploy() {
+    local srv=$1
+    if [ -z "$SELECTED_SERVICES" ]; then return 0; fi
+    # Core infrastructure always deployed
+    if [[ "$srv" =~ ^(hub-api|gluetun|dashboard|adguard|unbound|watchtower|wg-easy)$ ]]; then return 0; fi
+    # Dependencies
+    if [[ "$srv" == "invidious-db" || "$srv" == "companion" ]]; then srv="invidious"; fi
+    if [[ "$srv" == "wikiless_redis" ]]; then srv="wikiless"; fi
+    if [[ "$srv" == "vertd" ]]; then srv="vert"; fi
+    # Check if in selected list
+    if [[ ",$SELECTED_SERVICES," == *",$srv,"* ]]; then return 0; fi
+    return 1
+}
 
 VERTD_DEVICES=""
 if [ -d "/dev/dri" ]; then
@@ -2443,6 +2574,10 @@ networks:
         - subnet: $DOCKER_SUBNET
 
 services:
+EOF
+
+if should_deploy "hub-api"; then
+cat >> "$COMPOSE_FILE" <<EOF
   hub-api:
     build:
       context: $SRC_DIR/hub-api
@@ -2482,7 +2617,11 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
+EOF
+fi
 
+if should_deploy "odido-booster"; then
+cat >> "$COMPOSE_FILE" <<EOF
   odido-booster:
     build:
       context: $SRC_DIR/odido-bundle-booster
@@ -2503,7 +2642,11 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.3', memory: 128M}
+EOF
+fi
 
+if should_deploy "watchtower"; then
+cat >> "$COMPOSE_FILE" <<EOF
   watchtower:
     image: containrrr/watchtower
     container_name: watchtower
@@ -2522,7 +2665,11 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.2', memory: 128M}
+EOF
+fi
 
+if should_deploy "memos"; then
+cat >> "$COMPOSE_FILE" <<EOF
   memos:
     image: neosmemo/memos:stable
     container_name: memos
@@ -2533,7 +2680,11 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
+EOF
+fi
 
+if should_deploy "gluetun"; then
+cat >> "$COMPOSE_FILE" <<EOF
   gluetun:
     image: qmcgaw/gluetun
     container_name: gluetun
@@ -2562,7 +2713,11 @@ services:
     deploy:
       resources:
         limits: {cpus: '2.0', memory: 512M}
+EOF
+fi
 
+if should_deploy "dashboard"; then
+cat >> "$COMPOSE_FILE" <<EOF
   dashboard:
     image: dhi.io/nginx:1.28-alpine3.21
     container_name: dashboard
@@ -2590,7 +2745,11 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.3', memory: 128M}
+EOF
+fi
 
+if should_deploy "portainer"; then
+cat >> "$COMPOSE_FILE" <<EOF
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
@@ -2603,7 +2762,11 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 512M}
+EOF
+fi
 
+if should_deploy "adguard"; then
+cat >> "$COMPOSE_FILE" <<EOF
   adguard:
     image: adguard/adguardhome:latest
     container_name: adguard
@@ -2623,7 +2786,11 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 512M}
+EOF
+fi
 
+if should_deploy "unbound"; then
+cat >> "$COMPOSE_FILE" <<EOF
   unbound:
     image: klutchell/unbound:latest
     container_name: unbound
@@ -2638,7 +2805,11 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
+EOF
+fi
 
+if should_deploy "wg-easy"; then
+cat >> "$COMPOSE_FILE" <<EOF
   # WG-Easy: Remote access VPN server (only 51820/UDP exposed to internet)
   wg-easy:
     image: ghcr.io/wg-easy/wg-easy:latest
@@ -2660,7 +2831,11 @@ services:
     deploy:
       resources:
         limits: {cpus: '1.0', memory: 256M}
+EOF
+fi
 
+if should_deploy "redlib"; then
+cat >> "$COMPOSE_FILE" <<EOF
   redlib:
     image: quay.io/redlib/redlib:latest
     container_name: redlib
@@ -2679,7 +2854,11 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
+EOF
+fi
 
+if should_deploy "wikiless"; then
+cat >> "$COMPOSE_FILE" <<EOF
   wikiless:
     build:
       context: "$SRC_DIR/wikiless"
@@ -2708,7 +2887,11 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.3', memory: 128M}
+EOF
+fi
 
+if should_deploy "invidious"; then
+cat >> "$COMPOSE_FILE" <<EOF
   invidious:
     build:
       context: "$SRC_DIR/invidious"
@@ -2741,7 +2924,7 @@ services:
     restart: unless-stopped
     deploy:
       resources:
-        limits: {cpus: '1.5', memory: 2048M}
+        limits: {cpus: '1.5', memory: 1024M}
 
   invidious-db:
     image: dhi.io/postgres:14-alpine3.22
@@ -2781,7 +2964,11 @@ services:
     security_opt:
       - no-new-privileges:true
     depends_on: {gluetun: {condition: service_healthy}}
+EOF
+fi
 
+if should_deploy "rimgo"; then
+cat >> "$COMPOSE_FILE" <<EOF
   rimgo:
     image: codeberg.org/rimgo/rimgo:latest
     pull_policy: if_not_present
@@ -2793,9 +2980,13 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
+EOF
+fi
 
+if should_deploy "breezewiki"; then
+cat >> "$COMPOSE_FILE" <<EOF
   breezewiki:
-    image: quay.io/pussthecatorg/breezewiki:latest
+    image: local-breezewiki:alpine
     container_name: breezewiki
     network_mode: "service:gluetun"
     environment:
@@ -2810,19 +3001,27 @@ services:
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 1024M}
+EOF
+fi
 
+if should_deploy "anonymousoverflow"; then
+cat >> "$COMPOSE_FILE" <<EOF
   anonymousoverflow:
     image: ghcr.io/httpjamesm/anonymousoverflow:release
     container_name: anonymousoverflow
     network_mode: "service:gluetun"
-    env_file: ["$ENV_DIR/anonymousoverflow.env"]
+    env_file: ["./env/anonymousoverflow.env"]
     environment: {PORT: "$PORT_INT_ANONYMOUS"}
     depends_on: {gluetun: {condition: service_healthy}}
     restart: always
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
+EOF
+fi
 
+if should_deploy "scribe"; then
+cat >> "$COMPOSE_FILE" <<EOF
   scribe:
     build:
       context: "$SRC_DIR/scribe"
@@ -2831,13 +3030,17 @@ services:
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
     network_mode: "service:gluetun"
-    env_file: ["$ENV_DIR/scribe.env"]
+    env_file: ["./env/scribe.env"]
     depends_on: {gluetun: {condition: service_healthy}}
     restart: unless-stopped
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
+EOF
+fi
 
+if should_deploy "vert"; then
+cat >> "$COMPOSE_FILE" <<EOF
   # VERT: Local file conversion service
   vertd:
     container_name: vertd
@@ -2853,7 +3056,7 @@ $VERTD_DEVICES
     restart: unless-stopped
     deploy:
       resources:
-        limits: {cpus: '2.0', memory: 2048M}
+        limits: {cpus: '2.0', memory: 1024M}
 
   vert:
     container_name: vert
@@ -2892,6 +3095,8 @@ $VERTD_DEVICES
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
+EOF
+fi
 
 x-casaos:
   architectures:
@@ -3690,6 +3895,48 @@ cat > "$DASHBOARD_FILE" <<EOF
 
         .wizard-step { display: none; }
         .wizard-step.active { display: flex; flex-direction: column; gap: 16px; }
+
+        /* Service Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            z-index: 25000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .modal-card {
+            background: var(--md-sys-color-surface-container-high);
+            border-radius: var(--md-sys-shape-corner-extra-large);
+            max-width: 500px;
+            width: 100%;
+            padding: 32px;
+            box-shadow: var(--md-sys-elevation-3);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .modal-header { display: flex; align-items: center; justify-content: space-between; }
+        
+        .metric-bar {
+            height: 4px;
+            width: 100%;
+            background: var(--md-sys-color-surface-container-highest);
+            border-radius: 2px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+        
+        .metric-fill {
+            height: 100%;
+            background: var(--md-sys-color-primary);
+            transition: width 1s ease-in-out;
+        }
         
         .code-block {
             background: var(--md-sys-color-surface-container-highest);
@@ -3810,69 +4057,100 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>Invidious</h2>
                     <div style="display: flex; align-items: center; gap: 12px;">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('invidious', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <button onclick="openServiceSettings('invidious', event)" class="btn btn-icon" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box">
                     <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
-                    <button onclick="migrateService('invidious', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="The database stores your subscriptions, preferences, and cached video metadata. Use this to safely update the database schema."><span class="material-symbols-rounded">storage</span> Migrate DB</button>
-                    <button onclick="clearServiceDb('invidious', event)" class="chip admin" style="cursor:pointer; border:none; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="RESET ALL DATA: This permanently clears your subscriptions and preferences, returning the instance to a fresh state."><span class="material-symbols-rounded">delete_sweep</span> Clear DB</button>
-                    <label class="body-small" style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-left: 4px; color: var(--md-sys-color-on-surface-variant);" data-tooltip="Highly recommended: automatically create a safety backup before performing database operations.">
-                        <input type="checkbox" id="invidious-backup-toggle" checked style="accent-color: var(--md-sys-color-primary); width: 16px; height: 16px; cursor: pointer;">
-                        Auto-Backup
-                    </label>
+                    <div id="metrics-invidious" class="chip-box" style="padding-top:0; display:none;">
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                    </div>
                 </div>
             </div>
             <div id="link-redlib" data-url="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib" onclick="navigate(this, event)">
                 <div class="card-header">
                     <h2>Redlib</h2>
                     <div style="display: flex; align-items: center; gap: 12px;">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('redlib', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span></div>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                    <div id="metrics-redlib" class="chip-box" style="padding-top:0; display:none;">
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                    </div></div>
             </div>
             <div id="link-wikiless" data-url="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true" data-container="wikiless" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Wikiless</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>Wikiless</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('wikiless', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span></div>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                    <div id="metrics-wikiless" class="chip-box" style="padding-top:0; display:none;">
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                    </div></div>
             </div>
             <div id="link-memos" data-url="http://$LAN_IP:$PORT_MEMOS" class="card" data-check="true" data-container="memos" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Memos</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>Memos</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('memos', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
                 <div class="chip-box">
                     <span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container"><span class="material-symbols-rounded">lan</span> Direct Access</span>
                     <button onclick="vacuumServiceDb('memos', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Optimize the database by reclaiming unused space (VACUUM). Highly recommended after large deletions."><span class="material-symbols-rounded">compress</span> Optimize DB</button>
-                </div>
+                
+                    <div id="metrics-memos" class="chip-box" style="padding-top:0; display:none;">
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                    </div></div>
             </div>
             <div id="link-rimgo" data-url="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true" data-container="rimgo" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Rimgo</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>Rimgo</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('rimgo', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span></div>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                    <div id="metrics-rimgo" class="chip-box" style="padding-top:0; display:none;">
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                    </div></div>
             </div>
             <div id="link-scribe" data-url="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true" data-container="scribe" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Scribe</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>Scribe</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('scribe', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span></div>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                    <div id="metrics-scribe" class="chip-box" style="padding-top:0; display:none;">
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                    </div></div>
             </div>
             <div id="link-breezewiki" data-url="http://$LAN_IP:$PORT_BREEZEWIKI/" class="card" data-check="true" data-container="breezewiki" onclick="navigate(this, event)">
-                <div class="card-header"><h2>BreezeWiki</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>BreezeWiki</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('breezewiki', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span></div>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                    <div id="metrics-breezewiki" class="chip-box" style="padding-top:0; display:none;">
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                    </div></div>
             </div>
             <div id="link-anonymousoverflow" data-url="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true" data-container="anonymousoverflow" onclick="navigate(this, event)">
-                <div class="card-header"><h2>AnonOverflow</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>AnonOverflow</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('anonymousoverflow', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span></div>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container"><span class="material-symbols-rounded">vpn_lock</span> Private Instance</span>
+                    <div id="metrics-anonymousoverflow" class="chip-box" style="padding-top:0; display:none;">
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                    </div></div>
             </div>
             <div id="link-vert" data-url="http://$LAN_IP:$PORT_VERT" class="card" data-check="true" data-container="vert" onclick="navigate(this, event)">
-                <div class="card-header"><h2>VERT</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>VERT</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('vert', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container"><span class="material-symbols-rounded">build</span> Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion"><span class="material-symbols-rounded">memory</span> GPU Accelerated</span></div>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container"><span class="material-symbols-rounded">build</span> Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion"><span class="material-symbols-rounded">memory</span> GPU Accelerated</span>
+                    <div id="metrics-vert" class="chip-box" style="padding-top:0; display:none;">
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                    </div></div>
             </div>
         </div>
 
@@ -3882,23 +4160,35 @@ cat > "$DASHBOARD_FILE" <<EOF
         </div>
         <div class="grid-3">
             <div id="link-adguard" data-url="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card" data-check="true" data-container="adguard" onclick="navigate(this, event)">
-                <div class="card-header"><h2>AdGuard Home</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>AdGuard Home</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('adguard', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
                 <div class="chip-box">
                     <span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container"><span class="material-symbols-rounded">home</span> Local Access</span>
                     <button onclick="clearServiceLogs('adguard', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Clear the historical DNS query logs to free up space."><span class="material-symbols-rounded">auto_delete</span> Clear Logs</button>
                     <span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span>
-                </div>
+                
+                    <div id="metrics-adguard" class="chip-box" style="padding-top:0; display:none;">
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                    </div></div>
             </div>
             <div id="link-portainer" data-url="http://$LAN_IP:$PORT_PORTAINER" class="card" data-check="true" data-container="portainer" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Portainer</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>Portainer</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('portainer', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container"><span class="material-symbols-rounded">home</span> Local Access</span></div>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container"><span class="material-symbols-rounded">home</span> Local Access</span>
+                    <div id="metrics-portainer" class="chip-box" style="padding-top:0; display:none;">
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                    </div></div>
             </div>
             <div id="link-wg-easy" data-url="http://$LAN_IP:$PORT_WG_WEB" class="card" data-check="true" data-container="wg-easy" onclick="navigate(this, event)">
-                <div class="card-header"><h2>WireGuard</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header"><h2>WireGuard</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('wg-easy', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><button class="btn btn-icon settings-btn" style="margin-left: 8px;"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
                 <p class="description">The primary gateway for <strong>secure remote access</strong>. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container"><span class="material-symbols-rounded">home</span> Local Access</span></div>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container"><span class="material-symbols-rounded">home</span> Local Access</span>
+                    <div id="metrics-wg-easy" class="chip-box" style="padding-top:0; display:none;">
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                    </div></div>
             </div>
         </div>
 
@@ -4081,6 +4371,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         <span class="material-symbols-rounded">restart_alt</span>
                         Restart Stack
                     </button>
+                    <button onclick="rotateApiKey()" class="btn btn-tonal" style="width: 100%;" data-tooltip="Update the HUB_API_KEY used for dashboard authentication.">
+                        <span class="material-symbols-rounded">key_visualizer</span>
+                        Rotate API Key
+                    </button>
                     <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">
                         Note: Changes to .secrets may require a stack restart to take full effect.
                     </p>
@@ -4090,7 +4384,24 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 </p>
             </div>
             <div class="card">
-                <h3>System & Deployment Logs</h3>
+                <div class="card-header">
+                    <h3>System & Deployment Logs</h3>
+                    <div style="display: flex; gap: 8px;">
+                        <select id="log-filter-level" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 8px; font-size: 12px; border-radius: 8px;">
+                            <option value="ALL">All Levels</option>
+                            <option value="INFO">Info</option>
+                            <option value="WARN">Warn</option>
+                            <option value="ERROR">Error</option>
+                            <option value="SECURITY">Security</option>
+                        </select>
+                        <select id="log-filter-cat" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 8px; font-size: 12px; border-radius: 8px;">
+                            <option value="ALL">All Categories</option>
+                            <option value="SYSTEM">System</option>
+                            <option value="NETWORK">Network</option>
+                            <option value="MAINTENANCE">Maintenance</option>
+                        </select>
+                    </div>
+                </div>
                 <div id="log-container" class="log-container sensitive">Loading logs...</div>
                 <div id="log-status" class="body-small" style="color:var(--md-sys-color-on-surface-variant); text-align:right; margin-top:8px;">Connecting...</div>
             </div>
@@ -4099,33 +4410,24 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
     <!-- Setup Wizard -->
     <div id="setup-wizard" class="wizard-overlay">
-        <div class="wizard-card">
-            <div id="step-1" class="wizard-step active">
-                <span class="material-symbols-rounded" style="font-size: 48px; color: var(--md-sys-color-primary);">shield</span>
-                <h2>Welcome to Privacy Hub</h2>
-                <p class="body-medium">Let's get your secure infrastructure ready. This wizard will guide you through the essential configuration steps.</p>
-                <div style="text-align: right; margin-top: 12px;">
-                    <button onclick="nextStep(2)" class="btn btn-filled">Get Started</button>
-                </div>
+        <!-- ... existing ... -->
+    </div>
+
+    <!-- Service Management Modal -->
+    <div id="service-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 id="modal-service-name">Service Settings</h2>
+                <button onclick="closeServiceModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
             </div>
-            <div id="step-2" class="wizard-step">
-                <span class="material-symbols-rounded" style="font-size: 48px; color: var(--md-sys-color-primary);">dns</span>
-                <h2>Domain & SSL</h2>
-                <p class="body-medium">To enable encrypted DNS and valid SSL certificates, you need a deSEC domain.</p>
-                <input type="text" id="wiz-desec-domain" class="text-field" placeholder="yourname.dedyn.io">
-                <input type="password" id="wiz-desec-token" class="text-field sensitive" placeholder="deSEC API Token">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
-                    <button onclick="nextStep(3)" class="btn btn-outlined">Skip for now</button>
-                    <button onclick="saveWizardDesec()" class="btn btn-filled">Save & Continue</button>
-                </div>
+            <div id="modal-metrics" style="background: var(--md-sys-color-surface-container-low); padding: 16px; border-radius: 12px;">
+                <div class="stat-row"><span class="stat-label">CPU Usage</span><span class="stat-value" id="modal-cpu">0%</span></div>
+                <div class="metric-bar"><div id="modal-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
+                <div class="stat-row" style="margin-top:12px;"><span class="stat-label">Memory</span><span class="stat-value" id="modal-mem">0 / 0 MB</span></div>
+                <div class="metric-bar"><div id="modal-mem-fill" class="metric-fill" style="width: 0%"></div></div>
             </div>
-            <div id="step-3" class="wizard-step">
-                <span class="material-symbols-rounded" style="font-size: 48px; color: var(--md-sys-color-success);">check_circle</span>
-                <h2>Almost Ready!</h2>
-                <p class="body-medium">Your basic configuration is saved. You can now upload your WireGuard profiles or manage your applications from the dashboard.</p>
-                <div style="text-align: right; margin-top: 12px;">
-                    <button onclick="closeWizard()" class="btn btn-filled">Finish</button>
-                </div>
+            <div id="modal-actions" class="btn-group" style="flex-direction: column; gap: 8px;">
+                <!-- Actions injected via JS -->
             </div>
         </div>
     </div>
@@ -4259,6 +4561,46 @@ cat >> "$DASHBOARD_FILE" <<EOF
             } catch(e) {
                 showSnackbar("Optimization failed: " + e.message);
             }
+        }
+        
+        async function rotateApiKey() {
+            const newKey = prompt("Enter new HUB_API_KEY. Warning: You must update your local .secrets manually if this fails!");
+            if (!newKey) return;
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(API + "/rotate-api-key", {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ new_key: newKey })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    odidoApiKey = newKey;
+                    localStorage.setItem('odido_api_key', newKey);
+                    showSnackbar("API Key rotated successfully!");
+                } else { throw new Error(data.error); }
+            } catch(e) { showSnackbar("Rotation failed: " + e.message); }
+        }
+
+        async function filterLogs() {
+            const level = document.getElementById('log-filter-level').value;
+            const category = document.getElementById('log-filter-cat').value;
+            let url = API + "/logs";
+            const params = [];
+            if (level !== 'ALL') params.push("level=" + level);
+            if (category !== 'ALL') params.push("category=" + category);
+            if (params.length) url += "?" + params.join("&");
+            
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                const el = document.getElementById('log-container');
+                el.innerHTML = '';
+                (data.logs || []).forEach(log => {
+                    el.appendChild(parseLogLine(JSON.stringify(log)));
+                });
+            } catch(e) { showSnackbar("Failed to filter logs"); }
         }
         
         async function fetchContainerIds() {
@@ -4487,6 +4829,17 @@ cat >> "$DASHBOARD_FILE" <<EOF
                                 } else {
                                     txt.classList.remove('text-success');
                                 }
+                            }
+                            
+                            // Update metrics chips if present
+                            const metricsBox = document.getElementById("metrics-" + name);
+                            if (metricsBox && containerMetrics[name]) {
+                                const m = containerMetrics[name];
+                                metricsBox.style.display = 'flex';
+                                metricsBox.querySelector('.cpu-val').textContent = m.cpu.toFixed(0) + '%';
+                                metricsBox.querySelector('.mem-val').textContent = Math.round(m.mem) + 'MB';
+                            } else if (metricsBox) {
+                                metricsBox.style.display = 'none';
                             }
                         }
                     }
@@ -4822,53 +5175,37 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const div = document.createElement('div');
                 div.className = 'log-entry';
                 
+                let logData = null;
+                try {
+                    logData = JSON.parse(line);
+                } catch(e) {
+                    // Fallback for raw lines
+                    logData = { message: line, level: 'INFO', category: 'SYSTEM', timestamp: '' };
+                }
+                
                 let icon = 'info';
                 let iconColor = 'var(--md-sys-color-primary)';
-                let message = line;
-                let timestamp = '';
+                let message = logData.message;
+                let timestamp = logData.timestamp;
 
-                // Extract timestamp if present (YYYY-MM-DD HH:MM:SS or [Day, DD Mon YYYY HH:MM:SS GMT])
-                const tsMatch = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/) || line.match(/^\[(.*?)\]/);
-                if (tsMatch) {
-                    timestamp = tsMatch[1];
-                    message = line.replace(tsMatch[0], '').trim();
-                }
+                // Category based icons
+                if (logData.category === 'NETWORK') icon = 'lan';
+                if (logData.category === 'AUTH' || logData.category === 'SECURITY') icon = 'lock';
+                if (logData.category === 'MAINTENANCE') icon = 'build';
+                if (logData.category === 'ORCHESTRATION') icon = 'hub';
 
-                // Human-readable translations
-                if (message.includes('GET /status') || message.includes('GET /api/status')) {
-                    icon = 'analytics';
-                    message = 'System health check processed';
-                } else if (message.includes('GET /events')) {
-                    icon = 'rss_feed';
-                    message = 'Real-time log stream connected';
-                } else if (message.includes('GET /profiles') || message.includes('GET /api/profiles')) {
-                    icon = 'vpn_key';
-                    message = 'Retrieving VPN configuration profiles';
-                } else if (message.includes('POST /activate') || message.includes('POST /api/activate')) {
-                    icon = 'bolt';
-                    message = 'Activating selected VPN profile';
-                } else if (message.includes('GET /certificate-status')) {
-                    icon = 'verified_user';
-                    message = 'Verifying SSL certificate integrity';
-                } else if (message.includes('POST /update-service')) {
-                    icon = 'update';
-                    message = 'Triggering service update/rebuild';
-                } else if (message.includes(' [INFO] ')) {
-                    icon = 'info';
-                    message = message.replace(' [INFO] ', '');
-                } else if (message.includes(' [WARN] ')) {
+                // Level based colors
+                if (logData.level === 'WARN') {
                     icon = 'warning';
                     iconColor = 'var(--md-sys-color-warning)';
-                    message = message.replace(' [WARN] ', '');
-                } else if (message.includes(' [ERROR] ')) {
+                } else if (logData.level === 'ERROR') {
                     icon = 'error';
                     iconColor = 'var(--md-sys-color-error)';
-                    message = message.replace(' [ERROR] ', '');
-                }
-
-                // Handle HTTP status codes in remaining text
-                if (message.includes(' 200 ')) {
-                    message = message.replace(/\"GET .*?\" 200 -?/, 'Success').replace(/\"POST .*?\" 200 -?/, 'Action completed');
+                } else if (logData.level === 'ACCESS') {
+                    icon = 'api';
+                    // Simplify common access logs
+                    if (message.includes('GET /status')) message = 'Health check processed';
+                    if (message.includes('GET /events')) message = 'Log stream connection';
                 }
 
                 div.innerHTML = \`
@@ -5281,8 +5618,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
             initPrivacyMode();
             initTheme();
             fetchContainerIds();
-            fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates();
+            fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates(); fetchMetrics();
             setInterval(fetchStatus, 15000);
+            setInterval(fetchMetrics, 30000);
             setInterval(fetchUpdates, 300000); // Check for source updates every 5 mins
             setInterval(fetchOdidoStatus, 60000);  // Reduced polling frequency to respect Odido API
             setInterval(fetchContainerIds, 60000);
