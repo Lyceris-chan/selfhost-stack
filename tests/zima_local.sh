@@ -264,10 +264,10 @@ setup_fonts() {
         return 0
     fi
 
-    # URLs
-    URL_GS="https://api.fonts.coollabs.io/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
-    URL_CC="https://api.fonts.coollabs.io/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
-    URL_MS="https://api.fonts.coollabs.io/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+    # URLs (Fontlay)
+    URL_GS="https://fontlay.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
+    URL_CC="https://fontlay.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
+    URL_MS="https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
 
     # Download CSS
     curl -s "$URL_GS" > "$FONTS_DIR/gs.css"
@@ -278,15 +278,24 @@ setup_fonts() {
     cd "$FONTS_DIR"
     for css_file in gs.css cc.css ms.css; do
         # Extract URLs from url(...) - handle optional quotes
+        css_origin="https://fontlay.com"
         grep -o "url([^)]*)" "$css_file" | sed 's/url(//;s/)//' | tr -d "'\"" | sort | uniq | while read -r url; do
             if [ -z "$url" ]; then continue; fi
             filename=$(basename "$url")
             # Strip everything after ?
             clean_name="${filename%%\?*}"
+            fetch_url="$url"
+            if [[ "$url" == //* ]]; then
+                fetch_url="https:$url"
+            elif [[ "$url" == /* ]]; then
+                fetch_url="${css_origin}${url}"
+            elif [[ "$url" != http* ]]; then
+                fetch_url="${css_origin}/${url}"
+            fi
             
             if [ ! -f "$clean_name" ]; then
                 # log_info "Downloading font: $clean_name"
-                curl -sL "$url" -o "$clean_name"
+                curl -sL "$fetch_url" -o "$clean_name"
             fi
             
             # Escape URL for sed: escape / and & and |
@@ -1062,7 +1071,7 @@ fi
 
 # --- SECTION 9: INFRASTRUCTURE CONFIGURATION ---
 # Generate configuration files for core system services (DNS, SSL, Nginx).
-log_info "Compiling <span class="material-symbols-rounded">hub</span> Infrastructure Configs..."
+log_info "Compiling <span class=\"material-symbols-rounded\">hub</span> Infrastructure Configs..."
 
 # DNS & Certificate Setup
 log_info "Setting up DNS and certificates..."
@@ -2935,6 +2944,7 @@ $VERTD_DEVICES
 EOF
 fi
 
+cat >> "$COMPOSE_FILE" <<EOF
 x-casaos:
   architectures:
     - amd64
@@ -2954,7 +2964,7 @@ x-casaos:
       A comprehensive self-hosted privacy stack for people who want to own their data
       instead of renting a false sense of security. Includes WireGuard VPN access,
       recursive DNS with AdGuard filtering, and VPN-isolated privacy frontends
-      (Invidious, Redlib, etc.) that reduce tracking and prevent home IP exposure.
+      \(Invidious, Redlib, etc.\) that reduce tracking and prevent home IP exposure.
   icon: http://$LAN_IP:8081/fonts/privacy-hub.svg
 EOF
 

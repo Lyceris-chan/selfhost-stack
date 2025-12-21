@@ -13,3 +13,4 @@ Verification completed:
 2. Linting/Syntax check: bash -n zima.sh and zima_test.sh passed.
 3. Manual review: Verified HTML structure and chip icons via grep and read_file.
 4. Logic check: Ensured sed commands did not break heredoc structure or script logic.
+[DONE] include a restart button as well following the design rules mentioned Note: Changes to .secrets may require a stack restart to take full effect.

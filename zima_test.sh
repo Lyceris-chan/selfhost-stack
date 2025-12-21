@@ -264,10 +264,10 @@ setup_fonts() {
         return 0
     fi
 
-    # URLs
-    URL_GS="https://api.fonts.coollabs.io/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
-    URL_CC="https://api.fonts.coollabs.io/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
-    URL_MS="https://api.fonts.coollabs.io/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+    # URLs (Fontlay)
+    URL_GS="https://fontlay.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
+    URL_CC="https://fontlay.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
+    URL_MS="https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
 
     # Download CSS
     curl -s "$URL_GS" > "$FONTS_DIR/gs.css"
@@ -278,15 +278,24 @@ setup_fonts() {
     cd "$FONTS_DIR"
     for css_file in gs.css cc.css ms.css; do
         # Extract URLs from url(...) - handle optional quotes
+        css_origin="https://fontlay.com"
         grep -o "url([^)]*)" "$css_file" | sed 's/url(//;s/)//' | tr -d "'\"" | sort | uniq | while read -r url; do
             if [ -z "$url" ]; then continue; fi
             filename=$(basename "$url")
             # Strip everything after ?
             clean_name="${filename%%\?*}"
+            fetch_url="$url"
+            if [[ "$url" == //* ]]; then
+                fetch_url="https:$url"
+            elif [[ "$url" == /* ]]; then
+                fetch_url="${css_origin}${url}"
+            elif [[ "$url" != http* ]]; then
+                fetch_url="${css_origin}/${url}"
+            fi
             
             if [ ! -f "$clean_name" ]; then
                 # log_info "Downloading font: $clean_name"
-                curl -sL "$url" -o "$clean_name"
+                curl -sL "$fetch_url" -o "$clean_name"
             fi
             
             # Escape URL for sed: escape / and & and |
@@ -537,7 +546,7 @@ clean_environment() {
         
         if [ -n "$REMOVED_CRONS" ]; then
             log_info "  Clearing cron entries: $REMOVED_CRONS"
-            echo "$EXISTING_CRON" | grep -v "wg-ip-monitor" | grep -v "cert-monitor" | grep -v "privacy-hub" | echo crontab - 2>/dev/null || true
+            echo "$EXISTING_CRON" | grep -v "wg-ip-monitor" | grep -v "cert-monitor" | grep -v "privacy-hub" >/dev/null 2>&1 || true
         fi
         
         # ============================================================
@@ -870,7 +879,7 @@ else
     if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
         log_info "Generating missing Portainer hash..."
         PORTAINER_PASS_HASH="mockporhash"
-        echo "PORTAINER_PASS_HASH="mockporhash"
+        echo "PORTAINER_PASS_HASH=$PORTAINER_PASS_HASH" >> "$BASE_DIR/.secrets"
     fi
     if [ -z "${ODIDO_API_KEY:-}" ]; then
         ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
@@ -890,10 +899,6 @@ echo "=========================================================="
 
 # WireGuard Configuration Validation
 validate_wg_config() { echo "PrivateKey=mockmockmockmockmockmockmockmockmockmockmock" > "$ACTIVE_WG_CONF"; return 0; }
-        return 1
-    fi
-    return 0
-}
 
 # Check existing WireGuard configuration
 if validate_wg_config; then
@@ -1029,7 +1034,7 @@ fi
 
 # --- SECTION 9: INFRASTRUCTURE CONFIGURATION ---
 # Generate configuration files for core system services (DNS, SSL, Nginx).
-log_info "Compiling <span class="material-symbols-rounded">hub</span> Infrastructure Configs..."
+log_info "Compiling <span class=\"material-symbols-rounded\">hub</span> Infrastructure Configs..."
 
 # DNS & Certificate Setup
 log_info "Setting up DNS and certificates..."
@@ -1357,6 +1362,7 @@ EOF
 log_info "Synchronizing Source Repositories..."
 clone_repo() { 
     if [ ! -d "$2/.git" ]; then 
+        mkdir -p "$2"
         echo git clone --depth 1 "$1" "$2"
     else 
         (cd "$2" && echo git fetch --all && echo git reset --hard "origin/$(git rev-parse --abbrev-ref HEAD)" && echo git pull)
@@ -2952,6 +2958,7 @@ $VERTD_DEVICES
 EOF
 fi
 
+cat >> "$COMPOSE_FILE" <<EOF
 x-casaos:
   architectures:
     - amd64
@@ -2971,7 +2978,7 @@ x-casaos:
       A comprehensive self-hosted privacy stack for people who want to own their data
       instead of renting a false sense of security. Includes WireGuard VPN access,
       recursive DNS with AdGuard filtering, and VPN-isolated privacy frontends
-      (Invidious, Redlib, etc.) that reduce tracking and prevent home IP exposure.
+      \(Invidious, Redlib, etc.\) that reduce tracking and prevent home IP exposure.
   icon: http://$LAN_IP:8081/fonts/privacy-hub.svg
 EOF
 
@@ -5615,7 +5622,7 @@ rm -f "$CERT_TMP_OUT"
 EOF
 chmod +x "$CERT_MONITOR_SCRIPT"
 EXISTING_CRON=$(echo crontab -l 2>/dev/null || true)
-echo "$EXISTING_CRON" | grep -v "$CERT_MONITOR_SCRIPT" | { cat; echo "*/5 * * * * $CERT_MONITOR_SCRIPT"; } | echo crontab -
+echo "$EXISTING_CRON" | grep -v "$CERT_MONITOR_SCRIPT" | { cat; echo "*/5 * * * * $CERT_MONITOR_SCRIPT"; } >/dev/null
 
 # --- SECTION 15.1: DYNAMIC IP AUTOMATION ---
 # Detect public IP changes and synchronize DNS records and VPN endpoints.
@@ -5677,7 +5684,7 @@ EOF
 chmod +x "$MONITOR_SCRIPT"
 CRON_CMD="*/5 * * * * $MONITOR_SCRIPT"
 EXISTING_CRON=$(echo crontab -l 2>/dev/null || true)
-echo "$EXISTING_CRON" | grep -v "$MONITOR_SCRIPT" | { cat; echo "$CRON_CMD"; } | echo crontab -
+echo "$EXISTING_CRON" | grep -v "$MONITOR_SCRIPT" | { cat; echo "$CRON_CMD"; } >/dev/null
 
 # --- SECTION 15.2: EXPORT CREDENTIALS ---
 # Generate a CSV file compatible with Proton Pass for easy credential management.
@@ -5689,11 +5696,9 @@ generate_protonpass_export() {
     # We use this generic format for maximum compatibility.
     cat > "$export_file" <<EOF
 Name,URL,Username,Password,Note
-Privacy Hub Dashboard,http://$LAN_IP:$PORT_DASHBOARD_WEB,admin,$ADMIN_PASS_RAW,Primary management interface for the Privacy Hub stack.
 AdGuard Home,http://$LAN_IP:$PORT_ADGUARD_WEB,adguard,$AGH_PASS_RAW,Network-wide advertisement and tracker filtration.
 WireGuard VPN UI,http://$LAN_IP:$PORT_WG_WEB,admin,$VPN_PASS_RAW,WireGuard remote access management interface.
 Portainer UI,http://$LAN_IP:$PORT_PORTAINER,portainer,$ADMIN_PASS_RAW,Docker container management interface.
-Odido Booster API,,dashboard,$ODIDO_API_KEY,API key for the automated Odido data bundle booster.
 deSEC DNS API,,$DESEC_DOMAIN,$DESEC_TOKEN,API token for deSEC dynamic DNS management.
 GitHub Scribe Token,,$SCRIBE_GH_USER,$SCRIBE_GH_TOKEN,GitHub Personal Access Token for Scribe Medium frontend.
 EOF
@@ -5703,14 +5708,14 @@ EOF
 
 # --- SECTION 16: STACK ORCHESTRATION & DEPLOYMENT ---
 # Execute system deployment and verify global infrastructure integrity.
-check_echo iptables() {
-    log_info "Verifying echo iptables rules..."
+check_iptables() {
+    log_info "Verifying iptables rules..."
     if echo iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null && \
        echo iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null && \
        echo iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
-        log_info "echo iptables rules for wg-easy are correctly set up."
+        log_info "iptables rules for wg-easy are correctly set up."
     else
-        log_warn "echo iptables rules for wg-easy may not be correctly set up."
+        log_warn "iptables rules for wg-easy may not be correctly set up."
         log_warn "Please check your firewall settings if you experience connectivity issues."
     fi
 }
@@ -5819,7 +5824,7 @@ if $DOCKER_CMD ps | grep -q adguard; then
     fi
 fi
 
-check_echo iptables
+check_iptables
 
 generate_protonpass_export
 

@@ -19,16 +19,28 @@ Own your data, route through VPNs, and eliminate tracking with zero external dep
 
 Prepare these ahead of time so setup is smooth:
 
-- **Docker Hub / DHI PAT (required)**: One username + PAT is used for both Docker Hub and `dhi.io`. Use a token with **pull/read** permissions only. This is required to pull hardened images and avoid rate limits. Create it at [Docker Hub Access Tokens](https://hub.docker.com/settings/security).
+- **Docker Hub / DHI PAT (required)**: One username + PAT is used for both Docker Hub and `dhi.io`. Use a token with **pull/read** permissions only. This is required to pull hardened images and avoid rate limits. Create it at [Docker Hub Access Tokens](https://hub.docker.com/settings/security). ([Quick explainer](#quick-explainers))
 - **WireGuard config (recommended)**: A `.conf` from your VPN provider if you want VPN-routed frontends (Gluetun). Only ProtonVPN is tested (details below).
-- **deSEC domain + API token (recommended)**: Enables DDNS + trusted SSL. Create a token in your deSEC account at [deSEC](https://desec.io).
-- **GitHub token (optional)**: Classic PAT with `gist` scope only, used by the Scribe frontend for gist access. Create it at [GitHub Tokens](https://github.com/settings/tokens).
+- **deSEC domain + API token (recommended)**: Enables DDNS + trusted SSL. Create a token in your deSEC account at [deSEC](https://desec.io). ([Quick explainer](#quick-explainers))
+- **GitHub token (optional)**: Classic PAT with `gist` scope only, used by the Scribe frontend for gist access. Create it at [GitHub Tokens](https://github.com/settings/tokens). ([Quick explainer](#quick-explainers))
 - **Odido OAuth token (optional, NL unlimited data)**: Used by Odido Booster. Get the OAuth token using [Odido Authenticator](https://github.com/GuusBackup/Odido.Authenticator). The Odido API may incur costs or limits; use at your own risk.
+
+<a id="quick-explainers"></a>
+<details>
+<summary><strong>Quick Explainers (DHI, DDNS, SSL, PAT, CDN)</strong></summary>
+
+1. **DHI**: Docker Hardened Images. It’s a registry of hardened base images (on `dhi.io`) meant to reduce vulnerabilities in standard images. ([Credentials](#before-you-run-credentials))
+2. **DDNS**: Dynamic DNS updates your domain when your home IP changes, so your services stay reachable without manual edits. ([Credentials](#before-you-run-credentials))
+3. **SSL / trusted SSL**: SSL/TLS encrypts traffic. A **trusted** SSL cert is issued by a public CA (like Let’s Encrypt) so devices don’t warn you; a **self-signed** cert still encrypts, but isn’t trusted by default. ([Credentials](#before-you-run-credentials))
+4. **Classic PAT**: A Personal Access Token you create in your account settings (e.g., GitHub). It’s a password replacement for APIs with specific scopes. ([Credentials](#before-you-run-credentials))
+5. **CDN**: Content Delivery Network, a third-party network that serves assets. This stack avoids external CDNs for privacy. ([Zero-Leaks](#security--credentials))
+
+</details>
 
 <details>
 <summary><strong>ProtonVPN WireGuard (.conf) - tested path</strong></summary>
 
-Only ProtonVPN is tested. The free tier works fine; premium servers might be faster, but we only use the VPN to proxy frontends and hide our IPs, so higher speeds and extra security features aren’t necessary here. In the ProtonVPN dashboard:
+Only ProtonVPN is tested; other providers might work but are unverified. The free tier works fine; premium servers might be faster, but we only use the VPN to proxy frontends and hide our IPs, so higher speeds and extra security features aren’t necessary here. In the ProtonVPN dashboard:
 
 1. Go to **Downloads → WireGuard configuration**.
 2. Enable **Port Forwarding** before creating the config.
@@ -53,6 +65,14 @@ Only deploy specific services to save resources (Infrastructure is always includ
 ```bash
 ./zima.sh -c
 ```
+
+### Common Flags
+- `-c`: Reset environment (cleanup only).
+- `-x`: Reset environment and exit (no deployment).
+- `-p`: Auto-generate passwords.
+- `-y`: Auto-confirm prompts.
+- `-s <list>`: Deploy only selected services (comma-separated).
+- `-h`/`--help`: Show usage.
 
 ## 🖥️ Management Dashboard
 
@@ -198,7 +218,7 @@ uci commit firewall
 ## 🔒 Security & Credentials
 
 - **HUB_API_KEY**: Required for sensitive dashboard actions. Can be rotated via UI.
-- **Zero-Leaks**: No external CDNs or trackers. We never contact Google directly; fonts are downloaded once during setup (or if the cache is missing) via the Coollabs Google Fonts proxy ([privacy policy](https://coollabs.io/privacy-policy/)), with Fontlay as a fallback if Coollabs is unreachable. After download, fonts are served locally so no further font requests leave your machine.
+- **Zero-Leaks**: No external CDNs (content delivery networks) or trackers. We never contact Google directly; fonts are downloaded once during setup (or if the cache is missing) via Fontlay ([privacy policy + source code](https://github.com/miroocloud/fontlay)), then served locally so no further font requests leave your machine. ([CDN explainer](#quick-explainers))
 - **Redaction Mode**: "Safe Display Mode" blurs IPs and sensitive metadata for screenshots.
 - **Secrets**: Core credentials stored in `/DATA/AppData/privacy-hub/.secrets`.
 
@@ -232,7 +252,6 @@ When you run with `-p` (auto-passwords), the script generates a Proton Pass impo
   - [ipify.org](https://www.ipify.org/)
   - [ip-api.com](https://ip-api.com/docs/legal)
 - **Fonts proxy and CDN**:
-  - Coollabs Google Fonts proxy + CDN: [privacy policy](https://coollabs.io/privacy-policy/)
   - Fontlay Google Fonts proxy + CDN: [privacy policy + source code](https://github.com/miroocloud/fontlay)
 - **DNS & SSL automation**:
   - deSEC API: [privacy policy](https://desec.io/privacy-policy)
@@ -248,6 +267,28 @@ When you run with `-p` (auto-passwords), the script generates a Proton Pass impo
   - GitHub raw (sleepy list): [privacy policy](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement)
 - **Odido API**:
   - Odido privacy policy: [privacy policy](https://www.odido.nl/privacy)
+- **Service privacy policies (or no published policy)**:
+  - AdGuard Home: [privacy policy](https://adguard.com/en/privacy/home.html)
+  - Portainer: [privacy policy](https://www.portainer.io/legal/privacy-policy)
+  - WireGuard (WG-Easy): no published privacy policy; [repo](https://github.com/wg-easy/wg-easy)
+  - Invidious: no published privacy policy; [repo](https://github.com/iv-org/invidious)
+  - Redlib: no published privacy policy; [repo](https://github.com/redlib-org/redlib)
+  - Wikiless: no published privacy policy; [repo](https://github.com/Metastem/Wikiless)
+  - Memos: no published privacy policy; [repo](https://github.com/usememos/memos)
+  - Rimgo: no published privacy policy; [repo](https://codeberg.org/rimgo/rimgo)
+  - Scribe: no published privacy policy; [repo](https://git.sr.ht/~edwardloveall/scribe)
+  - BreezeWiki: no published privacy policy; [repo](https://gitdab.com/cadence/breezewiki)
+  - AnonOverflow: no published privacy policy; [repo](https://github.com/httpjamesm/anonymousoverflow)
+  - VERT / VERTD: no published privacy policy; [repo](https://github.com/vert-sh/vert)
+  - Gluetun: no published privacy policy; [repo](https://github.com/qdm12/gluetun)
+  - Unbound: no published privacy policy; [project page](https://nlnetlabs.nl/projects/unbound/about/)
+  - Watchtower: no published privacy policy; [repo](https://github.com/containrrr/watchtower)
+  - Odido Booster: no published privacy policy; [repo](https://github.com/Lyceris-chan/odido-bundle-booster)
+  - Invidious Companion: no published privacy policy; [repo](https://github.com/iv-org/invidious-companion)
+  - Redis: no published privacy policy; [project page](https://redis.io/)
+  - PostgreSQL: no published privacy policy; [project page](https://www.postgresql.org/)
+  - Nginx (dashboard host): no published privacy policy; [project page](https://nginx.org/)
+  - Hub API (local service): no published privacy policy; [source](https://github.com/Lyceris-chan/selfhost-stack)
 
 </details>
 

@@ -30,6 +30,8 @@ for arg in "$@"; do
     fi
 done
 
+FORCE_CLEAN=false
+CLEAN_ONLY=false
 AUTO_PASSWORD=false
 CLEAN_EXIT=false
 RESET_ENV=false
@@ -38,8 +40,8 @@ SELECTED_SERVICES=""
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        -c) RESET_ENV=true ;;
-        -x) CLEAN_EXIT=true; RESET_ENV=true ;;
+        -c) RESET_ENV=true; FORCE_CLEAN=true ;;
+        -x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
         -p) AUTO_PASSWORD=true ;;
         -y) AUTO_CONFIRM=true ;;
         -s|--services) SELECTED_SERVICES="$2"; shift ;;
@@ -270,39 +272,28 @@ setup_fonts() {
         return 0
     fi
 
-    # URLs (Coollabs primary, Fontlay fallback)
-    URL_GS_PRIMARY="https://api.fonts.coollabs.io/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
-    URL_CC_PRIMARY="https://api.fonts.coollabs.io/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
-    URL_MS_PRIMARY="https://api.fonts.coollabs.io/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
-    URL_GS_FALLBACK="https://fontlay.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
-    URL_CC_FALLBACK="https://fontlay.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
-    URL_MS_FALLBACK="https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+    # URLs (Fontlay)
+    URL_GS="https://fontlay.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
+    URL_CC="https://fontlay.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
+    URL_MS="https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
 
     download_css() {
         local dest="$1"
-        local primary="$2"
-        local fallback="$3"
-        local varname="$4"
-        local used="$primary"
-        if ! curl -fsSL "$primary" -o "$dest"; then
-            log_warn "Primary font source failed: $primary"
-            if curl -fsSL "$fallback" -o "$dest"; then
-                used="$fallback"
-                log_info "Using fallback font source: $fallback"
-            else
-                log_warn "Fallback font source failed: $fallback"
-            fi
+        local url="$2"
+        local varname="$3"
+        if ! curl -fsSL "$url" -o "$dest"; then
+            log_warn "Font source failed: $url"
         fi
-        printf -v "$varname" '%s' "$used"
+        printf -v "$varname" '%s' "$url"
     }
 
     css_origin() {
         echo "$1" | sed -E 's#(https?://[^/]+).*#\1#'
     }
 
-    download_css "$FONTS_DIR/gs.css" "$URL_GS_PRIMARY" "$URL_GS_FALLBACK" GS_CSS_URL
-    download_css "$FONTS_DIR/cc.css" "$URL_CC_PRIMARY" "$URL_CC_FALLBACK" CC_CSS_URL
-    download_css "$FONTS_DIR/ms.css" "$URL_MS_PRIMARY" "$URL_MS_FALLBACK" MS_CSS_URL
+    download_css "$FONTS_DIR/gs.css" "$URL_GS" GS_CSS_URL
+    download_css "$FONTS_DIR/cc.css" "$URL_CC" CC_CSS_URL
+    download_css "$FONTS_DIR/ms.css" "$URL_MS" MS_CSS_URL
 
     # Parse and download woff2 files for each CSS file
     cd "$FONTS_DIR"
@@ -311,6 +302,10 @@ setup_fonts() {
     CSS_ORIGINS[cc.css]="$(css_origin "$CC_CSS_URL")"
     CSS_ORIGINS[ms.css]="$(css_origin "$MS_CSS_URL")"
     for css_file in gs.css cc.css ms.css; do
+        if [ ! -s "$css_file" ]; then
+            log_warn "Skipping $css_file (missing or empty)."
+            continue
+        fi
         css_origin="${CSS_ORIGINS[$css_file]}"
         # Extract URLs from url(...) - handle optional quotes
         grep -o "url([^)]*)" "$css_file" | sed 's/url(//;s/)//' | tr -d "'\"" | sort | uniq | while read -r url; do
@@ -329,14 +324,17 @@ setup_fonts() {
             
             if [ ! -f "$clean_name" ]; then
                 # log_info "Downloading font: $clean_name"
-                curl -sL "$fetch_url" -o "$clean_name"
+                if ! curl -sL "$fetch_url" -o "$clean_name"; then
+                    log_warn "Failed to download font: $clean_name"
+                    continue
+                fi
             fi
             
             # Escape URL for sed: escape / and & and |
             escaped_url=$(echo "$url" | sed 's/[\/&|]/\\&/g')
             # Replace the URL in the CSS file
             sed -i "s|url(['\"]\{0,1\}${escaped_url}['\"]\{0,1\})|url($clean_name)|g" "$css_file"
-        done
+        done || true
     done
     cd - >/dev/null
     
@@ -2017,20 +2015,16 @@ FONTS_DIR = "/fonts"
 
 FONT_SOURCES = {
     "gs.css": [
-        "https://api.fonts.coollabs.io/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap",
         "https://fontlay.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap",
     ],
     "cc.css": [
-        "https://api.fonts.coollabs.io/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap",
         "https://fontlay.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap",
     ],
     "ms.css": [
-        "https://api.fonts.coollabs.io/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap",
         "https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap",
     ],
 }
 FONT_ORIGINS = [
-    "https://api.fonts.coollabs.io",
     "https://fontlay.com",
 ]
 
@@ -3270,6 +3264,7 @@ $VERTD_DEVICES
 EOF
 fi
 
+cat >> "$COMPOSE_FILE" <<EOF
 x-casaos:
   architectures:
     - amd64
