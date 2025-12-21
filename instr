@@ -263,3 +263,4 @@ Dashboard URL: http://10.0.0.118:8081/
 [progress] 2025-12-21T02:30:00Z Fixed YAML unmarshal error caused by duplicate 'labels' key in 'vert' service in both zima.sh and zima_local.sh. Verified valid orchestration file generation.
 [progress] 2025-12-21T02:45:00Z Relocated "DEPLOYMENT COMPLETE" message to the end of zima.sh and zima_local.sh to prevent premature success reports.
 [progress] 2025-12-21T02:45:00Z Fixed AUTO_CONFIRM (-y) logic in zima.sh to correctly bypass all cleanup prompts regardless of mode.
+[progress] 2025-12-21T03:00:00Z Decoupled registry authentication from AUTO_CONFIRM (-y) to ensure Docker login is never bypassed without valid environment variables. Corrected truncated logic in zima_local.sh.

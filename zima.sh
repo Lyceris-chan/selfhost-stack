@@ -189,28 +189,29 @@ authenticate_registries() {
     # Export DOCKER_CONFIG globally
     export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
     
-    if [ "$AUTO_CONFIRM" = true ]; then
-        if [ -n "${REG_USER:-}" ] && [ -n "${REG_TOKEN:-}" ]; then
-            log_info "Auto-confirm enabled: Using environment variables for non-interactive registry login."
-            
-            # DHI Login
-            if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-                log_info "dhi.io: Authentication successful."
-            else
-                log_warn "dhi.io: Authentication failed."
-            fi
-
-            # Docker Hub Login
-            if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-                 log_info "Docker Hub: Authentication successful."
-            else
-                 log_warn "Docker Hub: Authentication failed."
-            fi
+    # Non-interactive login via environment variables
+    if [ -n "${REG_USER:-}" ] && [ -n "${REG_TOKEN:-}" ]; then
+        log_info "Credentials detected in environment: Attempting non-interactive registry login."
+        
+        # DHI Login
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+            log_info "dhi.io: Authentication successful."
         else
-            log_info "Auto-confirm enabled: No credentials provided via environment. Skipping automated registry login."
+            log_warn "dhi.io: Authentication failed."
+        fi
+
+        # Docker Hub Login
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+             log_info "Docker Hub: Authentication successful."
+        else
+             log_warn "Docker Hub: Authentication failed."
         fi
         return 0
     fi
+
+    # If running with AUTO_CONFIRM but no credentials, warn but proceed to prompt 
+    # unless we are in a strictly non-interactive environment (which we can't easily detect).
+    # To satisfy the requirement that -p/-y shouldn't bypass this, we always prompt if vars are missing.
 
     echo ""
     echo "--- REGISTRY AUTHENTICATION ---"
@@ -4849,6 +4850,7 @@ check_iptables() {
     else
         log_warn "iptables rules for wg-easy may not be correctly set up."
         log_warn "Please check your firewall settings if you experience connectivity issues."
+    fi
 }
 
 sudo modprobe tun || true

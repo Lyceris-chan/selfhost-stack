@@ -189,34 +189,68 @@ authenticate_registries() {
     # Export DOCKER_CONFIG globally
     export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
     
-    if [ "$AUTO_CONFIRM" = true ]; then
-        if [ -n "${REG_USER:-}" ] && [ -n "${REG_TOKEN:-}" ]; then
-            log_info "Auto-confirm enabled: Using environment variables for non-interactive registry login."
-            
-            # DHI Login
-            if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-                log_info "dhi.io: Authentication successful."
-            else
-                log_warn "dhi.io: Authentication failed."
-            fi
-
-            # Docker Hub Login
-            if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-                 log_info "Docker Hub: Authentication successful."
-            else
-                 log_warn "Docker Hub: Authentication failed."
-            fi
+    # Non-interactive login via environment variables
+    if [ -n "${REG_USER:-}" ] && [ -n "${REG_TOKEN:-}" ]; then
+        log_info "Credentials detected in environment: Attempting non-interactive registry login."
+        
+        # DHI Login
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+            log_info "dhi.io: Authentication successful."
         else
-            log_info "Auto-confirm enabled: No credentials provided via environment. Skipping automated registry login."
+            log_warn "dhi.io: Authentication failed."
+        fi
+
+        # Docker Hub Login
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+             log_info "Docker Hub: Authentication successful."
+        else
+             log_warn "Docker Hub: Authentication failed."
         fi
         return 0
     fi
 
+    # If running with AUTO_CONFIRM but no credentials, warn but proceed to prompt 
+    # unless we are in a strictly non-interactive environment (which we can't easily detect).
+    # To satisfy the requirement that -p/-y shouldn't bypass this, we always prompt if vars are missing.
+
     echo ""
     echo "--- REGISTRY AUTHENTICATION ---"
-    # ... rest of the original function logic if it were there, but I replaced it with return 0 earlier
-    # So I will just implement the interactive part too or keep it simple.
-    return 0
+    echo "Please provide your credentials for dhi.io and Docker Hub."
+    echo "A single token is utilized for both registries to streamline configuration."
+    echo ""
+
+    while true; do
+        read -r -p "Username: " REG_USER
+        read -rs -p "Access Token (PAT): " REG_TOKEN
+        echo ""
+        
+        # DHI Login
+        DHI_LOGIN_OK=false
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
+            log_info "dhi.io: Authentication successful. Hardened images are now available."
+            DHI_LOGIN_OK=true
+        else
+            log_crit "dhi.io: Authentication failed. Please verify your credentials."
+        fi
+
+        # Docker Hub Login
+        HUB_LOGIN_OK=false
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+             log_info "Docker Hub: Authentication successful. Pull limits have been adjusted."
+             HUB_LOGIN_OK=true
+        else
+             log_warn "Docker Hub: Authentication failed. Pull rates may be limited for anonymous requests."
+        fi
+
+        if [ "$DHI_LOGIN_OK" = true ]; then
+            if [ "$HUB_LOGIN_OK" = false ]; then
+                log_warn "Proceeding with DHI authentication only."
+            fi
+            return 0
+        fi
+
+        if ! ask_confirm "Authentication failed. Would you like to retry?"; then return 1; fi
+    done
 }
 
 setup_fonts() {
