@@ -2239,6 +2239,19 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
+        elif self.path == '/restart-stack':
+            try:
+                # Trigger a full stack restart in the background
+                log_file = "/app/deployment.log"
+                with open(log_file, 'a') as f:
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} [SYSTEM] Full stack restart triggered via Dashboard.\n")
+                
+                # We use a detached process to avoid killing the API before it responds
+                # The restart will take 20-30 seconds.
+                subprocess.Popen(["/bin/sh", "-c", "sleep 2 && docker compose -f /app/docker-compose.yml restart"])
+                self._send_json({"success": True, "message": "Stack restart initiated"})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         elif self.path == '/update-service':
             try:
                 l = int(self.headers['Content-Length'])
@@ -3823,10 +3836,18 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace">/DATA/AppData/privacy-hub/config</span></div>
                 <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
                 <div class="stat-row"><span class="stat-label">Safe Display</span><span class="stat-value">Active (Client-side)</span></div>
-                <p class="body-small" style="margin-top: auto; color: var(--md-sys-color-on-surface-variant);">
+                <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
+                    <button onclick="restartStack()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Reboot all containers in the stack. Use this after manual .secrets changes.">
+                        <span class="material-symbols-rounded">restart_alt</span>
+                        Restart Stack
+                    </button>
+                    <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">
+                        Note: Changes to .secrets may require a stack restart to take full effect.
+                    </p>
+                </div>
+                <p class="body-small" style="margin-top: auto; padding-top: 16px; color: var(--md-sys-color-on-surface-variant);">
                     See the <a href="https://github.com/Lyceris-chan/selfhost-stack#credentials" target="_blank" style="color: var(--md-sys-color-primary);">README</a> for full details on obtaining required credentials.
                 </p>
-                <p class="body-small" style="margin-top: 8px; color: var(--md-sys-color-on-surface-variant);">Note: Changes to .secrets may require a stack restart to take full effect.</p>
             </div>
             <div class="card">
                 <h3>System & Deployment Logs</h3>
@@ -4697,6 +4718,55 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 alert("Network error while triggering SSL check.");
             }
             setTimeout(() => { btn.disabled = false; btn.style.opacity = '1'; }, 10000);
+        }
+
+        async function restartStack() {
+            if (!confirm("Are you sure you want to restart the entire stack? The dashboard and all services will be unreachable for approximately 30 seconds.")) return;
+            
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(API + "/restart-stack", {
+                    method: 'POST',
+                    headers
+                });
+                
+                const data = await res.json();
+                if (data.success) {
+                    // Show a persistent overlay or alert
+                    document.body.innerHTML = \`
+                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:var(--md-sys-color-surface); color:var(--md-sys-color-on-surface); font-family:sans-serif; text-align:center; padding:24px;">
+                            <span class="material-symbols-rounded" style="font-size:64px; color:var(--md-sys-color-primary); margin-bottom:24px;">restart_alt</span>
+                            <h1>Restarting Stack...</h1>
+                            <p style="margin-top:16px; opacity:0.8;">The management interface is rebooting. This page will automatically refresh when the services are back online.</p>
+                            <div style="margin-top:32px; width:48px; height:48px; border:4px solid var(--md-sys-color-surface-container-highest); border-top:4px solid var(--md-sys-color-primary); border-radius:50%; animation: spin 1s linear infinite;"></div>
+                            <style>
+                                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                            </style>
+                        </div>
+                    \`;
+                    
+                    // Poll for availability
+                    let attempts = 0;
+                    const checkAvailability = setInterval(async () => {
+                        attempts++;
+                        try {
+                            const ping = await fetch(window.location.href, { mode: 'no-cors' });
+                            clearInterval(checkAvailability);
+                            window.location.reload();
+                        } catch (e) {
+                            if (attempts > 60) {
+                                clearInterval(checkAvailability);
+                                alert("Restart is taking longer than expected. Please refresh the page manually.");
+                            }
+                        }
+                    }, 2000);
+                } else {
+                    throw new Error(data.error || "Unknown error");
+                }
+            } catch (e) {
+                alert("Failed to initiate restart: " + e.message);
+            }
         }
         
         document.addEventListener('DOMContentLoaded', () => {
