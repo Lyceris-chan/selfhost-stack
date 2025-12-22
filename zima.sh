@@ -6163,7 +6163,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     const text = indicator.querySelector('.status-text');
                     if (dot && text && !dot.id.includes('api')) {
                         dot.className = 'status-dot down';
-                        text.textContent = 'Connection Error';
+                        text.textContent = 'API Error';
+                        indicator.title = 'Unable to reach Hub API. Service status cannot be verified.';
                     }
                 });
             }
