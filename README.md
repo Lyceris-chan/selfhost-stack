@@ -147,17 +147,35 @@ The dashboard is built to strictly follow **[Google's Material Design 3](https:/
 ### Service Access & URLs
 The dashboard provides one-click launch cards for every service. 
 
-| Service | Local LAN URL |
-| :--- | :--- |
-| **Dashboard** | `http://<LAN_IP>:8081` |
-| **Invidious** | `http://<LAN_IP>:3000` |
-| **Redlib** | `http://<LAN_IP>:8080` |
-| **Wikiless** | `http://<LAN_IP>:8180` |
-| **AdGuard Home** | `http://<LAN_IP>:8083` |
-| **WireGuard UI** | `http://<LAN_IP>:51821` |
-| **Portainer** | `http://<LAN_IP>:9000` |
+| Service | Local LAN URL | Category |
+| :--- | :--- | :--- |
+| **Dashboard** | `http://<LAN_IP>:8081` | Management |
+| **Invidious** | `http://<LAN_IP>:3000` | Privacy Frontend |
+| **Redlib** | `http://<LAN_IP>:8080` | Privacy Frontend |
+| **Wikiless** | `http://<LAN_IP>:8180` | Privacy Frontend |
+| **Rimgo** | `http://<LAN_IP>:3002` | Privacy Frontend |
+| **BreezeWiki** | `http://<LAN_IP>:8380` | Privacy Frontend |
+| **AnonOverflow** | `http://<LAN_IP>:8480` | Privacy Frontend |
+| **Scribe** | `http://<LAN_IP>:8280` | Privacy Frontend |
+| **Memos** | `http://<LAN_IP>:5230` | Utility |
+| **VERT** | `http://<LAN_IP>:5555` | Utility |
+| **Odido Booster** | `http://<LAN_IP>:8085` | Utility |
+| **AdGuard Home** | `http://<LAN_IP>:8083` | Infrastructure |
+| **WireGuard UI** | `http://<LAN_IP>:51821` | Infrastructure |
+| **Portainer** | `http://<LAN_IP>:9000` | Admin |
 
 > 🔒 **Domain Access**: When deSEC is configured, all services automatically become available via trusted HTTPS at `https://<service>.<domain>:8443/`.
+
+### 🔑 Inbound Access: WireGuard (WG-Easy)
+While **Gluetun** handles the outbound VPN tunnel for privacy, **WG-Easy** provides the *inbound* tunnel for secure remote access.
+
+*   **Secure Entry**: To access your services from outside your home, connect to your Privacy Hub using a WireGuard client.
+*   **Client Configuration**: 
+    1. Open the WireGuard UI (`http://<LAN_IP>:51821`).
+    2. Create a new client (e.g., "Mobile").
+    3. **Scan QR Code**: Use the WireGuard app on your phone to scan the generated QR code.
+    4. **Download .conf**: Alternatively, download the configuration file for your laptop.
+*   **Routing**: Once connected, your device is virtually "inside" your home network. You can access all services using their local LAN IPs or deSEC subdomains.
 
 ## 🌐 Network Configuration
 
@@ -199,9 +217,13 @@ To filter ads and trackers for every device on your WiFi:
 This stack uses a **Split Tunnel** architecture via Gluetun. This means only specific traffic is sent through the VPN, while the rest of your home network remains untouched.
 *   **VPN-Gated Services**: Privacy frontends (Invidious, Redlib, etc.) are locked inside the VPN container. They cannot access the internet if the VPN disconnects (Killswitch enabled).
 *   **Local-Direct Services**: Core management tools (Dashboard, Portainer, AdGuard UI) are accessible directly via your LAN IP. This ensures you never lose control of your hub even if the VPN provider has an outage.
-*   **Resource Efficiency**: Only heavy data-scraping traffic (video streams, social media feeds) consumes VPN bandwidth, keeping your general home internet speed optimal.
 
-### 5. Advanced Network Hardening (Explore!)
+### 5. Encrypted DNS via Local Rewrites
+By leveraging AdGuard Home's **DNS Rewrites**, you can use advanced encrypted protocols (DoH/DoQ) without needing a constant VPN connection while at home.
+*   **The Logic**: AdGuard is configured to "rewrite" your deSEC domain (e.g., `your-domain.dedyn.io`) to your Hub's **Internal IP**.
+*   **The Benefit**: Your phone/laptop can use **Private DNS** (Android) or system-level DoH pointing to your domain. When you are home, the request never leaves your network; when you are away, the same settings route securely back to your hub via deSEC.
+
+### 6. Advanced Network Hardening (Explore!)
 Some "smart" devices (TVs, IoT, Google Home) are hardcoded to bypass your DNS and talk directly to Google. You can force them to respect your privacy rules using advanced firewall techniques.
 
 *   **DNS Hijacking (NAT Redirect)**: Catch all rogue traffic on port 53 and force it into your AdGuard instance. [OpenWrt Guide](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/intercept_dns)
