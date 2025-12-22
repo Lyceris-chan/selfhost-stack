@@ -419,7 +419,7 @@ clean_environment() {
     fi
     
     if [ "$FORCE_CLEAN" = true ]; then
-        log_warn "REVERT: REVERTING DEPLOYMENT (undoing our changes and restoring the system back to default and clean up all files)..."
+        log_warn "REVERT: Rolling back deployment. This process will undo changes, restore system defaults, and clean up all created files..."
         echo ""
         
         # ============================================================
@@ -6597,22 +6597,47 @@ cat >> "$DASHBOARD_FILE" <<EOF
             return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
         }
 
+        function getLuminance(hex) {
+            const rgb = hexToRgb(hex);
+            const rs = rgb.r / 255;
+            const gs = rgb.g / 255;
+            const bs = rgb.b / 255;
+            const r = rs <= 0.03928 ? rs / 12.92 : Math.pow((rs + 0.055) / 1.055, 2.4);
+            const g = gs <= 0.03928 ? gs / 12.92 : Math.pow((gs + 0.055) / 1.055, 2.4);
+            const b = bs <= 0.03928 ? bs / 12.92 : Math.pow((bs + 0.055) / 1.055, 2.4);
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        }
+
         function generateM3Palette(seedHex) {
             if (typeof MaterialColorUtilities === 'undefined') {
                 // Fallback if library fails to load
                 const rgb = hexToRgb(seedHex);
                 const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+                const lum = getLuminance(seedHex);
+                const onPrimary = lum > 0.4 ? '#000000' : '#ffffff';
                 return {
                     primary: seedHex,
-                    onPrimary: hsl.l > 0.6 ? '#000000' : '#ffffff',
+                    onPrimary: onPrimary,
                     primaryContainer: hslToHex(hsl.h, hsl.s, Math.min(0.9, hsl.l + 0.3)),
                     onPrimaryContainer: hslToHex(hsl.h, hsl.s, Math.max(0.1, hsl.l - 0.4)),
                     secondary: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, hsl.l),
-                    onSecondary: hsl.l > 0.6 ? '#000000' : '#ffffff',
+                    onSecondary: onPrimary,
                     secondaryContainer: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, Math.min(0.9, hsl.l + 0.3)),
                     onSecondaryContainer: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, Math.max(0.1, hsl.l - 0.4)),
+                    tertiary: hslToHex((hsl.h + 0.5) % 1, hsl.s, hsl.l),
+                    onTertiary: onPrimary,
+                    tertiaryContainer: hslToHex((hsl.h + 0.5) % 1, hsl.s, Math.min(0.9, hsl.l + 0.3)),
+                    onTertiaryContainer: hslToHex((hsl.h + 0.5) % 1, hsl.s, Math.max(0.1, hsl.l - 0.4)),
                     error: '#ba1a1a',
-                    onError: '#ffffff'
+                    onError: '#ffffff',
+                    errorContainer: '#ffdad6',
+                    onErrorContainer: '#410002',
+                    outline: '#79747e',
+                    outlineVariant: '#c4c7c5',
+                    surface: '#141218',
+                    onSurface: '#e6e1e5',
+                    surfaceVariant: '#49454f',
+                    onSurfaceVariant: '#cac4d0'
                 };
             }
 

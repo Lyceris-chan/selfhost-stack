@@ -409,7 +409,7 @@ clean_environment() {
     fi
     
     if [ "$FORCE_CLEAN" = true ]; then
-        log_warn "REVERT: REVERTING DEPLOYMENT (undoing our changes and restoring the system back to default and clean up all files)..."
+        log_warn "REVERT: Rolling back deployment. This process will undo changes, restore system defaults, and clean up all created files..."
         echo ""
         
         # ============================================================
