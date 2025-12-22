@@ -144,7 +144,7 @@ The dashboard provides one-click launch cards for every service at `http://<LAN_
 Everything lives in `zima.sh`, so one run rebuilds Docker Compose and the dashboard. Keep the service name consistent everywhere (Compose, monitoring, and UI IDs).
 
 ### 1) Service Definition (Orchestration Layer)
-Locate **SECTION 13** (around line 3332) in `zima.sh`. Add your service block within a `should_deploy` check to support selective deployment.
+Locate **SECTION 13** in `zima.sh` (search for `# --- SECTION 13: ORCHESTRATION LAYER`). This is where the `docker-compose.yml` file is generated. Add your service block using the `should_deploy` check to enable selective deployment.
 
 ```bash
 if should_deploy "myservice"; then
