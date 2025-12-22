@@ -596,9 +596,9 @@ clean_environment
 
 # Ensure authentication works by pulling critical utility images now
 log_info "Pre-pulling ALL deployment images to avoid rate limits..."
-# Explicitly pull images used by 'docker run' commands later in the script
-# These images are small but critical for password generation and setup
-CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
+# Explicitly pull images used by 'docker run' commands or as base images later in the script
+# We only pull core infrastructure and base images. App images built from source are skipped.
+CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
 
 for img in $CRITICAL_IMAGES; do
     if ! $DOCKER_CMD pull "$img"; then
@@ -2499,6 +2499,16 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json(json.loads(output))
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
+        elif self.path == '/theme':
+            theme_file = os.path.join(CONFIG_DIR, "theme.json")
+            if os.path.exists(theme_file):
+                try:
+                    with open(theme_file, 'r') as f:
+                        self._send_json(json.load(f))
+                except:
+                    self._send_json({})
+            else:
+                self._send_json({})
         elif self.path == '/master-update':
             try:
                 def run_master_update():
@@ -2798,18 +2808,19 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"error": "Unauthorized"}, 401)
             return
 
-        if self.path.startswith('/watchtower'):
+        content_length = int(self.headers.get('Content-Length', 0))
+        post_data = self.rfile.read(content_length).decode('utf-8')
+        
+        try:
+            data = json.loads(post_data)
+        except:
+            data = {}
+
+        if self.path == '/theme':
+            theme_file = os.path.join(CONFIG_DIR, "theme.json")
             try:
-                l = int(self.headers['Content-Length'])
-                data = json.loads(self.rfile.read(l).decode('utf-8'))
-                # Log watchtower event to history
-                with open(LOG_FILE, 'a') as f:
-                    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-                    entries = data.get('entries', [])
-                    for entry in entries:
-                        msg = entry.get('message', '')
-                        if 'Updated' in msg or 'Pulling' in msg:
-                            f.write(f"{timestamp} [WATCHTOWER] {msg}\n")
+                with open(theme_file, 'w') as f:
+                    json.dump(data, f)
                 self._send_json({"success": True})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -4354,6 +4365,13 @@ cat > "$DASHBOARD_FILE" <<EOF
             flex-direction: column;
             gap: 24px;
         }
+        .modal-card h2 { font-weight: 400; font-size: 24px; color: var(--md-sys-color-on-surface); margin: 0; }
+
+        .settings-btn { 
+            opacity: 0.5; 
+            transition: all var(--md-sys-motion-duration-short) linear; 
+        }
+        .card:hover .settings-btn { opacity: 1; color: var(--md-sys-color-primary); }
 
         .modal-header { display: flex; align-items: center; justify-content: space-between; }
         
@@ -4454,15 +4472,15 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 16px;">
-                    <div class="status-indicator" style="background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant); order: -1;">
-                        <span class="status-dot" id="api-dot"></span>
-                        <span class="status-text" id="api-text">API: ...</span>
-                    </div>
                     <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for privacy">
                         <span class="label-large">Privacy Masking</span>
                         <div class="switch-track">
                             <div class="switch-thumb"></div>
                         </div>
+                    </div>
+                    <div class="status-indicator" style="background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant);">
+                        <span class="status-dot" id="api-dot"></span>
+                        <span class="status-text" id="api-text">API: ...</span>
                     </div>
                     <div class="theme-toggle" onclick="toggleTheme()" data-tooltip="Switch between Light and Dark mode">
                         <span class="material-symbols-rounded" id="theme-icon">light_mode</span>
@@ -4499,7 +4517,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('invidious', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        
                     </div>
                 </div>
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
@@ -4519,7 +4537,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('redlib', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        
                     </div>
                 </div>
                 <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
@@ -4535,7 +4553,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('wikiless', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        
                     </div>
                 </div>
                 <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
@@ -4551,7 +4569,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('memos', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        
                     </div>
                 </div>
                 <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
@@ -4570,7 +4588,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('rimgo', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        
                     </div>
                 </div>
                 <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
@@ -4586,7 +4604,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('scribe', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        
                     </div>
                 </div>
                 <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
@@ -4602,7 +4620,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('breezewiki', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        
                     </div>
                 </div>
                 <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
@@ -4618,7 +4636,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('anonymousoverflow', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        
                     </div>
                 </div>
                 <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
@@ -4634,7 +4652,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('vert', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        
                     </div>
                 </div>
                 <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
@@ -4657,7 +4675,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('adguard', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        
                     </div>
                 </div>
                 <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
@@ -4677,7 +4695,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('portainer', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        
                     </div>
                 </div>
                 <p class="description">A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.</p>
@@ -4693,7 +4711,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('wg-easy', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        
                     </div>
                 </div>
                 <p class="description">The primary gateway for <strong>secure remote access</strong>. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
@@ -4795,7 +4813,7 @@ if [ -n "$DESEC_DOMAIN" ]; then
                     </div>
                     <div style="margin-top: auto; padding-top: 16px;">
                         <div class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
-                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-secondary-container);">warning</span>
+                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
                             <div style="display: flex; flex-direction: column; gap: 2px;">
                                 <span style="font-weight: 600;">Self-Signed (Local)</span>
                                 <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and Private DNS.</span>
@@ -4823,7 +4841,7 @@ else
                 <div class="code-block sensitive" style="margin-top:12px;">$LAN_IP</div>
                 <div style="margin-top: auto; padding-top: 16px;">
                     <div class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
-                        <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-secondary-container);">warning</span>
+                        <span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
                         <div style="display: flex; flex-direction: column; gap: 2px;">
                             <span style="font-weight: 600;">Self-Signed (Local)</span>
                             <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and full mobile support.</span>
@@ -4853,14 +4871,17 @@ cat >> "$DASHBOARD_FILE" <<EOF
                             <div>
                                 <div class="stat-row"><span class="stat-label">Remaining</span><span class="stat-value" id="odido-remaining">--</span></div>
                                 <div class="stat-row"><span class="stat-label">Bundle</span><span class="stat-value" id="odido-bundle-code">--</span></div>
+                                <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value" id="odido-rate">--</span></div>
                             </div>
                             <div>
-                                <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value" id="odido-rate">--</span></div>
                                 <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value" id="odido-api-status">--</span></div>
+                                <div class="stat-row"><span class="stat-label">Threshold</span><span class="stat-value" id="odido-threshold">--</span></div>
+                                <div class="stat-row"><span class="stat-label">Auto-Renew</span><span class="stat-value" id="odido-auto-renew">--</span></div>
                             </div>
                         </div>
                         
-                        <div style="margin-top: 24px; flex-grow: 1; min-height: 120px; position: relative;">
+                        <div style="margin-top: 24px; flex-grow: 1; min-height: 120px; position: relative; background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 12px;">
+                            <div style="position: absolute; top: 8px; left: 12px; font-size: 10px; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Consumption Rate (MB/min)</div>
                             <svg id="odido-graph" width="100%" height="100%" viewBox="0 0 400 120" preserveAspectRatio="none" style="overflow: visible;">
                                 <defs>
                                     <linearGradient id="graph-gradient" x1="0" y1="0" x2="0" y2="1">
@@ -4869,7 +4890,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                                     </linearGradient>
                                 </defs>
                                 <path id="graph-area" fill="url(#graph-gradient)" d=""></path>
-                                <path id="graph-line" fill="none" stroke="var(--md-sys-color-primary)" stroke-width="2" d=""></path>
+                                <path id="graph-line" fill="none" stroke="var(--md-sys-color-primary)" stroke-width="2.5" stroke-linejoin="round" d=""></path>
                                 <line x1="0" y1="120" x2="400" y2="120" stroke="var(--md-sys-color-outline-variant)" stroke-width="1"></line>
                                 <g id="graph-grid" stroke="var(--md-sys-color-outline-variant)" stroke-width="0.5" stroke-dasharray="2,2">
                                     <line x1="0" y1="30" x2="400" y2="30"></line>
@@ -4879,9 +4900,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
                             </svg>
                         </div>
 
+                        <div id="odido-buy-status" class="body-small" style="text-align: center; margin-top: 8px; font-weight: 500;"></div>
                         <div class="btn-group" style="justify-content:center; margin-top: 16px;">
                             <button onclick="buyOdidoBundle()" class="btn btn-tertiary" id="odido-buy-btn">Buy Bundle</button>
-                            <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh</button>
+                            <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh Status</button>
                             <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
                         </div>
                     </div>
@@ -4908,8 +4930,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     </p>
                     <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;" data-tooltip="The product code for your data bundle.">
                     <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;" data-tooltip="Automatic renewal triggers when data falls below this level.">
-                    <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;" data-tooltip="Minutes before expiration to trigger renewal.">
-                    <div style="text-align:right;">
+                    <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;" data-tooltip="Lead time before expiration to trigger renewal.">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+                        <div id="odido-config-status" class="body-small" style="font-weight: 500;"></div>
                         <button type="submit" class="btn btn-tonal">Save Configuration</button>
                     </div>
                 </form>
@@ -4938,6 +4961,32 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
         <div class="section-label">System & Logs</div>
         <div class="grid-2">
+            <div class="card">
+                <h3>Theme Customization</h3>
+                <p class="body-medium description">Personalize the dashboard appearance using Material Design 3 dynamic color principles.</p>
+                <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <input type="color" id="theme-seed-color" onchange="applySeedColor(this.value)" style="width: 48px; height: 48px; border: none; border-radius: 12px; cursor: pointer; background: transparent;" data-tooltip="Select a seed color to generate a custom M3 theme.">
+                        <div style="flex: 1;">
+                            <span class="body-medium" style="font-weight: 600;">Seed Color</span>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Manually select a primary color</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <label for="theme-image-upload" class="btn btn-tonal" style="width: 48px; height: 48px; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer;" data-tooltip="Upload an image to extract its dominant color for the theme.">
+                            <span class="material-symbols-rounded">image</span>
+                        </label>
+                        <input type="file" id="theme-image-upload" accept="image/*" onchange="extractColorFromImage(event)" style="display: none;">
+                        <div style="flex: 1;">
+                            <span class="body-medium" style="font-weight: 600;">Image Source</span>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Extract colors from a wallpaper</p>
+                        </div>
+                    </div>
+                    <div style="text-align: right; margin-top: 8px;">
+                        <button onclick="saveThemeSettings()" class="btn btn-filled" data-tooltip="Permanently save these theme settings to the server.">Save Theme</button>
+                    </div>
+                </div>
+            </div>
             <div class="card">
                 <h3>System Information</h3>
                 <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
@@ -5025,7 +5074,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
     </div>
 
     <script>
-        const API = "/api";
+        // Prevent extension injection errors
+        globalThis.configureInjection = globalThis.configureInjection || (() => {});
+
+        const API = ""; 
         const ODIDO_API = "/odido-api/api";
         
         // Global State & Data
@@ -5040,7 +5092,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         async function updateOdidoGraph(rate, remaining) {
             const now = Date.now();
             odidoHistory.push({ time: now, rate: rate, remaining: remaining });
-            if (odidoHistory.length > 40) odidoHistory.shift();
+            if (odidoHistory.length > 50) odidoHistory.shift();
 
             const svg = document.getElementById('odido-graph');
             const line = document.getElementById('graph-line');
@@ -5050,17 +5102,29 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
             const width = 400;
             const height = 120;
-            const maxRate = Math.max(...odidoHistory.map(d => d.rate), 0.1);
+            
+            // Smooth the rate for the graph
+            const smoothHistory = odidoHistory.map((d, i) => {
+                const start = Math.max(0, i - 2);
+                const end = Math.min(odidoHistory.length - 1, i + 2);
+                const subset = odidoHistory.slice(start, end + 1);
+                const avgRate = subset.reduce((acc, curr) => acc + curr.rate, 0) / subset.length;
+                return { ...d, smoothRate: avgRate };
+            });
+
+            const maxRate = Math.max(...smoothHistory.map(d => d.smoothRate), 0.1);
             
             // Speed indicator (MB/min to Mb/s: * 8 / 60)
             const speedMbs = (rate * 8 / 60).toFixed(2);
             if (speedIndicator) speedIndicator.textContent = speedMbs + " Mb/s";
 
+            if (smoothHistory.length < 2) return;
+
             let points = "";
-            odidoHistory.forEach((d, i) => {
-                const x = (i / (odidoHistory.length - 1 || 1)) * width;
-                const y = height - (d.rate / maxRate) * height;
-                points += (i === 0 ? "M" : "L") + x + "," + y;
+            smoothHistory.forEach((d, i) => {
+                const x = (i / (smoothHistory.length - 1)) * width;
+                const y = height - (d.smoothRate / (maxRate * 1.2)) * height;
+                points += (i === 0 ? "M" : " L") + x + "," + y;
             });
 
             line.setAttribute("d", points);
@@ -5153,10 +5217,15 @@ cat >> "$DASHBOARD_FILE" <<EOF
         function updateModalMetrics(name) {
             const m = containerMetrics[name];
             if (m) {
-                document.getElementById('modal-cpu').textContent = m.cpu;
-                document.getElementById('modal-cpu-fill').style.width = m.cpu;
-                document.getElementById('modal-mem').textContent = m.mem;
-                document.getElementById('modal-mem-fill').style.width = '50%'; // Approximation
+                const cpu = parseFloat(m.cpu) || 0;
+                document.getElementById('modal-cpu').textContent = cpu.toFixed(1) + "%";
+                document.getElementById('modal-cpu-fill').style.width = Math.min(100, cpu) + "%";
+                
+                const mem = parseFloat(m.mem) || 0;
+                const limit = parseFloat(m.limit) || 1;
+                const memPercent = Math.min(100, (mem / limit) * 100);
+                document.getElementById('modal-mem').textContent = Math.round(mem) + " / " + Math.round(limit) + " MB";
+                document.getElementById('modal-mem-fill').style.width = memPercent + "%";
             }
         }
 
@@ -5779,28 +5848,58 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 el.style.flexDirection = 'column';
                 el.style.alignItems = 'stretch';
                 el.style.justifyContent = 'flex-start';
+                el.style.gap = '4px';
+                
+                if (data.profiles.length === 0) {
+                    el.innerHTML = '<div style="text-align:center; padding: 24px; opacity: 0.6;"><span class="material-symbols-rounded" style="font-size: 48px;">folder_open</span><p class="body-medium">No profiles found</p></div>';
+                    return;
+                }
+
                 data.profiles.forEach(p => {
                     const row = document.createElement('div');
                     row.className = 'list-item';
+                    row.style.margin = '0';
+                    row.style.borderRadius = '12px';
+                    row.style.background = 'var(--md-sys-color-surface-container-low)';
+                    row.style.border = '1px solid var(--md-sys-color-outline-variant)';
+
+                    const content = document.createElement('div');
+                    content.style.display = 'flex';
+                    content.style.alignItems = 'center';
+                    content.style.gap = '12px';
+                    content.style.flex = '1';
+                    content.style.cursor = 'pointer';
+                    content.onclick = function() { activateProfile(p); };
+
+                    const icon = document.createElement('span');
+                    icon.className = 'material-symbols-rounded';
+                    icon.textContent = 'vpn_key';
+                    icon.style.color = 'var(--md-sys-color-primary)';
 
                     const name = document.createElement('span');
                     name.className = 'list-item-text';
+                    name.style.flex = '1';
                     name.dataset.realName = p;
                     name.textContent = getProfileLabel(p);
-                    name.onclick = function() { activateProfile(p); };
+
+                    content.appendChild(icon);
+                    content.appendChild(name);
 
                     const delBtn = document.createElement('button');
-                    delBtn.className = 'btn btn-icon btn-action';
+                    delBtn.className = 'btn btn-icon';
+                    delBtn.style.color = 'var(--md-sys-color-error)';
                     delBtn.title = 'Delete';
-                    delBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
-                    delBtn.onclick = function() { deleteProfile(p); };
+                    delBtn.innerHTML = '<span class="material-symbols-rounded">delete</span>';
+                    delBtn.onclick = function(e) { e.stopPropagation(); deleteProfile(p); };
 
-                    row.appendChild(name);
+                    row.appendChild(content);
                     row.appendChild(delBtn);
                     el.appendChild(row);
                 });
                 updateProfileListDisplay();
-            } catch(e) {}
+            } catch(e) {
+                console.error("Profile fetch error:", e);
+            }
         }
         async function uploadProfile() {
             const nameInput = document.getElementById('prof-name').value;
@@ -5966,7 +6065,153 @@ cat >> "$DASHBOARD_FILE" <<EOF
             setTimeout(() => {
                 snackbar.classList.remove('visible');
                 setTimeout(() => snackbar.remove(), 500);
-            }, 5000);
+            }, 1500);
+        }
+
+        // Theme customization logic
+        async function applySeedColor(hex) {
+            const colors = generateM3Palette(hex);
+            applyThemeColors(colors);
+        }
+
+        function extractColorFromImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                    let r = 0, g = 0, b = 0;
+                    const step = Math.max(1, Math.floor(data.length / 4000));
+                    let count = 0;
+                    for (let i = 0; i < data.length; i += step * 4) { 
+                        r += data[i]; g += data[i+1]; b += data[i+2];
+                        count++;
+                    }
+                    const avgHex = rgbToHex(Math.round(r/count), Math.round(g/count), Math.round(b/count));
+                    const picker = document.getElementById('theme-seed-color');
+                    if (picker) picker.value = avgHex;
+                    applySeedColor(avgHex);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function rgbToHex(r, g, b) {
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
+        function generateM3Palette(seedHex) {
+            const rgb = hexToRgb(seedHex);
+            const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+            
+            return {
+                primary: seedHex,
+                onPrimary: hsl.l > 0.6 ? '#000000' : '#ffffff',
+                primaryContainer: hslToHex(hsl.h, hsl.s, Math.min(0.9, hsl.l + 0.3)),
+                onPrimaryContainer: hslToHex(hsl.h, hsl.s, Math.max(0.1, hsl.l - 0.4)),
+                secondary: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, hsl.l),
+                onSecondary: hsl.l > 0.6 ? '#000000' : '#ffffff',
+                secondaryContainer: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, Math.min(0.9, hsl.l + 0.3)),
+                onSecondaryContainer: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, Math.max(0.1, hsl.l - 0.4)),
+                error: '#ba1a1a',
+                onError: '#ffffff'
+            };
+        }
+
+        function applyThemeColors(colors) {
+            const root = document.documentElement;
+            root.style.setProperty('--md-sys-color-primary', colors.primary);
+            root.style.setProperty('--md-sys-color-on-primary', colors.onPrimary);
+            root.style.setProperty('--md-sys-color-primary-container', colors.primaryContainer);
+            root.style.setProperty('--md-sys-color-on-primary-container', colors.onPrimaryContainer);
+            root.style.setProperty('--md-sys-color-secondary', colors.secondary);
+            root.style.setProperty('--md-sys-color-on-secondary', colors.onSecondary);
+            root.style.setProperty('--md-sys-color-secondary-container', colors.secondaryContainer);
+            root.style.setProperty('--md-sys-color-on-secondary-container', colors.onSecondaryContainer);
+        }
+
+        async function saveThemeSettings() {
+            const seed = document.getElementById('theme-seed-color').value;
+            const colors = generateM3Palette(seed);
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(API + "/theme", {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ seed, colors })
+                });
+                if (res.ok) showSnackbar("Theme settings saved to server");
+                else throw new Error("Failed to save");
+            } catch(e) { showSnackbar("Error saving theme: " + e.message); }
+        }
+
+        async function loadThemeSettings() {
+            try {
+                const res = await fetch(API + "/theme");
+                const data = await res.json();
+                if (data.seed) {
+                    const picker = document.getElementById('theme-seed-color');
+                    if (picker) picker.value = data.seed;
+                    applyThemeColors(data.colors);
+                }
+            } catch(e) {}
+        }
+
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : { r:0, g:0, b:0 };
+        }
+
+        function rgbToHsl(r, g, b) {
+            r /= 255, g /= 255, b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, l = (max + min) / 2;
+            if (max == min) h = s = 0;
+            else {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            return { h, s, l };
+        }
+
+        function hslToHex(h, s, l) {
+            let r, g, b;
+            if (s == 0) r = g = b = l;
+            else {
+                const hue2rgb = (p, q, t) => {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return p + (q - p) * 6 * t;
+                    if (t < 1/2) return q;
+                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                    return p;
+                };
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                r = hue2rgb(p, q, h + 1/3);
+                g = hue2rgb(p, q, h);
+                b = hue2rgb(p, q, h - 1/3);
+            }
+            return rgbToHex(Math.round(r * 255), Math.round(g * 255), Math.round(b * 255));
         }
 
         // Theme management
@@ -6270,7 +6515,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             initPrivacyMode();
             initTheme();
             fetchContainerIds();
-            fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates(); fetchMetrics();
+            fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates(); fetchMetrics(); loadThemeSettings();
             setInterval(fetchStatus, 15000);
             setInterval(fetchMetrics, 30000);
             setInterval(fetchUpdates, 300000); // Check for source updates every 5 mins

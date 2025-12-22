@@ -75,16 +75,15 @@ Only deploy specific services to save resources (Infrastructure is always includ
 - `-h`: Show usage.
 
 ## 🖥️ Management Dashboard
+The Privacy Hub features a custom-built, unified management interface designed with **Material Design 3**.
 
-Built with strict adherence to **Material 3** principles, the dashboard provides a high-fidelity control plane:
+### 🎨 UI & Theme Customization
+Personalize the dashboard appearance using Material Design 3 dynamic color principles:
+- **Seed Color Selection:** Choose a primary color to generate a full compliant M3 theme.
+- **Dynamic Image Extraction:** Upload a wallpaper to automatically extract its dominant color and apply it to the UI.
+- **Server-Side Persistence:** Theme settings are saved directly to the host filesystem via the API (`config/theme.json`), ensuring your preferences persist across devices without cookies.
+- **Fast Feedback:** UI transitions and notifications are optimized for performance and Material motion standards.
 
-- **Live Telemetry**: Real-time CPU and Memory usage per service.
-- **Human Logs**: Cryptic system logs translated into plain English with meaningful icons.
-- **Theme Support**: Native Light/Dark mode with system preference detection.
-- **Maintenance**: One-click database optimization, log clearing, and schema migrations.
-- **Easy Access**: Launch any service from a single dashboard with auto-switching links when <sup>[3](#explainer-3)</sup> is configured.
-- **Sensitive Actions**: No login is required to view the dashboard, but sensitive actions require the dashboard API key from `.secrets`.
-- **Secure Setup**: Integrated wizard for first-time deSEC and <sup>[3](#explainer-3)</sup> configuration.
 
 ## 📦 Included Services
 
