@@ -312,9 +312,9 @@ uci commit firewall
 ## 🔒 Security & Credentials
 
 - **HUB_API_KEY**: Required for sensitive dashboard actions. Can be rotated via UI.
-- **Zero-Leaks**: No external <sup>[5](#explainer-5)</sup> or trackers. We never contact Google directly; assets (fonts, icons, scripts) are downloaded once during setup (or if the cache is missing) via Fontlay ([privacy policy + source code](https://github.com/miroocloud/fontlay)) and JSDelivr, then served locally so no further requests leave your machine. (<sup>[5](#explainer-5)</sup>)
-- **Material Design 3**: The dashboard strictly adheres to M3 specifications (`m3.material.io`). Color generation is powered by the [material-color-utilities](https://github.com/material-foundation/material-color-utilities) library (downloaded during setup from `cdn.jsdelivr.net`; [privacy policy](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net)).
-- **CDN Proxying**: To further protect your privacy, all external asset downloads (fonts, MCU library, changelogs) performed by the Hub API are routed through the **Gluetun VPN proxy**. This ensures that even during setup or updates, your public home IP is never exposed to asset providers or CDNs.
+- **Zero-Leaks Architecture**: This stack is designed for complete isolation. External assets (fonts, icons, and scripts) are fetched only once during the initial setup or when the local cache is invalidated. These requests are made via **Fontlay** ([Privacy Policy](https://github.com/miroocloud/fontlay)) and **JSDelivr** ([Privacy Policy](https://www.jsdelivr.com/terms/privacy-policy)), then stored and served locally to ensure your machine never communicates with these providers during regular use.
+- **Material Design 3 Compliance**: The dashboard strictly adheres to M3 specifications (`m3.material.io`). Dynamic color generation is powered by the [material-color-utilities](https://github.com/material-foundation/material-color-utilities) library, ensuring an accessible and consistent visual experience.
+- **Anonymized Fetching (CDN Proxying)**: To eliminate host IP exposure, all external asset downloads and changelog retrievals performed by the Management Hub are routed through the **Gluetun VPN proxy**. Even during maintenance or background updates, your public home IP remains hidden from third-party CDNs and asset providers.
 
 ### External Assets & Libraries
 
