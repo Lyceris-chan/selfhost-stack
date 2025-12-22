@@ -248,17 +248,14 @@ The configuration is pre-tuned to support up to **30 users** on a machine with 1
 
 > **Note:** Building containers from source (e.g., Invidious, Wikiless) is intensive. Physical cores significantly improve build speed compared to logical threads.
 
-## 📡 Advanced Setup: Double NAT
+## 📡 Advanced Setup: OpenWrt & Double NAT
 
-<details>
-<summary><strong>Full UCI Commands for Double NAT Scenarios</strong></summary>
+If you are behind an ISP modem *and* an OpenWrt router (Double NAT), you must ensure traffic reaches the Hub by repeating the port forwarding step on both devices.
 
-If you are behind an ISP modem *and* an OpenWrt router (Double NAT), you need to forward traffic through both.
-
-```bash
-# ... (Previous UCI commands for port forwarding and DNS hijacking)
-```
-</details>
+**Configuration Workflow:**
+1.  **ISP Modem**: Forward UDP Port 51820 to the **WAN IP** of your OpenWrt router.
+2.  **OpenWrt Router**: Forward UDP Port 51820 to the **Local IP** of your Privacy Hub (using the commands in the [Network Configuration](#network-configuration) section).
+3.  **Forced DNS**: Apply the NAT redirection rules on your OpenWrt router to catch rogue DNS traffic as described above.
 
 <a id="add-your-own-services"></a>
 <details>
