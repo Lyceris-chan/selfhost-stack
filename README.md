@@ -35,6 +35,26 @@ Prepare these ahead of time to ensure a smooth deployment.
 *   **GitHub Token (Optional)**: A classic PAT with `gist` scope is required for the **Scribe** service to function.
 *   **Odido OAuth token (optional, NL unlimited data)**: Used by Odido Booster. Get the OAuth token using [Odido Authenticator](https://github.com/GuusBackup/Odido.Authenticator).
 
+### Key Concepts & Terms
+*   **DHI (Docker Hardened Images)**: Custom images (hosted at `dhi.io`) optimized for security by reducing the attack surface and using minimal base OS components.
+*   **DDNS (Dynamic DNS)**: Automatically synchronization of your domain name with your home's public IP. Essential if your ISP gives you a dynamic IP that changes periodically.
+*   **SSL (Secure Sockets Layer)**: Encrypts the connection between your browser and the hub. We use **Let's Encrypt** for globally trusted certificates (no security warnings).
+*   **PAT (Personal Access Token)**: A secure alternative to passwords for API access (like Docker Hub or GitHub).
+*   **Gluetun**: The VPN gateway container. It acts as a "firewall" that only allows traffic to flow through the encrypted VPN tunnel.
+
+<details>
+<summary><strong>ProtonVPN WireGuard (.conf) - tested path</strong></summary>
+
+Only ProtonVPN is tested; other providers might work but are unverified. 
+
+1. Go to **Downloads → WireGuard configuration**.
+2. Enable **Port Forwarding** before creating the config.
+3. Give the config a recognizable **name**.
+4. Choose a server/region and download the `.conf`.
+5. Paste the contents when the script prompts for the WireGuard configuration.
+
+</details>
+
 ### Installation
 Run the deployment script. It will validate your environment, prompt for credentials, and build the stack.
 
@@ -53,7 +73,7 @@ If you used the `-p` flag, the script auto-generated secure credentials for you.
     ```bash
     /DATA/AppData/privacy-hub/.secrets
     ```
-    > ⚠️ **SECURITY WARNING**: This file contains unencrypted administrative passwords and API keys. Ensure access to your host machine is restricted. Consider deleting this file after safely storing your credentials in a password manager, though `hub-api` uses it for some operations.
+    > ⚠️ **SECURITY WARNING**: This file contains unencrypted administrative passwords and API keys. Ensure access to your host machine is restricted.
 
 2.  **Proton Pass Import**: A CSV file ready for import into password managers is generated at:
     ```bash
@@ -82,24 +102,36 @@ Access the unified dashboard at `http://<LAN_IP>:8081`.
 
 ### Material Design 3 Compliance
 The dashboard is built to strictly follow **[Google's Material Design 3](https://m3.material.io/)** guidelines.
-*   **Color System**: We use the official `material-color-utilities` library to generate scientifically accurate accessible color palettes from your seed color.
+*   **Color System**: We use the official `material-color-utilities` library to generate accessible color palettes from your seed color or wallpaper.
 *   **Components**: All UI elements (cards, chips, buttons) adhere to M3 specifications for shape, elevation, and state layers.
 
 ### Customization
 *   **Theme Engine**: Upload a wallpaper to automatically extract a coordinated palette (Android folder style), or pick a color manually.
 *   **Presets**: Choose from curated Material Design color presets.
-*   **Dark/Light Mode**: Fully supported with automatic system preference detection.
 *   **Privacy Masking**: One-click toggle to blur sensitive IPs and data for screenshots.
 
 ### Update Engine
-The stack features a sophisticated update management system:
-*   **Changelogs**: View commit logs (for source builds) or release notes (for images) directly in the UI before updating.
+*   **Changelogs**: View commit logs (for source builds) or release notes (for images) directly in the UI.
 *   **Granular Control**: Update all services at once or select specific ones.
-*   **Safety First**: The system automatically creates database backups before applying any updates.
-*   **Rollback**: If an update fails, you can restore data from the automatically generated backups via the `migrate.sh` helper.
+*   **Safety First**: Automatic database backups are created before any update is applied.
 
-| [Scribe](https://git.sr.ht/~edwardloveall/scribe) | Frontend | Alternative Medium frontend |
-| [Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster) | Utility | Automated data bundle booster (NL Odido) |
+## 📦 Included Services
+
+| Service | Category | Purpose | Source |
+| :--- | :--- | :--- | :--- |
+| **Invidious** | Frontend | Anonymous YouTube (No ads/tracking) | [iv-org/invidious](https://github.com/iv-org/invidious) |
+| **Redlib** | Frontend | Lightweight Reddit interface | [redlib-org/redlib](https://github.com/redlib-org/redlib) |
+| **Wikiless** | Frontend | Private Wikipedia access | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) |
+| **Memos** | Utility | Private knowledge base & notes | [usememos/memos](https://github.com/usememos/memos) |
+| **AdGuard Home** | Core | DNS filtering & Ad-blocking | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) |
+| **WireGuard** | Core | Secure remote access gateway | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) |
+| **Portainer** | Admin | Advanced container management | [portainer/portainer](https://github.com/portainer/portainer) |
+| **VERT** | Utility | Local, GPU-accelerated file conversion | [VERT-sh/vert](https://github.com/vert-sh/vert) |
+| **Rimgo** | Frontend | Lightweight Imgur interface | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) |
+| **BreezeWiki** | Frontend | De-fandomized Wiki interface | [cadence/breezewiki](https://gitdab.com/cadence/breezewiki) |
+| **AnonOverflow** | Frontend | Private Stack Overflow viewer | [httpjamesm/anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) |
+| **Scribe** | Frontend | Alternative Medium frontend | [scribe](https://git.sr.ht/~edwardloveall/scribe) |
+| **Odido Booster** | Utility | Automated NL data bundle booster | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) |
 
 > 💡 **Tip: Migrating your data to Invidious**
 > You can easily import your existing data to your private Invidious instance. Navigate to **Settings → Import/Export** to upload:
@@ -109,33 +141,24 @@ The stack features a sophisticated update management system:
 
 ## 🔗 Service Access (After Deploy)
 
-The dashboard provides one-click launch cards for every service at `http://<LAN_IP>:8081`. If you prefer direct access, use the LAN URLs below. When deSEC is configured, HTTPS URLs are available at `https://<service>.<domain>:8443/` (or `https://<domain>:8443/` for the dashboard).
+The dashboard provides one-click launch cards for every service. When deSEC is configured, HTTPS URLs are available at `https://<service>.<domain>:8443/`.
 
-| Service | Local URL | HTTPS (deSEC) | Notes |
-| :--- | :--- | :--- | :--- |
-| Dashboard | `http://<LAN_IP>:8081` | `https://<domain>:8443/` | Management UI and service launcher. |
-| Invidious | `http://<LAN_IP>:3000` | `https://invidious.<domain>:8443/` | VPN-routed; upstream sees VPN IP. |
-| Redlib | `http://<LAN_IP>:8080` | `https://redlib.<domain>:8443/` | VPN-routed; upstream sees VPN IP. |
-| Wikiless | `http://<LAN_IP>:8180` | `https://wikiless.<domain>:8443/` | VPN-routed; upstream sees VPN IP. |
-| Memos | `http://<LAN_IP>:5230` | `https://memos.<domain>:8443/` | Local notes and knowledge base. |
-| AdGuard Home | `http://<LAN_IP>:8083` | `https://adguard.<domain>:8443/` | DNS filtering UI. |
-| WireGuard (WG-Easy) | `http://<LAN_IP>:51821` | `https://wireguard.<domain>:8443/` | VPN management UI. |
-| Portainer | `http://<LAN_IP>:9000` | `https://portainer.<domain>:8443/` | Container management. |
-| VERT | `http://<LAN_IP>:5555` | `https://vert.<domain>:8443/` | GPU acceleration uses `https://vertd.<domain>:8443/`. |
-| Rimgo | `http://<LAN_IP>:3002` | `https://rimgo.<domain>:8443/` | VPN-routed; upstream sees VPN IP. |
-| BreezeWiki | `http://<LAN_IP>:8380` | `https://breezewiki.<domain>:8443/` | VPN-routed; upstream sees VPN IP. |
-| AnonOverflow | `http://<LAN_IP>:8480` | `https://anonymousoverflow.<domain>:8443/` | VPN-routed; upstream sees VPN IP. |
-| Scribe | `http://<LAN_IP>:8280` | `https://scribe.<domain>:8443/` | VPN-routed; upstream sees VPN IP. |
-| Odido Booster | `http://<LAN_IP>:8085` | `https://odido.<domain>:8443/` | NL Odido automated booster UI. |
+| Service | Local URL | HTTPS (deSEC) |
+| :--- | :--- | :--- |
+| Dashboard | `http://<LAN_IP>:8081` | `https://<domain>:8443/` |
+| Invidious | `http://<LAN_IP>:3000` | `https://invidious.<domain>:8443/` |
+| Redlib | `http://<LAN_IP>:8080` | `https://redlib.<domain>:8443/` |
+| Wikiless | `http://<LAN_IP>:8180` | `https://wikiless.<domain>:8443/` |
+| AdGuard Home | `http://<LAN_IP>:8083` | `https://adguard.<domain>:8443/` |
+| WireGuard UI | `http://<LAN_IP>:51821` | `https://wireguard.<domain>:8443/` |
+| Portainer | `http://<LAN_IP>:9000` | `https://portainer.<domain>:8443/` |
 
 <a id="add-your-own-services"></a>
 <details>
 <summary><strong>🔧 Add Your Own Services</strong> (advanced)</summary>
 
-Everything lives in `zima.sh`, so one run rebuilds Docker Compose and the dashboard. Keep the service name consistent everywhere (Compose, monitoring, and UI IDs).
-
 ### 1) Service Definition (Orchestration Layer)
-Locate **SECTION 13** in `zima.sh` (search for `# --- SECTION 13: ORCHESTRATION LAYER`). This is where the `docker-compose.yml` file is generated. Add your service block using the `should_deploy` check to enable selective deployment.
+Locate **SECTION 13** in `zima.sh` (search for `# --- SECTION 13: ORCHESTRATION LAYER`). Add your service block using the `should_deploy` check to enable selective deployment.
 
 ```bash
 if should_deploy "myservice"; then
@@ -153,25 +176,13 @@ fi
 ```
 
 ### 2) Monitoring & Health (Status Logic)
-
 Update the service status loop inside the `WG_API_SCRIPT` heredoc in `zima.sh` (search for `Check individual privacy services status internally`).
 
 - Add `"myservice:1234"` to the `for srv in ...` list.
 - If the service is routed through Gluetun, add `myservice` to the case that maps `TARGET_HOST="gluetun"`.
-- Optional: add a Docker `healthcheck` to surface `Healthy` rather than just `Online`.
 
-### 3) Dashboard Card + Metrics + Portainer
-
-Add a card in the dashboard HTML (SECTION 14 in `zima.sh`):
-
-- Use `id="link-myservice"` and `data-container="myservice"`.
-- Set `data-url="http://$LAN_IP:<port>"` for the LAN link.
-- Add a `portainer-link` chip if you want one-click container management.
-- Add a `metrics-myservice` block if you want CPU/memory chips to show.
-
-### 4) Update Checks (Optional)
-
-The Update banner checks git repos under `/app/sources/<service>`. If you want your service to appear there, keep its source repo in that path with a remote configured. For image-based services, add your mapping to the `SERVICE_REPOS` dictionary in `hub-api`.
+### 3) Dashboard UI
+Add a card in the dashboard HTML (SECTION 14 in `zima.sh`). Use `id="link-myservice"` and `data-container="myservice"`.
 
 </details>
 
@@ -181,55 +192,47 @@ The Update banner checks git repos under `/app/sources/<service>`. If you want y
 | :--- | :--- | :--- |
 | **Processor** | 2 Physical Cores | 4+ Physical Cores (8+ Threads) |
 | **RAM** | 4 GB | 8 GB+ |
-| **Storage** | 20 GB | 40 GB+ (SSD preferred) |
 | **OS** | Linux (Ubuntu/Debian/Alpine) | Linux (Ubuntu/Debian/Alpine) |
 
-### Scaling & Resource Management
-The current configuration is pre-tuned to support up to **30 users** on a machine with 16 GB RAM. Each service is constrained by **Docker Resource Limits** to prevent host exhaustion.
-
-> **Note:** Building containers from source (e.g., Invidious, Wikiless) is intensive. Physical cores significantly improve build speed compared to logical threads.
+The configuration is pre-tuned to support up to **30 users** on a machine with 16 GB RAM. Each service is constrained by **Docker Resource Limits** to prevent host exhaustion.
 
 ## 🌐 Network Configuration
 
 ### 1. Standard Router Setup (Recommended)
-Log in to your main router's admin panel and find the **DHCP Server** or **LAN Settings**.
-*   **Set Primary DNS**: Enter the **Local IP** of your Privacy Hub (e.g., `192.168.1.100`).
-*   **Set Secondary DNS**: Leave empty or set to the same IP. *Do not use Google (8.8.8.8) as a backup, or ads will leak through.*
-
-This ensures all devices on your WiFi/LAN automatically get ad-blocking and privacy protection.
+Set your router's **LAN DNS** to the local IP of your Privacy Hub (e.g., `192.168.1.100`). This ensures all devices on your network automatically use AdGuard Home for filtering.
 
 ### 2. Manual Device Configuration
-If you cannot change router settings, or for specific devices (e.g., work laptop):
-*   **Windows/Mac/Linux**: Go to Network Settings → IPv4 properties → Manually set DNS server to the Privacy Hub's IP.
-*   **Android/iOS**: Set "Configure DNS" to "Manual" in WiFi settings and enter the IP.
-*   **Private DNS (Android/iOS)**: Once deSEC is configured with a valid certificate, you can use `your-domain.dedyn.io` as the "Private DNS" hostname for encrypted protection anywhere.
+If you cannot change router settings, manually set the DNS server in your device's Network Settings to the Privacy Hub's IP. 
 
-### 3. Advanced Router Setup (OpenWrt / Hijacking)
-Some devices (Chromecasts, Smart TVs, IoT) ignore your DHCP DNS and hardcode `8.8.8.8` to bypass filters. You can force them to comply using **DNS Hijacking** (NAT Redirection).
+### 3. Advanced Setup (OpenWrt / Hijacking)
+Some devices hardcode DNS (like `8.8.8.8`) to bypass filters. You can force compliance using **DNS Hijacking** (NAT Redirection).
 
-**The Concept:** Create a firewall rule on your router that intercepts *any* traffic on port 53 (UDP/TCP) coming from the LAN and forcibly redirects it to your AdGuard Home instance. The device thinks it's talking to Google, but your router sends it to the Privacy Hub.
-
-**OpenWrt Resources:**
-*   [OpenWrt Guide: Intercepting DNS](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/intercept_dns)
-*   [OpenWrt Guide: Blocking Public DoH (Port 853)](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/ban_ip)
-
-> **Note:** To block DoH (DNS over HTTPS), you must block port 853 and known DoH server IPs at the firewall level, as these requests look like regular HTTPS traffic.
-
-## 📡 Advanced Setup: OpenWrt & Double NAT
-
-<details>
-<summary><strong>UCI Commands for OpenWrt Configuration</strong></summary>
-
+**OpenWrt UCI Commands:**
 ```bash
-# Static IP, Port Forwarding (51820), and NAT Redirect (53)
+# 1. Static IP Assignment
 uci add dhcp host
 uci set dhcp.@host[-1].name='Privacy-Hub'
-uci set dhcp.@host[-1].mac='00:11:22:33:44:55'
-uci set dhcp.@host[-1].ip='192.168.1.100'
+uci set dhcp.@host[-1].mac='00:11:22:33:44:55' # <--- YOUR MAC
+uci set dhcp.@host[-1].ip='192.168.1.100'      # <--- YOUR IP
 uci commit dhcp
-/etc/init.d/dnsmasq restart
+
+# 2. DNS Hijacking (Redirect all LAN port 53 traffic to the Hub)
+uci add firewall redirect
+uci set firewall.@redirect[-1].name='Forced-DNS'
+uci set firewall.@redirect[-1].src='lan'
+uci set firewall.@redirect[-1].proto='tcpudp'
+uci set firewall.@redirect[-1].src_dport='53'
+uci set firewall.@redirect[-1].dest_ip='192.168.1.100'
+uci set firewall.@redirect[-1].dest_port='53'
+uci set firewall.@redirect[-1].target='DNAT'
+
+# 3. Blocking Public DoH (Closing bypass holes)
+# See OpenWrt 'banIP' or 'simple-adblock' documentation for blocking port 853.
 ```
-</details>
+
+**Resources:**
+*   [OpenWrt: Intercepting DNS](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/intercept_dns)
+*   [OpenWrt: Ban IP addresses (DoH Blocking)](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/ban_ip)
 
 ## 🔒 Security & Privacy
 
@@ -246,18 +249,17 @@ graph TD
     F -->|Request| G[External CDNs]
     G -->|Fontlay/JSDelivr| F
     F -->|Response| E
-    E -->|Save to Disk| H[/assets Volume]
+    E -->|Save to Disk| H["/assets Volume"]
     H --> D
 ```
 
 **Privacy Enforcement:**
 1.  **Isolation**: The host machine never contacts CDNs directly.
 2.  **Proxying**: The `hub-api` container uses the `gluetun` container as an HTTP proxy for all external fetches.
-3.  **Persistence**: Assets are downloaded once and stored in a persistent Docker volume.
-4.  **Local Serving**: The Dashboard (Nginx) serves files exclusively from the local volume.
+3.  **Data Minimization**: Requests use generic User-Agents, preventing host fingerprinting. Upstream providers see a generic Linux client from a VPN IP.
 
-- **Data Minimization**: Requests originate from the isolated `hub-api` container using generic User-Agents, preventing host or browser fingerprinting.
-- **Proton Pass Export**: When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/protonpass_import.csv` for easy import ([See Guide](#proton-pass-import)).
+### Proton Pass Export
+When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/protonpass_import.csv` for easy import ([See Guide](#proton-pass-import)).
 
 <a id="proton-pass-import"></a>
 <details>
