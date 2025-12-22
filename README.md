@@ -221,6 +221,9 @@ To protect your entire network, set your router's **LAN DNS** (not WAN DNS) to t
 Many "smart" devices (TVs, IoT) hardcode their own DNS (like `8.8.8.8`) to bypass local filters. You can "elevate" your setup by creating a **NAT Redirect** rule on your router:
 - **Rule:** Redirect all traffic on port `53` (TCP/UDP) not originating from the Privacy Hub to the Privacy Hub's IP.
 - This forces rogue devices to use your filtered DNS even if they think they are talking to Google or Cloudflare.
+- **Advanced Blocking:** You can also explore blocking or redirecting other DNS ports such as `853` (DNS-over-TLS) or known DoH (DNS-over-HTTPS) endpoints to further close these bypass holes.
+
+> **Note on Network Engineering:** While I personally use OpenWrt to implement these advanced redirects and encourage you to explore these techniques to harden your network, this project is not specifically a network engineering suite. My focus here is on providing the privacy frontends and the DNS filtering core; how you "force" your network to use them is a great area for personal exploration and learning.
 
 > **Note on Certificate Pinning:** While DNS hijacking works for standard DNS, some high-security apps use **Certificate Pinning** combined with hardcoded Encrypted DNS (DoH/DoT) to prevent any interference. In these cases, the app may refuse to connect if it detects its traffic is being rerouted or if it cannot verify the upstream certificate. This is a deliberate security feature of those apps and cannot be bypassed via DNS manipulation.
 
