@@ -167,10 +167,36 @@ Then add the service to the `const services = { ... }` map so the dashboard can 
 ### 4) Watchtower Updates
 
 - Watchtower updates all image-based containers by default.
-- To opt out, add `com.centurylinklabs.watchtower.enable=false` under the service labels.
-- For build-based services, Watchtower won't rebuild; re-run `./zima.sh` or use the dashboard Update flow.
+- It runs once every day at 3 AM.
+- You can trigger a manual check via the "Check" button on the dashboard.
 
-### 5) Dashboard Update Banner (optional)
+### 5) Selective Service Updates
+
+The "Update All" button now opens a selection window:
+- **Granular Control**: Choose exactly which services to update.
+- **Opt-Out**: All available updates are selected by default; uncheck specific ones to skip.
+- **Fetch Status**: Real-time feedback on the update scanning process.
+- **Changelogs**: View "What's New" for each service directly in the dashboard before updating.
+    - **Source Services**: Displays specific git commits (HEAD..upstream).
+    - **Image Services**: Fetches latest release notes from GitHub/Codeberg APIs (e.g., AdGuard, Portainer).
+- **Automated Maintenance**: The update engine automatically performs the following for each selected service:
+    1.  **Backup**: Creates a pre-update backup.
+    2.  **Pull**: Fetches the latest source code or images.
+    3.  **Build**: Rebuilds the container.
+    4.  **Migrate**: Runs necessary database migrations.
+    5.  **Vacuum**: Optimizes the database (VACUUM) if supported.
+
+### 6) Intelligent Rollback
+
+If an update causes issues, the system includes a robust rollback mechanism:
+- **Data Restoration**: Automatically restores the most recent database dump (`.sql` or volume snapshot).
+- **Version Revert**: 
+    - For source builds, resets `git` to the previous commit hash.
+    - For images, instructions are provided to revert tags if needed.
+- **Trigger**: Accessible via the `migrate.sh` helper or manual API call.
+- **Automation**: Migration, backup, and rollback processes are fully automated by the update engine. No manual intervention is required for standard maintenance.
+
+### 7) Logs & Monitoring
 
 The Update banner checks git repos under `/app/sources/<service>`. If you want your service to appear there, keep its source repo in that path with a remote configured.
 
@@ -225,6 +251,10 @@ Many "smart" devices (TVs, IoT) hardcode their own DNS (like `8.8.8.8`) to bypas
 > **Note on Network Engineering:** While I personally use OpenWrt to implement these advanced redirects and encourage you to explore these techniques to harden your network, this project is not specifically a network engineering suite. My focus here is on providing the privacy frontends and the DNS filtering core; how you "force" your network to use them is a great area for personal exploration and learning.
 
 > **Note on Certificate Pinning:** While DNS hijacking works for standard DNS, some high-security apps use **Certificate Pinning** combined with hardcoded Encrypted DNS (DoH/DoT) to prevent any interference. In these cases, the app may refuse to connect if it detects its traffic is being rerouted or if it cannot verify the upstream certificate. This is a deliberate security feature of those apps and cannot be bypassed via DNS manipulation.
+>
+> **Blocking DoH:** To mitigate this, you can block common public DoH/DoT endpoints (port 853 and known DoH IPs on 443) at the firewall level. References for OpenWrt:
+> - [OpenWrt: Intercept DNS](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/intercept_dns)
+> - [OpenWrt: Ban IP addresses](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/ban_ip)
 
 ## 📡 Advanced Setup: OpenWrt & Double NAT
 
@@ -284,7 +314,7 @@ uci commit firewall
 - **HUB_API_KEY**: Required for sensitive dashboard actions. Can be rotated via UI.
 - **Zero-Leaks**: No external <sup>[5](#explainer-5)</sup> or trackers. We never contact Google directly; fonts are downloaded once during setup (or if the cache is missing) via Fontlay ([privacy policy + source code](https://github.com/miroocloud/fontlay)), then served locally so no further font requests leave your machine. (<sup>[5](#explainer-5)</sup>)
 - **Material Design 3**: The dashboard strictly adheres to M3 specifications (`m3.material.io`). Color generation is powered by the [material-color-utilities](https://github.com/material-foundation/material-color-utilities) library (downloaded during setup from `cdn.jsdelivr.net`; [privacy policy](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net)).
-- **CDN Proxying**: To further protect your privacy, all external asset downloads (fonts, MCU library) performed by the Hub API are routed through the **Gluetun VPN proxy**. This ensures that even during setup or updates, your public home IP is never exposed to asset providers or CDNs.
+- **CDN Proxying**: To further protect your privacy, all external asset downloads (fonts, MCU library, changelogs) performed by the Hub API are routed through the **Gluetun VPN proxy**. This ensures that even during setup or updates, your public home IP is never exposed to asset providers or CDNs.
 
 ### External Assets & Libraries
 
