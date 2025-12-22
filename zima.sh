@@ -5350,14 +5350,27 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         </div>
                     </div>
 
-                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
-                        <label for="theme-image-upload" class="btn btn-filled" style="width: 48px; height: 48px; padding: 0; border-radius: 24px; cursor: pointer;" data-tooltip="Pick a wallpaper to extract colors">
-                            <span class="material-symbols-rounded">wallpaper</span>
-                        </label>
-                        <input type="file" id="theme-image-upload" accept="image/*" onchange="extractColorFromImage(event)" style="display: none;">
-                        <div style="flex: 1;">
-                            <span class="label-large">Image Extraction</span>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Generate a theme from any photo</p>
+                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <label for="theme-image-upload" class="btn btn-filled" style="width: 48px; height: 48px; padding: 0; border-radius: 24px; cursor: pointer; flex-shrink: 0;" data-tooltip="Pick a wallpaper to extract colors">
+                                <span class="material-symbols-rounded">wallpaper</span>
+                            </label>
+                            <input type="file" id="theme-image-upload" accept="image/*" onchange="extractColorsFromImage(event)" style="display: none;">
+                            <div style="flex: 1;">
+                                <span class="label-large">Image Extraction</span>
+                                <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Auto-generate a palette from your wallpaper</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Extracted/Manual Palette -->
+                        <div id="extracted-palette" style="display: flex; gap: 12px; flex-wrap: wrap; min-height: 48px; align-items: center;">
+                            <span class="body-small" style="opacity: 0.5; font-style: italic;">Extracted colors will appear here...</span>
+                        </div>
+
+                        <!-- Manual Add -->
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="manual-color-input" class="text-field" placeholder="Add Hex (e.g. #FF0000)" style="border-radius: 8px; height: 40px; padding: 0 12px; font-family: monospace;">
+                            <button onclick="addManualColor()" class="btn btn-tonal" style="height: 40px;">Add</button>
                         </div>
                     </div>
 
@@ -6645,34 +6658,124 @@ cat >> "$DASHBOARD_FILE" <<EOF
             applyThemeColors(colors);
         }
 
-        function extractColorFromImage(event) {
+        async function extractColorsFromImage(event) {
             const file = event.target.files[0];
             if (!file) return;
+            
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 const img = new Image();
-                img.onload = function() {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    ctx.drawImage(img, 0, 0);
-                    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-                    let r = 0, g = 0, b = 0;
-                    const step = Math.max(1, Math.floor(data.length / 4000));
-                    let count = 0;
-                    for (let i = 0; i < data.length; i += step * 4) { 
-                        r += data[i]; g += data[i+1]; b += data[i+2];
-                        count++;
-                    }
-                    const avgHex = rgbToHex(Math.round(r/count), Math.round(g/count), Math.round(b/count));
-                    const picker = document.getElementById('theme-seed-color');
-                    if (picker) picker.value = avgHex;
-                    applySeedColor(avgHex);
-                };
                 img.src = e.target.result;
+                await new Promise(r => img.onload = r);
+
+                // Downscale for performance (max 128x128 is usually enough for color extraction)
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const scale = Math.min(1, 128 / Math.max(img.width, img.height));
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const pixels = imageData.data;
+                const argbPixels = [];
+                
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const r = pixels[i];
+                    const g = pixels[i + 1];
+                    const b = pixels[i + 2];
+                    const a = pixels[i + 3];
+                    if (a < 255) continue; // Skip transparent
+                    // ARGB int format
+                    const argb = (a << 24) | (r << 16) | (g << 8) | b;
+                    argbPixels.push(argb);
+                }
+
+                if (typeof MaterialColorUtilities !== 'undefined' && MaterialColorUtilities.QuantizerCelebi) {
+                    // Use official extraction
+                    const result = MaterialColorUtilities.QuantizerCelebi.quantize(argbPixels, 128);
+                    const ranked = MaterialColorUtilities.Score.score(result);
+                    
+                    // Clear previous
+                    const container = document.getElementById('extracted-palette');
+                    container.innerHTML = '';
+                    
+                    // Take top 4 or all if fewer
+                    const topColors = ranked.slice(0, 5);
+                    if (topColors.length === 0) {
+                        // Fallback to naive average if algo fails
+                        fallbackExtraction(pixels);
+                        return;
+                    }
+
+                    topColors.forEach(argb => {
+                        const hex = hexFromArgb(argb);
+                        addColorChip(hex);
+                    });
+                    
+                    // Auto-select first
+                    applySeedColor(hexFromArgb(topColors[0]));
+                } else {
+                    // Library missing? Fallback
+                    fallbackExtraction(pixels);
+                }
             };
             reader.readAsDataURL(file);
+        }
+
+        function fallbackExtraction(data) {
+            let r = 0, g = 0, b = 0;
+            const step = Math.max(1, Math.floor(data.length / 4000));
+            let count = 0;
+            for (let i = 0; i < data.length; i += step * 4) { 
+                r += data[i]; g += data[i+1]; b += data[i+2];
+                count++;
+            }
+            const avgHex = rgbToHex(Math.round(r/count), Math.round(g/count), Math.round(b/count));
+            const container = document.getElementById('extracted-palette');
+            container.innerHTML = '';
+            addColorChip(avgHex);
+            applySeedColor(avgHex);
+        }
+
+        function addManualColor() {
+            const input = document.getElementById('manual-color-input');
+            let val = input.value.trim();
+            if (!val.startsWith('#')) val = '#' + val;
+            if (/^#[0-9A-F]{6}$/i.test(val)) {
+                // Clear placeholder text if it exists
+                const container = document.getElementById('extracted-palette');
+                if (container.querySelector('span')) container.innerHTML = '';
+                
+                addColorChip(val);
+                applySeedColor(val);
+                input.value = '';
+            } else {
+                alert("Invalid Hex Code");
+            }
+        }
+
+        function addColorChip(hex) {
+            const container = document.getElementById('extracted-palette');
+            // Remove placeholder
+            const placeholder = container.querySelector('span');
+            if (placeholder) placeholder.remove();
+
+            const chip = document.createElement('div');
+            chip.style.width = '40px';
+            chip.style.height = '40px';
+            chip.style.borderRadius = '20px';
+            chip.style.backgroundColor = hex;
+            chip.style.cursor = 'pointer';
+            chip.style.border = '2px solid var(--md-sys-color-outline-variant)';
+            chip.style.transition = 'transform 0.2s';
+            chip.title = "Apply " + hex;
+            
+            chip.onmouseover = () => chip.style.transform = 'scale(1.1)';
+            chip.onmouseout = () => chip.style.transform = 'scale(1)';
+            chip.onclick = () => applySeedColor(hex);
+            
+            container.appendChild(chip);
         }
 
         function rgbToHex(r, g, b) {
