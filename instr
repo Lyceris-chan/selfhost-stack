@@ -30,6 +30,10 @@ COMPLETED TASKS & SYSTEM STATUS:
 28. Settings Cog Polish: Improved visual state (0.5 opacity rest, 1.0 hover) and modal typography.
 29. Metrics Logic: Fixed CPU/RAM percentage calculation in the service management modal.
 30. Verification Expansion: Scaled to a 100-step comprehensive framework in VERIFICATION_100.md.
+31. System Health UI: Added a dedicated card next to logs for system health (CPU, RAM, Uptime, Project Disk Space, Drive Status).
+32. Backend Metrics: Integrated psutil into hub-api for robust system monitoring.
+33. M3 State Layers: Refined hover/active states for buttons and chips using strict M3 opacity tokens to prevent blending.
+34. API Fixed: Resolved 404/502 errors by fixing proxy paths and authentication requirements for logs and metrics.
 
 15-METHOD VERIFICATION FRAMEWORK:
 ==========================================================

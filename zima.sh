@@ -1558,6 +1558,7 @@ mkdir -p "$SRC_DIR/hub-api"
 cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
 FROM dhi.io/python:3.11-alpine3.22-dev
 RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git
+RUN pip install --no-cache-dir psutil
 WORKDIR /app
 CMD ["python", "server.py"]
 EOF
@@ -2219,6 +2220,7 @@ import sqlite3
 import threading
 import urllib.request
 import urllib.parse
+import psutil
 
 PORT = 55555
 PROFILES_DIR = "/profiles"
@@ -2263,7 +2265,7 @@ def metrics_collector():
     while True:
         try:
             res = subprocess.run(
-                ['docker', 'stats', '--no-stream', '--format', '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemLimit}}'],
+                ['docker', 'stats', '--no-stream', '--format', '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'],
                 capture_output=True, text=True, timeout=30
             )
             if res.returncode == 0:
@@ -2272,8 +2274,8 @@ def metrics_collector():
                 for line in res.stdout.strip().split('\n'):
                     if not line: continue
                     parts = line.split('\t')
-                    if len(parts) == 4:
-                        name, cpu_str, mem_use_str, mem_lim_str = parts
+                    if len(parts) == 3:
+                        name, cpu_str, mem_combined = parts
                         cpu = float(cpu_str.replace('%', ''))
                         
                         def to_mb(val):
@@ -2284,8 +2286,9 @@ def metrics_collector():
                             if 'B' in val: return float(val.replace('B', '')) / 1024 / 1024
                             return 0.0
 
-                        mem_usage = to_mb(mem_use_str.split(' / ')[0])
-                        mem_limit = to_mb(mem_lim_str)
+                        mem_parts = mem_combined.split(' / ')
+                        mem_usage = to_mb(mem_parts[0])
+                        mem_limit = to_mb(mem_parts[1]) if len(mem_parts) > 1 else 0.0
                         
                         c.execute("INSERT INTO metrics (container, cpu_percent, mem_usage, mem_limit) VALUES (?, ?, ?, ?)",
                                   (name, cpu, mem_usage, mem_limit))
@@ -2466,7 +2469,8 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
 
     def _check_auth(self):
         # Allow certain GET endpoints without auth for the dashboard
-        if self.command == 'GET' and self.path in ['/', '/status', '/profiles', '/containers', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates', '/master-update']:
+        base_path = self.path.split('?')[0]
+        if self.command == 'GET' and base_path in ['/', '/status', '/profiles', '/containers', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates', '/master-update', '/logs', '/system-health']:
             return True
         
         # Watchtower notification (comes from docker network, simple path check)
@@ -2487,7 +2491,42 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"error": "Unauthorized"}, 401)
             return
 
-        if self.path == '/status':
+        elif self.path == '/system-health':
+            try:
+                # System Uptime
+                uptime_seconds = time.time() - psutil.boot_time()
+                
+                # CPU & RAM
+                cpu_usage = psutil.cpu_percent(interval=None)
+                ram = psutil.virtual_memory()
+                
+                # Disk Health (Root Partition)
+                disk = psutil.disk_usage('/')
+                
+                # Project Size (Approximate via du)
+                project_size_bytes = 0
+                try:
+                    # In container, the project root is mapped to /app (containing docker-compose.yml, sources, etc)
+                    # BASE_DIR is /DATA/AppData/privacy-hub on host, mapped to /app in hub-api
+                    res = subprocess.run(['du', '-sb', '/app'], capture_output=True, text=True, timeout=10)
+                    if res.returncode == 0:
+                        project_size_bytes = int(res.stdout.split()[0])
+                except: pass
+
+                health_data = {
+                    "uptime": uptime_seconds,
+                    "cpu_percent": cpu_usage,
+                    "ram_used": ram.used / (1024 * 1024),
+                    "ram_total": ram.total / (1024 * 1024),
+                    "disk_used": disk.used / (1024 * 1024 * 1024),
+                    "disk_total": disk.total / (1024 * 1024 * 1024),
+                    "project_size": project_size_bytes / (1024 * 1024),
+                    "drive_status": "Healthy" if disk.percent < 90 else "Warning (High Usage)"
+                }
+                self._send_json(health_data)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/status':
             try:
                 result = subprocess.run([CONTROL_SCRIPT, "status"], capture_output=True, text=True, timeout=30)
                 output = result.stdout.strip()
@@ -3884,19 +3923,20 @@ cat > "$DASHBOARD_FILE" <<EOF
             border-radius: inherit;
             background: var(--md-sys-color-on-surface);
             opacity: 0;
-            transition: opacity var(--md-sys-duration-short) linear;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
             pointer-events: none;
             z-index: 1;
         }
         
         .card:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        .card:active::before { opacity: var(--md-sys-state-pressed-opacity); }
+
         .card:hover { 
             background: var(--md-sys-color-surface-container);
             box-shadow: var(--md-sys-elevation-2);
             transform: translateY(-4px);
         }
         
-        .card:active::before { opacity: var(--md-sys-state-pressed-opacity); }
         .card.full-width { grid-column: 1 / -1; }
         
         .card-header {
@@ -3917,7 +3957,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             flex: 1;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
+            white-space: normal;
         }
 
         .card-header-actions {
@@ -3967,12 +4007,10 @@ cat > "$DASHBOARD_FILE" <<EOF
         .chip-box { 
             display: flex; 
             gap: 8px; 
-            flex-wrap: nowrap; 
-            overflow-x: auto;
+            flex-wrap: wrap; 
             padding-top: 12px;
             position: relative;
             z-index: 2;
-            scrollbar-width: none;
         }
         .chip-box::-webkit-scrollbar { display: none; }
         
@@ -4002,16 +4040,18 @@ cat > "$DASHBOARD_FILE" <<EOF
             pointer-events: none;
         }
         
-        .chip::before {
+        .chip::before, .btn::before {
             content: '';
             position: absolute;
             inset: 0;
             background: currentColor;
             opacity: 0;
             transition: opacity var(--md-sys-motion-duration-short) linear;
+            pointer-events: none;
         }
         
-        .chip:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        .chip:hover::before, .btn:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        .chip:active::before, .btn:active::before { opacity: var(--md-sys-state-pressed-opacity); }
         
         .chip.vpn { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border: none; }
         .chip.admin { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border: none; }
@@ -4097,17 +4137,6 @@ cat > "$DASHBOARD_FILE" <<EOF
             text-decoration: none;
             font-family: inherit;
         }
-        
-        .btn::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: currentColor;
-            opacity: 0;
-            transition: opacity var(--md-sys-motion-duration-short) linear;
-        }
-        
-        .btn:hover::before { opacity: 0.08; }
         
         .btn-filled { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); box-shadow: var(--md-sys-elevation-1); }
         .btn-tonal { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
@@ -4522,7 +4551,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 </div>
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box">
-                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance</span>
+                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance -></span>
                     <button onclick="migrateService('invidious', 'migrate', 'yes', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Perform database migration and maintenance."><span class="material-symbols-rounded">database_upload</span> Migrate DB</button>
                     <button onclick="migrateService('invidious', 'clear-logs', 'no', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Clear Invidious application logs."><span class="material-symbols-rounded">delete_sweep</span> Clear Logs</button>
                     <div id="metrics-invidious" class="chip-box" style="padding-top:0; display:none;">
@@ -4541,7 +4570,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance</span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance -></span>
                     <div id="metrics-redlib" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4557,7 +4586,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance</span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance -></span>
                     <div id="metrics-wikiless" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4592,7 +4621,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance</span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance -></span>
                     <div id="metrics-rimgo" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4608,7 +4637,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance</span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance -></span>
                     <div id="metrics-scribe" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4624,7 +4653,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance</span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance -></span>
                     <div id="metrics-breezewiki" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4640,7 +4669,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance</span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance -></span>
                     <div id="metrics-anonymousoverflow" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4962,65 +4991,41 @@ cat >> "$DASHBOARD_FILE" <<EOF
         <div class="section-label">System & Logs</div>
         <div class="grid-2">
             <div class="card">
-                <h3>Theme Customization</h3>
-                <p class="body-medium description">Personalize the dashboard appearance using Material Design 3 dynamic color principles.</p>
-                <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <input type="color" id="theme-seed-color" onchange="applySeedColor(this.value)" style="width: 48px; height: 48px; border: none; border-radius: 12px; cursor: pointer; background: transparent;" data-tooltip="Select a seed color to generate a custom M3 theme.">
-                        <div style="flex: 1;">
-                            <span class="body-medium" style="font-weight: 600;">Seed Color</span>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Manually select a primary color</p>
+                <div class="card-header">
+                    <h3>System Health</h3>
+                    <div class="card-header-actions">
+                        <div class="status-indicator" id="health-status-indicator" style="background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant);">
+                            <span class="status-dot up" id="health-dot"></span>
+                            <span class="status-text" id="health-text">Optimal</span>
                         </div>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <label for="theme-image-upload" class="btn btn-tonal" style="width: 48px; height: 48px; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer;" data-tooltip="Upload an image to extract its dominant color for the theme.">
-                            <span class="material-symbols-rounded">image</span>
-                        </label>
-                        <input type="file" id="theme-image-upload" accept="image/*" onchange="extractColorFromImage(event)" style="display: none;">
-                        <div style="flex: 1;">
-                            <span class="body-medium" style="font-weight: 600;">Image Source</span>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Extract colors from a wallpaper</p>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1;">
+                    <div class="stat-row"><span class="stat-label">System CPU</span><span class="stat-value" id="sys-cpu">0%</span></div>
+                    <div class="metric-bar"><div id="sys-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
+                    
+                    <div class="stat-row" style="margin-top:8px;"><span class="stat-label">System RAM</span><span class="stat-value" id="sys-ram">0 / 0 MB</span></div>
+                    <div class="metric-bar"><div id="sys-ram-fill" class="metric-fill" style="width: 0%"></div></div>
+
+                    <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 4px;">
+                            <span class="body-small" style="opacity: 0.7;">Project Size</span>
+                            <span class="label-large" id="sys-project-size">-- MB</span>
+                        </div>
+                        <div style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 4px;">
+                            <span class="body-small" style="opacity: 0.7;">System Uptime</span>
+                            <span class="label-large" id="sys-uptime">--</span>
                         </div>
                     </div>
-                    <div style="text-align: right; margin-top: 8px;">
-                        <button onclick="saveThemeSettings()" class="btn btn-filled" data-tooltip="Permanently save these theme settings to the server.">Save Theme</button>
+
+                    <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="material-symbols-rounded" style="font-size: 20px; color: var(--md-sys-color-primary);">hard_drive</span>
+                            <span class="body-medium">Drive Health: <strong id="sys-drive-status">Checking...</strong></span>
+                        </div>
+                        <span class="body-small" id="sys-disk-percent">--% used</span>
                     </div>
                 </div>
-            </div>
-            <div class="card">
-                <h3>System Information</h3>
-                <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
-                <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace">/DATA/AppData/privacy-hub/.secrets</span></div>
-                <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace">/DATA/AppData/privacy-hub/config</span></div>
-                <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
-                <div class="stat-row"><span class="stat-label">Privacy Masking</span><span class="stat-value">Active (Local)</span></div>
-                <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
-                    <button onclick="checkUpdates()" class="btn btn-tonal" style="width: 100%;" data-tooltip="Manually trigger a check for image updates (via Watchtower) and source code updates.">
-                        <span class="material-symbols-rounded">system_update_alt</span>
-                        Check for Updates
-                    </button>
-                    <button onclick="updateAllServices()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="All Updates: Pulls latest images and source code for the entire stack.">
-                        <span class="material-symbols-rounded">upgrade</span>
-                        Update All Services
-                    </button>
-                    <p class="body-small" style="color: var(--md-sys-color-on-surface-variant); margin-top: -4px;">
-                        Note: Mass updates may significantly increase system load during builds.
-                    </p>
-                    <button onclick="restartStack()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Reboot all containers in the stack. This takes ~30 seconds and is required for manual .secrets changes to take effect.">
-                        <span class="material-symbols-rounded">restart_alt</span>
-                        Restart Stack
-                    </button>
-                    <button onclick="rotateApiKey()" class="btn btn-tonal" style="width: 100%;" data-tooltip="Update the HUB_API_KEY used for dashboard authentication.">
-                        <span class="material-symbols-rounded">key_visualizer</span>
-                        Rotate API Key
-                    </button>
-                    <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">
-                        Note: Changes to .secrets may require a stack restart to take full effect.
-                    </p>
-                </div>
-                <p class="body-small" style="margin-top: auto; padding-top: 16px; color: var(--md-sys-color-on-surface-variant);">
-                    See the <a href="https://github.com/Lyceris-chan/selfhost-stack#credentials" target="_blank" style="color: var(--md-sys-color-primary);">README</a> for full details on obtaining required credentials.
-                </p>
             </div>
             <div class="card">
                 <div class="card-header">
@@ -5077,7 +5082,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         // Prevent extension injection errors
         globalThis.configureInjection = globalThis.configureInjection || (() => {});
 
-        const API = ""; 
+        const API = "/api"; 
         const ODIDO_API = "/odido-api/api";
         
         // Global State & Data
@@ -6437,6 +6442,43 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
         }
         
+        async function fetchSystemHealth() {
+            try {
+                const res = await fetch(API + "/system-health");
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                document.getElementById('sys-cpu').textContent = data.cpu_percent.toFixed(1) + "%";
+                document.getElementById('sys-cpu-fill').style.width = Math.min(100, data.cpu_percent) + "%";
+                
+                document.getElementById('sys-ram').textContent = Math.round(data.ram_used) + " / " + Math.round(data.ram_total) + " MB";
+                document.getElementById('sys-ram-fill').style.width = Math.min(100, (data.ram_used / data.ram_total) * 100) + "%";
+                
+                document.getElementById('sys-project-size').textContent = data.project_size.toFixed(1) + " MB";
+                document.getElementById('sys-drive-status').textContent = data.drive_status;
+                document.getElementById('sys-disk-percent').textContent = ((data.disk_used / data.disk_total) * 100).toFixed(1) + "% used";
+                
+                const uptime = data.uptime;
+                const days = Math.floor(uptime / 86400);
+                const hours = Math.floor((uptime % 86400) / 3600);
+                const mins = Math.floor((uptime % 3600) / 60);
+                let uptimeStr = "";
+                if (days > 0) uptimeStr += days + "d ";
+                uptimeStr += hours + "h " + mins + "m";
+                document.getElementById('sys-uptime').textContent = uptimeStr;
+
+                const healthDot = document.getElementById('health-dot');
+                const healthText = document.getElementById('health-text');
+                if (data.drive_status === "Healthy" && (data.ram_used / data.ram_total) < 0.9) {
+                    healthDot.className = "status-dot up";
+                    healthText.textContent = "Optimal";
+                } else {
+                    healthDot.className = "status-dot down";
+                    healthText.textContent = "Degraded";
+                }
+            } catch(e) {}
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             // Load deSEC config if available
             fetch(API + "/status").then(r => r.json()).then(data => {
@@ -6515,8 +6557,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
             initPrivacyMode();
             initTheme();
             fetchContainerIds();
-            fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates(); fetchMetrics(); loadThemeSettings();
+            fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates(); fetchMetrics(); loadThemeSettings(); fetchSystemHealth();
             setInterval(fetchStatus, 15000);
+            setInterval(fetchSystemHealth, 15000);
             setInterval(fetchMetrics, 30000);
             setInterval(fetchUpdates, 300000); // Check for source updates every 5 mins
             setInterval(fetchOdidoStatus, 60000);  // Reduced polling frequency to respect Odido API
