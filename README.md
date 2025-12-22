@@ -98,29 +98,13 @@ The stack features a sophisticated update management system:
 *   **Safety First**: The system automatically creates database backups before applying any updates.
 *   **Rollback**: If an update fails, you can restore data from the automatically generated backups via the `migrate.sh` helper.
 
-## 📦 Included Services
+| [Scribe](https://git.sr.ht/~edwardloveall/scribe) | Frontend | Alternative Medium frontend |
+| [Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster) | Utility | Automated data bundle booster (NL Odido) |
 
-| Service | Category | Purpose |
-| :--- | :--- | :--- |
-| **[Invidious](https://github.com/iv-org/invidious)** | Privacy Frontend | Anonymous YouTube browsing (No ads/tracking) |
-| **[Redlib](https://github.com/redlib-org/redlib)** | Privacy Frontend | Lightweight Reddit interface |
-| **[Wikiless](https://github.com/Metastem/Wikiless)** | Privacy Frontend | Private Wikipedia access |
-| **[Memos](https://github.com/usememos/memos)** | Utility | Private knowledge base & note-taking |
-| **[AdGuard Home](https://github.com/AdguardTeam/AdGuardHome)** | Infrastructure | Network-wide DNS filtering & Ad-blocking |
-| **[WireGuard (WG-Easy)](https://github.com/wg-easy/wg-easy)** | Infrastructure | Secure remote access gateway |
-| **[Portainer](https://github.com/portainer/portainer)** | Management | Advanced container orchestration |
-| **[VERT](https://github.com/vert-sh/vert)** | Utility | Local file conversion with optional GPU acceleration |
-| **[Rimgo](https://codeberg.org/rimgo/rimgo)** | Privacy Frontend | Lightweight Imgur interface |
-| **[BreezeWiki](https://gitdab.com/cadence/breezewiki)** | Privacy Frontend | De-fandomized Wikipedia/Wiki interface |
-| **[AnonymousOverflow](https://github.com/httpjamesm/anonymousoverflow)** | Privacy Frontend | Privacy-focused Stack Overflow viewer |
-| **[Scribe](https://git.sr.ht/~edwardloveall/scribe)** | Privacy Frontend | Alternative Medium frontend |
-| Odido Booster | Utility | Automated data bundle booster (NL Odido) |
-
-> 💡 **Invidious Migration Tip**: You can easily migrate your data to your private Invidious instance. Navigate to **Settings → Import/Export** to upload:
+> 💡 **Tip: Migrating your data to Invidious**
+> You can easily import your existing data to your private Invidious instance. Navigate to **Settings → Import/Export** to upload:
 > *   **Invidious Data**: JSON backup from another instance.
-> *   **YouTube Subscriptions**: CSV or OPML files.
-> *   **YouTube Playlists**: `.csv` exports.
-> *   **YouTube Watch History**: `.json` data.
+> *   **YouTube**: Subscriptions (CSV/OPML), Playlists (CSV), or Watch History (JSON).
 > *   **Other Clients**: FreeTube (`.db`) or NewPipe (`.json`/`.zip`) subscriptions and data.
 
 ## 🔗 Service Access (After Deploy)
