@@ -267,6 +267,12 @@ setup_fonts() {
     download_css "$FONTS_DIR/cc.css" "$URL_CC" CC_CSS_URL
     download_css "$FONTS_DIR/ms.css" "$URL_MS" MS_CSS_URL
 
+    # Material Color Utilities (Local for privacy)
+    log_info "Downloading Material Color Utilities..."
+    if ! curl -fsSL "https://cdn.jsdelivr.net/npm/@material/material-color-utilities/dist/index.min.js" -o "$FONTS_DIR/mcu.js"; then
+        log_warn "Failed to download Material Color Utilities. Using fallback logic."
+    fi
+
     # Parse and download woff2 files for each CSS file
     cd "$FONTS_DIR"
     declare -A CSS_ORIGINS
@@ -3623,6 +3629,7 @@ cat > "$DASHBOARD_FILE" <<EOF
     <link href="fonts/gs.css" rel="stylesheet">
     <link href="fonts/cc.css" rel="stylesheet">
     <link href="fonts/ms.css" rel="stylesheet">
+    <script src="fonts/mcu.js"></script>
     <style>
         /* ============================================
            Material 3 Dark Theme - Strict Implementation
@@ -6113,34 +6120,68 @@ cat >> "$DASHBOARD_FILE" <<EOF
             return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
         }
 
+        function hexFromArgb(argb) {
+            const r = (argb >> 16) & 255;
+            const g = (argb >> 8) & 255;
+            const b = argb & 255;
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
         function generateM3Palette(seedHex) {
-            const rgb = hexToRgb(seedHex);
-            const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
-            
+            if (typeof MaterialColorUtilities === 'undefined') {
+                // Fallback if library fails to load
+                const rgb = hexToRgb(seedHex);
+                const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+                return {
+                    primary: seedHex,
+                    onPrimary: hsl.l > 0.6 ? '#000000' : '#ffffff',
+                    primaryContainer: hslToHex(hsl.h, hsl.s, Math.min(0.9, hsl.l + 0.3)),
+                    onPrimaryContainer: hslToHex(hsl.h, hsl.s, Math.max(0.1, hsl.l - 0.4)),
+                    secondary: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, hsl.l),
+                    onSecondary: hsl.l > 0.6 ? '#000000' : '#ffffff',
+                    secondaryContainer: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, Math.min(0.9, hsl.l + 0.3)),
+                    onSecondaryContainer: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, Math.max(0.1, hsl.l - 0.4)),
+                    error: '#ba1a1a',
+                    onError: '#ffffff'
+                };
+            }
+
+            const argb = MaterialColorUtilities.argbFromHex(seedHex);
+            const isDark = !document.documentElement.classList.contains('light-mode');
+            const theme = MaterialColorUtilities.themeFromSourceColor(argb);
+            const scheme = isDark ? theme.schemes.dark : theme.schemes.light;
+
             return {
-                primary: seedHex,
-                onPrimary: hsl.l > 0.6 ? '#000000' : '#ffffff',
-                primaryContainer: hslToHex(hsl.h, hsl.s, Math.min(0.9, hsl.l + 0.3)),
-                onPrimaryContainer: hslToHex(hsl.h, hsl.s, Math.max(0.1, hsl.l - 0.4)),
-                secondary: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, hsl.l),
-                onSecondary: hsl.l > 0.6 ? '#000000' : '#ffffff',
-                secondaryContainer: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, Math.min(0.9, hsl.l + 0.3)),
-                onSecondaryContainer: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, Math.max(0.1, hsl.l - 0.4)),
-                error: '#ba1a1a',
-                onError: '#ffffff'
+                primary: hexFromArgb(scheme.primary),
+                onPrimary: hexFromArgb(scheme.onPrimary),
+                primaryContainer: hexFromArgb(scheme.primaryContainer),
+                onPrimaryContainer: hexFromArgb(scheme.onPrimaryContainer),
+                secondary: hexFromArgb(scheme.secondary),
+                onSecondary: hexFromArgb(scheme.onSecondary),
+                secondaryContainer: hexFromArgb(scheme.secondaryContainer),
+                onSecondaryContainer: hexFromArgb(scheme.onSecondaryContainer),
+                tertiary: hexFromArgb(scheme.tertiary),
+                onTertiary: hexFromArgb(scheme.onTertiary),
+                tertiaryContainer: hexFromArgb(scheme.tertiaryContainer),
+                onTertiaryContainer: hexFromArgb(scheme.onTertiaryContainer),
+                error: hexFromArgb(scheme.error),
+                onError: hexFromArgb(scheme.onError),
+                errorContainer: hexFromArgb(scheme.errorContainer),
+                onErrorContainer: hexFromArgb(scheme.onErrorContainer),
+                outline: hexFromArgb(scheme.outline),
+                outlineVariant: hexFromArgb(scheme.outlineVariant),
+                surface: hexFromArgb(scheme.surface),
+                onSurface: hexFromArgb(scheme.onSurface),
+                surfaceVariant: hexFromArgb(scheme.surfaceVariant),
+                onSurfaceVariant: hexFromArgb(scheme.onSurfaceVariant)
             };
         }
 
         function applyThemeColors(colors) {
             const root = document.documentElement;
-            root.style.setProperty('--md-sys-color-primary', colors.primary);
-            root.style.setProperty('--md-sys-color-on-primary', colors.onPrimary);
-            root.style.setProperty('--md-sys-color-primary-container', colors.primaryContainer);
-            root.style.setProperty('--md-sys-color-on-primary-container', colors.onPrimaryContainer);
-            root.style.setProperty('--md-sys-color-secondary', colors.secondary);
-            root.style.setProperty('--md-sys-color-on-secondary', colors.onSecondary);
-            root.style.setProperty('--md-sys-color-secondary-container', colors.secondaryContainer);
-            root.style.setProperty('--md-sys-color-on-secondary-container', colors.onSecondaryContainer);
+            for (const [key, value] of Object.entries(colors)) {
+                root.style.setProperty('--md-sys-color-' + key.replace(/[A-Z]/g, m => "-" + m.toLowerCase()), value);
+            }
         }
 
         async function saveThemeSettings() {
@@ -6224,7 +6265,14 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const isLight = document.documentElement.classList.toggle('light-mode');
             localStorage.setItem('theme', isLight ? 'light' : 'dark');
             updateThemeIcon();
-            showSnackbar(\`Switched to \${isLight ? 'Light' : 'Dark'} mode\`);
+            
+            // Regenerate palette for new mode if seed exists
+            const picker = document.getElementById('theme-seed-color');
+            if (picker && picker.value) {
+                applySeedColor(picker.value);
+            }
+            
+            showSnackbar(`Switched to ${isLight ? 'Light' : 'Dark'} mode`);
         }
 
         function updateThemeIcon() {
