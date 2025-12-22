@@ -18,25 +18,45 @@ COMPLETED TASKS & SYSTEM STATUS:
 16. Tooltip Engine: Rewritten with M3-compliant 150ms delay and robust transition handling to prevent flickering or "stuck" tooltips.
 17. Header Action Ordering: Swapped Cog and Arrow positions to [Status] [Cog] [Arrow] for superior visual flow and clarity.
 18. Log Expansion: Updated Log Container to use flex-grow: 1, ensuring logs occupy all available card space.
-19. Informative Loading: Replaced generic "Loading..." indicators with rich M3 loading boxes featuring centered spinners and descriptive text.
-20. Privacy Clarification: Renamed "Safe Display" to "Privacy Masking: Active (Local)" to improve user understanding.
+19. Informative Loading: Replaced generic "Loading..." indicators with rich M3 loading boxes featuring centered spinners and descriptive body-medium text.
+20. Privacy Clarification: Renamed "Safe Display" to "Privacy Masking" throughout UI and README to improve user understanding.
 21. API Monitoring: Integrated global API status indicator in the header to prevent UI from appearing "stuck" during backend connection.
 22. Syntax Integrity: Fixed recursive code duplication and missing braces that caused "Unexpected end of input" errors.
+23. Scaling Documentation: Updated README with explicit Core/Thread differentiation and scaling recommendations for up to 30+ users.
+24. Advanced Network Docs: Added detailed guides for DNS Hijacking (NAT Redirect), port 853 (DoT/DoQ), and port 443 (DoH) with OpenWrt UCI commands.
 
-DASHBOARD COG FUNCTIONALITY:
+15-METHOD VERIFICATION FRAMEWORK:
 ==========================================================
-The settings cog triggers a Service Modal providing:
-- Real-time CPU/Memory metrics for the specific container.
-- "Update Service" button (Specific source pull + Rebuild).
-- "View in Portainer" deep link to the container ID.
-- Specialized maintenance buttons (Migrate DB, Clear Logs, Optimize DB).
+[ARCHITECTURE & DEPLOYMENT]
+1.  BASH Syntax & Linting: Checked with 'bash -n' and 'shellcheck' for script quality.
+2.  Argument Parsing: Verified 'getopts' correctly handles flags (-p, -y, -c, -x, -s).
+3.  Resource Limit Check: Inspected 'docker-compose.yml' for CPU/Memory caps (capped at ~7.5GB RAM).
 
-FINAL VERIFICATION (CODE AGENT CHECK):
+[UI/UX - MATERIAL 3]
+4.  Header Standardization: Verified [Status][Cog][Arrow] ordering on all 14 service cards.
+5.  M3 Token Compliance: Confirmed CSS usage of primary/secondary color tokens and rounded corners.
+6.  Tooltip Robustness: Tested 150ms delay and non-overlapping box logic via JS inspection.
+7.  Typography Review: Confirmed 'body-medium' detail text in loading boxes for better space utilization.
+
+[PRIVACY & SECURITY]
+8.  Privacy Masking: Verified 'sensitive' class blur effects and updated 'Privacy Masking' terminology.
+9.  Secret Isolation: Confirmed '.secrets' file generation without exposing credentials in deployment logs.
+10. Asset Privacy: Verified zero external CDN calls; all assets (fonts/icons) served from local 'fonts/' directory.
+
+[NETWORK & DNS]
+11. DNS Redirection: Verified README documentation for Port 53/853/443 hijacking.
+12. Advanced Protocol Support: Confirmed inclusion of DOQ, DoH, and DoT notes in network hardening section.
+
+[ROBUSTNESS & ERROR HANDLING]
+13. API Monitoring: Verified 'api-dot' correctly reflects backend connectivity and clears 'Initializing' states on failure.
+14. Container Health Loop: Confirmed 'starting' -> 'healthy' transition logic in 'fetchStatus' JS.
+15. Loading Transitions: Verified 'finally' blocks correctly hide loaders (Odido, SSL, Logs) after data fetch.
+
+FINAL STATUS:
 ==========================================================
-- [✓] BASH: Passed shellcheck and bash -n syntax parsing.
-- [✓] UI: Confirmed element ordering, M3 token integration, and layout robustness.
-- [✓] API: Verified endpoint connectivity and background thread safety.
-- [✓] ARCHITECTURE: Verified global state management and update engine fail-safes.
+- [✓] BASH: Passed static analysis and local execution.
+- [✓] UI: Standardized, M3 compliant, and robust.
+- [✓] API: Verified endpoint connectivity and error recovery.
 - [✓] STATUS: System verified as proper and working as intended.
 
 rules are strictly follow m3.material.io for the rules besides for my font choice keep their rules to the styling of the fonts and everything
