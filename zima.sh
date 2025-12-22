@@ -974,7 +974,7 @@ $DOCKER_CMD pull -q qmcgaw/gluetun:latest > /dev/null
 cat > "$GLUETUN_ENV_FILE" <<EOF
 VPN_SERVICE_PROVIDER=custom
 VPN_TYPE=wireguard
-HTTP_PROXY=on
+HTTPPROXY=on
 FIREWALL_VPN_INPUT_PORTS=8080,8180,3000,3002,8280,10416,8480
 FIREWALL_OUTBOUND_SUBNETS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 EOF
@@ -2273,6 +2273,7 @@ import threading
 import urllib.request
 import urllib.parse
 import psutil
+import socket
 
 PORT = 55555
 CONFIG_DIR = "/app"
@@ -3298,7 +3299,7 @@ if __name__ == "__main__":
     # Wait for Gluetun proxy to be ready
     print("Waiting for proxy...", flush=True)
     proxy_ready = False
-    for _ in range(30):
+    for _ in range(60):
         try:
             with socket.create_connection(("gluetun", 8888), timeout=2):
                 proxy_ready = True
@@ -3409,6 +3410,8 @@ cat >> "$COMPOSE_FILE" <<EOF
       interval: 20s
       timeout: 10s
       retries: 5
+    depends_on:
+      gluetun: {condition: service_healthy}
     restart: unless-stopped
     deploy:
       resources:
