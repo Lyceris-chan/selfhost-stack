@@ -4457,7 +4457,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                         <span class="status-text" id="api-text">API: ...</span>
                     </div>
                     <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for safe display">
-                        <span class="label-large">Safe Display Mode</span>
+                        <span class="label-large">Privacy Masking</span>
                         <div class="switch-track">
                             <div class="switch-thumb"></div>
                         </div>
@@ -4723,7 +4723,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                         <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                         <div style="display: flex; flex-direction: column; gap: 2px;">
                             <span style="font-weight: 600;">Verifying Pipeline</span>
-                            <span class="body-small" style="opacity: 0.8; white-space: normal;">Checking SSL certificate validity and issuance status...</span>
+                            <span class="body-medium" style="opacity: 0.8; white-space: normal;">Checking SSL certificate validity and issuance status...</span>
                         </div>
                     </div>
                 </div>
@@ -4839,7 +4839,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                         <div style="display: flex; flex-direction: column; gap: 2px;">
                             <span style="font-weight: 600;">Synchronizing Data</span>
-                            <span class="body-small" style="opacity: 0.8; white-space: normal;">Connecting to Odido API to retrieve latest bundle status...</span>
+                            <span class="body-medium" style="opacity: 0.8; white-space: normal;">Connecting to Odido API to retrieve latest bundle status...</span>
                         </div>
                     </div>
                 </div>
@@ -4879,7 +4879,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div id="profile-list" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; min-height: 100px;">
                     <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
                         <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        <span class="body-small">Scanning Profiles...</span>
+                        <span class="body-medium">Scanning Profiles...</span>
                     </div>
                 </div>
                 <p class="body-small profile-hint" style="margin-top: auto; padding-top: 12px;">Click name to activate.</p>
@@ -4926,7 +4926,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             <div class="card">
                 <div class="card-header">
                     <h3>System & Deployment Logs</h3>
-                    <div style="display: flex; gap: 8px;">
+                    <div class="card-header-actions">
                         <select id="log-filter-level" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 8px; font-size: 12px; border-radius: 8px;">
                             <option value="ALL">All Levels</option>
                             <option value="INFO">Info</option>
@@ -4945,7 +4945,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div id="log-container" class="log-container sensitive" style="display: flex; align-items: center; justify-content: center;">
                     <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
                         <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        <span class="body-small">Connecting to Log Stream...</span>
+                        <span class="body-medium">Connecting to Log Stream...</span>
                     </div>
                 </div>
                 <div id="log-status" class="body-small" style="color:var(--md-sys-color-on-surface-variant); text-align:right; margin-top:8px;">Connecting...</div>
@@ -5834,7 +5834,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 if (!entry) return;
                 
                 // Clear the loader if it's still there
-                if (el.querySelector('.body-small')) {
+                if (el.querySelector('.body-medium')) {
                     el.innerHTML = '';
                     el.style.alignItems = 'flex-start';
                     el.style.justifyContent = 'flex-start';
