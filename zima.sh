@@ -1196,6 +1196,10 @@ server:
   access-control: 10.0.0.0/8 allow
   hide-identity: yes
   hide-version: yes
+  qname-minimization: yes
+  harden-glue: yes
+  harden-dnssec-stripped: yes
+  use-caps-for-id: yes
   num-threads: 2
   msg-cache-size: 50m
   rrset-cache-size: 100m
