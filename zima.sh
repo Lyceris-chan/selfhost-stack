@@ -101,7 +101,7 @@ DATA_DIR="$BASE_DIR/data"
 COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
 DASHBOARD_FILE="$BASE_DIR/dashboard.html"
 GLUETUN_ENV_FILE="$BASE_DIR/gluetun.env"
-FONTS_DIR="$BASE_DIR/fonts"
+ASSETS_DIR="$BASE_DIR/assets"
 HISTORY_LOG="$BASE_DIR/deployment.log"
 
 # Initialize deSEC variables to prevent unbound variable errors
@@ -234,12 +234,12 @@ authenticate_registries() {
         done
 }
 
-setup_fonts() {
+setup_assets() {
     log_info "Downloading local assets to ensure dashboard privacy and eliminate third-party dependencies."
-    mkdir -p "$FONTS_DIR"
+    mkdir -p "$ASSETS_DIR"
     
-    # Check if fonts are already set up
-    if [ -f "$FONTS_DIR/gs.css" ] && [ -f "$FONTS_DIR/cc.css" ] && [ -f "$FONTS_DIR/ms.css" ]; then
+    # Check if assets are already set up
+    if [ -f "$ASSETS_DIR/gs.css" ] && [ -f "$ASSETS_DIR/cc.css" ] && [ -f "$ASSETS_DIR/ms.css" ]; then
         log_info "Local assets are present."
         return 0
     fi
@@ -254,7 +254,7 @@ setup_fonts() {
         local url="$2"
         local varname="$3"
         if ! curl -fsSL "$url" -o "$dest"; then
-            log_warn "Font source failed: $url"
+            log_warn "Asset source failed: $url"
         fi
         printf -v "$varname" '%s' "$url"
     }
@@ -263,18 +263,18 @@ setup_fonts() {
         echo "$1" | sed -E 's#(https?://[^/]+).*#\1#'
     }
 
-    download_css "$FONTS_DIR/gs.css" "$URL_GS" GS_CSS_URL
-    download_css "$FONTS_DIR/cc.css" "$URL_CC" CC_CSS_URL
-    download_css "$FONTS_DIR/ms.css" "$URL_MS" MS_CSS_URL
+    download_css "$ASSETS_DIR/gs.css" "$URL_GS" GS_CSS_URL
+    download_css "$ASSETS_DIR/cc.css" "$URL_CC" CC_CSS_URL
+    download_css "$ASSETS_DIR/ms.css" "$URL_MS" MS_CSS_URL
 
     # Material Color Utilities (Local for privacy)
     log_info "Downloading Material Color Utilities..."
-    if ! curl -fsSL "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.2.7/dist/material-color-utilities.min.js" -o "$FONTS_DIR/mcu.js"; then
+    if ! curl -fsSL "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.2.7/dist/material-color-utilities.min.js" -o "$ASSETS_DIR/mcu.js"; then
         log_warn "Failed to download Material Color Utilities. Using fallback logic."
     fi
 
     # Parse and download woff2 files for each CSS file
-    cd "$FONTS_DIR"
+    cd "$ASSETS_DIR"
     declare -A CSS_ORIGINS
     CSS_ORIGINS[gs.css]="$(css_origin "$GS_CSS_URL")"
     CSS_ORIGINS[cc.css]="$(css_origin "$CC_CSS_URL")"
@@ -303,7 +303,7 @@ setup_fonts() {
             if [ ! -f "$clean_name" ]; then
                 # log_info "Downloading font: $clean_name"
                 if ! curl -sL "$fetch_url" -o "$clean_name"; then
-                    log_warn "Failed to download font: $clean_name"
+                    log_warn "Failed to download asset: $clean_name"
                     continue
                 fi
             fi
@@ -316,11 +316,11 @@ setup_fonts() {
     done
     cd - >/dev/null
     
-    log_info "Fonts setup complete (Separate files retained for reliability)."
+    log_info "Assets setup complete (Separate files retained for reliability)."
 
     # Create local SVG icon for CasaOS/ZimaOS dashboard
     log_info "Creating local SVG icon for the dashboard..."
-    cat > "$FONTS_DIR/privacy-hub.svg" <<EOF
+    cat > "$ASSETS_DIR/privacy-hub.svg" <<EOF
 <svg xmlns="http://www.w3.org/2000/svg" height="128" viewBox="0 -960 960 960" width="128" fill="#D0BCFF">
     <path d="M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z"/>
 </svg>
@@ -615,7 +615,7 @@ done
 mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR/unbound" "$AGH_CONF_DIR" "$NGINX_CONF_DIR" "$WG_PROFILES_DIR"
 mkdir -p "$DATA_DIR/postgres" "$DATA_DIR/redis" "$DATA_DIR/wireguard" "$DATA_DIR/adguard-work" "$DATA_DIR/portainer" "$DATA_DIR/odido" "$DATA_DIR/companion"
 
-# setup_fonts (Moved to hub-api container for privacy)
+# setup_assets (Moved to hub-api container for privacy)
 
 # Initialize log files and data files
 touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
@@ -2280,7 +2280,7 @@ PROFILES_DIR = "/profiles"
 CONTROL_SCRIPT = "/usr/local/bin/wg-control.sh"
 LOG_FILE = "/app/deployment.log"
 DB_FILE = "/app/data/logs.db"
-FONTS_DIR = "/fonts"
+ASSETS_DIR = "/assets"
 
 FONT_SOURCES = {
     "gs.css": [
@@ -2422,14 +2422,14 @@ def download_binary(url):
         with urllib.request.urlopen(req, timeout=30) as resp:
             return resp.read()
 
-def ensure_fonts():
-    if os.path.exists(FONTS_DIR) and not os.path.isdir(FONTS_DIR):
-        log_fonts(f"Font path is not a directory: {FONTS_DIR}", "WARN")
+def ensure_assets():
+    if os.path.exists(ASSETS_DIR) and not os.path.isdir(ASSETS_DIR):
+        log_fonts(f"Asset path is not a directory: {ASSETS_DIR}", "WARN")
         return
-    os.makedirs(FONTS_DIR, exist_ok=True)
+    os.makedirs(ASSETS_DIR, exist_ok=True)
 
     for css_name, sources in FONT_SOURCES.items():
-        css_path = os.path.join(FONTS_DIR, css_name)
+        css_path = os.path.join(ASSETS_DIR, css_name)
         css_text = ""
 
         if not os.path.exists(css_path) or os.path.getsize(css_path) == 0:
@@ -2471,7 +2471,7 @@ def ensure_fonts():
             if not filename:
                 continue
 
-            local_path = os.path.join(FONTS_DIR, filename)
+            local_path = os.path.join(ASSETS_DIR, filename)
             if not os.path.exists(local_path):
                 candidates = []
                 if cleaned.startswith("//"):
@@ -2488,14 +2488,14 @@ def ensure_fonts():
                         data = download_binary(candidate)
                         with open(local_path, "wb") as f:
                             f.write(data)
-                        log_fonts(f"Downloaded font {filename} from {candidate}")
+                        log_fonts(f"Downloaded asset {filename} from {candidate}")
                         last_err = None
                         break
                     except Exception as e:
                         last_err = e
 
                 if last_err is not None and not os.path.exists(local_path):
-                    log_fonts(f"Failed to download font {filename}: {last_err}", "WARN")
+                    log_fonts(f"Failed to download asset {filename}: {last_err}", "WARN")
                     continue
 
             if raw != filename:
@@ -2508,6 +2508,19 @@ def ensure_fonts():
                     f.write(css_text)
             except Exception as e:
                 log_fonts(f"Failed to update {css_name}: {e}", "WARN")
+
+    # Ensure MCU library
+    mcu_path = os.path.join(ASSETS_DIR, "mcu.js")
+    if not os.path.exists(mcu_path):
+        try:
+            # Use reliable CDN
+            url = "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.2.7/dist/material-color-utilities.min.js"
+            data = download_binary(url)
+            with open(mcu_path, "wb") as f:
+                f.write(data)
+            log_fonts(f"Downloaded mcu.js from {url}")
+        except Exception as e:
+            log_fonts(f"Failed to download mcu.js: {e}", "WARN")
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
@@ -3283,9 +3296,9 @@ if __name__ == "__main__":
     init_db()
 
     try:
-        ensure_fonts()
+        ensure_assets()
     except Exception as e:
-        log_structured("WARN", f"Font sync failed: {e}", "FONTS")
+        log_structured("WARN", f"Asset sync failed: {e}", "FONTS")
     
     # Start metrics collector thread
     t = threading.Thread(target=metrics_collector, daemon=True)
@@ -3368,7 +3381,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$BASE_DIR/.wge_data_usage:/app/.wge_data_usage"
       - "$AGH_CONF_DIR:/etc/adguard/conf"
       - "$DOCKER_AUTH_DIR:/root/.docker:ro"
-      - "$FONTS_DIR:/fonts"
+      - "$ASSETS_DIR:/assets"
       - "$SRC_DIR:/app/sources"
       - "$BASE_DIR:/project_root:ro"
       - "$CONFIG_DIR/theme.json:/app/theme.json"
@@ -3494,7 +3507,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$LAN_IP:$PORT_DASHBOARD_WEB:$PORT_DASHBOARD_WEB"
       - "$LAN_IP:8443:8443"
     volumes:
-      - "$FONTS_DIR:/usr/share/nginx/html/fonts:ro"
+      - "$ASSETS_DIR:/usr/share/nginx/html/assets:ro"
       - "$DASHBOARD_FILE:/usr/share/nginx/html/index.html:ro"
       - "$NGINX_CONF:/etc/nginx/conf.d/default.conf:ro"
       - "$AGH_CONF_DIR:/etc/adguard/conf:ro"
@@ -3890,7 +3903,7 @@ x-casaos:
       instead of renting a false sense of security. Includes WireGuard VPN access,
       recursive DNS with AdGuard filtering, and VPN-isolated privacy frontends
       \(Invidious, Redlib, etc.\) that reduce tracking and prevent home IP exposure.
-  icon: http://$LAN_IP:8081/fonts/privacy-hub.svg
+  icon: http://$LAN_IP:8081/assets/privacy-hub.svg
 EOF
 
 # --- SECTION 14: DASHBOARD & UI GENERATION ---
@@ -3903,16 +3916,16 @@ cat > "$DASHBOARD_FILE" <<EOF
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZimaOS Privacy Hub</title>
-    <link rel="icon" type="image/svg+xml" href="fonts/privacy-hub.svg">
-    <!-- Local privacy friendly fonts (Hosted Locally) -->
-    <link href="fonts/gs.css" rel="stylesheet">
-    <link href="fonts/cc.css" rel="stylesheet">
-    <link href="fonts/ms.css" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="assets/privacy-hub.svg">
+    <!-- Local privacy friendly assets (Hosted Locally) -->
+    <link href="assets/gs.css" rel="stylesheet">
+    <link href="assets/cc.css" rel="stylesheet">
+    <link href="assets/ms.css" rel="stylesheet">
     <script>
         // Prevent extension injection errors - defined early
         globalThis.configureInjection = globalThis.configureInjection || (() => {});
     </script>
-    <script src="fonts/mcu.js"></script>
+    <script src="assets/mcu.js"></script>
     <script>
         // Map global UMD to window.MaterialColorUtilities if needed
         document.addEventListener('DOMContentLoaded', () => {
