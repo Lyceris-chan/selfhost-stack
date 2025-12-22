@@ -14,13 +14,14 @@ Route your traffic through secure VPNs, eliminate tracking with isolated fronten
 *   **Material Design 3**: A beautiful, accessible management dashboard with dynamic theming and real-time health metrics.
 
 ## 📚 Contents
-- [🏗️ Getting Started](#getting-started)
-- [🖥️ Management Dashboard](#management-dashboard)
-- [📦 Included Services](#included-services)
-- [🌐 Network Configuration](#network-configuration)
-- [🔒 Security & Privacy](#security--privacy)
-- [🔧 Add Your Own Services](#add-your-own-services)
+- [Getting Started](#getting-started)
+- [Management Dashboard](#management-dashboard)
+- [Included Services](#included-services)
+- [Network Configuration](#network-configuration)
+- [Security & Privacy](#security--privacy)
+- [Add Your Own Services](#add-your-own-services)
 
+<a id="getting-started"></a>
 ## 🏗️ Getting Started
 
 ### Prerequisites & Infrastructure
