@@ -2987,6 +2987,30 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
         except:
             data = {}
 
+        if self.path == '/watchtower' and self.command == 'POST':
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(content_length).decode('utf-8')
+                # Watchtower sends a JSON list of messages or a single message depending on template
+                # We configured it with template=json, so we expect a JSON structure.
+                # However, the generic webhook usually sends a simple JSON payload.
+                # Let's just log it and mark updates as available.
+                # Since we can't easily parse specific container names from standard generic webhooks reliably without a custom template,
+                # we will just trigger a 'check-updates' logic or store a generic flag.
+                # BUT, better yet, let's try to parse the message if possible.
+                
+                # To keep it robust: We will store "Image Updates Available" in a file that /updates can read.
+                # Actually, /updates logic for images is tricky because we don't persist "pending updates" state for images easily
+                # without querying the registry. Watchtower run-once in /check-updates does the checking.
+                # If this webhook is called, it means Watchtower found something (if it's running in notification mode).
+                
+                # We will simply log the event for now as "Update Available"
+                log_structured("INFO", f"Watchtower Notification: {body}", "MAINTENANCE")
+                self._send_json({"success": True})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+            return
+
         if self.path == '/theme':
             theme_file = os.path.join(CONFIG_DIR, "theme.json")
             try:
@@ -3176,7 +3200,8 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     "rimgo": {"repo": "rimgo/rimgo", "type": "codeberg"},
                     "memos": {"repo": "usememos/memos", "type": "github"},
                     "watchtower": {"repo": "containrrr/watchtower", "type": "github"},
-                    "unbound": {"repo": "klutchell/unbound", "type": "github"}
+                    "unbound": {"repo": "klutchell/unbound", "type": "github"},
+                    "vertd": {"repo": "VERT-sh/vertd", "type": "github"}
                 }
 
                 # Check if it's a source-based service
