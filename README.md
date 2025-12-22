@@ -46,16 +46,18 @@ Prepare these details ahead of time to ensure a smooth deployment.
 </details>
 
 <details>
-<summary><strong>ProtonVPN WireGuard (.conf) - tested path</strong></summary>
+<summary><strong>ProtonVPN WireGuard (.conf) - The Anonymity Engine</strong></summary>
 
-Only ProtonVPN is tested; other providers might work but are unverified. 
+This configuration is the "privacy heart" of your stack. It allows the **Gluetun** gateway to mask your home IP, ensuring that even when you download system assets (fonts, color utilities) or browse upstream services (YouTube, Reddit), your identity remains hidden.
 
-1. Go to **Downloads → WireGuard configuration**.
-2. Enable **Port Forwarding** before creating the config.
-3. Give the config a recognizable **name**.
-4. Choose a server/region and download the `.conf`.
-5. Paste the contents when the script prompts for the WireGuard configuration.
+**Steps to obtain:**
+1.  **Login**: Go to [ProtonVPN Downloads](https://account.protonvpn.com/downloads).
+2.  **Naming**: Under the WireGuard section, give your configuration a recognizable name.
+3.  **Port Forwarding**: Ensure **NAT-PMP (Port Forwarding)** is toggled **ON**. This is required for optimal performance of some services.
+4.  **Selection**: Select a **Free** server in a region of your choice.
+5.  **Download**: Download the `.conf` file. You will be asked to paste its contents during the setup script execution.
 
+> 🛡️ **Privacy Impact**: Without this config, services will leak your public home IP to third parties. By enabling it, all "scraping" and asset-fetching traffic is forced through the encrypted tunnel.
 </details>
 
 ### Installation
