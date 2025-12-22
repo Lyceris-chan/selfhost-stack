@@ -5113,7 +5113,6 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 return false;
             }
         }
-
         async function migrateService(name, event) {
             if (event) { event.preventDefault(); event.stopPropagation(); }
             const doBackup = document.getElementById('invidious-backup-toggle')?.checked ? 'yes' : 'no';
@@ -6004,7 +6003,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 }
             } catch(e) { 
                 console.error('Cert status fetch error:', e);
-
+            }
         }
 
         async function requestSslCheck() {
