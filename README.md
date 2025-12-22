@@ -120,19 +120,19 @@ The dashboard is built to strictly follow **[Google's Material Design 3](https:/
 
 | Service | Category | Purpose | Source |
 | :--- | :--- | :--- | :--- |
-| **Invidious** | Frontend | Anonymous YouTube (No ads/tracking) | [iv-org/invidious](https://github.com/iv-org/invidious) |
-| **Redlib** | Frontend | Lightweight Reddit interface | [redlib-org/redlib](https://github.com/redlib-org/redlib) |
-| **Wikiless** | Frontend | Private Wikipedia access | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) |
-| **Memos** | Utility | Private knowledge base & notes | [usememos/memos](https://github.com/usememos/memos) |
-| **AdGuard Home** | Core | DNS filtering & Ad-blocking | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) |
-| **WireGuard** | Core | Secure remote access gateway | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) |
-| **Portainer** | Admin | Advanced container management | [portainer/portainer](https://github.com/portainer/portainer) |
-| **VERT** | Utility | Local, GPU-accelerated file conversion | [VERT-sh/vert](https://github.com/vert-sh/vert) |
-| **Rimgo** | Frontend | Lightweight Imgur interface | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) |
-| **BreezeWiki** | Frontend | De-fandomized Wiki interface | [cadence/breezewiki](https://gitdab.com/cadence/breezewiki) |
-| **AnonOverflow** | Frontend | Private Stack Overflow viewer | [httpjamesm/anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) |
-| **[Scribe](https://git.sr.ht/~edwardloveall/scribe)** | Frontend | Alternative Medium frontend |
-| **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)** | Utility | Automated data bundle booster (NL Odido) |
+| **Invidious** | Privacy Frontend | Anonymous YouTube browsing (No ads/tracking) | [iv-org/invidious](https://github.com/iv-org/invidious) |
+| **Redlib** | Privacy Frontend | Lightweight Reddit interface | [redlib-org/redlib](https://github.com/redlib-org/redlib) |
+| **Wikiless** | Privacy Frontend | Private Wikipedia access | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) |
+| **Memos** | Utility | Private knowledge base & note-taking | [usememos/memos](https://github.com/usememos/memos) |
+| **AdGuard Home** | Infrastructure | Network-wide DNS filtering & Ad-blocking | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) |
+| **WireGuard** | Infrastructure | Secure remote access gateway | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) |
+| **Portainer** | Management | Advanced container orchestration | [portainer/portainer](https://github.com/portainer/portainer) |
+| **VERT** | Utility | Local file conversion with optional GPU acceleration | [VERT-sh/vert](https://github.com/vert-sh/vert) |
+| **Rimgo** | Privacy Frontend | Lightweight Imgur interface | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) |
+| **BreezeWiki** | Privacy Frontend | De-fandomized Wikipedia/Wiki interface | [cadence/breezewiki](https://gitdab.com/cadence/breezewiki) |
+| **AnonymousOverflow** | Privacy Frontend | Privacy-focused Stack Overflow viewer | [httpjamesm/anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) |
+| **Scribe** | Privacy Frontend | Alternative Medium frontend | [scribe](https://git.sr.ht/~edwardloveall/scribe) |
+| **Odido Booster** | Utility | Automated data bundle booster (NL Odido) | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) |
 
 > 💡 **Tip: Migrating your data to Invidious**
 > You can easily import your existing data to your private Invidious instance. Navigate to **Settings → Import/Export** to upload:
