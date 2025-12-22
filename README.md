@@ -96,7 +96,7 @@ If you used the `-p` flag, the script auto-generated secure credentials for you.
 | Flag | Description | Action |
 | :--- | :--- | :--- |
 | `-c` | **Clean Reset** | Removes all containers and networks but preserves user data. Useful for fixing network glitches. |
-| `-x` | **Uninstall** | ⚠️ **DESTRUCTIVE**. Removes containers, networks, volumes, and ALL data. |
+| `-x` | **Factory Reset** | ⚠️ **Stack Wipe**. Removes all application containers, networks, and persistent data volumes. Does not affect host OS. |
 | `-p` | **Auto-Passwords** | Generates secure random passwords for all services automatically. |
 | `-y` | **Auto-Confirm** | Skips confirmation prompts (for automated deployments). |
 | `-s` | **Select Services** | Deploy specific services only (e.g., `./zima.sh -s invidious,memos`). |
