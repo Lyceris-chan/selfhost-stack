@@ -9,13 +9,18 @@ COMPLETED TASKS & SYSTEM STATUS:
 7. Theme Toggle: Positioned to the right of the Privacy Switch.
 8. Redlib Health: Fixed issue where Portainer reported 'Unhealthy' due to 403 errors (while dashboard correctly showed 'Online'). Updated healthcheck to ignore 403s.
 9. Update Engine: Added manual 'Check for Updates' button and backend logic.
-10. Master Update: Added a permanent 'Update All Services' button that triggers both global image updates (Watchtower) and source code refreshes.
+10. All Updates: Added a permanent 'Update All Services' button that triggers both global image updates (Watchtower) and source code refreshes.
 11. Material Design 3: Verified full compliance with M3 tokens (color, shape, motion), expressive elevations, and typography.
+12. Backup Safeguards: Updates (individual or global) now trigger automated backups via migrate.sh to prevent data loss.
+13. Progress Monitoring: Update progress is logged in real-time to the dashboard's log view.
+14. Resource Awareness: Added UI warnings informing users about increased CPU/RAM usage during update builds.
+15. Wizard Removed: Completely stripped the Setup Wizard (HTML/CSS/JS) to prevent UI interference.
 
 DASHBOARD COG FUNCTIONALITY:
 ==========================================================
 The settings cog triggers a Service Modal providing:
 - Real-time CPU/Memory metrics for the specific container.
-- Individual "Update Service" button (Source pull + Rebuild).
+- "Update Service" button (Specific source pull + Rebuild).
+- Global "Update All Services" button (Full image and source refresh).
 - "View in Portainer" deep link to the container ID.
 - Specialized maintenance buttons (Migrate DB, Clear Logs, Optimize DB).

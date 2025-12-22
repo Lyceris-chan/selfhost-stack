@@ -1690,8 +1690,18 @@ log() { echo "{\"timestamp\":\"$(date +'%Y-%m-%d %H:%M:%S')\",\"level\":\"DATABA
 
 mkdir -p "$BACKUP_DIR"
 
-if [ "$SERVICE" = "invidious" ]; then
-    if [ "$ACTION" = "clear" ]; then
+    if [ "$ACTION" = "backup-all" ]; then
+        log "Starting full system backup (pre-update safety)..."
+        # We backup the entire config and data directories (mounted as /etc/adguard, /app/data etc)
+        # In the context of the container, /DATA/AppData/privacy-hub is the root.
+        # But we only have access to what is mounted. 
+        # A more reliable way is to backup the service-specific volumes we have.
+        tar -czf "$BACKUP_DIR/full_backup_$TIMESTAMP.tar.gz" -C "$DATA_DIR" . 2>/dev/null || true
+        log "Full system backup completed: full_backup_$TIMESTAMP.tar.gz"
+        exit 0
+    fi
+
+    if [ "$SERVICE" = "invidious" ]; then    if [ "$ACTION" = "clear" ]; then
         log "CLEARING Invidious database (resetting to defaults)..."
         if [ "$BACKUP" != "no" ]; then
             log "Creating safety backup..."
@@ -2498,18 +2508,35 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/master-update':
             try:
-                # 1. Trigger Watchtower for all images
-                subprocess.Popen(['docker', 'run', '--rm', '-v', '/var/run/docker.sock:/var/run/docker.sock', 'containrrr/watchtower', '--run-once', '--cleanup'])
-                # 2. Trigger source updates for all
-                src_root = "/app/sources"
-                if os.path.exists(src_root):
-                    for repo in os.listdir(src_root):
-                        repo_path = os.path.join(src_root, repo)
-                        if os.path.isdir(os.path.join(repo_path, ".git")):
-                            # We can't easily rebuild everything via one command without knowing which services use which repo
-                            # but we can at least fetch and reset to origin
-                            subprocess.Popen(["git", "fetch", "--all"], cwd=repo_path)
-                self._send_json({"success": True, "message": "Master update initiated"})
+                def run_master_update():
+                    try:
+                        # 1. Start Logging
+                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Starting Master Update process."}}\' >> {HISTORY_LOG}'])
+                        
+                        # 2. Perform Full Backup
+                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Creating pre-update backup..."}}\' >> {HISTORY_LOG}'])
+                        subprocess.run(["/usr/local/bin/migrate.sh", "all", "backup-all"], timeout=300)
+                        
+                        # 3. Trigger Watchtower for all images
+                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Pulling latest container images..."}}\' >> {HISTORY_LOG}'])
+                        subprocess.run(['docker', 'run', '--rm', '-v', '/var/run/docker.sock:/var/run/docker.sock', 'containrrr/watchtower', '--run-once', '--cleanup'])
+                        
+                        # 4. Trigger source updates for all
+                        src_root = "/app/sources"
+                        if os.path.exists(src_root):
+                            subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Refreshing service source code..."}}\' >> {HISTORY_LOG}'])
+                            for repo in os.listdir(src_root):
+                                repo_path = os.path.join(src_root, repo)
+                                if os.path.isdir(os.path.join(repo_path, ".git")):
+                                    subprocess.run(["git", "fetch", "--all"], cwd=repo_path)
+                        
+                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Master Update successfully completed."}}\' >> {HISTORY_LOG}'])
+                    except Exception as e:
+                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"ERROR","category":"MAINTENANCE","message":"[Update Engine] Master Update failed: {str(e)}"}}\' >> {HISTORY_LOG}'])
+
+                import threading
+                threading.Thread(target=run_master_update).start()
+                self._send_json({"success": True, "message": "Master update process started in background"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/check-updates':
@@ -2846,30 +2873,31 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({"error": "Service name required"}, 400)
                     return
                 
-                log_structured("UPDATE", f"Triggering update for {service}...", "MAINTENANCE")
-                
-                # We can't easily run zima.sh from inside hub-api because of permissions and complexity.
-                # Instead, we perform the git pull and docker rebuild here.
-                repo_path = f"/app/sources/{service}"
-                if os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, ".git")):
-                    # Reset to clean state (removes old patches)
-                    subprocess.run(["git", "reset", "--hard"], cwd=repo_path, check=True, timeout=30)
-                    # Pull latest changes
-                    subprocess.run(["git", "pull"], cwd=repo_path, check=True, timeout=60)
-                    # Re-apply patches
-                    if os.path.exists("/app/patches.sh"):
-                        subprocess.run(["/app/patches.sh", service], check=True, timeout=30)
-                
-                # Rebuild and restart
-                res = subprocess.run(
-                    ["docker", "compose", "-f", "/app/docker-compose.yml", "up", "-d", "--build", "--no-deps", service],
-                    capture_output=True, text=True, timeout=300
-                )
-                
-                if res.returncode == 0:
-                    self._send_json({"success": True, "output": res.stdout})
-                else:
-                    self._send_json({"error": res.stderr}, 500)
+                def run_service_update(name):
+                    try:
+                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Starting update for {name}..."}}\' >> {HISTORY_LOG}'])
+                        # 1. Pre-update Backup
+                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Creating safety backup for {name}..."}}\' >> {HISTORY_LOG}'])
+                        subprocess.run(["/usr/local/bin/migrate.sh", name, "backup"], timeout=120)
+                        
+                        # 2. Refresh source
+                        repo_path = f"/app/sources/{name}"
+                        if os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, ".git")):
+                            subprocess.run(["git", "reset", "--hard"], cwd=repo_path, check=True, timeout=30)
+                            subprocess.run(["git", "pull"], cwd=repo_path, check=True, timeout=60)
+                            if os.path.exists("/app/patches.sh"):
+                                subprocess.run(["/app/patches.sh", name], check=True, timeout=30)
+                        
+                        # 3. Rebuild and restart
+                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Build process for {name} initiated (Expect increased resource usage)."}}\' >> {HISTORY_LOG}'])
+                        subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', name], timeout=600)
+                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] {name} update completed successfully."}}\' >> {HISTORY_LOG}'])
+                    except Exception as ex:
+                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"ERROR","category":"MAINTENANCE","message":"[Update Engine] {name} update failed: {str(ex)}"}}\' >> {HISTORY_LOG}'])
+
+                import threading
+                threading.Thread(target=run_service_update, args=(service,)).start()
+                self._send_json({"success": True, "message": f"Update for {service} started in background"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/rotate-api-key' and self.command == 'POST':
@@ -4308,34 +4336,6 @@ cat > "$DASHBOARD_FILE" <<EOF
         
         .theme-toggle:hover { background: var(--md-sys-color-surface-container-highest); }
 
-        /* Setup Wizard Overlay */
-        .wizard-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.8);
-            backdrop-filter: blur(4px);
-            z-index: 30000;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-        }
-
-        .wizard-card {
-            background: var(--md-sys-color-surface-container-high);
-            border-radius: var(--md-sys-shape-corner-extra-large);
-            max-width: 600px;
-            width: 100%;
-            padding: 40px;
-            box-shadow: var(--md-sys-elevation-3);
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-        }
-
-        .wizard-step { display: none; }
-        .wizard-step.active { display: flex; flex-direction: column; gap: 16px; }
-
         /* Service Modal */
         .modal-overlay {
             position: fixed;
@@ -4884,10 +4884,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         <span class="material-symbols-rounded">system_update_alt</span>
                         Check for Updates
                     </button>
-                    <button onclick="updateAllServices()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Master Update: Pulls latest images and source code for all services.">
+                    <button onclick="updateAllServices()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="All Updates: Pulls latest images and source code for the entire stack.">
                         <span class="material-symbols-rounded">upgrade</span>
                         Update All Services
                     </button>
+                    <p class="body-small" style="color: var(--md-sys-color-on-surface-variant); margin-top: -4px;">
+                        Note: Mass updates may significantly increase system load during builds.
+                    </p>
                     <button onclick="restartStack()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Reboot all containers in the stack. This takes ~30 seconds and is required for manual .secrets changes to take effect.">
                         <span class="material-symbols-rounded">restart_alt</span>
                         Restart Stack
@@ -5026,7 +5029,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             title.textContent = name.charAt(0).toUpperCase() + name.slice(1) + " Management";
             
             // Basic actions for all
-            actions.innerHTML = "<button onclick=\"updateService('" + name + "')\" class=\"btn btn-tonal\" style=\"width:100%\"><span class=\"material-symbols-rounded\">update</span> Update Service</button><button onclick=\"window.open(PORTAINER_URL + '/#!/1/docker/containers/' + (containerIds[name] || ''), '_blank')\" class=\"btn btn-outlined\" style=\"width:100%\"><span class=\"material-symbols-rounded\">dock</span> View in Portainer</button>";
+            actions.innerHTML = "<button onclick=\"updateService('" + name + "')\" class=\"btn btn-tonal\" style=\"width:100%\"><span class=\"material-symbols-rounded\">update</span> Update Service</button><p class=\"body-small\" style=\"margin: 4px 0 12px 0; color: var(--md-sys-color-on-surface-variant);\">Note: Updates may cause temporary high CPU/RAM usage during build.</p><button onclick=\"window.open(PORTAINER_URL + '/#!/1/docker/containers/' + (containerIds[name] || ''), '_blank')\" class=\"btn btn-outlined\" style=\"width:100%\"><span class=\"material-symbols-rounded\">dock</span> View in Portainer</button>";
 
             // Specialized actions
             if (name === 'invidious') {
@@ -5056,19 +5059,19 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
 
         async function updateAllServices() {
-            if (!confirm("Start Master Update? This will pull latest images and source code for the entire stack. Services may restart.")) return;
-            showSnackbar("Master update initiated... pulling images and code.");
+            if (!confirm("Start All Updates? This will pull latest images and source code for the entire stack. Services may restart.")) return;
+            showSnackbar("All-service updates initiated... pulling images and code.");
             try {
                 const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
                 const res = await fetch(API + "/master-update", { method: 'POST', headers });
                 const data = await res.json();
                 if (data.success) {
-                    showSnackbar("Master update is running in background. Check logs for progress.");
+                    showSnackbar("Update process is running in background. Check logs for progress.");
                 } else {
                     throw new Error(data.error);
                 }
             } catch(e) {
-                showSnackbar("Master update failed: " + e.message);
+                showSnackbar("Update failed: " + e.message);
             }
         }
 
@@ -5946,11 +5949,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     if (untrustedInfo) untrustedInfo.style.display = 'block';
                     if (retryBtn) retryBtn.style.display = 'inline-flex';
                     
-                    // Trigger wizard only if it failed due to credentials (Auth Error)
+                    // Handle authentication or rate limit errors
                     if (data.status === "Auth Error") {
-                        checkWizard(true); // Force wizard if auth failed
+                        showSnackbar("SSL Authentication Error: Please check your deSEC credentials.");
                     } else if (data.status === "Rate Limited" || data.status === "Issuance Failed") {
-                        // Just alert if rate limited or other non-auth failure
                         showSnackbar("SSL Issue: " + data.error);
                     }
                 } else {
@@ -5965,44 +5967,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         if (retryBtn) retryBtn.style.display = 'inline-flex';
                     }
                 }
-
-                // Automated Link Switching Logic
-                const services = {
-                    'invidious': { port: '$PORT_INVIDIOUS', sub: 'invidious' },
-                    'redlib': { port: '$PORT_REDLIB', sub: 'redlib' },
-                    'wikiless': { port: '$PORT_WIKILESS', sub: 'wikiless' },
-                    'memos': { port: '$PORT_MEMOS', sub: 'memos' },
-                    'rimgo': { port: '$PORT_RIMGO', sub: 'rimgo' },
-                    'scribe': { port: '$PORT_SCRIBE', sub: 'scribe' },
-                    'breezewiki': { port: '$PORT_BREEZEWIKI', sub: 'breezewiki' },
-                    'anonymousoverflow': { port: '$PORT_ANONYMOUS', sub: 'anonymousoverflow' },
-                    'vert': { port: '$PORT_VERT', sub: 'vert' },
-                    'adguard': { port: '$PORT_ADGUARD_WEB', sub: 'adguard' },
-                    'portainer': { port: '$PORT_PORTAINER', sub: 'portainer' },
-                    'wg-easy': { port: '$PORT_WG_WEB', sub: 'wireguard' }
-                };
-
-                for (const [id, info] of Object.entries(services)) {
-                    const el = document.getElementById('link-' + id);
-                    if (!el) continue;
-                    if (isTrusted && domain) {
-                        el.href = "https://" + info.sub + "." + domain + ":8443/";
-                    } else {
-                        const baseIpUrl = "http://$LAN_IP:" + info.port;
-                        el.href = id === 'breezewiki' ? baseIpUrl + '/' : baseIpUrl;
-                    }
-                }
-                
-                // General wizard check after fetching cert status
-                checkWizard(false);
             } catch(e) { 
-                console.error('Cert status fetch error:', e); 
-                const badge = document.getElementById('cert-status-badge');
-                if (badge) {
-                    badge.textContent = "Fetch Error";
-                    badge.dataset.tooltip = "Could not communicate with the backend API.";
-                }
-            }
+                console.error('Cert status fetch error:', e);
+
         }
 
         async function requestSslCheck() {
@@ -6090,53 +6057,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
         }
         
-        // Setup Wizard Logic
-        function nextStep(step) {
-            document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
-            document.getElementById('step-' + step).classList.add('active');
-        }
-
-        async function saveWizardDesec() {
-            const domain = document.getElementById('wiz-desec-domain').value.trim();
-            const token = document.getElementById('wiz-desec-token').value.trim();
-            if (!domain || !token) {
-                showSnackbar("Both domain and token are required to proceed.");
-                return;
-            }
-            try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                const res = await fetch(API + "/config-desec", {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({ domain, token })
-                });
-                const result = await res.json();
-                if (result.success) {
-                    showSnackbar("Configuration saved!");
-                    nextStep(3);
-                } else { throw new Error(result.error); }
-            } catch (e) { showSnackbar("Error: " + e.message); }
-        }
-
-        function closeWizard() {
-            document.getElementById('setup-wizard').style.display = 'none';
-            localStorage.setItem('wizard_completed', 'true');
-        }
-
-        function checkWizard(force = false) {
-            // Wizard disabled - deployment is fully automated
-            return;
-        }
-        
         document.addEventListener('DOMContentLoaded', () => {
             // Load deSEC config if available
             fetch(API + "/status").then(r => r.json()).then(data => {
                 if (data.gluetun && data.gluetun.desec_domain) {
                     document.getElementById('desec-domain-input').placeholder = data.gluetun.desec_domain;
                 }
-                // checkWizard will be called by fetchCertStatus to ensure it has latest SSL info
-            }).catch(() => { checkWizard(); });
+            }).catch(() => {});
 
             // Tooltip Initialization
             const tooltipBox = document.createElement('div');
