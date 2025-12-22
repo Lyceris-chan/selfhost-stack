@@ -234,7 +234,7 @@ To filter ads and trackers for every device on your WiFi:
 >
 > **What to do:**
 > 1.  **Restart the Hub**: Run `./zima.sh` again to fix configurations and restart containers.
-> 2.  **Emergency Fallback**: If you cannot fix the hub immediately, change your router or device DNS to a trusted public provider like **Mullvad DNS** (`194.242.2.2`). They offer advanced [DoH/DoT options](https://mullvad.net/en/help/dns-over-https-and-dns-over-tls) and have a verified [Privacy Policy](https://mullvad.net/en/help/privacy-policy) that aligns with our least-trust model. Use this to restore connectivity until you can repair your self-hosted instance.
+> 2.  **Emergency Fallback**: If you cannot fix the hub immediately, change your router or device DNS to a trusted public provider like **Mullvad DNS**. They offer advanced [DoH/DoT options](https://mullvad.net/en/help/dns-over-https-and-dns-over-tls) and have a verified [Privacy Policy](https://mullvad.net/en/help/privacy-policy) that aligns with our least-trust model. Use this to restore connectivity until you can repair your self-hosted instance.
 
 ### 4. Split Tunnel Configuration (VPN Routing)
 This stack uses a **Split Tunnel** architecture via Gluetun. This means only specific traffic is sent through the VPN, while the rest of your home network remains untouched.
