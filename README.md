@@ -72,7 +72,7 @@ Only deploy specific services to save resources (Infrastructure is always includ
 - `-p`: Auto-generate passwords.
 - `-y`: Auto-confirm prompts.
 - `-s <list>`: Deploy only selected services (comma-separated).
-- `-h`/`--help`: Show usage.
+- `-h`: Show usage.
 
 ## 🖥️ Management Dashboard
 
