@@ -262,7 +262,7 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 4.  **Local Persistence**: Assets are saved to a persistent Docker volume (`/assets`).
 5.  **Offline Serving**: The Management Dashboard (Nginx) serves all UI resources exclusively from this local volume.
 
-- **Data Minimization**:
+- **Data Minimization**: Requests originate from the isolated `hub-api` container using generic User-Agents, preventing host or browser fingerprinting. Upstream providers see a generic Linux client from a commercial VPN IP.
 
 ### Proton Pass Export
 When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/protonpass_import.csv` for easy import ([See Guide](#proton-pass-import)).
