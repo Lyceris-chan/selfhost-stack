@@ -4719,6 +4719,13 @@ cat > "$DASHBOARD_FILE" <<EOF
                         </div>
                         <div class="body-small" id="ssl-failure-reason" style="opacity: 0.9;">--</div>
                     </div>
+                    <div id="cert-loading" class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium); border: none; margin-top: 16px;">
+                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span style="font-weight: 600;">Verifying Pipeline</span>
+                            <span class="body-small" style="opacity: 0.8; white-space: normal;">Checking SSL certificate validity and issuance status...</span>
+                        </div>
+                    </div>
                 </div>
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; gap: 16px; flex-wrap: wrap;">
                     <div id="cert-status-badge" class="chip" style="width: fit-content;" data-tooltip="Overall health of the SSL certificate issuance pipeline">...</div>
@@ -5445,6 +5452,15 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     dot.className = 'status-dot down';
                     txt.textContent = 'Offline (API Error)';
                 }
+                // Force indicators out of "Initializing..." state on API failure
+                document.querySelectorAll('.status-indicator').forEach(indicator => {
+                    const dot = indicator.querySelector('.status-dot');
+                    const text = indicator.querySelector('.status-text');
+                    if (dot && text && !dot.id.includes('api')) {
+                        dot.className = 'status-dot down';
+                        text.textContent = 'API Error';
+                    }
+                });
             }
         }
         
@@ -5926,6 +5942,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 
                 if (res.status === 401) throw new Error("401");
                 const data = await res.json();
+                
+                const loadingBox = document.getElementById('cert-loading');
+                if (loadingBox) loadingBox.style.display = 'none';
 
                 document.getElementById('cert-type').textContent = data.type || "--";
                 document.getElementById('cert-subject').textContent = data.subject || "--";
@@ -5996,6 +6015,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 }
             } catch(e) { 
                 console.error('Cert status fetch error:', e);
+            } finally {
+                const loadingBox = document.getElementById('cert-loading');
+                if (loadingBox) loadingBox.style.display = 'none';
             }
         }
 
