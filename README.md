@@ -91,12 +91,23 @@ If you used the `-p` flag, the script auto-generated secure credentials for you.
 ## 🖥️ Management Dashboard
 The Privacy Hub features a custom-built, unified management interface designed with **Material Design 3**.
 
-### 🎨 UI & Theme Customization
-Personalize the dashboard appearance using Material Design 3 dynamic color principles:
-- **Seed Color Selection:** Choose a primary color to generate a full compliant M3 theme.
-- **Dynamic Image Extraction:** Upload a wallpaper to automatically extract its dominant color and apply it to the UI.
-- **Server-Side Persistence:** Theme settings are saved directly to the host filesystem via the API (`config/theme.json`), ensuring your preferences persist across devices without cookies.
-- **Fast Feedback:** UI transitions and notifications are optimized for performance and Material motion standards.
+### Material Design 3 Compliance
+The dashboard is built to strictly follow **[Google's Material Design 3](https://m3.material.io/)** guidelines.
+*   **Color System**: We use the official `material-color-utilities` library to generate scientifically accurate accessible color palettes from your seed color.
+*   **Components**: All UI elements (cards, chips, buttons) adhere to M3 specifications for shape, elevation, and state layers.
+
+### Customization
+*   **Theme Engine**: Upload a wallpaper to automatically extract a coordinated palette, or pick a color manually.
+*   **Presets**: Choose from curated Android-style color presets.
+*   **Dark/Light Mode**: Fully supported with automatic system preference detection.
+*   **Privacy Masking**: One-click toggle to blur sensitive IPs and data for screenshots.
+
+### Update Engine
+The stack features a sophisticated update management system:
+*   **Changelogs**: View commit logs (for source builds) or release notes (for images) directly in the UI before updating.
+*   **Granular Control**: Update all services at once or select specific ones.
+*   **Safety First**: The system automatically creates database backups before applying any updates.
+*   **Rollback**: If an update fails, you can restore data from the automatically generated backups via the `migrate.sh` helper.
 
 
 ## 📦 Included Services
