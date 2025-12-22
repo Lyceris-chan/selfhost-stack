@@ -114,7 +114,14 @@ The stack features a sophisticated update management system:
 | **[BreezeWiki](https://gitdab.com/cadence/breezewiki)** | Privacy Frontend | De-fandomized Wikipedia/Wiki interface |
 | **[AnonymousOverflow](https://github.com/httpjamesm/anonymousoverflow)** | Privacy Frontend | Privacy-focused Stack Overflow viewer |
 | **[Scribe](https://git.sr.ht/~edwardloveall/scribe)** | Privacy Frontend | Alternative Medium frontend |
-| **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)** | Utility | Automated data bundle booster (NL Odido) |
+| Odido Booster | Utility | Automated data bundle booster (NL Odido) |
+
+> 💡 **Invidious Migration Tip**: You can easily migrate your data to your private Invidious instance. Navigate to **Settings → Import/Export** to upload:
+> *   **Invidious Data**: JSON backup from another instance.
+> *   **YouTube Subscriptions**: CSV or OPML files.
+> *   **YouTube Playlists**: `.csv` exports.
+> *   **YouTube Watch History**: `.json` data.
+> *   **Other Clients**: FreeTube (`.db`) or NewPipe (`.json`/`.zip`) subscriptions and data.
 
 ## 🔗 Service Access (After Deploy)
 
@@ -197,8 +204,6 @@ The Update banner checks git repos under `/app/sources/<service>`. If you want y
 The current configuration is pre-tuned to support up to **30 users** on a machine with 16 GB RAM. Each service is constrained by **Docker Resource Limits** to prevent host exhaustion.
 
 > **Note:** Building containers from source (e.g., Invidious, Wikiless) is intensive. Physical cores significantly improve build speed compared to logical threads.
-
-## 🌐 Network Configuration
 
 ## 🌐 Network Configuration
 
