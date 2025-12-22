@@ -37,6 +37,18 @@ COMPLETED TASKS & SYSTEM STATUS:
 35. Material Color Utilities: Integrated the official MCU library for accurate HCT color space palette generation.
 36. Theme Switcher Sync: Updated the theme engine to dynamically regenerate palettes when toggling between dark and light modes.
 37. UI Polish: Improved the Theme Customization card with an integrated M3-style color picker and image extraction interface.
+38. MCU Syntax Fix: Resolved "Unexpected token 'export'" by correctly implementing ESM imports and exposing MCU globally.
+39. Uniform Spacing: Standardized vertical text spacing in service cards.
+40. Material Arrows: Replaced generic arrows with `arrow_forward` and added hover transform animations.
+41. Metrics Relocation: Moved per-container CPU/RAM metrics to card header actions for better layout.
+42. CDN VPN Proxy: Routed all external asset downloads (fonts, MCU) through Gluetun VPN proxy to protect host IP.
+43. Seed Color Hex: Added real-time hex color display to the theme customization interface.
+44. Drive Health Pro: Implemented SMART-based health % and intelligent issue detection with informational tooltips.
+45. Technical Log Humanization: Replaced technical HTTP status logs with user-friendly system messages.
+46. Console Error Scrub: Fixed all dashboard console errors including MCU, favicon, and API gateway timeouts.
+47. Accurate Project Sizing: Overhauled project size calculation to include source code, base directory, and Docker volumes.
+48. System Uninstaller: Added a functional "Uninstall" button with double-confirmation safeguards and background cleanup.
+49. Log Scrollability: Fixed log container overflow issues by implementing robust vertical scrolling.
 
 15-METHOD VERIFICATION FRAMEWORK:
 ==========================================================
@@ -54,7 +66,7 @@ COMPLETED TASKS & SYSTEM STATUS:
 [PRIVACY & SECURITY]
 8.  Privacy Masking: Verified 'sensitive' class blur effects.
 9.  Persistence: Confirmed theme and API keys store in localStorage or server-side JSON (no cookies).
-10. Asset Privacy: Verified zero external CDN calls; all assets served locally.
+10. Asset Privacy: Verified zero external CDN calls; all assets served through Gluetun proxy during setup.
 
 [NETWORK & DNS]
 11. DNS Redirection: Verified README documentation for Port 53/853/443 hijacking.
@@ -69,5 +81,6 @@ FINAL STATUS:
 ==========================================================
 - [✓] BASH: Passed static analysis and local execution.
 - [✓] UI: Standardized, M3 compliant, and dynamic.
-- [✓] API: Verified endpoint connectivity and theme saving.
+- [✓] API: Verified endpoint connectivity, theme saving, and health monitoring.
+- [✓] LOGS: Technical logs humanized and scrollable.
 - [✓] STATUS: System verified as proper and working as intended.

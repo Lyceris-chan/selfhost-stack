@@ -284,6 +284,17 @@ uci commit firewall
 - **HUB_API_KEY**: Required for sensitive dashboard actions. Can be rotated via UI.
 - **Zero-Leaks**: No external <sup>[5](#explainer-5)</sup> or trackers. We never contact Google directly; fonts are downloaded once during setup (or if the cache is missing) via Fontlay ([privacy policy + source code](https://github.com/miroocloud/fontlay)), then served locally so no further font requests leave your machine. (<sup>[5](#explainer-5)</sup>)
 - **Material Design 3**: The dashboard strictly adheres to M3 specifications (`m3.material.io`). Color generation is powered by the [material-color-utilities](https://github.com/material-foundation/material-color-utilities) library (downloaded during setup from `cdn.jsdelivr.net`; [privacy policy](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net)).
+- **CDN Proxying**: To further protect your privacy, all external asset downloads (fonts, MCU library) performed by the Hub API are routed through the **Gluetun VPN proxy**. This ensures that even during setup or updates, your public home IP is never exposed to asset providers or CDNs.
+
+### External Assets & Libraries
+
+This project stands on the shoulders of these incredible open-source projects and assets:
+
+- **Fonts**: [Google Sans Flex](https://fonts.google.com/specimen/Google+Sans+Flex), [Cascadia Code](https://github.com/microsoft/cascadia-code), and [Material Symbols](https://fonts.google.com/icons).
+- **Icons**: [Material Symbols Rounded](https://fonts.google.com/icons?icon.style=Rounded).
+- **Backend Libraries**: [psutil](https://github.com/giampaolo/psutil) (System monitoring), [SQLite](https://www.sqlite.org/) (Logging & Metrics).
+- **Frontend Libraries**: [@material/material-color-utilities](https://github.com/material-foundation/material-color-utilities) (M3 Color Engine).
+- **Infrastructure**: [Gluetun](https://github.com/qdm12/gluetun) (VPN Gateway), [Unbound](https://github.com/NLnetLabs/unbound) (Recursive DNS), [AdGuard Home](https://github.com/AdguardTeam/AdGuardHome) (DNS Filtering).
 - **Redaction Mode**: "Privacy Masking" blurs IPs and sensitive metadata for screenshots.
 - **Secrets**: Core credentials stored in `/DATA/AppData/privacy-hub/.secrets`.
 

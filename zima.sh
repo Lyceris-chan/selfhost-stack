@@ -1341,7 +1341,8 @@ server {
     }
 
     location /api/ {
-        proxy_pass http://hub-api:55555/;
+        set \$hub_api http://hub-api:55555/;
+        proxy_pass \$hub_api;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -1354,7 +1355,8 @@ server {
     }
 
     location /odido-api/ {
-        proxy_pass http://odido-booster:8080/;
+        set \$odido_booster http://odido-booster:8080/;
+        proxy_pass \$odido_booster;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -2308,6 +2310,14 @@ def metrics_collector():
 
 def log_structured(level, message, category="SYSTEM"):
     """Log to both file and SQLite."""
+    # Humanize common logs
+    if "GET /system-health" in message:
+        message = "System health telemetry synchronized"
+    elif "POST /update-service" in message:
+        message = "Service update sequence initiated"
+    elif "GET /status" in message:
+        return # Too noisy
+        
     entry = {
         "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
         "level": level,
@@ -2339,19 +2349,33 @@ def log_fonts(message, level="SYSTEM"):
     except Exception:
         print(f"[{level}] {message}")
 
+def get_proxy_opener():
+    # Gluetun proxy is usually available at gluetun:8888 within the same docker network
+    proxy_handler = urllib.request.ProxyHandler({'http': 'http://gluetun:8888', 'https': 'http://gluetun:8888'})
+    opener = urllib.request.build_opener(proxy_handler)
+    return opener
+
 def download_text(url):
     req = urllib.request.Request(url, headers={"User-Agent": "privacy-hub/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        if getattr(resp, "status", 200) >= 400:
-            raise Exception(f"HTTP {resp.status}")
-        return resp.read().decode("utf-8", errors="replace")
+    try:
+        opener = get_proxy_opener()
+        with opener.open(req, timeout=30) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except:
+        # Fallback to direct if proxy fails
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.read().decode("utf-8", errors="replace")
 
 def download_binary(url):
     req = urllib.request.Request(url, headers={"User-Agent": "privacy-hub/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        if getattr(resp, "status", 200) >= 400:
-            raise Exception(f"HTTP {resp.status}")
-        return resp.read()
+    try:
+        opener = get_proxy_opener()
+        with opener.open(req, timeout=30) as resp:
+            return resp.read()
+    except:
+        # Fallback to direct if proxy fails
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.read()
 
 def ensure_fonts():
     if os.path.exists(FONTS_DIR) and not os.path.isdir(FONTS_DIR):
@@ -2448,7 +2472,16 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         # Filter out common health check and static asset logs to reduce noise
         msg = format % args
-        if any(x in msg for x in ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'HTTP/1.1" 200', 'HTTP/1.1" 304']):
+        
+        # Humanize common logs
+        if "GET /system-health" in msg:
+            log_structured("INFO", "System health telemetry synchronized", "NETWORK")
+            return
+        elif "POST /update-service" in msg:
+            log_structured("INFO", "Service update sequence initiated", "NETWORK")
+            return
+            
+        if any(x in msg for x in ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /odido-api/api/status', 'HTTP/1.1" 200', 'HTTP/1.1" 304']):
             return
         log_structured("INFO", msg, "NETWORK")
     
@@ -2509,14 +2542,48 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 # Disk Health (Root Partition)
                 disk = psutil.disk_usage('/')
                 
-                # Project Size (Approximate via du)
+                # Project Size (Comprehensive)
                 project_size_bytes = 0
                 try:
-                    # In container, the project root is mapped to /app (containing docker-compose.yml, sources, etc)
-                    # BASE_DIR is /DATA/AppData/privacy-hub on host, mapped to /app in hub-api
-                    res = subprocess.run(['du', '-sb', '/app'], capture_output=True, text=True, timeout=10)
+                    # Sum up BASE_DIR (mounted as /project_root), and check volume sizes via docker
+                    res = subprocess.run(['du', '-sb', '/project_root'], capture_output=True, text=True, timeout=15)
                     if res.returncode == 0:
-                        project_size_bytes = int(res.stdout.split()[0])
+                        project_size_bytes += int(res.stdout.split()[0])
+                    
+                    # Also include Docker volumes if possible
+                    vol_res = subprocess.run(['docker', 'system', 'df', '-v', '--format', 'json'], capture_output=True, text=True, timeout=10)
+                    if vol_res.returncode == 0:
+                        try:
+                            vdata = json.loads(vol_res.stdout)
+                            for vol in vdata.get('Volumes', []):
+                                if 'privacy-hub' in vol.get('Name', '') or 'privacyhub' in vol.get('Name', ''):
+                                    # size is string like "1.2MB", "45.1kB"
+                                    sz_str = vol.get('Size', '0B').upper()
+                                    mult = 1
+                                    if 'GB' in sz_str: mult = 1024*1024*1024
+                                    elif 'MB' in sz_str: mult = 1024*1024
+                                    elif 'KB' in sz_str: mult = 1024
+                                    sz_val = float(re.sub(r'[^0-9.]', '', sz_str))
+                                    project_size_bytes += int(sz_val * mult)
+                        except: pass
+                except: pass
+
+                # Drive Health Logic (SMART-lite)
+                drive_health_pct = 100 - disk.percent
+                drive_status = "Healthy"
+                smart_alerts = []
+                
+                if disk.percent > 90:
+                    drive_status = "Warning (High Usage)"
+                    smart_alerts.append("Disk space is critical (>90%)")
+                
+                # Try to get real SMART info if smartctl is available
+                try:
+                    s_res = subprocess.run(['smartctl', '-H', '/dev/sda'], capture_output=True, text=True, timeout=5)
+                    if s_res.returncode == 0:
+                        if "PASSED" not in s_res.stdout:
+                            drive_status = "Action Required"
+                            smart_alerts.append("SMART health check failed")
                 except: pass
 
                 health_data = {
@@ -2526,10 +2593,24 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     "ram_total": ram.total / (1024 * 1024),
                     "disk_used": disk.used / (1024 * 1024 * 1024),
                     "disk_total": disk.total / (1024 * 1024 * 1024),
+                    "disk_percent": disk.percent,
                     "project_size": project_size_bytes / (1024 * 1024),
-                    "drive_status": "Healthy" if disk.percent < 90 else "Warning (High Usage)"
+                    "drive_status": drive_status,
+                    "drive_health_pct": drive_health_pct,
+                    "smart_alerts": smart_alerts
                 }
                 self._send_json(health_data)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/uninstall':
+            try:
+                def run_uninstall():
+                    time.sleep(2)
+                    subprocess.run(["bash", "/app/zima.sh", "-x"], cwd="/app")
+                
+                import threading
+                threading.Thread(target=run_uninstall).start()
+                self._send_json({"success": True, "message": "Uninstall sequence started"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/status':
@@ -3084,6 +3165,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$PATCHES_SCRIPT:/app/patches.sh"
       - "$CERT_MONITOR_SCRIPT:/usr/local/bin/cert-monitor.sh"
       - "$MIGRATE_SCRIPT:/usr/local/bin/migrate.sh"
+      - "$0:/app/zima.sh"
       - "$WG_API_SCRIPT:/app/server.py"
       - "$GLUETUN_ENV_FILE:/app/gluetun.env"
       - "$COMPOSE_FILE:/app/docker-compose.yml"
@@ -3094,6 +3176,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$DOCKER_AUTH_DIR:/root/.docker:ro"
       - "$FONTS_DIR:/fonts"
       - "$SRC_DIR:/app/sources"
+      - "$BASE_DIR:/project_root:ro"
     environment:
       - HUB_API_KEY=$ODIDO_API_KEY
       - DOCKER_CONFIG=/root/.docker
@@ -3625,11 +3708,15 @@ cat > "$DASHBOARD_FILE" <<EOF
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZimaOS Privacy Hub</title>
+    <link rel="icon" type="image/svg+xml" href="fonts/privacy-hub.svg">
     <!-- Local privacy friendly fonts (Hosted Locally) -->
     <link href="fonts/gs.css" rel="stylesheet">
     <link href="fonts/cc.css" rel="stylesheet">
     <link href="fonts/ms.css" rel="stylesheet">
-    <script src="fonts/mcu.js"></script>
+    <script type="module">
+        import * as mcu from './fonts/mcu.js';
+        window.MaterialColorUtilities = mcu;
+    </script>
     <style>
         /* ============================================
            Material 3 Dark Theme - Strict Implementation
@@ -3998,7 +4085,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         }
 
         .card:hover .nav-arrow {
-            transform: translateX(6px);
+            transform: translateX(8px);
         }
 
         .settings-btn {
@@ -4007,7 +4094,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         .card .description {
             font-size: 14px;
             color: var(--md-sys-color-on-surface-variant);
-            margin-bottom: 16px; 
+            margin: 0 0 16px 0; /* Uniform vertical spacing */
             line-height: 20px;
             flex-grow: 1;
             display: -webkit-box;
@@ -4033,17 +4120,21 @@ cat > "$DASHBOARD_FILE" <<EOF
             padding-top: 12px;
             position: relative;
             z-index: 2;
+            overflow-x: auto; /* Allow chips to scroll horizontally if they overflow */
+            -ms-overflow-style: none;
+            scrollbar-width: none;
         }
         .chip-box::-webkit-scrollbar { display: none; }
         
         .chip {
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 8px; 
-            height: 28px;
-            padding: 0 10px;
+            height: 32px;
+            padding: 0 16px;
             border-radius: 8px;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 500;
             letter-spacing: 0.1px;
             text-decoration: none;
@@ -4060,6 +4151,11 @@ cat > "$DASHBOARD_FILE" <<EOF
         .chip .material-symbols-rounded {
             font-size: 18px;
             pointer-events: none;
+            transition: transform var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
+        }
+
+        .chip:hover .material-symbols-rounded.move-on-hover {
+            transform: translateX(4px);
         }
         
         .chip::before, .btn::before {
@@ -4566,53 +4662,54 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>Invidious</h2>
                     <div class="card-header-actions">
+                        <div id="metrics-invidious" class="status-indicator" style="display:none; gap: 8px; background: transparent; border: none; min-width: auto; padding: 0;">
+                            <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px; margin:0;" data-tooltip="CPU Usage"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                            <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px; margin:0;" data-tooltip="RAM Usage"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                        </div>
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('invidious', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        
                     </div>
                 </div>
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box">
-                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance -></span>
+                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
                     <button onclick="migrateService('invidious', 'migrate', 'yes', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Perform database migration and maintenance."><span class="material-symbols-rounded">database_upload</span> Migrate DB</button>
                     <button onclick="migrateService('invidious', 'clear-logs', 'no', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Clear Invidious application logs."><span class="material-symbols-rounded">delete_sweep</span> Clear Logs</button>
-                    <div id="metrics-invidious" class="chip-box" style="padding-top:0; display:none;">
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                    </div>
                 </div>
             </div>
             <div id="link-redlib" data-url="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib" onclick="navigate(this, event)">
                 <div class="card-header">
                     <h2>Redlib</h2>
                     <div class="card-header-actions">
+                        <div id="metrics-redlib" class="status-indicator" style="display:none; gap: 8px; background: transparent; border: none; min-width: auto; padding: 0;">
+                            <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px; margin:0;" data-tooltip="CPU Usage"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                            <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px; margin:0;" data-tooltip="RAM Usage"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                        </div>
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('redlib', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        
                     </div>
                 </div>
                 <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance -></span>
-                    <div id="metrics-redlib" class="chip-box" style="padding-top:0; display:none;">
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                    </div></div>
+                <div class="chip-box">
+                    <span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
+                </div>
             </div>
             <div id="link-wikiless" data-url="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true" data-container="wikiless" onclick="navigate(this, event)">
                 <div class="card-header">
                     <h2>Wikiless</h2>
                     <div class="card-header-actions">
+                        <div id="metrics-wikiless" class="status-indicator" style="display:none; gap: 8px; background: transparent; border: none; min-width: auto; padding: 0;">
+                            <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px; margin:0;" data-tooltip="CPU Usage"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
+                            <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px; margin:0;" data-tooltip="RAM Usage"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
+                        </div>
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('wikiless', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        
                     </div>
                 </div>
                 <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance -></span>
-                    <div id="metrics-wikiless" class="chip-box" style="padding-top:0; display:none;">
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                    </div></div>
+                <div class="chip-box">
+                    <span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
+                </div>
             </div>
             <div id="link-memos" data-url="http://$LAN_IP:$PORT_MEMOS" class="card" data-check="true" data-container="memos" onclick="navigate(this, event)">
                 <div class="card-header">
@@ -5026,7 +5123,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
                             <input type="color" id="theme-seed-color" onchange="applySeedColor(this.value)" style="position: absolute; top: -10px; left: -10px; width: 80px; height: 80px; cursor: pointer; border: none; background: transparent;">
                         </div>
                         <div style="flex: 1;">
-                            <span class="label-large">Custom Seed Color</span>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="label-large">Custom Seed Color</span>
+                                <span class="body-small monospace" id="theme-seed-hex" style="opacity: 0.7;">#D0BCFF</span>
+                            </div>
                             <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Tap the circle to choose a primary tone</p>
                         </div>
                     </div>
@@ -5063,8 +5163,11 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     <button onclick="updateAllServices()" class="btn btn-filled" data-tooltip="Update all services">
                         <span class="material-symbols-rounded">upgrade</span> Update All
                     </button>
-                    <button onclick="restartStack()" class="btn btn-tonal" style="grid-column: span 2; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
-                        <span class="material-symbols-rounded">restart_alt</span> Restart Stack
+                    <button onclick="restartStack()" class="btn btn-tonal" style="grid-column: span 1; background: var(--md-sys-color-surface-container-highest);">
+                        <span class="material-symbols-rounded">restart_alt</span> Restart
+                    </button>
+                    <button onclick="uninstallStack()" class="btn btn-tonal" style="grid-column: span 1; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Permanently remove all containers and data.">
+                        <span class="material-symbols-rounded">delete_forever</span> Uninstall
                     </button>
                 </div>
             </div>
@@ -5103,7 +5206,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; justify-content: space-between; align-items: center;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span class="material-symbols-rounded" style="font-size: 20px; color: var(--md-sys-color-primary);">hard_drive</span>
-                            <span class="body-medium">Drive Health: <strong id="sys-drive-status">Checking...</strong></span>
+                            <span class="body-medium" data-tooltip="SMART Health Status" id="drive-health-container">Drive Health: <strong id="sys-drive-status">Checking...</strong> <span id="sys-drive-pct"></span></span>
                         </div>
                         <span class="body-small" id="sys-disk-percent">--% used</span>
                     </div>
@@ -6157,6 +6260,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
         // Theme customization logic
         async function applySeedColor(hex) {
+            const hexEl = document.getElementById('theme-seed-hex');
+            if (hexEl) hexEl.textContent = hex.toUpperCase();
             const colors = generateM3Palette(hex);
             applyThemeColors(colors);
         }
@@ -6275,9 +6380,31 @@ cat >> "$DASHBOARD_FILE" <<EOF
             } catch(e) { showSnackbar("Error saving theme: " + e.message); }
         }
 
+        async function uninstallStack() {
+            if (!confirm("⚠️ DANGER: This will permanently remove all containers, volumes, and data. This cannot be undone. Are you absolutely sure?")) return;
+            if (!confirm("LAST WARNING: Final confirmation required to proceed with uninstallation.")) return;
+            
+            showSnackbar("Uninstallation sequence initiated...");
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(API + "/uninstall", { method: 'POST', headers });
+                const result = await res.json();
+                if (result.success) {
+                    showSnackbar("System removed. Redirecting...");
+                    setTimeout(() => window.location.href = "about:blank", 3000);
+                } else {
+                    throw new Error(result.error || "Uninstall failed");
+                }
+            } catch (e) {
+                showSnackbar("Error during uninstall: " + e.message);
+            }
+        }
+
         async function loadThemeSettings() {
             try {
-                const res = await fetch(API + "/theme");
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/theme", { headers });
                 const data = await res.json();
                 if (data.seed) {
                     const picker = document.getElementById('theme-seed-color');
@@ -6565,41 +6692,53 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
         }
         
-        async function fetchSystemHealth() {
+        async function fetchHealth() {
             try {
-                const res = await fetch(API + "/system-health");
-                if (!res.ok) return;
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/system-health", { headers });
+                if (res.status === 401) throw new Error("401");
                 const data = await res.json();
                 
-                document.getElementById('sys-cpu').textContent = data.cpu_percent.toFixed(1) + "%";
-                document.getElementById('sys-cpu-fill').style.width = Math.min(100, data.cpu_percent) + "%";
-                
-                document.getElementById('sys-ram').textContent = Math.round(data.ram_used) + " / " + Math.round(data.ram_total) + " MB";
-                document.getElementById('sys-ram-fill').style.width = Math.min(100, (data.ram_used / data.ram_total) * 100) + "%";
-                
-                document.getElementById('sys-project-size').textContent = data.project_size.toFixed(1) + " MB";
-                document.getElementById('sys-drive-status').textContent = data.drive_status;
-                document.getElementById('sys-disk-percent').textContent = ((data.disk_used / data.disk_total) * 100).toFixed(1) + "% used";
-                
-                const uptime = data.uptime;
-                const days = Math.floor(uptime / 86400);
-                const hours = Math.floor((uptime % 86400) / 3600);
-                const mins = Math.floor((uptime % 3600) / 60);
-                let uptimeStr = "";
-                if (days > 0) uptimeStr += days + "d ";
-                uptimeStr += hours + "h " + mins + "m";
-                document.getElementById('sys-uptime').textContent = uptimeStr;
+                const cpu = Math.round(data.cpu_percent || 0);
+                const ramUsed = Math.round(data.ram_used || 0);
+                const ramTotal = Math.round(data.ram_total || 0);
+                const ramPct = Math.round((ramUsed / ramTotal) * 100);
 
-                const healthDot = document.getElementById('health-dot');
-                const healthText = document.getElementById('health-text');
-                if (data.drive_status === "Healthy" && (data.ram_used / data.ram_total) < 0.9) {
-                    healthDot.className = "status-dot up";
-                    healthText.textContent = "Optimal";
-                } else {
-                    healthDot.className = "status-dot down";
-                    healthText.textContent = "Degraded";
-                }
-            } catch(e) {}
+                document.getElementById('sys-cpu').textContent = cpu + "%";
+                document.getElementById('sys-cpu-fill').style.width = cpu + "%";
+                document.getElementById('sys-ram').textContent = ramUsed + " / " + ramTotal + " MB";
+                document.getElementById('sys-ram-fill').style.width = ramPct + "%";
+                document.getElementById('sys-project-size').textContent = (data.project_size || 0).toFixed(1) + " MB";
+                
+                const uptime = data.uptime || 0;
+                const d = Math.floor(uptime / 86400);
+                const h = Math.floor((uptime % 86400) / 3600);
+                const m = Math.floor((uptime % 3600) / 60);
+                document.getElementById('sys-uptime').textContent = d + "d " + h + "h " + m + "m";
+
+                const driveStatus = document.getElementById('sys-drive-status');
+                const drivePct = document.getElementById('sys-drive-pct');
+                const driveContainer = document.getElementById('drive-health-container');
+                
+driveStatus.textContent = data.drive_status || "Unknown";
+drivePct.textContent = (data.drive_health_pct || 0) + "% Health";
+document.getElementById('sys-disk-percent').textContent = (data.disk_percent || 0).toFixed(1) + "% used";
+
+if (data.drive_status === "Action Required") {
+    driveStatus.style.color = "var(--md-sys-color-error)";
+} else if (data.drive_status.includes("Warning")) {
+    driveStatus.style.color = "var(--md-sys-color-warning)";
+} else {
+    driveStatus.style.color = "var(--md-sys-color-success)";
+}
+
+if (data.smart_alerts && data.smart_alerts.length > 0) {
+    driveContainer.dataset.tooltip = "SMART Alerts:\n" + data.smart_alerts.join("\n");
+} else {
+    driveContainer.dataset.tooltip = "Drive is reporting healthy SMART status.";
+}
+
+            } catch(e) { console.error("Health fetch error:", e); }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
