@@ -5351,20 +5351,29 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     </div>
 
                     <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span class="label-large">Theme Presets</span>
+                        </div>
+                        <div id="static-presets" style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <!-- Static presets injected here -->
+                        </div>
+
+                        <div style="height: 1px; background: var(--md-sys-color-outline-variant); opacity: 0.5;"></div>
+
                         <div style="display: flex; align-items: center; gap: 16px;">
                             <label for="theme-image-upload" class="btn btn-filled" style="width: 48px; height: 48px; padding: 0; border-radius: 24px; cursor: pointer; flex-shrink: 0;" data-tooltip="Pick a wallpaper to extract colors">
                                 <span class="material-symbols-rounded">wallpaper</span>
                             </label>
                             <input type="file" id="theme-image-upload" accept="image/*" onchange="extractColorsFromImage(event)" style="display: none;">
                             <div style="flex: 1;">
-                                <span class="label-large">Image Extraction</span>
-                                <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Auto-generate a palette from your wallpaper</p>
+                                <span class="label-large">Wallpaper Extraction</span>
+                                <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Upload image to generate palettes</p>
                             </div>
                         </div>
                         
-                        <!-- Extracted/Manual Palette -->
+                        <!-- Extracted Palette -->
                         <div id="extracted-palette" style="display: flex; gap: 12px; flex-wrap: wrap; min-height: 48px; align-items: center;">
-                            <span class="body-small" style="opacity: 0.5; font-style: italic;">Extracted colors will appear here...</span>
+                            <span class="body-small" style="opacity: 0.5; font-style: italic;">Extracted palettes will appear here...</span>
                         </div>
 
                         <!-- Manual Add -->
@@ -6658,6 +6667,47 @@ cat >> "$DASHBOARD_FILE" <<EOF
             applyThemeColors(colors);
         }
 
+        function renderThemePreset(seedHex) {
+            const colors = generateM3Palette(seedHex);
+            const container = document.createElement('div');
+            container.style.width = '48px';
+            container.style.height = '48px';
+            container.style.borderRadius = '24px';
+            container.style.backgroundColor = colors.surfaceContainer; // Background of the "folder"
+            container.style.cursor = 'pointer';
+            container.style.border = '1px solid var(--md-sys-color-outline-variant)';
+            container.style.transition = 'transform 0.2s, border-color 0.2s';
+            container.title = "Apply " + seedHex;
+            container.style.display = 'grid';
+            container.style.gridTemplateColumns = '1fr 1fr';
+            container.style.gridTemplateRows = '1fr 1fr';
+            container.style.overflow = 'hidden';
+            container.style.padding = '4px';
+            container.style.gap = '2px';
+
+            const c1 = document.createElement('div'); c1.style.background = colors.primary; c1.style.borderRadius = '50%';
+            const c2 = document.createElement('div'); c2.style.background = colors.secondary; c2.style.borderRadius = '50%';
+            const c3 = document.createElement('div'); c3.style.background = colors.tertiary; c3.style.borderRadius = '50%';
+            const c4 = document.createElement('div'); c4.style.background = colors.primaryContainer; c4.style.borderRadius = '50%';
+
+            container.appendChild(c1); container.appendChild(c2); container.appendChild(c3); container.appendChild(c4);
+
+            container.onmouseover = () => { container.style.transform = 'scale(1.1)'; container.style.borderColor = 'var(--md-sys-color-primary)'; };
+            container.onmouseout = () => { container.style.transform = 'scale(1)'; container.style.borderColor = 'var(--md-sys-color-outline-variant)'; };
+            container.onclick = () => { applySeedColor(seedHex); };
+            
+            return container;
+        }
+
+        function initStaticPresets() {
+            const presets = ['#D0BCFF', '#93000A', '#FFA500', '#006e1c', '#0061a4', '#555555'];
+            const container = document.getElementById('static-presets');
+            if(container) {
+                container.innerHTML = '';
+                presets.forEach(hex => container.appendChild(renderThemePreset(hex)));
+            }
+        }
+
         async function extractColorsFromImage(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -6701,7 +6751,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     container.innerHTML = '';
                     
                     // Take top 4 or all if fewer
-                    const topColors = ranked.slice(0, 5);
+                    const topColors = ranked.slice(0, 4);
                     if (topColors.length === 0) {
                         // Fallback to naive average if algo fails
                         fallbackExtraction(pixels);
@@ -6710,7 +6760,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
                     topColors.forEach(argb => {
                         const hex = hexFromArgb(argb);
-                        addColorChip(hex);
+                        container.appendChild(renderThemePreset(hex));
                     });
                     
                     // Auto-select first
@@ -6734,7 +6784,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const avgHex = rgbToHex(Math.round(r/count), Math.round(g/count), Math.round(b/count));
             const container = document.getElementById('extracted-palette');
             container.innerHTML = '';
-            addColorChip(avgHex);
+            container.appendChild(renderThemePreset(avgHex));
             applySeedColor(avgHex);
         }
 
@@ -6747,7 +6797,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const container = document.getElementById('extracted-palette');
                 if (container.querySelector('span')) container.innerHTML = '';
                 
-                addColorChip(val);
+                container.appendChild(renderThemePreset(val));
                 applySeedColor(val);
                 input.value = '';
             } else {
@@ -6756,26 +6806,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
 
         function addColorChip(hex) {
-            const container = document.getElementById('extracted-palette');
-            // Remove placeholder
-            const placeholder = container.querySelector('span');
-            if (placeholder) placeholder.remove();
-
-            const chip = document.createElement('div');
-            chip.style.width = '40px';
-            chip.style.height = '40px';
-            chip.style.borderRadius = '20px';
-            chip.style.backgroundColor = hex;
-            chip.style.cursor = 'pointer';
-            chip.style.border = '2px solid var(--md-sys-color-outline-variant)';
-            chip.style.transition = 'transform 0.2s';
-            chip.title = "Apply " + hex;
-            
-            chip.onmouseover = () => chip.style.transform = 'scale(1.1)';
-            chip.onmouseout = () => chip.style.transform = 'scale(1)';
-            chip.onclick = () => applySeedColor(hex);
-            
-            container.appendChild(chip);
+            // Deprecated, replaced by renderThemePreset but kept if needed for fallback logic not using renderThemePreset
+            // For now we remove it to keep code clean as we replaced calls
         }
 
         function rgbToHex(r, g, b) {
@@ -7338,6 +7370,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             
             initPrivacyMode();
             initTheme();
+            initStaticPresets();
             fetchContainerIds();
             fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates(); fetchMetrics(); loadThemeSettings(); fetchSystemHealth();
             setInterval(fetchStatus, 15000);
