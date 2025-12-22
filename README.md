@@ -247,16 +247,17 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 Requests originate from the isolated `hub-api` container using generic User-Agents, preventing host or browser fingerprinting. Upstream providers see a generic Linux client from a commercial VPN IP.
 
 ### Proton Pass Export
-When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/protonpass_import.csv` for easy import ([See Guide](#proton-pass-import)).
+When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/protonpass_import.csv` for easy import.
 
 <a id="proton-pass-import"></a>
-<details open>
-<summary><strong>👇 How to Import into Proton Pass</strong></summary>
+**👇 How to Import into Proton Pass**
 
 1.  **Download the CSV**: Transfer `protonpass_import.csv` to your machine.
 2.  **Open Proton Pass**: Settings → Import → Select Proton Pass (CSV).
 3.  **Upload**: The format matches the official template (`name,url,email,username,password,note,totp,vault`).
-</details>
+
+---
+*Built with ❤️ for the self-hosting community.*
 
 ## 🖥️ System Requirements & Scaling
 
