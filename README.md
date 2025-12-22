@@ -226,6 +226,16 @@ To filter ads and trackers for every device on your WiFi:
 *   **DHCP Settings**: Set the **Primary DNS** server in your router's LAN/DHCP settings to your Privacy Hub's IP (`192.168.1.100`).
 *   **Secondary DNS**: Leave empty or set to the same IP. *Adding Google (8.8.8.8) here breaks your privacy.*
 
+> ⚠️ **Critical Troubleshooting: If Your Internet "Breaks"**
+>
+> **What is DNS?** DNS (Domain Name System) is the "phonebook" of the internet. It translates human-friendly names (like `google.com`) into computer IPs (like `142.250.1.1`). **Resolving a name** is the process of your computer asking your hub for this translation.
+>
+> If your Privacy Hub machine loses power, crashes, or the script breaks during an update, your devices may lose internet access because they can no longer "resolve names."
+>
+> **What to do:**
+> 1.  **Restart the Hub**: Run `./zima.sh` again to fix configurations and restart containers.
+> 2.  **Emergency Fallback**: If you cannot fix the hub immediately, change your router or device DNS to a trusted public provider like **Mullvad DNS** (`194.242.2.2`) to restore connectivity until you can repair your self-hosted instance.
+
 ### 4. Split Tunnel Configuration (VPN Routing)
 This stack uses a **Split Tunnel** architecture via Gluetun. This means only specific traffic is sent through the VPN, while the rest of your home network remains untouched.
 *   **VPN-Gated Services**: Privacy frontends (Invidious, Redlib, etc.) are locked inside the VPN container. They cannot access the internet if the VPN disconnects (Killswitch enabled).
