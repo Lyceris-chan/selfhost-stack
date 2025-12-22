@@ -4019,6 +4019,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         .status-indicator {
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
             background: var(--md-sys-color-surface-container-highest);
             padding: 6px 12px;
@@ -4026,6 +4027,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             font-size: 12px;
             color: var(--md-sys-color-on-surface-variant);
             width: fit-content;
+            min-width: 100px;
             flex-shrink: 0;
         }
         
@@ -4495,7 +4497,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>Invidious</h2>
                     <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('invidious', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
@@ -4515,7 +4517,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>Redlib</h2>
                     <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('redlib', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
@@ -4531,7 +4533,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>Wikiless</h2>
                     <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('wikiless', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
@@ -4547,7 +4549,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>Memos</h2>
                     <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('memos', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
@@ -4566,7 +4568,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>Rimgo</h2>
                     <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('rimgo', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
@@ -4582,7 +4584,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>Scribe</h2>
                     <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('scribe', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
@@ -4598,7 +4600,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>BreezeWiki</h2>
                     <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('breezewiki', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
@@ -4614,7 +4616,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>AnonOverflow</h2>
                     <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('anonymousoverflow', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
@@ -4630,7 +4632,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>VERT</h2>
                     <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('vert', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
@@ -4653,7 +4655,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>AdGuard Home</h2>
                     <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('adguard', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
@@ -4673,7 +4675,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>Portainer</h2>
                     <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('portainer', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
@@ -4689,7 +4691,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>WireGuard</h2>
                     <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
                         <button onclick="openServiceSettings('wg-easy', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
@@ -5410,11 +5412,11 @@ cat >> "$DASHBOARD_FILE" <<EOF
                                     dot.className = 'status-dot down';
                                     indicator.title = data.health_details[name];
                                 } else if (status === 'healthy' || status === 'up') {
-                                    txt.textContent = 'Healthy';
+                                    txt.textContent = 'Connected';
                                     dot.className = 'status-dot up';
-                                    indicator.title = 'Service is operational';
+                                    indicator.title = 'Service is connected and operational';
                                 } else if (status === 'starting') {
-                                    txt.textContent = 'Starting';
+                                    txt.textContent = 'Connecting...';
                                     dot.className = 'status-dot starting';
                                     indicator.title = 'Service is currently initializing';
                                 } else {
@@ -5452,7 +5454,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     dot.className = 'status-dot down';
                     txt.textContent = 'Offline (API Error)';
                 }
-                // Force indicators out of "Initializing..." state on API failure
+                // Force indicators out of "Connecting..." state on API failure
                 document.querySelectorAll('.status-indicator').forEach(indicator => {
                     const dot = indicator.querySelector('.status-dot');
                     const text = indicator.querySelector('.status-text');
