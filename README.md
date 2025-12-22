@@ -271,7 +271,7 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/protonpass_import.csv` for easy import ([See Guide](#proton-pass-import)).
 
 <a id="proton-pass-import"></a>
-<details>
+<details open>
 <summary><strong>👇 How to Import into Proton Pass</strong></summary>
 
 1.  **Download the CSV**: Transfer `protonpass_import.csv` to your machine.
