@@ -206,8 +206,15 @@ Resource usage scales primarily with simultaneous browsing and background sync t
 ### Standard Setup
 Forward port **51820/UDP** to your host's local IP. This is the only exposed port and is cryptographically silent.
 
-### Local LAN Mode
-AdGuard Home utilizes DNS rewrites to direct internal traffic to your local IP, ensuring optimal performance and local <sup>[3](#explainer-3)</sup> access.
+### Router Integration (Default DNS)
+To protect your entire network, set your router's **LAN DNS** (not WAN DNS) to the local IP of this stack. This ensures all DHCP clients automatically use AdGuard Home for filtering.
+
+### DNS Hijacking (Forced Resolution)
+Many "smart" devices (TVs, IoT) hardcode their own DNS (like `8.8.8.8`) to bypass local filters. You can "elevate" your setup by creating a **NAT Redirect** rule on your router:
+- **Rule:** Redirect all traffic on port `53` (TCP/UDP) not originating from the Privacy Hub to the Privacy Hub's IP.
+- This forces rogue devices to use your filtered DNS even if they think they are talking to Google or Cloudflare.
+
+> **Note on Certificate Pinning:** While DNS hijacking works for standard DNS, some high-security apps use **Certificate Pinning** combined with hardcoded Encrypted DNS (DoH/DoT) to prevent any interference. In these cases, the app may refuse to connect if it detects its traffic is being rerouted or if it cannot verify the upstream certificate. This is a deliberate security feature of those apps and cannot be bypassed via DNS manipulation.
 
 ## 📡 Advanced Setup: OpenWrt & Double NAT
 
@@ -243,6 +250,19 @@ uci set firewall.@rule[-1].src='wan'
 uci set firewall.@rule[-1].proto='udp'
 uci set firewall.@rule[-1].dest_port='51820'
 uci set firewall.@rule[-1].target='ACCEPT'
+
+**3. Forced DNS (DNS Hijacking)**
+```bash
+# Redirect all LAN port 53 traffic to the Privacy Hub
+uci add firewall redirect
+uci set firewall.@redirect[-1].name='Forced-DNS'
+uci set firewall.@redirect[-1].src='lan'
+uci set firewall.@redirect[-1].proto='tcpudp'
+uci set firewall.@redirect[-1].src_dport='53'
+uci set firewall.@redirect[-1].dest_ip='192.168.1.100' # <--- YOUR IP
+uci set firewall.@redirect[-1].dest_port='53'
+uci set firewall.@redirect[-1].target='DNAT'
+```
 
 uci commit firewall
 /etc/init.d/firewall restart
