@@ -198,41 +198,57 @@ The configuration is pre-tuned to support up to **30 users** on a machine with 1
 
 ## 🌐 Network Configuration
 
-### 1. Standard Router Setup (Recommended)
-Set your router's **LAN DNS** to the local IP of your Privacy Hub (e.g., `192.168.1.100`). This ensures all devices on your network automatically use AdGuard Home for filtering.
+### 1. Enable Remote Access (ISP Router)
+To access your services from anywhere via WireGuard, you must forward the VPN port on your main router:
+*   **Port Forwarding**: Forward **UDP Port 51820** to the **Local IP** of your Privacy Hub (e.g., `192.168.1.100`).
+*   This allows the WireGuard handshake to complete securely. No other ports need to be exposed.
 
-### 2. Manual Device Configuration
-If you cannot change router settings, manually set the DNS server in your device's Network Settings to the Privacy Hub's IP. 
+### 2. Router Configuration (OpenWrt Example)
+If you use a custom router like OpenWrt, ensure your Privacy Hub has a stable address and firewall permission.
 
-### 3. Advanced Setup (OpenWrt / Hijacking)
-Some devices hardcode DNS (like `8.8.8.8`) to bypass filters. You can force compliance using **DNS Hijacking** (NAT Redirection).
-
-**OpenWrt UCI Commands:**
 ```bash
-# 1. Static IP Assignment
+# 1. Assign Static IP
 uci add dhcp host
 uci set dhcp.@host[-1].name='Privacy-Hub'
 uci set dhcp.@host[-1].mac='00:11:22:33:44:55' # <--- YOUR MAC
 uci set dhcp.@host[-1].ip='192.168.1.100'      # <--- YOUR IP
 uci commit dhcp
 
-# 2. DNS Hijacking (Redirect all LAN port 53 traffic to the Hub)
-uci add firewall redirect
-uci set firewall.@redirect[-1].name='Forced-DNS'
-uci set firewall.@redirect[-1].src='lan'
-uci set firewall.@redirect[-1].proto='tcpudp'
-uci set firewall.@redirect[-1].src_dport='53'
-uci set firewall.@redirect[-1].dest_ip='192.168.1.100'
-uci set firewall.@redirect[-1].dest_port='53'
-uci set firewall.@redirect[-1].target='DNAT'
-
-# 3. Blocking Public DoH (Closing bypass holes)
-# See OpenWrt 'banIP' or 'simple-adblock' documentation for blocking port 853.
+# 2. Allow WireGuard Inbound
+uci add firewall rule
+uci set firewall.@rule[-1].name='Allow-WireGuard-Inbound'
+uci set firewall.@rule[-1].src='wan'
+uci set firewall.@rule[-1].proto='udp'
+uci set firewall.@rule[-1].dest_port='51820'
+uci set firewall.@rule[-1].target='ACCEPT'
+uci commit firewall
+/etc/init.d/firewall restart
 ```
 
-**Resources:**
-*   [OpenWrt: Intercepting DNS](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/intercept_dns)
-*   [OpenWrt: Ban IP addresses (DoH Blocking)](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/ban_ip)
+### 3. Network-Wide DNS Protection
+To filter ads and trackers for every device on your WiFi:
+*   **DHCP Settings**: Set the **Primary DNS** server in your router's LAN/DHCP settings to your Privacy Hub's IP (`192.168.1.100`).
+*   **Secondary DNS**: Leave empty or set to the same IP. *Adding Google (8.8.8.8) here breaks your privacy.*
+
+### 4. Advanced Network Hardening (Explore!)
+Some "smart" devices (TVs, IoT, Google Home) are hardcoded to bypass your DNS and talk directly to Google. You can force them to respect your privacy rules using advanced firewall techniques.
+
+*   **DNS Hijacking (NAT Redirect)**: Catch all rogue traffic on port 53 and force it into your AdGuard instance. [OpenWrt Guide](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/intercept_dns)
+*   **Block DoH/DoT**: Modern apps try to use "DNS over HTTPS" to sneak past filters. You can block this by banning known DoH IPs and ports (853/443). [OpenWrt banIP Guide](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/ban_ip)
+
+> 🚀 **Why do this?** This ensures *total* network sovereignty. Not a single packet leaves your house without your permission. It's a deep rabbit hole, but worth exploring!
+
+## 📡 Advanced Setup: OpenWrt & Double NAT
+
+<details>
+<summary>**Full UCI Commands for Double NAT Scenarios**</summary>
+
+If you are behind an ISP modem *and* an OpenWrt router (Double NAT), you need to forward traffic through both.
+
+```bash
+# ... (Previous UCI commands for port forwarding and DNS hijacking)
+```
+</details>
 
 ## 🔒 Security & Privacy
 
