@@ -2463,7 +2463,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
 
     def _check_auth(self):
         # Allow certain GET endpoints without auth for the dashboard
-        if self.command == 'GET' and self.path in ['/', '/status', '/profiles', '/containers', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates']:
+        if self.command == 'GET' and self.path in ['/', '/status', '/profiles', '/containers', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates', '/master-update']:
             return True
         
         # Watchtower notification (comes from docker network, simple path check)
@@ -2494,6 +2494,22 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 if json_start != -1 and json_end != -1:
                     output = output[json_start:json_end+1]
                 self._send_json(json.loads(output))
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/master-update':
+            try:
+                # 1. Trigger Watchtower for all images
+                subprocess.Popen(['docker', 'run', '--rm', '-v', '/var/run/docker.sock:/var/run/docker.sock', 'containrrr/watchtower', '--run-once', '--cleanup'])
+                # 2. Trigger source updates for all
+                src_root = "/app/sources"
+                if os.path.exists(src_root):
+                    for repo in os.listdir(src_root):
+                        repo_path = os.path.join(src_root, repo)
+                        if os.path.isdir(os.path.join(repo_path, ".git")):
+                            # We can't easily rebuild everything via one command without knowing which services use which repo
+                            # but we can at least fetch and reset to origin
+                            subprocess.Popen(["git", "fetch", "--all"], cwd=repo_path)
+                self._send_json({"success": True, "message": "Master update initiated"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/check-updates':
@@ -4864,9 +4880,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
                 <div class="stat-row"><span class="stat-label">Safe Display</span><span class="stat-value">Active (Client-side)</span></div>
                 <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
-                    <button onclick="checkUpdates()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Manually trigger a check for image updates (via Watchtower) and source code updates.">
+                    <button onclick="checkUpdates()" class="btn btn-tonal" style="width: 100%;" data-tooltip="Manually trigger a check for image updates (via Watchtower) and source code updates.">
                         <span class="material-symbols-rounded">system_update_alt</span>
                         Check for Updates
+                    </button>
+                    <button onclick="updateAllServices()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Master Update: Pulls latest images and source code for all services.">
+                        <span class="material-symbols-rounded">upgrade</span>
+                        Update All Services
                     </button>
                     <button onclick="restartStack()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Reboot all containers in the stack. This takes ~30 seconds and is required for manual .secrets changes to take effect.">
                         <span class="material-symbols-rounded">restart_alt</span>
@@ -5036,12 +5056,20 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
 
         async function updateAllServices() {
-            if (!confirm("Update " + pendingUpdates.length + " services now? This will pull latest code and rebuild containers.")) return;
-            for (const srv of pendingUpdates) {
-                await updateService(srv);
+            if (!confirm("Start Master Update? This will pull latest images and source code for the entire stack. Services may restart.")) return;
+            showSnackbar("Master update initiated... pulling images and code.");
+            try {
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/master-update", { method: 'POST', headers });
+                const data = await res.json();
+                if (data.success) {
+                    showSnackbar("Master update is running in background. Check logs for progress.");
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch(e) {
+                showSnackbar("Master update failed: " + e.message);
             }
-            alert("All updates completed.");
-            fetchUpdates();
         }
 
         async function updateService(name) {
