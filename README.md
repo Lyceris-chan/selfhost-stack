@@ -239,24 +239,14 @@ uci set firewall.@redirect[-1].target='DNAT'
 ### Zero-Leaks Architecture
 External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN proxy** and served locally. Your public home IP is never exposed to CDNs.
 
-```mermaid
-graph TD
-    A[User/Script] -->|Starts Container| B(Hub API)
-    B -->|Checks /assets Volume| C{Assets Exist?}
-    C -->|Yes| D[Serve Locally via Nginx]
-    C -->|No| E[Initiate Download]
-    E -->|Configure Proxy| F[Gluetun Proxy :8888]
-    F -->|Request| G[External CDNs]
-    G -->|Fontlay/JSDelivr| F
-    F -->|Response| E
-    E -->|Save to Disk| H["/assets Volume"]
-    H --> D
-```
-
 **Privacy Enforcement:**
-1.  **Isolation**: The host machine never contacts CDNs directly.
-2.  **Proxying**: The `hub-api` container uses the `gluetun` container as an HTTP proxy for all external fetches.
-3.  **Data Minimization**: Requests use generic User-Agents, preventing host fingerprinting. Upstream providers see a generic Linux client from a VPN IP.
+1.  **Container Initiation**: When the Hub API container starts, it initiates an asset verification check.
+2.  **Proxy Routing**: If assets are missing, the Hub API routes download requests through the Gluetun VPN container (acting as an HTTP proxy on port 8888).
+3.  **Encapsulated Fetching**: All requests to external CDNs (Fontlay, JSDelivr) occur *inside* the VPN tunnel. Upstream providers only see the VPN IP.
+4.  **Local Persistence**: Assets are saved to a persistent Docker volume (`/assets`).
+5.  **Offline Serving**: The Management Dashboard (Nginx) serves all UI resources exclusively from this local volume.
+
+- **Data Minimization**:
 
 ### Proton Pass Export
 When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/protonpass_import.csv` for easy import ([See Guide](#proton-pass-import)).
