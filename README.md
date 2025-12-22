@@ -249,7 +249,29 @@ uci commit dhcp
 
 ## 🔒 Security & Privacy
 
-- **Zero-Leaks Architecture**: External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN proxy** and served locally. Your public home IP is never exposed to CDNs.
+### Zero-Leaks Architecture
+External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN proxy** and served locally. Your public home IP is never exposed to CDNs.
+
+```mermaid
+graph TD
+    A[User/Script] -->|Starts Container| B(Hub API)
+    B -->|Checks /assets Volume| C{Assets Exist?}
+    C -->|Yes| D[Serve Locally via Nginx]
+    C -->|No| E[Initiate Download]
+    E -->|Configure Proxy| F[Gluetun Proxy :8888]
+    F -->|Request| G[External CDNs]
+    G -->|Fontlay/JSDelivr| F
+    F -->|Response| E
+    E -->|Save to Disk| H[/assets Volume]
+    H --> D
+```
+
+**Privacy Enforcement:**
+1.  **Isolation**: The host machine never contacts CDNs directly.
+2.  **Proxying**: The `hub-api` container uses the `gluetun` container as an HTTP proxy for all external fetches.
+3.  **Persistence**: Assets are downloaded once and stored in a persistent Docker volume.
+4.  **Local Serving**: The Dashboard (Nginx) serves files exclusively from the local volume.
+
 - **Data Minimization**: Requests originate from the isolated `hub-api` container using generic User-Agents, preventing host or browser fingerprinting.
 - **Proton Pass Export**: When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/protonpass_import.csv` for easy import ([See Guide](#proton-pass-import)).
 
