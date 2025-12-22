@@ -36,16 +36,34 @@ Prepare these credentials to ensure a smooth deployment.
 Run the deployment script. It will validate your environment, prompt for credentials, and build the stack.
 
 ```bash
-# Standard Deployment
+# Standard Deployment (Interactive)
 ./zima.sh
 
-# Deployment with Auto-generated Passwords
+# Deployment with Auto-generated Passwords (Recommended for Beginners)
 ./zima.sh -p
 ```
 
-### Management
-*   **Reset Environment**: `./zima.sh -c` (Cleans up containers and networks)
-*   **Uninstall**: `./zima.sh -x` (Removes everything and exits)
+### 🔑 Post-Install: Where are my passwords?
+If you used the `-p` flag, the script auto-generated secure credentials for you.
+
+1.  **Secret File**: All passwords are stored on your host at:
+    ```bash
+    /DATA/AppData/privacy-hub/.secrets
+    ```
+2.  **Proton Pass Import**: A CSV file ready for import into password managers is generated at:
+    ```bash
+    /DATA/AppData/privacy-hub/protonpass_import.csv
+    ```
+3.  **Default Username**:
+    *   **Portainer**: `portainer` (or `admin`)
+    *   **AdGuard**: `adguard`
+    *   **Dashboard API**: `HUB_API_KEY` (Found in `.secrets`)
+
+### Management & Troubleshooting
+*   **Update Services**: Use the "Check Updates" button in the dashboard.
+*   **Restart Stack**: `./zima.sh` (Running it again updates configuration and restarts containers safely).
+*   **Reset Environment**: `./zima.sh -c` (Cleans up containers and networks, keeps data).
+*   **Uninstall**: `./zima.sh -x` (⚠️ Removes everything including data).
 
 ## 🔒 Architecture & Privacy
 
