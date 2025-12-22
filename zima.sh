@@ -269,7 +269,7 @@ setup_fonts() {
 
     # Material Color Utilities (Local for privacy)
     log_info "Downloading Material Color Utilities..."
-    if ! curl -fsSL "https://esm.run/@material/material-color-utilities" -o "$FONTS_DIR/mcu.js"; then
+    if ! curl -fsSL "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.2.7/dist/material-color-utilities.min.js" -o "$FONTS_DIR/mcu.js"; then
         log_warn "Failed to download Material Color Utilities. Using fallback logic."
     fi
 
@@ -419,7 +419,7 @@ clean_environment() {
     fi
     
     if [ "$FORCE_CLEAN" = true ]; then
-        log_warn "SYSTEM RESET: Restoring host to its original state..."
+        log_warn "REVERT: REVERTING DEPLOYMENT (undoing our changes and restoring the system back to default and clean up all files)..."
         echo ""
         
         # ============================================================
@@ -1690,59 +1690,104 @@ log() { echo "{\"timestamp\":\"$(date +'%Y-%m-%d %H:%M:%S')\",\"level\":\"DATABA
 
 mkdir -p "$BACKUP_DIR"
 
-    if [ "$ACTION" = "backup-all" ]; then
-        log "Starting full system backup (pre-update safety)..."
-        # We backup the entire config and data directories (mounted as /etc/adguard, /app/data etc)
-        # In the context of the container, /DATA/AppData/privacy-hub is the root.
-        # But we only have access to what is mounted. 
-        # A more reliable way is to backup the service-specific volumes we have.
-        tar -czf "$BACKUP_DIR/full_backup_$TIMESTAMP.tar.gz" -C "$DATA_DIR" . 2>/dev/null || true
-        log "Full system backup completed: full_backup_$TIMESTAMP.tar.gz"
-        exit 0
-    fi
+        if [ "$ACTION" = "backup-all" ]; then
 
-    if [ "$SERVICE" = "invidious" ]; then    if [ "$ACTION" = "clear" ]; then
-        log "CLEARING Invidious database (resetting to defaults)..."
-        if [ "$BACKUP" != "no" ]; then
-            log "Creating safety backup..."
-            docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
+            log "Starting full system backup (pre-update safety)..."
+
+            tar -czf "$BACKUP_DIR/full_backup_$TIMESTAMP.tar.gz" -C "$DATA_DIR" . 2>/dev/null || true
+
+            log "Full system backup completed: full_backup_$TIMESTAMP.tar.gz"
+
+            exit 0
+
         fi
-        # Drop and recreate
-        docker exec invidious-db dropdb -U kemal invidious
-        docker exec invidious-db createdb -U kemal invidious
-        docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh
-        log "Invidious database cleared."
+
+    
+
+        if [ "$ACTION" = "restore" ]; then
+
+            log "Attempting to restore latest backup for $SERVICE..."
+
+            LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/${SERVICE}_*.sql 2>/dev/null | head -n1)
+
+            if [ -n "$LATEST_BACKUP" ]; then
+
+                log "Restoring from $LATEST_BACKUP..."
+
+                if [ "$SERVICE" = "invidious" ]; then
+
+                    docker exec invidious-db dropdb -U kemal invidious
+
+                    docker exec invidious-db createdb -U kemal invidious
+
+                    cat "$LATEST_BACKUP" | docker exec -i invidious-db psql -U kemal invidious
+
+                    log "Restore complete."
+
+                else
+
+                    log "Restore not fully automated for $SERVICE yet. Check $BACKUP_DIR."
+
+                fi
+
+            else
+
+                log "No sql backup found for $SERVICE."
+
+            fi
+
+            exit 0
+
+        fi
+
+    
+
+        if [ "$SERVICE" = "invidious" ]; then
+
+            if [ "$ACTION" = "clear" ]; then
+            log "CLEARING Invidious database (resetting to defaults)..."
+            if [ "$BACKUP" != "no" ]; then
+                log "Creating safety backup..."
+                docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
+            fi
+            # Drop and recreate
+            docker exec invidious-db dropdb -U kemal invidious
+            docker exec invidious-db createdb -U kemal invidious
+            docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh
+            log "Invidious database cleared."
+        elif [ "$ACTION" = "migrate" ]; then
+            log "Starting Invidious migration..."
+            # 1. Backup existing data
+            if [ "$BACKUP" != "no" ] && [ -d "$DATA_DIR/postgres" ]; then
+                log "Backing up Invidious database..."
+                docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"
+            fi
+            # 2. Run migrations
+            log "Applying schema updates..."
+            docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
+            log "Invidious migration complete."
+        elif [ "$ACTION" = "vacuum" ]; then
+             log "Invidious (Postgres) handles vacuuming automatically. Skipping."
+        fi
+    elif [ "$SERVICE" = "adguard" ]; then
+        if [ "$ACTION" = "clear-logs" ]; then
+            log "Clearing AdGuard Home query logs..."
+            find "$DATA_DIR/adguard-work" -name "querylog.json" -exec truncate -s 0 {} +
+            log "AdGuard logs cleared."
+        fi
+    elif [ "$SERVICE" = "memos" ]; then
+        if [ "$ACTION" = "vacuum" ]; then
+            log "Optimizing Memos database (VACUUM)..."
+            docker exec memos sqlite3 /var/opt/memos/memos_prod.db "VACUUM;" 2>/dev/null || log "Memos container not ready or sqlite3 missing."
+            log "Memos database optimized."
+        fi
     else
-        log "Starting Invidious migration..."
-        # 1. Backup existing data
-        if [ "$BACKUP" != "no" ] && [ -d "$DATA_DIR/postgres" ]; then
-            log "Backing up Invidious database..."
-            docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"
+        if [ "$ACTION" = "vacuum" ]; then
+            log "Vacuum not required/supported for $SERVICE."
+        else
+            log "No custom migration logic defined for $SERVICE."
         fi
-        # 2. Run migrations
-        log "Applying schema updates..."
-        docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
-        log "Invidious migration complete."
     fi
-elif [ "$SERVICE" = "adguard" ]; then
-    if [ "$ACTION" = "clear-logs" ]; then
-        log "Clearing AdGuard Home query logs..."
-        # AdGuard logs are in the work directory (data/adguard-work/querylog.json or similar)
-        # We can trigger it via API or just truncate the log file if we mount it.
-        # Safer way: clear the file in the mounted volume.
-        find "$DATA_DIR/adguard-work" -name "querylog.json" -exec truncate -s 0 {} +
-        log "AdGuard logs cleared."
-    fi
-elif [ "$SERVICE" = "memos" ]; then
-    if [ "$ACTION" = "vacuum" ]; then
-        log "Optimizing Memos database (VACUUM)..."
-        # Memos uses SQLite.
-        docker exec memos sqlite3 /var/opt/memos/memos_prod.db "VACUUM;"
-        log "Memos database optimized."
-    fi
-else
-    log "No logic defined for $SERVICE."
-fi
 EOF
 chmod +x "$MIGRATE_SCRIPT"
 
@@ -2993,6 +3038,61 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True, "message": "Stack restart initiated"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
+        elif self.path == '/batch-update':
+            try:
+                l = int(self.headers['Content-Length'])
+                data = json.loads(self.rfile.read(l).decode('utf-8'))
+                services = data.get('services', [])
+                if not services or not isinstance(services, list):
+                    self._send_json({"error": "List of services required"}, 400)
+                    return
+
+                def run_batch_update(svc_list):
+                    try:
+                        log_structured("INFO", f"[Update Engine] Starting batch update for {len(svc_list)} services...", "MAINTENANCE")
+                        for name in svc_list:
+                            try:
+                                log_structured("INFO", f"[Update Engine] Processing {name}...", "MAINTENANCE")
+                                
+                                # 1. Backup
+                                subprocess.run(["/usr/local/bin/migrate.sh", name, "backup", "yes"], timeout=120)
+                                
+                                # 2. Refresh source
+                                repo_path = f"/app/sources/{name}"
+                                if os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, ".git")):
+                                    log_structured("INFO", f"[Update Engine] Pulling latest source for {name}...", "MAINTENANCE")
+                                    subprocess.run(["git", "fetch", "--all"], cwd=repo_path, check=True, timeout=60)
+                                    subprocess.run(["git", "reset", "--hard", "origin/master"], cwd=repo_path, timeout=30) # Try master
+                                    subprocess.run(["git", "reset", "--hard", "origin/main"], cwd=repo_path, timeout=30)   # Try main
+                                    subprocess.run(["git", "pull"], cwd=repo_path, check=True, timeout=60)
+                                    if os.path.exists("/app/patches.sh"):
+                                        subprocess.run(["/app/patches.sh", name], check=True, timeout=30)
+                                
+                                # 3. Rebuild and restart
+                                log_structured("INFO", f"[Update Engine] Rebuilding {name}...", "MAINTENANCE")
+                                subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', name], timeout=600)
+                                
+                                # 4. Migrate
+                                log_structured("INFO", f"[Update Engine] Running migrations for {name}...", "MAINTENANCE")
+                                subprocess.run(["/usr/local/bin/migrate.sh", name, "migrate", "no"], timeout=120) # No backup needed, just done
+                                
+                                # 5. Vacuum
+                                log_structured("INFO", f"[Update Engine] Optimizing database for {name}...", "MAINTENANCE")
+                                subprocess.run(["/usr/local/bin/migrate.sh", name, "vacuum"], timeout=60)
+                                
+                                log_structured("INFO", f"[Update Engine] {name} update complete.", "MAINTENANCE")
+                            except Exception as ex:
+                                log_structured("ERROR", f"[Update Engine] Failed to update {name}: {str(ex)}", "MAINTENANCE")
+                        
+                        log_structured("INFO", "[Update Engine] Batch update finished.", "MAINTENANCE")
+                    except Exception as e:
+                        log_structured("ERROR", f"[Update Engine] Batch update crashed: {str(e)}", "MAINTENANCE")
+
+                import threading
+                threading.Thread(target=run_batch_update, args=(services,)).start()
+                self._send_json({"success": True, "message": "Batch update started in background"})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         elif self.path == '/update-service':
             try:
                 l = int(self.headers['Content-Length'])
@@ -3052,6 +3152,71 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({"success": True})
                 else:
                     self._send_json({"error": "New key required"}, 400)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path.startswith('/changelog'):
+            try:
+                from urllib.parse import urlparse, parse_qs
+                query = urlparse(self.path).query
+                params = parse_qs(query)
+                service = params.get('service', [''])[0]
+                
+                if not service:
+                    self._send_json({"error": "Service required"}, 400)
+                    return
+
+                SERVICE_REPOS = {
+                    "adguard": {"repo": "AdguardTeam/AdGuardHome", "type": "github"},
+                    "portainer": {"repo": "portainer/portainer", "type": "github"},
+                    "wg-easy": {"repo": "wg-easy/wg-easy", "type": "github"},
+                    "redlib": {"repo": "redlib-org/redlib", "type": "github"},
+                    "gluetun": {"repo": "qdm12/gluetun", "type": "github"},
+                    "anonymousoverflow": {"repo": "httpjamesm/AnonymousOverflow", "type": "github"},
+                    "rimgo": {"repo": "rimgo/rimgo", "type": "codeberg"},
+                    "memos": {"repo": "usememos/memos", "type": "github"},
+                    "watchtower": {"repo": "containrrr/watchtower", "type": "github"},
+                    "unbound": {"repo": "klutchell/unbound", "type": "github"}
+                }
+
+                # Check if it's a source-based service
+                repo_path = f"/app/sources/{service}"
+                if os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, ".git")):
+                    # Fetch first
+                    subprocess.run(["git", "fetch"], cwd=repo_path, timeout=15)
+                    branch = "origin/master"
+                    if subprocess.run(["git", "rev-parse", "--verify", "origin/main"], cwd=repo_path).returncode == 0:
+                        branch = "origin/main"
+                    
+                    res = subprocess.run(
+                        ["git", "log", "--pretty=format:%h - %s (%cr)", f"HEAD..{branch}"], 
+                        cwd=repo_path, capture_output=True, text=True, timeout=5
+                    )
+                    
+                    if res.returncode == 0 and res.stdout.strip():
+                        self._send_json({"changelog": res.stdout})
+                    else:
+                        self._send_json({"changelog": "No new commits found in source repo."})
+                
+                # Check if it's a known image-based service
+                elif service in SERVICE_REPOS:
+                    meta = SERVICE_REPOS[service]
+                    try:
+                        url = ""
+                        if meta["type"] == "github":
+                            url = f"https://api.github.com/repos/{meta['repo']}/releases/latest"
+                        elif meta["type"] == "codeberg":
+                            url = f"https://codeberg.org/api/v1/repos/{meta['repo']}/releases/latest"
+                        
+                        req = urllib.request.Request(url, headers={"User-Agent": "privacy-hub/1.0"})
+                        with urllib.request.urlopen(req, timeout=10) as resp:
+                            data = json.loads(resp.read().decode())
+                            body = data.get("body", "No description available.")
+                            name = data.get("name") or data.get("tag_name") or "Latest Release"
+                            self._send_json({"changelog": f"## {name}\n\n{body}"})
+                    except Exception as e:
+                        self._send_json({"changelog": f"Failed to fetch release notes: {str(e)}"})
+                else:
+                    self._send_json({"changelog": "Changelog not available for this service."})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/odido-userid':
@@ -3720,9 +3885,14 @@ cat > "$DASHBOARD_FILE" <<EOF
         // Prevent extension injection errors - defined early
         globalThis.configureInjection = globalThis.configureInjection || (() => {});
     </script>
-    <script type="module">
-        import * as mcu from './fonts/mcu.js';
-        window.MaterialColorUtilities = mcu;
+    <script src="fonts/mcu.js"></script>
+    <script>
+        // Map global UMD to window.MaterialColorUtilities if needed
+        document.addEventListener('DOMContentLoaded', () => {
+             if (typeof MaterialColorUtilities === 'undefined' && typeof materialColorUtilities !== 'undefined') {
+                 window.MaterialColorUtilities = materialColorUtilities;
+             }
+        });
     </script>
     <style>
         /* ============================================
@@ -4079,8 +4249,9 @@ cat > "$DASHBOARD_FILE" <<EOF
         .card-header-actions {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
             flex-shrink: 0;
+            margin-right: 4px;
         }
 
         .nav-arrow {
@@ -4884,10 +5055,10 @@ cat > "$DASHBOARD_FILE" <<EOF
             <div class="card">
                 <h3>Certificate Status</h3>
                 <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
-                    <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label">Type</span><span class="stat-value" id="cert-type">--</span></div>
-                    <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label">Domain</span><span class="stat-value sensitive" id="cert-subject">--</span></div>
-                    <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label">Issuer</span><span class="stat-value sensitive" id="cert-issuer">--</span></div>
-                    <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label">Expires</span><span class="stat-value sensitive" id="cert-to">--</span></div>
+                    <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label">Type</span><span class="stat-value" id="cert-type">Checking...</span></div>
+                    <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label">Domain</span><span class="stat-value sensitive" id="cert-subject">Checking...</span></div>
+                    <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label">Issuer</span><span class="stat-value sensitive" id="cert-issuer">Checking...</span></div>
+                    <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label">Expires</span><span class="stat-value sensitive" id="cert-to">Checking...</span></div>
                     <div id="ssl-failure-info" style="display:none; margin-top: 16px; padding: 16px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: 1px solid var(--md-sys-color-error);">
                         <div class="body-small" style="font-weight:600; margin-bottom:4px; display: flex; align-items: center; gap: 8px;">
                             <span class="material-symbols-rounded" style="font-size: 16px;">error</span>
@@ -5015,7 +5186,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                     <h3>Data Status</h3>
-                    <div id="odido-speed-indicator" class="body-small" style="color: var(--md-sys-color-primary); font-weight: 500;">0 Mb/s</div>
+                    <div id="odido-speed-indicator" class="body-small" style="color: var(--md-sys-color-primary); font-weight: 500; display:none;">0 Mb/s</div>
                 </div>
                 <div id="odido-status-container" style="display: flex; flex-direction: column; height: 100%;">
                     <div id="odido-not-configured" style="display:none;">
@@ -5252,6 +5423,32 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
     <!-- Setup Wizard removed (Automated Deployment) -->
 
+    <!-- Update Selection Modal -->
+    <div id="update-selection-modal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>Select Updates</h2>
+                <button onclick="closeUpdateModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+            </div>
+            <div style="padding: 16px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <span class="body-medium" id="update-fetch-status" style="color: var(--md-sys-color-on-surface-variant);">Scanning for updates...</span>
+                    <button onclick="toggleAllUpdates()" class="btn btn-tonal" style="height: 32px; font-size: 12px;">Reset / Undo</button>
+                </div>
+                <div id="update-list-container" style="background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 8px; max-height: 300px; overflow-y: auto;">
+                    <!-- Checkboxes injected here -->
+                    <div style="padding: 24px; text-align: center; opacity: 0.6;">
+                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
+                        <span class="body-medium">Checking repositories...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-group" style="justify-content: flex-end;">
+                <button onclick="startBatchUpdate()" class="btn btn-filled" id="start-update-btn" disabled>Update Selected</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Service Management Modal -->
     <div id="service-modal" class="modal-overlay">
         <div class="modal-card">
@@ -5428,17 +5625,102 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
 
         async function updateAllServices() {
-            if (!confirm("Start All Updates? This will pull latest images and source code for the entire stack. Services may restart.")) return;
-            showSnackbar("All-service updates initiated... pulling images and code.");
+            openUpdateModal();
+        }
+
+        let isAllSelected = true;
+
+        function openUpdateModal() {
+            const modal = document.getElementById('update-selection-modal');
+            modal.style.display = 'flex';
+            document.getElementById('start-update-btn').disabled = true;
+            
+            // Trigger check
+            fetch(API + "/check-updates", { headers: odidoApiKey ? { 'X-API-Key': odidoApiKey } : {} });
+            
+            // Poll for results
+            const listContainer = document.getElementById('update-list-container');
+            const statusLabel = document.getElementById('update-fetch-status');
+            
+            let attempts = 0;
+            const poll = setInterval(async () => {
+                attempts++;
+                statusLabel.textContent = "Scanning repositories... (" + attempts + ")";
+                try {
+                    const res = await fetch(API + "/updates", { headers: odidoApiKey ? { 'X-API-Key': odidoApiKey } : {} });
+                    const data = await res.json();
+                    const updates = data.updates || {};
+                    const keys = Object.keys(updates);
+                    
+                    if (keys.length > 0 || attempts > 5) {
+                        clearInterval(poll);
+                        renderUpdateList(keys);
+                        statusLabel.textContent = keys.length + " updates found.";
+                        document.getElementById('start-update-btn').disabled = keys.length === 0;
+                    }
+                } catch(e) {}
+            }, 2000);
+        }
+
+        function closeUpdateModal() {
+            document.getElementById('update-selection-modal').style.display = 'none';
+        }
+
+        function renderUpdateList(services) {
+            const el = document.getElementById('update-list-container');
+            el.innerHTML = '';
+            if (services.length === 0) {
+                el.innerHTML = '<div style="padding: 24px; text-align: center; opacity: 0.7;">No updates found. System is up to date.</div>';
+                return;
+            }
+            services.forEach(svc => {
+                const row = document.createElement('div');
+                row.className = 'list-item';
+                row.style.margin = '4px 0';
+                row.style.background = 'transparent';
+                row.style.border = 'none';
+                row.innerHTML = \`
+                    <label style="display:flex; align-items:center; gap:12px; width:100%; cursor:pointer;">
+                        <input type="checkbox" class="update-checkbox" value="\${svc}" checked style="width:18px; height:18px; accent-color:var(--md-sys-color-primary);">
+                        <span class="list-item-text">\${svc}</span>
+                        <span class="chip tertiary" style="height:24px; font-size:11px;">Update Available</span>
+                    </label>
+                \`;
+                el.appendChild(row);
+            });
+        }
+
+        function toggleAllUpdates() {
+            const checkboxes = document.querySelectorAll('.update-checkbox');
+            isAllSelected = !isAllSelected;
+            // If the user wants to "Undo" (reset), we assume resetting to ALL checked.
+            // The prompt says "undo button for the unchecked checkboxes list", which I interpret as "Check All".
+            checkboxes.forEach(cb => cb.checked = true);
+            isAllSelected = true; 
+        }
+
+        async function startBatchUpdate() {
+            const checkboxes = document.querySelectorAll('.update-checkbox:checked');
+            const selected = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (selected.length === 0) {
+                alert("No services selected.");
+                return;
+            }
+
+            if (!confirm("Update " + selected.length + " services? This will trigger backups, updates, migrations, and vacuuming.")) return;
+            
+            closeUpdateModal();
+            showSnackbar("Batch update initiated for " + selected.length + " services.");
+            
             try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/master-update", { method: 'POST', headers });
-                const data = await res.json();
-                if (data.success) {
-                    showSnackbar("Update process is running in background. Check logs for progress.");
-                } else {
-                    throw new Error(data.error);
-                }
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                await fetch(API + "/batch-update", {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ services: selected })
+                });
             } catch(e) {
                 showSnackbar("Update failed: " + e.message);
             }
@@ -6712,39 +6994,52 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const ramTotal = Math.round(data.ram_total || 0);
                 const ramPct = Math.round((ramUsed / ramTotal) * 100);
 
-                document.getElementById('sys-cpu').textContent = cpu + "%";
-                document.getElementById('sys-cpu-fill').style.width = cpu + "%";
-                document.getElementById('sys-ram').textContent = ramUsed + " / " + ramTotal + " MB";
-                document.getElementById('sys-ram-fill').style.width = ramPct + "%";
-                document.getElementById('sys-project-size').textContent = (data.project_size || 0).toFixed(1) + " MB";
+                const sysCpu = document.getElementById('sys-cpu');
+                if(sysCpu) sysCpu.textContent = cpu + "%";
+                const sysCpuFill = document.getElementById('sys-cpu-fill');
+                if(sysCpuFill) sysCpuFill.style.width = cpu + "%";
+                
+                const sysRam = document.getElementById('sys-ram');
+                if(sysRam) sysRam.textContent = ramUsed + " / " + ramTotal + " MB";
+                const sysRamFill = document.getElementById('sys-ram-fill');
+                if(sysRamFill) sysRamFill.style.width = ramPct + "%";
+                
+                const sysProj = document.getElementById('sys-project-size');
+                if(sysProj) sysProj.textContent = (data.project_size || 0).toFixed(1) + " MB";
                 
                 const uptime = data.uptime || 0;
                 const d = Math.floor(uptime / 86400);
                 const h = Math.floor((uptime % 86400) / 3600);
                 const m = Math.floor((uptime % 3600) / 60);
-                document.getElementById('sys-uptime').textContent = d + "d " + h + "h " + m + "m";
+                const sysUp = document.getElementById('sys-uptime');
+                if(sysUp) sysUp.textContent = d + "d " + h + "h " + m + "m";
 
                 const driveStatus = document.getElementById('sys-drive-status');
                 const drivePct = document.getElementById('sys-drive-pct');
                 const driveContainer = document.getElementById('drive-health-container');
+                const diskPercent = document.getElementById('sys-disk-percent');
                 
-driveStatus.textContent = data.drive_status || "Unknown";
-drivePct.textContent = (data.drive_health_pct || 0) + "% Health";
-document.getElementById('sys-disk-percent').textContent = (data.disk_percent || 0).toFixed(1) + "% used";
+                if(driveStatus) driveStatus.textContent = data.drive_status || "Unknown";
+                if(drivePct) drivePct.textContent = (data.drive_health_pct || 0) + "% Health";
+                if(diskPercent) diskPercent.textContent = (data.disk_percent || 0).toFixed(1) + "% used";
 
-if (data.drive_status === "Action Required") {
-    driveStatus.style.color = "var(--md-sys-color-error)";
-} else if (data.drive_status.includes("Warning")) {
-    driveStatus.style.color = "var(--md-sys-color-warning)";
-} else {
-    driveStatus.style.color = "var(--md-sys-color-success)";
-}
+                if (driveStatus) {
+                    if (data.drive_status === "Action Required") {
+                        driveStatus.style.color = "var(--md-sys-color-error)";
+                    } else if (data.drive_status && data.drive_status.includes("Warning")) {
+                        driveStatus.style.color = "var(--md-sys-color-warning)";
+                    } else {
+                        driveStatus.style.color = "var(--md-sys-color-success)";
+                    }
+                }
 
-if (data.smart_alerts && data.smart_alerts.length > 0) {
-    driveContainer.dataset.tooltip = "SMART Alerts:\n" + data.smart_alerts.join("\n");
-} else {
-    driveContainer.dataset.tooltip = "Drive is reporting healthy SMART status.";
-}
+                if (driveContainer) {
+                    if (data.smart_alerts && data.smart_alerts.length > 0) {
+                        driveContainer.dataset.tooltip = "SMART Alerts:\n" + data.smart_alerts.join("\n");
+                    } else {
+                        driveContainer.dataset.tooltip = "Drive is reporting healthy SMART status.";
+                    }
+                }
 
             } catch(e) { console.error("Health fetch error:", e); }
         }
