@@ -137,6 +137,7 @@ The dashboard provides one-click launch cards for every service at `http://<LAN_
 | Scribe | `http://<LAN_IP>:8280` | `https://scribe.<domain>:8443/` | VPN-routed; upstream sees VPN IP. |
 | Odido Booster | `http://<LAN_IP>:8085` | `https://odido.<domain>:8443/` | NL Odido automated booster UI. |
 
+<a id="add-your-own-services"></a>
 <details>
 <summary><strong>🔧 Add Your Own Services</strong> (advanced)</summary>
 
@@ -225,8 +226,9 @@ uci commit dhcp
 
 - **Zero-Leaks Architecture**: External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN proxy** and served locally. Your public home IP is never exposed to CDNs.
 - **Data Minimization**: Requests originate from the isolated `hub-api` container using generic User-Agents, preventing host or browser fingerprinting.
-- **Proton Pass Export**: When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/protonpass_import.csv` for easy import.
+- **Proton Pass Export**: When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/protonpass_import.csv` for easy import ([See Guide](#proton-pass-import)).
 
+<a id="proton-pass-import"></a>
 <details>
 <summary><strong>👇 How to Import into Proton Pass</strong></summary>
 
