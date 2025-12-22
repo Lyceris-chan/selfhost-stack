@@ -183,21 +183,21 @@ Ensure your host meets these specifications for optimal performance, especially 
 
 | Specification | Minimum | Recommended |
 | :--- | :--- | :--- |
-| **Processor** | 2 Cores / Threads | 4+ Cores / Threads |
+| **Processor** | 2 Physical Cores | 4+ Physical Cores (8+ Threads) |
 | **RAM** | 4 GB | 8 GB+ |
 | **Storage** | 20 GB | 40 GB+ (SSD preferred) |
-| **OS** | Linux (Debian/Ubuntu/Alpine) | Linux (Debian/Ubuntu/Alpine) |
+| **OS** | Linux (Ubuntu/Debian/Alpine) | Linux (Ubuntu/Debian/Alpine) |
 | **Architecture** | amd64 / arm64 | amd64 |
 
 ### Scaling by User Capacity
 
-Resource usage scales primarily with simultaneous browsing and background sync tasks. 
+Resource usage scales primarily with simultaneous browsing and background sync tasks. For the best experience, prioritize **Physical Cores** over logical threads for heavy tasks like source builds.
 
-| User Count | Cores / Threads | RAM | Performance Notes |
-| :--- | :--- | :--- | :--- |
-| **1-2 Users** | 2 | 4 GB | Baseline. Fast browsing for a single household. |
-| **3-10 Users** | 4 | 8 GB | Recommended for small groups. Handles simultaneous 4K streams well. |
-| **10-30 Users** | 8 | 16 GB | High-capacity. Suitable for small communities or public instances. |
+| User Count | Physical Cores | Logical Threads (SMT) | RAM | Performance Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **1-2 Users** | 2 | 2-4 | 4 GB | Baseline. Fast browsing for a single household. |
+| **3-10 Users** | 4 | 8 | 8 GB | Recommended for small groups. Handles 4K streams well. |
+| **10-30+ Users** | 8 | 16 | 16 GB | High-capacity. Suitable for small communities or public instances. |
 
 ### Internal Resource Management (Container Isolation)
 
@@ -207,7 +207,7 @@ To ensure stability and prevent any single service from exhausting host resource
 - **Isolation:** Even if one service (like Invidious) experiences a traffic spike, it cannot exceed its assigned limit (e.g., 1.5 Threads, 1 GB RAM), preserving the responsiveness of the Dashboard and AdGuard.
 - **Scaling Capability:** The current configuration is pre-tuned to support up to **30 users** on a machine with 16 GB RAM, leaving 50% of host memory for the OS, filesystem cache, and Docker overhead.
 
-> **Note:** Building containers from source (e.g., Invidious, Wikiless, BreezeWiki) is the most intensive task. On systems with fewer than **4 threads**, updates may cause temporary UI lag for other users during the compilation phase.
+> **Note:** Building containers from source (e.g., Invidious, Wikiless, BreezeWiki) is the most intensive task. On systems with fewer than **4 logical threads**, updates may cause temporary UI lag for other users during the compilation phase. Physical cores significantly improve build speed compared to logical threads.
 
 ## 🌐 Network Configuration
 
