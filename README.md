@@ -130,8 +130,8 @@ The dashboard is built to strictly follow **[Google's Material Design 3](https:/
 | **Rimgo** | Frontend | Lightweight Imgur interface | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) |
 | **BreezeWiki** | Frontend | De-fandomized Wiki interface | [cadence/breezewiki](https://gitdab.com/cadence/breezewiki) |
 | **AnonOverflow** | Frontend | Private Stack Overflow viewer | [httpjamesm/anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) |
-| **Scribe** | Frontend | Alternative Medium frontend | [scribe](https://git.sr.ht/~edwardloveall/scribe) |
-| **Odido Booster** | Utility | Automated NL data bundle booster | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) |
+| **[Scribe](https://git.sr.ht/~edwardloveall/scribe)** | Frontend | Alternative Medium frontend |
+| **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)** | Utility | Automated data bundle booster (NL Odido) |
 
 > 💡 **Tip: Migrating your data to Invidious**
 > You can easily import your existing data to your private Invidious instance. Navigate to **Settings → Import/Export** to upload:
