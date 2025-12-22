@@ -4454,7 +4454,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 16px;">
-                    <div class="status-indicator" style="background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant);">
+                    <div class="status-indicator" style="background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant); order: -1;">
                         <span class="status-dot" id="api-dot"></span>
                         <span class="status-text" id="api-text">API: ...</span>
                     </div>
@@ -4504,7 +4504,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 </div>
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box">
-                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
+                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance</span>
                     <button onclick="migrateService('invidious', 'migrate', 'yes', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Perform database migration and maintenance."><span class="material-symbols-rounded">database_upload</span> Migrate DB</button>
                     <button onclick="migrateService('invidious', 'clear-logs', 'no', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Clear Invidious application logs."><span class="material-symbols-rounded">delete_sweep</span> Clear Logs</button>
                     <div id="metrics-invidious" class="chip-box" style="padding-top:0; display:none;">
@@ -4523,7 +4523,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance</span>
                     <div id="metrics-redlib" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4539,7 +4539,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance</span>
                     <div id="metrics-wikiless" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4556,7 +4556,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 </div>
                 <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
                 <div class="chip-box">
-                    <span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container">Direct Access <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
+                    <span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container">Direct Access</span>
                     <button onclick="vacuumServiceDb('memos', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Optimize the database by reclaiming unused space (VACUUM). Highly recommended after large deletions."><span class="material-symbols-rounded">compress</span> Optimize DB</button>
                 
                     <div id="metrics-memos" class="chip-box" style="padding-top:0; display:none;">
@@ -4574,7 +4574,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance</span>
                     <div id="metrics-rimgo" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4590,7 +4590,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance</span>
                     <div id="metrics-scribe" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4606,7 +4606,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance</span>
                     <div id="metrics-breezewiki" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4622,7 +4622,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance</span>
                     <div id="metrics-anonymousoverflow" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4638,7 +4638,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container">Utility <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion"><span class="material-symbols-rounded">memory</span> GPU Accelerated</span>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container">Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion"><span class="material-symbols-rounded">memory</span> GPU Accelerated</span>
                     <div id="metrics-vert" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4662,7 +4662,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 </div>
                 <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
                 <div class="chip-box">
-                    <span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container">Local Access <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
+                    <span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container">Local Access</span>
                     <button onclick="clearServiceLogs('adguard', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Clear the historical DNS query logs to free up space."><span class="material-symbols-rounded">auto_delete</span> Clear Logs</button>
                     <span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span>
                 
@@ -4681,7 +4681,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container">Local Access <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container">Local Access</span>
                     <div id="metrics-portainer" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4697,7 +4697,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">The primary gateway for <strong>secure remote access</strong>. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container">Local Access <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container">Local Access</span>
                     <div id="metrics-wg-easy" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4767,21 +4767,41 @@ if [ -n "$DESEC_DOMAIN" ]; then
             </div>
             <div class="card">
                 <h3>Endpoint Provisioning</h3>
-                <div id="dns-setup-trusted" style="display:none;">
-                    <p class="body-medium description">Globally trusted SSL is active. Implementation details:</p>
-                    <ol style="margin:0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8;">
-                        <li data-tooltip="For legacy devices within your home network."><b>Local:</b> Standard IP binding.</li>
-                        <li data-tooltip="Requires establishing the WireGuard VPN tunnel when away from home."><b>Remote:</b> Establish VPN tunnel for secure access.</li>
+                <div id="dns-setup-trusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
+                    <p class="body-medium description">Globally trusted SSL is active via Let's Encrypt and deSEC. This enables zero-trust encrypted DNS on mobile devices without requiring certificate installation.</p>
+                    <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
+                        <li data-tooltip="For legacy devices within your home network."><b>Local LAN:</b> Configure devices to use <code class="sensitive">$LAN_IP</code>.</li>
+                        <li data-tooltip="Requires establishing the WireGuard VPN tunnel when away from home."><b>VPN Tunnel:</b> Route all traffic through the Privacy Hub.</li>
+                        <li data-tooltip="Android 9+ native feature. Encrypts all DNS queries automatically."><b>Mobile Private DNS:</b> Use the hostname below for native encryption.</li>
                     </ol>
                     <div class="code-label" style="margin-top:12px;" data-tooltip="Use this hostname in your Android 'Private DNS' settings.">Mobile Private DNS Hostname</div>
                     <div class="code-block sensitive" style="margin-top:4px;">$DESEC_DOMAIN</div>
-                    <p class="body-small" style="color:var(--md-sys-color-success); margin-top:12px;">Verified Certificate Authority</p>
+                    <div style="margin-top: auto; padding-top: 16px;">
+                        <div class="chip vpn" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
+                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-primary-container);">verified_user</span>
+                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span style="font-weight: 600;">Verified Certificate Authority</span>
+                                <span class="body-small" style="opacity: 0.8; white-space: normal;">Trust chain established with Let's Encrypt. Fully compatible with native Private DNS.</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div id="dns-setup-untrusted" style="display:none;">
+                <div id="dns-setup-untrusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
                     <p class="body-medium description" style="color:var(--md-sys-color-error);">Limited Encrypted DNS Coverage</p>
-                    <p class="body-small description">Android 'Private DNS' requires a FQDN. Falling back to IPv4 binding.</p>
-                    <div class="code-label" data-tooltip="The local IP address of your privacy hub.">Primary Gateway</div>
-                    <div class="code-block sensitive">$LAN_IP</div>
+                    <p class="body-small description">Android 'Private DNS' requires a FQDN. Since no domain is configured, your mobile devices cannot utilize native encrypted DNS without the VPN.</p>
+                    <div style="flex-grow: 1;">
+                        <div class="code-label" data-tooltip="The local IP address of your privacy hub.">Primary Gateway</div>
+                        <div class="code-block sensitive">$LAN_IP</div>
+                    </div>
+                    <div style="margin-top: auto; padding-top: 16px;">
+                        <div class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
+                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-secondary-container);">warning</span>
+                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span style="font-weight: 600;">Self-Signed (Local)</span>
+                                <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and Private DNS.</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 EOF
@@ -4794,10 +4814,11 @@ else
             </div>
             <div class="card">
                 <h3>Endpoint Provisioning</h3>
-                <p class="body-medium description">Infrastructure access model:</p>
-                <ol style="margin:0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8;">
-                    <li>Configure router WAN/LAN DNS: <b class="sensitive">$LAN_IP</b></li>
-                    <li>Remote Access: Utilize WireGuard VPN interface</li>
+                <p class="body-medium description">The system is currently operating in local-only mode. To maintain privacy, all external traffic should be routed via the local infrastructure:</p>
+                <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
+                    <li>Configure router WAN/LAN DNS to: <b class="sensitive">$LAN_IP</b></li>
+                    <li>Remote Access: Establish WireGuard tunnel before accessing services.</li>
+                    <li>Legacy Support: Standard Port 53 resolution for older hardware.</li>
                 </ol>
                 <div class="code-block sensitive" style="margin-top:12px;">$LAN_IP</div>
                 <div style="margin-top: auto; padding-top: 16px;">
@@ -4805,7 +4826,7 @@ else
                         <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-secondary-container);">warning</span>
                         <div style="display: flex; flex-direction: column; gap: 2px;">
                             <span style="font-weight: 600;">Self-Signed (Local)</span>
-                            <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL.</span>
+                            <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and full mobile support.</span>
                         </div>
                     </div>
                 </div>
@@ -4818,20 +4839,47 @@ cat >> "$DASHBOARD_FILE" <<EOF
         <div class="section-label">Odido Bundle Booster</div>
         <div class="grid-2">
             <div class="card">
-                <h3>Data Status</h3>
-                <div id="odido-status-container">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <h3>Data Status</h3>
+                    <div id="odido-speed-indicator" class="body-small" style="color: var(--md-sys-color-primary); font-weight: 500;">0 Mb/s</div>
+                </div>
+                <div id="odido-status-container" style="display: flex; flex-direction: column; height: 100%;">
                     <div id="odido-not-configured" style="display:none;">
                         <p class="body-medium" style="color:var(--md-sys-color-on-surface-variant);">Odido Bundle Booster service available. Configure credentials via API or link below.</p>
                         <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-tonal" style="margin-top:12px;">Open API Docs</a>
                     </div>
-                    <div id="odido-configured" style="display:none; padding-top: 8px;">
-                        <div class="stat-row"><span class="stat-label">Data Remaining</span><span class="stat-value" id="odido-remaining">--</span></div>
-                        <div class="stat-row"><span class="stat-label">Bundle Code</span><span class="stat-value" id="odido-bundle-code">--</span></div>
-                        <div class="stat-row"><span class="stat-label">Auto-Renew</span><span class="stat-value" id="odido-auto-renew">--</span></div>
-                        <div class="stat-row"><span class="stat-label">Threshold</span><span class="stat-value" id="odido-threshold">--</span></div>
-                        <div class="stat-row"><span class="stat-label">Consumption Rate</span><span class="stat-value" id="odido-rate">--</span></div>
-                        <div class="stat-row"><span class="stat-label">API Status</span><span class="stat-value" id="odido-api-status">--</span></div>
-                        <div class="btn-group" style="justify-content:center;">
+                    <div id="odido-configured" style="display:none; padding-top: 8px; flex-grow: 1; display: flex; flex-direction: column;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div>
+                                <div class="stat-row"><span class="stat-label">Remaining</span><span class="stat-value" id="odido-remaining">--</span></div>
+                                <div class="stat-row"><span class="stat-label">Bundle</span><span class="stat-value" id="odido-bundle-code">--</span></div>
+                            </div>
+                            <div>
+                                <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value" id="odido-rate">--</span></div>
+                                <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value" id="odido-api-status">--</span></div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 24px; flex-grow: 1; min-height: 120px; position: relative;">
+                            <svg id="odido-graph" width="100%" height="100%" viewBox="0 0 400 120" preserveAspectRatio="none" style="overflow: visible;">
+                                <defs>
+                                    <linearGradient id="graph-gradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="var(--md-sys-color-primary)" stop-opacity="0.3"></stop>
+                                        <stop offset="100%" stop-color="var(--md-sys-color-primary)" stop-opacity="0"></stop>
+                                    </linearGradient>
+                                </defs>
+                                <path id="graph-area" fill="url(#graph-gradient)" d=""></path>
+                                <path id="graph-line" fill="none" stroke="var(--md-sys-color-primary)" stroke-width="2" d=""></path>
+                                <line x1="0" y1="120" x2="400" y2="120" stroke="var(--md-sys-color-outline-variant)" stroke-width="1"></line>
+                                <g id="graph-grid" stroke="var(--md-sys-color-outline-variant)" stroke-width="0.5" stroke-dasharray="2,2">
+                                    <line x1="0" y1="30" x2="400" y2="30"></line>
+                                    <line x1="0" y1="60" x2="400" y2="60"></line>
+                                    <line x1="0" y1="90" x2="400" y2="90"></line>
+                                </g>
+                            </svg>
+                        </div>
+
+                        <div class="btn-group" style="justify-content:center; margin-top: 16px;">
                             <button onclick="buyOdidoBundle()" class="btn btn-tertiary" id="odido-buy-btn">Buy Bundle</button>
                             <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh</button>
                             <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
@@ -4987,6 +5035,37 @@ cat >> "$DASHBOARD_FILE" <<EOF
         let realProfileName = '';
         let maskedProfileId = '';
         const profileMaskMap = {};
+        let odidoHistory = [];
+
+        async function updateOdidoGraph(rate, remaining) {
+            const now = Date.now();
+            odidoHistory.push({ time: now, rate: rate, remaining: remaining });
+            if (odidoHistory.length > 40) odidoHistory.shift();
+
+            const svg = document.getElementById('odido-graph');
+            const line = document.getElementById('graph-line');
+            const area = document.getElementById('graph-area');
+            const speedIndicator = document.getElementById('odido-speed-indicator');
+            if (!svg || !line || !area) return;
+
+            const width = 400;
+            const height = 120;
+            const maxRate = Math.max(...odidoHistory.map(d => d.rate), 0.1);
+            
+            // Speed indicator (MB/min to Mb/s: * 8 / 60)
+            const speedMbs = (rate * 8 / 60).toFixed(2);
+            if (speedIndicator) speedIndicator.textContent = speedMbs + " Mb/s";
+
+            let points = "";
+            odidoHistory.forEach((d, i) => {
+                const x = (i / (odidoHistory.length - 1 || 1)) * width;
+                const y = height - (d.rate / maxRate) * height;
+                points += (i === 0 ? "M" : "L") + x + "," + y;
+            });
+
+            line.setAttribute("d", points);
+            area.setAttribute("d", points + " L" + width + "," + height + " L0," + height + " Z");
+        }
 
         async function fetchMetrics() {
             try {
@@ -5517,6 +5596,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const apiStatus = document.getElementById('odido-api-status');
                 apiStatus.textContent = isConfigured ? 'Connected' : 'Not configured';
                 apiStatus.style.color = isConfigured ? 'var(--md-sys-color-success)' : 'var(--md-sys-color-warning)';
+                
+                updateOdidoGraph(rate, remaining);
+
                 const maxData = config.bundle_size_mb || 1024;
                 const percent = Math.min(100, (remaining / maxData) * 100);
                 const bar = document.getElementById('odido-bar');
@@ -5694,6 +5776,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const data = await res.json();
                 const el = document.getElementById('profile-list');
                 el.innerHTML = '';
+                el.style.flexDirection = 'column';
                 el.style.alignItems = 'stretch';
                 el.style.justifyContent = 'flex-start';
                 data.profiles.forEach(p => {
@@ -5972,16 +6055,17 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const isSelfSigned = data.status && data.status.includes("Self-Signed");
                 const domain = isTrusted ? data.subject : "";
 
-                badge.textContent = data.status || "Unknown";
-                
                 if (isTrusted) {
                     badge.className = "chip vpn"; // Use primary-container color
+                    badge.innerHTML = '<span class="material-symbols-rounded" style="font-size:16px;">verified</span> Trusted';
                     badge.dataset.tooltip = "✓ Globally Trusted: Valid certificate from Let's Encrypt.";
                 } else if (isSelfSigned) {
                     badge.className = "chip admin"; // Use secondary-container color
+                    badge.innerHTML = '<span class="material-symbols-rounded" style="font-size:16px;">warning</span> Self-Signed';
                     badge.dataset.tooltip = "⚠ Self-Signed (Local): Devices will show security warnings. deSEC configuration recommended.";
                 } else {
                     badge.className = "chip tertiary";
+                    badge.textContent = data.status || "Unknown";
                     badge.dataset.tooltip = "Status unknown or certificate missing.";
                 }
                 

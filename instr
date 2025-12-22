@@ -62,3 +62,11 @@ FINAL STATUS:
 rules are strictly follow m3.material.io for the rules besides for my font choice keep their rules to the styling of the fonts and everything
 ensure no information or text / knowledge is lost
 ensure everything works do a local mock deployment without real values with the contents we already have to figure out if everything works and use 10 different ways that you list and document to ensure that all requests have been completed.
+
+make available profiles a list instead of a block 
+have data status make better usage of the remaining space include a m3.material.io graph for data usage / speed to fill up the space
+make this bigger as endpoint provisioning still has a bunch of dead space and figure out otherways to fill it without making  it look bad dont use spacers or feedback elements
+Self-Signed (Local) should also show the warning icon thing without being hovered 
+im still getting Utility arrow_forward and Local Access arrow_forward
+move connected left to the privacy masking button
+expand to 100 step verification
