@@ -14,14 +14,12 @@ Route your traffic through secure VPNs, eliminate tracking with isolated fronten
 *   **Material Design 3**: A beautiful, accessible management dashboard with dynamic theming and real-time health metrics.
 
 ## 📚 Contents
-- [🚀 Quick Start](#quick-start)
+- [🏗️ Getting Started](#getting-started)
 - [🖥️ Management Dashboard](#management-dashboard)
 - [📦 Included Services](#included-services)
-- [🔗 Service Access](#service-access-after-deploy)
-- [🔧 Add Your Own Services](#add-your-own-services)
 - [🌐 Network Configuration](#network-configuration)
-- [📡 Advanced Setup: OpenWrt & Double NAT](#advanced-setup-openwrt--double-nat)
-- [🔒 Security & Credentials](#security--credentials)
+- [🔒 Security & Privacy](#security--privacy)
+- [🔧 Add Your Own Services](#add-your-own-services)
 
 ## 🏗️ Getting Started
 
@@ -116,7 +114,7 @@ The dashboard is built to strictly follow **[Google's Material Design 3](https:/
 *   **Privacy Masking**: One-click toggle to blur sensitive IPs and data for screenshots.
 
 ### Update Engine
-*   **Changelogs**: View commit logs (for source builds) or release notes (for images) directly in the UI.
+*   **Changelogs**: View commit logs (for source builds) or release notes (for images) directly in the UI before updating.
 *   **Granular Control**: Update all services at once or select specific ones.
 *   **Safety First**: Automatic database backups are created before any update is applied.
 
@@ -144,8 +142,7 @@ The dashboard is built to strictly follow **[Google's Material Design 3](https:/
 > *   **YouTube**: Subscriptions (CSV/OPML), Playlists (CSV), or Watch History (JSON).
 > *   **Other Clients**: FreeTube (`.db`) or NewPipe (`.json`/`.zip`) subscriptions and data.
 
-## 🔗 Service Access (After Deploy)
-
+### Service Access & URLs
 The dashboard provides one-click launch cards for every service. 
 
 | Service | Local LAN URL |
@@ -159,49 +156,6 @@ The dashboard provides one-click launch cards for every service.
 | **Portainer** | `http://<LAN_IP>:9000` |
 
 > 🔒 **Domain Access**: When deSEC is configured, all services automatically become available via trusted HTTPS at `https://<service>.<domain>:8443/`.
-
-<a id="add-your-own-services"></a>
-<details>
-<summary><strong>🔧 Add Your Own Services</strong> (advanced)</summary>
-
-### 1) Service Definition (Orchestration Layer)
-Locate **SECTION 13** in `zima.sh` (search for `# --- SECTION 13: ORCHESTRATION LAYER`). Add your service block using the `should_deploy` check to enable selective deployment.
-
-```bash
-if should_deploy "myservice"; then
-cat >> "$COMPOSE_FILE" <<EOF
-  myservice:
-    image: my-image:latest
-    container_name: myservice
-    networks: [frontnet]
-    # For VPN routing, uncomment the next two lines:
-    # network_mode: "service:gluetun"
-    # depends_on: gluetun: {condition: service_healthy}
-    restart: unless-stopped
-EOF
-fi
-```
-
-### 2) Monitoring & Health (Status Logic)
-Update the service status loop inside the `WG_API_SCRIPT` heredoc in `zima.sh` (search for `Check individual privacy services status internally`).
-
-- Add `"myservice:1234"` to the `for srv in ...` list.
-- If the service is routed through Gluetun, add `myservice` to the case that maps `TARGET_HOST="gluetun"`.
-
-### 3) Dashboard UI
-Add a card in the dashboard HTML (SECTION 14 in `zima.sh`). Use `id="link-myservice"` and `data-container="myservice"`.
-
-</details>
-
-## 🖥️ System Requirements
-
-| Specification | Minimum | Recommended |
-| :--- | :--- | :--- |
-| **Processor** | 2 Physical Cores | 4+ Physical Cores (8+ Threads) |
-| **RAM** | 4 GB | 8 GB+ |
-| **OS** | Linux (Ubuntu/Debian/Alpine) | Linux (Ubuntu/Debian/Alpine) |
-
-The configuration is pre-tuned to support up to **30 users** on a machine with 16 GB RAM. Each service is constrained by **Docker Resource Limits** to prevent host exhaustion.
 
 ## 🌐 Network Configuration
 
@@ -247,18 +201,6 @@ Some "smart" devices (TVs, IoT, Google Home) are hardcoded to bypass your DNS an
 
 > 🚀 **Why do this?** This ensures *total* network sovereignty. Not a single packet leaves your house without your permission. It's a deep rabbit hole, but worth exploring!
 
-## 📡 Advanced Setup: OpenWrt & Double NAT
-
-<details>
-<summary>**Full UCI Commands for Double NAT Scenarios**</summary>
-
-If you are behind an ISP modem *and* an OpenWrt router (Double NAT), you need to forward traffic through both.
-
-```bash
-# ... (Previous UCI commands for port forwarding and DNS hijacking)
-```
-</details>
-
 ## 🔒 Security & Privacy
 
 ### Zero-Leaks Architecture
@@ -271,7 +213,8 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 4.  **Local Persistence**: Assets are saved to a persistent Docker volume (`/assets`).
 5.  **Offline Serving**: The Management Dashboard (Nginx) serves all UI resources exclusively from this local volume.
 
-- **Data Minimization**: Requests originate from the isolated `hub-api` container using generic User-Agents, preventing host or browser fingerprinting. Upstream providers see a generic Linux client from a commercial VPN IP.
+### Data Minimization
+Requests originate from the isolated `hub-api` container using generic User-Agents, preventing host or browser fingerprinting. Upstream providers see a generic Linux client from a commercial VPN IP.
 
 ### Proton Pass Export
 When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/protonpass_import.csv` for easy import ([See Guide](#proton-pass-import)).
@@ -283,6 +226,63 @@ When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/proto
 1.  **Download the CSV**: Transfer `protonpass_import.csv` to your machine.
 2.  **Open Proton Pass**: Settings → Import → Select Proton Pass (CSV).
 3.  **Upload**: The format matches the official template (`name,url,email,username,password,note,totp,vault`).
+</details>
+
+## 🖥️ System Requirements & Scaling
+
+| Specification | Minimum | Recommended |
+| :--- | :--- | :--- |
+| **Processor** | 2 Physical Cores | 4+ Physical Cores (8+ Threads) |
+| **RAM** | 4 GB | 8 GB+ |
+| **OS** | Linux (Ubuntu/Debian/Alpine) | Linux (Ubuntu/Debian/Alpine) |
+
+The configuration is pre-tuned to support up to **30 users** on a machine with 16 GB RAM. Each service is constrained by **Docker Resource Limits** to prevent host exhaustion.
+
+> **Note:** Building containers from source (e.g., Invidious, Wikiless) is intensive. Physical cores significantly improve build speed compared to logical threads.
+
+## 📡 Advanced Setup: Double NAT
+
+<details>
+<summary><strong>Full UCI Commands for Double NAT Scenarios</strong></summary>
+
+If you are behind an ISP modem *and* an OpenWrt router (Double NAT), you need to forward traffic through both.
+
+```bash
+# ... (Previous UCI commands for port forwarding and DNS hijacking)
+```
+</details>
+
+<a id="add-your-own-services"></a>
+<details>
+<summary><strong>🔧 Add Your Own Services</strong> (advanced)</summary>
+
+### 1) Service Definition (Orchestration Layer)
+Locate **SECTION 13** in `zima.sh` (search for `# --- SECTION 13: ORCHESTRATION LAYER`). Add your service block using the `should_deploy` check to enable selective deployment.
+
+```bash
+if should_deploy "myservice"; then
+cat >> "$COMPOSE_FILE" <<EOF
+  myservice:
+    image: my-image:latest
+    container_name: myservice
+    networks: [frontnet]
+    # For VPN routing, uncomment the next two lines:
+    # network_mode: "service:gluetun"
+    # depends_on: gluetun: {condition: service_healthy}
+    restart: unless-stopped
+EOF
+fi
+```
+
+### 2) Monitoring & Health (Status Logic)
+Update the service status loop inside the `WG_API_SCRIPT` heredoc in `zima.sh` (search for `Check individual privacy services status internally`).
+
+- Add `"myservice:1234"` to the `for srv in ...` list.
+- If the service is routed through Gluetun, add `myservice` to the case that maps `TARGET_HOST="gluetun"`.
+
+### 3) Dashboard UI
+Add a card in the dashboard HTML (SECTION 14 in `zima.sh`). Use `id="link-myservice"` and `data-container="myservice"`.
+
 </details>
 
 ---
