@@ -20,15 +20,8 @@ set -euo pipefail
 
 # --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
 usage() {
-    echo "Usage: $0 [-c (reset environment)] [-x (reset environment and exit)] [-p (automated password generation)] [-y (auto-confirm cleanup)] [-h|--help]"
+    echo "Usage: $0 [-c (reset environment)] [-x (cleanup and exit)] [-p (auto-passwords)] [-y (auto-confirm)] [-s services] [-h]"
 }
-
-for arg in "$@"; do
-    if [ "$arg" = "--help" ]; then
-        usage
-        exit 0
-    fi
-done
 
 FORCE_CLEAN=false
 CLEAN_ONLY=false
@@ -38,21 +31,21 @@ RESET_ENV=false
 AUTO_CONFIRM=false
 SELECTED_SERVICES=""
 
-while [[ "$#" -gt 0 ]]; do
-    case $1 in
-        -c) RESET_ENV=true; FORCE_CLEAN=true ;;
-        -x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
-        -p) AUTO_PASSWORD=true ;;
-        -y) AUTO_CONFIRM=true ;;
-        -s|--services) SELECTED_SERVICES="$2"; shift ;;
-        -h|--help) 
-            echo "Usage: ./zima.sh [-c (reset environment)] [-x (reset environment and exit)] [-p (automated password generation)] [-y (auto-confirm)] [-s|--services (comma-separated list)] [-h|--help)"
+while getopts "cxpys:h" opt; do
+    case ${opt} in
+        c) RESET_ENV=true; FORCE_CLEAN=true ;;
+        x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
+        p) AUTO_PASSWORD=true ;;
+        y) AUTO_CONFIRM=true ;;
+        s) SELECTED_SERVICES="${OPTARG}" ;;
+        h) 
+            usage
             exit 0
             ;;
-        *) echo "Unknown parameter: $1"; exit 1 ;;
+        *) usage; exit 1 ;;
     esac
-    shift
 done
+shift $((OPTIND -1))
 
 # --- SECTION 1: ENVIRONMENT VALIDATION & DIRECTORY SETUP ---
 # Verify core dependencies before proceeding.
