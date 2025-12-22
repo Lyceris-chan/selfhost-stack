@@ -2514,8 +2514,8 @@ def ensure_assets():
     mcu_path = os.path.join(ASSETS_DIR, "mcu.js")
     if not os.path.exists(mcu_path):
         try:
-            # Use reliable CDN
-            url = "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.2.7/dist/material-color-utilities.min.js"
+            # Use verified ESM bundle
+            url = "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.2.7/+esm"
             data = download_binary(url)
             with open(mcu_path, "wb") as f:
                 f.write(data)
@@ -3943,14 +3943,9 @@ cat > "$DASHBOARD_FILE" <<EOF
         // Prevent extension injection errors - defined early
         globalThis.configureInjection = globalThis.configureInjection || (() => {});
     </script>
-    <script src="assets/mcu.js"></script>
-    <script>
-        // Map global UMD to window.MaterialColorUtilities if needed
-        document.addEventListener('DOMContentLoaded', () => {
-             if (typeof MaterialColorUtilities === 'undefined' && typeof materialColorUtilities !== 'undefined') {
-                 window.MaterialColorUtilities = materialColorUtilities;
-             }
-        });
+    <script type="module">
+        import * as MaterialColorUtilities from './assets/mcu.js';
+        window.MaterialColorUtilities = MaterialColorUtilities;
     </script>
     <style>
         /* ============================================
