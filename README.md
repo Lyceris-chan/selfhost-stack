@@ -142,7 +142,8 @@ The dashboard provides one-click launch cards for every service at `http://<LAN_
 
 Everything lives in `zima.sh`, so one run rebuilds Docker Compose and the dashboard. Keep the service name consistent everywhere (Compose, monitoring, and UI IDs).
 
-### 1) Add it to Compose (SECTION 13)
+### 1) Service Definition (Orchestration Layer)
+Locate **SECTION 13** (around line 3332) in `zima.sh`. Add your service block within a `should_deploy` check to support selective deployment.
 
 ```bash
 if should_deploy "myservice"; then
@@ -151,14 +152,15 @@ cat >> "$COMPOSE_FILE" <<EOF
     image: my-image:latest
     container_name: myservice
     networks: [frontnet]
+    # For VPN routing, uncomment the next two lines:
+    # network_mode: "service:gluetun"
+    # depends_on: gluetun: {condition: service_healthy}
     restart: unless-stopped
 EOF
 fi
 ```
 
-If you want the service to run through the VPN, use `network_mode: "service:gluetun"` and `depends_on: gluetun` like the existing privacy frontends.
-
-### 2) Monitoring & Health (status pill)
+### 2) Monitoring & Health (Status Logic)
 
 Update the service status loop inside the `WG_API_SCRIPT` heredoc in `zima.sh` (search for `Check individual privacy services status internally`).
 
