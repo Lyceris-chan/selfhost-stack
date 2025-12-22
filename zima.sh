@@ -2463,7 +2463,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
 
     def _check_auth(self):
         # Allow certain GET endpoints without auth for the dashboard
-        if self.command == 'GET' and self.path in ['/', '/status', '/profiles', '/containers', '/certificate-status', '/events', '/updates', '/metrics']:
+        if self.command == 'GET' and self.path in ['/', '/status', '/profiles', '/containers', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates']:
             return True
         
         # Watchtower notification (comes from docker network, simple path check)
@@ -2494,6 +2494,20 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 if json_start != -1 and json_end != -1:
                     output = output[json_start:json_end+1]
                 self._send_json(json.loads(output))
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/check-updates':
+            try:
+                # Trigger Watchtower run-once to check for image updates
+                subprocess.Popen(['docker', 'run', '--rm', '-v', '/var/run/docker.sock:/var/run/docker.sock', 'containrrr/watchtower', '--run-once', '--cleanup', '--include-stopped'])
+                # Also trigger git fetch for sources in background
+                src_root = "/app/sources"
+                if os.path.exists(src_root):
+                    for repo in os.listdir(src_root):
+                        repo_path = os.path.join(src_root, repo)
+                        if os.path.isdir(os.path.join(repo_path, ".git")):
+                            subprocess.Popen(["git", "fetch"], cwd=repo_path)
+                self._send_json({"success": True, "message": "Update check initiated in background"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/updates':
@@ -3231,7 +3245,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     cap_drop: [ALL]
     depends_on: {gluetun: {condition: service_healthy}}
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "--tries=1", "http://localhost:8080/"]
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/robots.txt || [ $? -eq 8 ]"]
       interval: 1m
       timeout: 5s
       retries: 3
@@ -4850,6 +4864,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
                 <div class="stat-row"><span class="stat-label">Safe Display</span><span class="stat-value">Active (Client-side)</span></div>
                 <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
+                    <button onclick="checkUpdates()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Manually trigger a check for image updates (via Watchtower) and source code updates.">
+                        <span class="material-symbols-rounded">system_update_alt</span>
+                        Check for Updates
+                    </button>
                     <button onclick="restartStack()" class="btn btn-filled" style="width: 100%; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Reboot all containers in the stack. This takes ~30 seconds and is required for manual .secrets changes to take effect.">
                         <span class="material-symbols-rounded">restart_alt</span>
                         Restart Stack
@@ -5975,6 +5993,24 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 alert("Network error while triggering SSL check.");
             }
             setTimeout(() => { btn.disabled = false; btn.style.opacity = '1'; }, 10000);
+        }
+
+        async function checkUpdates() {
+            showSnackbar("Update check initiated... checking images and sources.");
+            try {
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/check-updates", { headers });
+                const data = await res.json();
+                if (data.success) {
+                    showSnackbar("Update check is running in background. Results will appear in logs and banners shortly.");
+                    // Refresh source updates after a short delay
+                    setTimeout(fetchUpdates, 5000);
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch(e) {
+                showSnackbar("Failed to initiate update check: " + e.message);
+            }
         }
 
         async function restartStack() {
