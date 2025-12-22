@@ -18,7 +18,7 @@ Route your traffic through secure VPNs, eliminate tracking with isolated fronten
 - [Management Dashboard](#management-dashboard)
 - [Included Services](#included-services)
 - [Network Configuration](#network-configuration)
-- [Security & Privacy](#security--privacy)
+- [Security & Privacy](#security-privacy)
 - [Add Your Own Services](#add-your-own-services)
 
 <a id="getting-started"></a>
@@ -102,6 +102,7 @@ If you used the `-p` flag, the script auto-generated secure credentials for you.
 | `-y` | **Auto-Confirm** | Skips confirmation prompts (for automated deployments). |
 | `-s` | **Select Services** | Deploy specific services only (e.g., `./zima.sh -s invidious,memos`). |
 
+<a id="management-dashboard"></a>
 ## 🖥️ Management Dashboard
 
 Access the unified dashboard at `http://<LAN_IP>:8081`.
@@ -121,6 +122,7 @@ The dashboard is built to strictly follow **[Google's Material Design 3](https:/
 *   **Granular Control**: Update all services at once or select specific ones.
 *   **Safety First**: Automatic database backups are created before any update is applied.
 
+<a id="included-services"></a>
 ## 📦 Included Services
 
 | Service & Source | Category | Purpose |
@@ -159,7 +161,7 @@ The dashboard provides one-click launch cards for every service.
 | **AnonOverflow** | `http://<LAN_IP>:8480` | Privacy Frontend |
 | **Scribe** | `http://<LAN_IP>:8280` | Privacy Frontend |
 | **Memos** | `http://<LAN_IP>:5230` | Utility |
-| **VERT** | `http://<LAN_IP>:5555` | Utility |
+| **VERT** | `http://<LAN_IP>:5555" | Utility |
 | **Odido Booster** | `http://<LAN_IP>:8085` | Utility |
 | **AdGuard Home** | `http://<LAN_IP>:8083` | Infrastructure |
 | **WireGuard UI** | `http://<LAN_IP>:51821` | Infrastructure |
@@ -178,6 +180,7 @@ While **Gluetun** handles the outbound VPN tunnel for privacy, **WG-Easy** provi
     4. **Download .conf**: Alternatively, download the configuration file for your laptop.
 *   **Routing**: Once connected, your device is virtually "inside" your home network. You can access all services using their local LAN IPs or deSEC subdomains.
 
+<a id="network-configuration"></a>
 ## 🌐 Network Configuration
 
 ### 1. Enable Remote Access (ISP Router)
@@ -232,6 +235,7 @@ Some "smart" devices (TVs, IoT, Google Home) are hardcoded to bypass your DNS an
 
 > 🚀 **Why do this?** This ensures *total* network sovereignty. Not a single packet leaves your house without your permission. It's a deep rabbit hole, but worth exploring!
 
+<a id="security-privacy"></a>
 ## 🔒 Security & Privacy
 
 ### Zero-Leaks Architecture
@@ -272,6 +276,7 @@ The configuration is pre-tuned to support up to **30 users** on a machine with 1
 
 > **Note:** Building containers from source (e.g., Invidious, Wikiless) is intensive. Physical cores significantly improve build speed compared to logical threads.
 
+<a id="advanced-setup"></a>
 ## 📡 Advanced Setup: OpenWrt & Double NAT
 
 If you are behind an ISP modem *and* an OpenWrt router (Double NAT), you must ensure traffic reaches the Hub by repeating the port forwarding step on both devices.
