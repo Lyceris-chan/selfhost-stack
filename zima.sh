@@ -3295,10 +3295,25 @@ if __name__ == "__main__":
     print(f"Starting API server on port {PORT}...")
     init_db()
 
-    try:
-        ensure_assets()
-    except Exception as e:
-        log_structured("WARN", f"Asset sync failed: {e}", "FONTS")
+    # Wait for Gluetun proxy to be ready
+    print("Waiting for proxy...", flush=True)
+    proxy_ready = False
+    for _ in range(30):
+        try:
+            with socket.create_connection(("gluetun", 8888), timeout=2):
+                proxy_ready = True
+                break
+        except (OSError, ConnectionRefusedError):
+            time.sleep(2)
+    
+    if proxy_ready:
+        print("Proxy available. Syncing assets...", flush=True)
+        try:
+            ensure_assets()
+        except Exception as e:
+            log_structured("WARN", f"Asset sync failed: {e}", "FONTS")
+    else:
+        log_structured("WARN", "Proxy unavailable after 60s. Asset sync skipped.", "FONTS")
     
     # Start metrics collector thread
     t = threading.Thread(target=metrics_collector, daemon=True)
