@@ -24,5 +24,24 @@ the dashboard shows 2 settings cog per chip and the service text is cut off
 the wizard causes a blank screen on the portal
 the buttons still say vpn_lock Private Instance and change the arrow to be like this -> 
 
+--------------
+
+dashboard still says offline api error
+Uncaught ReferenceError: fetchMetrics is not defined
+    at HTMLDocument.<anonymous> ((index):2461:118)
+:8081/api/updates:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+:8081/odido-api/api/status:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+(index):1688 Status fetch error: ReferenceError: containerMetrics is not defined
+    at fetchStatus ((index):1676:47)
+
+
+text still overlaps Por... Offline (API Error)
+
+there is still two cog icons 
+ensure the chips dont go 2 and then 1 under there as its ugly 
+
+give the light mode button a better position place it right of the privacy switch instead 
+
+
 
 
