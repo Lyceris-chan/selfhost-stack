@@ -3936,7 +3936,6 @@ cat > "$DASHBOARD_FILE" <<EOF
         }
 
         .settings-btn {
-            order: 3;
         }
 
         .card .description {
@@ -4232,7 +4231,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             background: var(--md-sys-color-surface-container-highest);
             border-radius: var(--md-sys-shape-corner-large);
             padding: 16px;
-            height: 320px;
+            flex-grow: 1;
             overflow-y: auto;
             font-size: 13px;
             color: var(--md-sys-color-on-surface-variant);
@@ -4434,6 +4433,8 @@ cat > "$DASHBOARD_FILE" <<EOF
         .list-item:last-child { border-bottom: none; }
         .list-item-text { cursor: pointer; flex: 1 1 220px; font-weight: 500; overflow-wrap: anywhere; font-size: 16px; letter-spacing: 0.5px; }
 
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
         @media (max-width: 720px) {
             body { padding: 16px; }
             h1 { font-size: 36px; line-height: 42px; }
@@ -4458,6 +4459,10 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 16px;">
+                    <div class="status-indicator" style="background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant);">
+                        <span class="status-dot" id="api-dot"></span>
+                        <span class="status-text" id="api-text">API: ...</span>
+                    </div>
                     <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for safe display">
                         <span class="label-large">Safe Display Mode</span>
                         <div class="switch-track">
@@ -4496,10 +4501,10 @@ cat > "$DASHBOARD_FILE" <<EOF
             <div id="link-invidious" data-url="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true" data-container="invidious" onclick="navigate(this, event)">
                 <div class="card-header">
                     <h2>Invidious</h2>
-                    <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                         <button onclick="openServiceSettings('invidious', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
@@ -4518,8 +4523,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h2>Redlib</h2>
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                         <button onclick="openServiceSettings('redlib', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
@@ -4534,8 +4539,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h2>Wikiless</h2>
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                         <button onclick="openServiceSettings('wikiless', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
@@ -4550,8 +4555,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h2>Memos</h2>
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                         <button onclick="openServiceSettings('memos', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
@@ -4569,8 +4574,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h2>Rimgo</h2>
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                         <button onclick="openServiceSettings('rimgo', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
@@ -4585,8 +4590,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h2>Scribe</h2>
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                         <button onclick="openServiceSettings('scribe', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
@@ -4601,8 +4606,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h2>BreezeWiki</h2>
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                         <button onclick="openServiceSettings('breezewiki', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
@@ -4617,8 +4622,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h2>AnonOverflow</h2>
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                         <button onclick="openServiceSettings('anonymousoverflow', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
@@ -4633,8 +4638,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h2>VERT</h2>
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                         <button onclick="openServiceSettings('vert', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
@@ -4656,8 +4661,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h2>AdGuard Home</h2>
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                         <button onclick="openServiceSettings('adguard', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
@@ -4676,8 +4681,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h2>Portainer</h2>
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                         <button onclick="openServiceSettings('portainer', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.</p>
@@ -4692,8 +4697,8 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h2>WireGuard</h2>
                     <div class="card-header-actions">
                         <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
-                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                         <button onclick="openServiceSettings('wg-easy', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
                     </div>
                 </div>
                 <p class="description">The primary gateway for <strong>secure remote access</strong>. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
@@ -4830,7 +4835,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
                             <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
                         </div>
                     </div>
-                    <div id="odido-loading" style="color:var(--md-sys-color-on-surface-variant);">Loading...</div>
+                    <div id="odido-loading" class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium); border: none; margin-top: 8px;">
+                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span style="font-weight: 600;">Synchronizing Data</span>
+                            <span class="body-small" style="opacity: 0.8; white-space: normal;">Connecting to Odido API to retrieve latest bundle status...</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="card">
@@ -4865,7 +4876,12 @@ cat >> "$DASHBOARD_FILE" <<EOF
             </div>
             <div class="card profile-card">
                 <h3 data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available Profiles</h3>
-                <div id="profile-list" style="flex-grow: 1;">Loading...</div>
+                <div id="profile-list" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; min-height: 100px;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
+                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <span class="body-small">Scanning Profiles...</span>
+                    </div>
+                </div>
                 <p class="body-small profile-hint" style="margin-top: auto; padding-top: 12px;">Click name to activate.</p>
             </div>
         </div>
@@ -4878,7 +4894,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace">/DATA/AppData/privacy-hub/.secrets</span></div>
                 <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace">/DATA/AppData/privacy-hub/config</span></div>
                 <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
-                <div class="stat-row"><span class="stat-label">Safe Display</span><span class="stat-value">Active (Client-side)</span></div>
+                <div class="stat-row"><span class="stat-label">Privacy Masking</span><span class="stat-value">Active (Local)</span></div>
                 <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
                     <button onclick="checkUpdates()" class="btn btn-tonal" style="width: 100%;" data-tooltip="Manually trigger a check for image updates (via Watchtower) and source code updates.">
                         <span class="material-symbols-rounded">system_update_alt</span>
@@ -4926,7 +4942,12 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         </select>
                     </div>
                 </div>
-                <div id="log-container" class="log-container sensitive">Loading logs...</div>
+                <div id="log-container" class="log-container sensitive" style="display: flex; align-items: center; justify-content: center;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
+                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <span class="body-small">Connecting to Log Stream...</span>
+                    </div>
+                </div>
                 <div id="log-status" class="body-small" style="color:var(--md-sys-color-on-surface-variant); text-align:right; margin-top:8px;">Connecting...</div>
             </div>
         </div>
@@ -5387,15 +5408,19 @@ cat >> "$DASHBOARD_FILE" <<EOF
                             if (dot && txt && indicator) {
                                 if (status === 'unhealthy' && data.health_details && data.health_details[name]) {
                                     txt.textContent = 'Issue Detected';
-                                    dot.className = 'status-dot status-down';
+                                    dot.className = 'status-dot down';
                                     indicator.title = data.health_details[name];
                                 } else if (status === 'healthy' || status === 'up') {
                                     txt.textContent = 'Healthy';
-                                    dot.className = 'status-dot status-up';
+                                    dot.className = 'status-dot up';
                                     indicator.title = 'Service is operational';
+                                } else if (status === 'starting') {
+                                    txt.textContent = 'Starting';
+                                    dot.className = 'status-dot starting';
+                                    indicator.title = 'Service is currently initializing';
                                 } else {
                                     txt.textContent = 'Offline';
-                                    dot.className = 'status-dot status-down';
+                                    dot.className = 'status-dot down';
                                     indicator.title = 'Service is unreachable';
                                 }
                             }
@@ -5417,7 +5442,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const dot = document.getElementById('api-dot');
                 const txt = document.getElementById('api-text');
                 if (dot && txt) {
-                    dot.className = 'status-dot status-up';
+                    dot.className = 'status-dot up';
                     txt.textContent = 'Connected';
                 }
             } catch(e) {
@@ -5425,7 +5450,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const dot = document.getElementById('api-dot');
                 const txt = document.getElementById('api-text');
                 if (dot && txt) {
-                    dot.className = 'status-dot status-down';
+                    dot.className = 'status-dot down';
                     txt.textContent = 'Offline (API Error)';
                 }
             }
@@ -5659,6 +5684,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const data = await res.json();
                 const el = document.getElementById('profile-list');
                 el.innerHTML = '';
+                el.style.alignItems = 'stretch';
+                el.style.justifyContent = 'flex-start';
                 data.profiles.forEach(p => {
                     const row = document.createElement('div');
                     row.className = 'list-item';
@@ -5797,6 +5824,14 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 if (!e.data) return;
                 const entry = parseLogLine(e.data);
                 if (!entry) return;
+                
+                // Clear the loader if it's still there
+                if (el.querySelector('.body-small')) {
+                    el.innerHTML = '';
+                    el.style.alignItems = 'flex-start';
+                    el.style.justifyContent = 'flex-start';
+                }
+                
                 el.appendChild(entry);
                 if (el.childNodes.length > 500) el.removeChild(el.firstChild);
                 el.scrollTop = el.scrollHeight;
@@ -6069,41 +6104,48 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const tooltipBox = document.createElement('div');
             tooltipBox.className = 'tooltip-box';
             document.body.appendChild(tooltipBox);
+            
+            let tooltipTimeout = null;
 
             document.addEventListener('mouseover', (e) => {
                 const target = e.target.closest('[data-tooltip]');
                 if (!target) return;
 
-                tooltipBox.textContent = target.dataset.tooltip;
-                tooltipBox.style.display = 'block';
-                // Trigger reflow
-                tooltipBox.offsetHeight;
-                tooltipBox.classList.add('visible');
-
-                const rect = target.getBoundingClientRect();
-                const boxRect = tooltipBox.getBoundingClientRect();
+                if (tooltipTimeout) clearTimeout(tooltipTimeout);
                 
-                let top = rect.top - boxRect.height - 12;
-                let left = rect.left + (rect.width / 2) - (boxRect.width / 2);
+                tooltipTimeout = setTimeout(() => {
+                    tooltipBox.textContent = target.dataset.tooltip;
+                    tooltipBox.style.display = 'block';
+                    // Trigger reflow
+                    tooltipBox.offsetHeight;
+                    tooltipBox.classList.add('visible');
 
-                // Edge collision detection (with 12px safety margin)
-                if (top < 12) top = rect.bottom + 12;
-                if (left < 12) left = 12;
-                if (left + boxRect.width > window.innerWidth - 12) {
-                    left = window.innerWidth - boxRect.width - 12;
-                }
-                
-                // Final safety: ensure it doesn't go off bottom
-                if (top + boxRect.height > window.innerHeight - 12) {
-                    top = window.innerHeight - boxRect.height - 12;
-                }
+                    const rect = target.getBoundingClientRect();
+                    const boxRect = tooltipBox.getBoundingClientRect();
+                    
+                    let top = rect.top - boxRect.height - 12;
+                    let left = rect.left + (rect.width / 2) - (boxRect.width / 2);
 
-                tooltipBox.style.top = top + 'px';
-                tooltipBox.style.left = left + 'px';
+                    // Edge collision detection (with 12px safety margin)
+                    if (top < 12) top = rect.bottom + 12;
+                    if (left < 12) left = 12;
+                    if (left + boxRect.width > window.innerWidth - 12) {
+                        left = window.innerWidth - boxRect.width - 12;
+                    }
+                    
+                    // Final safety: ensure it doesn't go off bottom
+                    if (top + boxRect.height > window.innerHeight - 12) {
+                        top = window.innerHeight - boxRect.height - 12;
+                    }
+
+                    tooltipBox.style.top = top + 'px';
+                    tooltipBox.style.left = left + 'px';
+                }, 150); 
             });
 
             document.addEventListener('mouseout', (e) => {
                 if (e.target.closest('[data-tooltip]')) {
+                    if (tooltipTimeout) clearTimeout(tooltipTimeout);
                     tooltipBox.classList.remove('visible');
                     // Hide after transition
                     setTimeout(() => {
