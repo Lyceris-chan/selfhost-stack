@@ -3,14 +3,15 @@
 A comprehensive, self-hosted privacy infrastructure designed for digital independence.
 Route your traffic through secure VPNs, eliminate tracking with isolated frontends, and manage everything from a unified **Material Design 3** dashboard.
 
-## 🌟 Key Features
+## 🌟 Key Features & Benefits
 
-*   **VPN-Gated Frontends**: Services like Invidious (YouTube), Redlib (Reddit), and Wikiless are routed through a **Gluetun VPN** tunnel. Upstream providers see your VPN IP, not your home IP.
-*   **Zero-Leaks Architecture**: No external CDNs or trackers. All assets (fonts, icons, scripts) are fetched once via an anonymized proxy and served locally.
-*   **Network-Wide Filtering**: AdGuard Home provides DNS-level ad blocking and tracking protection for your entire home network.
-*   **Automated Lifecycle**: Built-in "Update Engine" handles backups, database migrations, container rebuilds, and rollbacks automatically.
-*   **Material Design 3**: A modern, responsive management dashboard with dynamic theming and real-time system metrics.
-*   **Hardened Infrastructure**: Built on DHI (Docker Hardened Images) with minimal-footprint Alpine Linux bases.
+*   **Data Sovereignty & Ownership**: By hosting your own frontends (Invidious, Redlib, etc.), you stop upstream giants like Google and Reddit from collecting, profiling, and selling your behavioral data. You own the instance; you own the data.
+*   **Ad-Free by Design**: Enjoy a clean, distraction-free web. AdGuard Home blocks trackers and ads at the DNS level for your entire home, while frontends eliminate in-video ads and sponsored content natively.
+*   **No App Prompts**: Say goodbye to "Install our app" popups. These frontends provide a premium mobile-web experience that works perfectly in any browser without requiring invasive native applications.
+*   **VPN-Gated Privacy**: Sensitive services are routed through a **Gluetun VPN** tunnel. This ensures that even when you browse, end-service providers only see your VPN's IP address, keeping your home location and identity hidden.
+*   **Zero-Leaks Architecture**: Our "Privacy First" asset engine ensures your browser never contacts third-party CDNs. Fonts, icons, and scripts are served locally from your machine.
+*   **Privacy Guarantee**: Within this stack, **none** of the services you interact with can see your public IP or identifying metadata. The *only* time your IP is exposed is during the initial setup when cloning source code from GitHub/Codeberg, which is a one-time deployment event.
+*   **Material Design 3**: A beautiful, accessible management dashboard with dynamic theming and real-time health metrics.
 
 ## 📚 Contents
 - [🚀 Quick Start](#quick-start)
