@@ -5472,9 +5472,16 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <button onclick="closeServiceModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
             </div>
             <div id="modal-metrics" style="background: var(--md-sys-color-surface-container-low); padding: 16px; border-radius: 12px;">
-                <div class="stat-row"><span class="stat-label">CPU Usage</span><span class="stat-value" id="modal-cpu">0%</span></div>
+                <div class="stat-row">
+                    <span class="stat-label">CPU Usage <span id="modal-cpu-text" style="float:right; font-family:monospace; opacity:0.8;">0%</span></span>
+                    <span class="stat-value" id="modal-cpu" style="display:none;">0%</span>
+                </div>
                 <div class="metric-bar"><div id="modal-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
-                <div class="stat-row" style="margin-top:12px;"><span class="stat-label">Memory</span><span class="stat-value" id="modal-mem">0 / 0 MB</span></div>
+                
+                <div class="stat-row" style="margin-top:12px;">
+                    <span class="stat-label">Memory <span id="modal-mem-text" style="float:right; font-family:monospace; opacity:0.8;">0 / 0 MB</span></span>
+                    <span class="stat-value" id="modal-mem" style="display:none;">0 / 0 MB</span>
+                </div>
                 <div class="metric-bar"><div id="modal-mem-fill" class="metric-fill" style="width: 0%"></div></div>
             </div>
             <div id="modal-actions" class="btn-group" style="flex-direction: column; gap: 8px;">
@@ -5628,13 +5635,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const m = containerMetrics[name];
             if (m) {
                 const cpu = parseFloat(m.cpu) || 0;
-                document.getElementById('modal-cpu').textContent = cpu.toFixed(1) + "%";
+                document.getElementById('modal-cpu-text').textContent = cpu.toFixed(1) + "%";
                 document.getElementById('modal-cpu-fill').style.width = Math.min(100, cpu) + "%";
                 
                 const mem = parseFloat(m.mem) || 0;
                 const limit = parseFloat(m.limit) || 1;
                 const memPercent = Math.min(100, (mem / limit) * 100);
-                document.getElementById('modal-mem').textContent = Math.round(mem) + " / " + Math.round(limit) + " MB";
+                document.getElementById('modal-mem-text').textContent = Math.round(mem) + " / " + Math.round(limit) + " MB";
                 document.getElementById('modal-mem-fill').style.width = memPercent + "%";
             }
         }
@@ -6123,7 +6130,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const txt = document.getElementById('api-text');
                 if (dot && txt) {
                     dot.className = 'status-dot down';
-                    txt.textContent = 'Offline (API Error)';
+                    txt.textContent = 'Offline';
                 }
                 // Force indicators out of "Connecting..." state on API failure
                 document.querySelectorAll('.status-indicator').forEach(indicator => {
@@ -6131,7 +6138,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     const text = indicator.querySelector('.status-text');
                     if (dot && text && !dot.id.includes('api')) {
                         dot.className = 'status-dot down';
-                        text.textContent = 'API Error';
+                        text.textContent = 'Connection Error';
                     }
                 });
             }
