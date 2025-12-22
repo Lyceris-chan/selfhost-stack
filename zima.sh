@@ -5450,6 +5450,19 @@ cat >> "$DASHBOARD_FILE" <<EOF
         </div>
     </div>
 
+    <!-- Changelog Modal -->
+    <div id="changelog-modal" class="modal-overlay" style="z-index: 26000;">
+        <div class="modal-card" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h2 id="changelog-title">Changelog</h2>
+                <button onclick="document.getElementById('changelog-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+            </div>
+            <div id="changelog-content" class="code-block" style="flex-grow: 1; overflow-y: auto; white-space: pre-wrap; margin-top: 16px; font-family: monospace; font-size: 13px;">
+                Loading...
+            </div>
+        </div>
+    </div>
+
     <!-- Service Management Modal -->
     <div id="service-modal" class="modal-overlay">
         <div class="modal-card">
@@ -5681,14 +5694,42 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 row.style.background = 'transparent';
                 row.style.border = 'none';
                 row.innerHTML = \`
-                    <label style="display:flex; align-items:center; gap:12px; width:100%; cursor:pointer;">
-                        <input type="checkbox" class="update-checkbox" value="\${svc}" checked style="width:18px; height:18px; accent-color:var(--md-sys-color-primary);">
-                        <span class="list-item-text">\${svc}</span>
-                        <span class="chip tertiary" style="height:24px; font-size:11px;">Update Available</span>
-                    </label>
+                    <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+                        <label style="display:flex; align-items:center; gap:12px; cursor:pointer; flex-grow:1;">
+                            <input type="checkbox" class="update-checkbox" value="\${svc}" checked style="width:18px; height:18px; accent-color:var(--md-sys-color-primary);">
+                            <span class="list-item-text">\${svc}</span>
+                        </label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <button onclick="viewChangelog('\${svc}')" class="btn btn-icon" style="width:32px; height:32px;" data-tooltip="View Changes">
+                                <span class="material-symbols-rounded" style="font-size:18px;">description</span>
+                            </button>
+                            <span class="chip tertiary" style="height:24px; font-size:11px;">Update Available</span>
+                        </div>
+                    </div>
                 \`;
                 el.appendChild(row);
             });
+        }
+
+        async function viewChangelog(service) {
+            const modal = document.getElementById('changelog-modal');
+            const title = document.getElementById('changelog-title');
+            const content = document.getElementById('changelog-content');
+            
+            title.textContent = "Changes: " + service;
+            content.textContent = "Fetching release notes...";
+            modal.style.display = 'flex';
+            
+            try {
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/changelog?service=" + service, { headers });
+                const data = await res.json();
+                
+                if (data.error) throw new Error(data.error);
+                content.textContent = data.changelog || "No changelog information available.";
+            } catch (e) {
+                content.textContent = "Failed to load changelog: " + e.message;
+            }
         }
 
         function toggleAllUpdates() {
