@@ -200,11 +200,31 @@ The current configuration is pre-tuned to support up to **30 users** on a machin
 
 ## 🌐 Network Configuration
 
-### Router Integration (Default DNS)
-Set your router's **LAN DNS** to the local IP of this stack. This ensures all connected devices automatically use AdGuard Home for filtering.
+## 🌐 Network Configuration
 
-### DNS Hijacking (Forced Resolution)
-Redirect all traffic on port `53` (TCP/UDP) not originating from the Privacy Hub to the Privacy Hub's IP. This forces rogue devices (IoT, Smart TVs) to use your filtered DNS even if they have hardcoded servers.
+### 1. Standard Router Setup (Recommended)
+Log in to your main router's admin panel and find the **DHCP Server** or **LAN Settings**.
+*   **Set Primary DNS**: Enter the **Local IP** of your Privacy Hub (e.g., `192.168.1.100`).
+*   **Set Secondary DNS**: Leave empty or set to the same IP. *Do not use Google (8.8.8.8) as a backup, or ads will leak through.*
+
+This ensures all devices on your WiFi/LAN automatically get ad-blocking and privacy protection.
+
+### 2. Manual Device Configuration
+If you cannot change router settings, or for specific devices (e.g., work laptop):
+*   **Windows/Mac/Linux**: Go to Network Settings → IPv4 properties → Manually set DNS server to the Privacy Hub's IP.
+*   **Android/iOS**: Set "Configure DNS" to "Manual" in WiFi settings and enter the IP.
+*   **Private DNS (Android/iOS)**: Once deSEC is configured with a valid certificate, you can use `your-domain.dedyn.io` as the "Private DNS" hostname for encrypted protection anywhere.
+
+### 3. Advanced Router Setup (OpenWrt / Hijacking)
+Some devices (Chromecasts, Smart TVs, IoT) ignore your DHCP DNS and hardcode `8.8.8.8` to bypass filters. You can force them to comply using **DNS Hijacking** (NAT Redirection).
+
+**The Concept:** Create a firewall rule on your router that intercepts *any* traffic on port 53 (UDP/TCP) coming from the LAN and forcibly redirects it to your AdGuard Home instance. The device thinks it's talking to Google, but your router sends it to the Privacy Hub.
+
+**OpenWrt Resources:**
+*   [OpenWrt Guide: Intercepting DNS](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/intercept_dns)
+*   [OpenWrt Guide: Blocking Public DoH (Port 853)](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/ban_ip)
+
+> **Note:** To block DoH (DNS over HTTPS), you must block port 853 and known DoH server IPs at the firewall level, as these requests look like regular HTTPS traffic.
 
 ## 📡 Advanced Setup: OpenWrt & Double NAT
 
