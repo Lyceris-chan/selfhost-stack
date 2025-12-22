@@ -97,10 +97,18 @@ If you used the `-p` flag, the script auto-generated secure credentials for you.
 | Flag | Description | Action |
 | :--- | :--- | :--- |
 | `-c` | **Maintenance Reset** | Removes active containers and networks to resolve glitches, while strictly preserving persistent user data. |
-| `-x` | **REVERT (Factory Reset)** | ⚠️ **Environmental Restoration**. Purges all application artifacts and volumes to restore the host system to its original state. |
+| `-x` | **REVERT (Factory Reset)** | ⚠️ **Environmental Restoration**. Purges all application artifacts, volumes, and **iptables networking rules** to restore the host system to its original state. |
 | `-p` | **Auto-Passwords** | Generates secure random passwords for all services automatically. |
-| `-y` | **Auto-Confirm** | Skips confirmation prompts (for automated deployments). |
-| `-s` | **Select Services** | Deploy specific services only (e.g., `./zima.sh -s invidious,memos`). |
+
+## 🛡️ Privacy & Security Features
+
+### Recursive DNS Engine (Unbound + AdGuard)
+The core resolution engine provides advanced privacy protections that standard routers and public DNS providers (like Google) lack:
+*   **QNAME Minimization**: Only sends the minimum necessary information to upstream root servers, preventing leakage of your full browsing history.
+*   **Encrypted Local Path**: Supports **DoH** (DNS over HTTPS) and **DoQ** (DNS over QUIC) protocols locally, ensuring your internal traffic remains invisible even to your ISP.
+*   **Aggressive Caching**: High-performance `msg-cache` and `rrset-cache` reduce external lookups and improve response times.
+*   **ECH Ready**: Architecture is designed to support **Encrypted Client Hello**, closing the last visibility gap in HTTPS handshakes.
+*   **Identity Hiding**: Explicitly hides server identity and version to prevent fingerprinting by malicious actors.
 
 <a id="management-dashboard"></a>
 ## 🖥️ Management Dashboard
