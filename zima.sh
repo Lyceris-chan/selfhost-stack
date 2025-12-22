@@ -6163,8 +6163,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     const text = indicator.querySelector('.status-text');
                     if (dot && text && !dot.id.includes('api')) {
                         dot.className = 'status-dot down';
-                        text.textContent = 'API Error';
-                        indicator.title = 'Unable to reach Hub API. Service status cannot be verified.';
+                        text.textContent = 'API Offline';
+                        indicator.title = 'The Management Hub is unreachable. Real-time metrics, VPN switching, and service update controls are unavailable until connection is restored.';
                     }
                 });
             }
