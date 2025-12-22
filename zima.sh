@@ -574,9 +574,16 @@ clean_environment() {
         # PHASE 9: Reset iptables rules
         # ============================================================
         log_info "Phase 9: Resetting networking rules..."
-        sudo iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
-        sudo iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
-        sudo iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
+        # Only remove rules if they exist to avoid affecting other system configurations
+        if sudo iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null; then
+            sudo iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
+        fi
+        if sudo iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null; then
+            sudo iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
+        fi
+        if sudo iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
+            sudo iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
+        fi
         
         echo ""
         log_info "============================================================"
