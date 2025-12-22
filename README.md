@@ -102,13 +102,14 @@ If you used the `-p` flag, the script auto-generated secure credentials for you.
 
 ## 🛡️ Privacy & Security Features
 
-### Recursive DNS Engine (Unbound + AdGuard)
-The core resolution engine provides advanced privacy protections that standard routers and public DNS providers (like Google) lack:
-*   **QNAME Minimization**: Only sends the minimum necessary information to upstream root servers, preventing leakage of your full browsing history.
-*   **Encrypted Local Path**: Supports **DoH** (DNS over HTTPS) and **DoQ** (DNS over QUIC) protocols locally, ensuring your internal traffic remains invisible even to your ISP.
-*   **Aggressive Caching**: High-performance `msg-cache` and `rrset-cache` reduce external lookups and improve response times.
-*   **ECH Ready**: Architecture is designed to support **Encrypted Client Hello**, closing the last visibility gap in HTTPS handshakes.
-*   **Identity Hiding**: Explicitly hides server identity and version to prevent fingerprinting by malicious actors.
+### Recursive DNS Engine (Independent Resolution)
+This stack eliminates reliance on centralized upstream providers. By resolving queries directly with Root Servers, we operate on a **Zero-Trust** model that prioritizes your independence:
+*   **Zero Third-Parties**: We bypass "public" resolvers like **Google** (to prevent behavioral data harvesting and sale) and **Cloudflare** (to avoid centralized censorship and single-point-of-failure risks).
+*   **Least Trust Architecture**: Your browsing queries never leave your hardware in a readable or profileable format.
+*   **QNAME Minimization**: Only sends the absolute minimum metadata to root servers, closing the "full-history" visibility gap inherent in standard DNS.
+*   **Encrypted Local Path**: Native support for **DoH** and **DoQ** ensures your internal queries are invisible to your ISP.
+*   **Aggressive Caching**: Reduces external network exposure while significantly speeding up frequent queries.
+*   **Identity Hiding**: Server identity and version metadata are scrubbed to prevent fingerprinting.
 
 <a id="management-dashboard"></a>
 ## 🖥️ Management Dashboard
