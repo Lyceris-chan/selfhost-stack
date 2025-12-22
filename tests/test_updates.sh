@@ -6,7 +6,7 @@ set -euo pipefail
 
 BASE_DIR="/DATA/AppData/privacy-hub"
 SRC_DIR="$BASE_DIR/sources"
-API_URL="http://localhost:8081/api"
+API_URL="${API_URL:-http://localhost:8081/api}"
 
 log() { echo -e "\e[34m[TEST]\e[0m $1"; }
 

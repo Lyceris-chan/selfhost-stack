@@ -13,7 +13,7 @@ echo "✅ ShellCheck passed (with ignored exclusions)."
 
 # 2. UI logic check
 echo "[2/4] Verifying UI fix patterns..."
-grep -q "Private Instance ->" zima.sh || (echo "❌ UI Button text fix missing"; exit 1)
+grep -q "arrow_forward" zima.sh || (echo "❌ UI Button text fix missing"; exit 1)
 grep -q "async function fetchMetrics()" zima.sh || (echo "❌ fetchMetrics fix missing"; exit 1)
 grep -q "white-space: normal;" zima.sh || (echo "❌ Service title cut-off fix missing"; exit 1)
 COG_COUNT=$(grep -c "settings-btn" zima.sh)

@@ -269,7 +269,7 @@ setup_fonts() {
 
     # Material Color Utilities (Local for privacy)
     log_info "Downloading Material Color Utilities..."
-    if ! curl -fsSL "https://cdn.jsdelivr.net/npm/@material/material-color-utilities/dist/index.min.js" -o "$FONTS_DIR/mcu.js"; then
+    if ! curl -fsSL "https://esm.run/@material/material-color-utilities" -o "$FONTS_DIR/mcu.js"; then
         log_warn "Failed to download Material Color Utilities. Using fallback logic."
     fi
 
@@ -1341,8 +1341,7 @@ server {
     }
 
     location /api/ {
-        set \$hub_api http://hub-api:55555/;
-        proxy_pass \$hub_api;
+        proxy_pass http://hub-api:55555/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -1355,8 +1354,7 @@ server {
     }
 
     location /odido-api/ {
-        set \$odido_booster http://odido-booster:8080/;
-        proxy_pass \$odido_booster;
+        proxy_pass http://odido-booster:8080/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -2231,6 +2229,7 @@ import urllib.parse
 import psutil
 
 PORT = 55555
+CONFIG_DIR = "/app"
 PROFILES_DIR = "/profiles"
 CONTROL_SCRIPT = "/usr/local/bin/wg-control.sh"
 LOG_FILE = "/app/deployment.log"
@@ -3134,6 +3133,9 @@ if [ -d "/dev/dri" ]; then
       - /dev/dri"
 fi
 
+if [ ! -f "$CONFIG_DIR/theme.json" ]; then echo "{}" > "$CONFIG_DIR/theme.json"; fi
+chmod 666 "$CONFIG_DIR/theme.json"
+
 cat > "$COMPOSE_FILE" <<EOF
 networks:
   frontnet:
@@ -3177,12 +3179,13 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$FONTS_DIR:/fonts"
       - "$SRC_DIR:/app/sources"
       - "$BASE_DIR:/project_root:ro"
+      - "$CONFIG_DIR/theme.json:/app/theme.json"
     environment:
       - HUB_API_KEY=$ODIDO_API_KEY
       - DOCKER_CONFIG=/root/.docker
     entrypoint: ["/bin/sh", "-c", "mkdir -p /app && touch /app/deployment.log /app/.data_usage /app/.wge_data_usage && python3 -u /app/server.py"]
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "55555"]
+      test: ["CMD-SHELL", "curl -f http://localhost:55555/status || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 5
@@ -3713,6 +3716,10 @@ cat > "$DASHBOARD_FILE" <<EOF
     <link href="fonts/gs.css" rel="stylesheet">
     <link href="fonts/cc.css" rel="stylesheet">
     <link href="fonts/ms.css" rel="stylesheet">
+    <script>
+        // Prevent extension injection errors - defined early
+        globalThis.configureInjection = globalThis.configureInjection || (() => {});
+    </script>
     <script type="module">
         import * as mcu from './fonts/mcu.js';
         window.MaterialColorUtilities = mcu;
@@ -4136,6 +4143,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             border-radius: 8px;
             font-size: 14px;
             font-weight: 500;
+            font-family: inherit;
             letter-spacing: 0.1px;
             text-decoration: none;
             transition: all var(--md-sys-motion-duration-short) linear;
@@ -4740,7 +4748,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance -></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
                     <div id="metrics-rimgo" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4756,7 +4764,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance -></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
                     <div id="metrics-scribe" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4772,7 +4780,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance -></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
                     <div id="metrics-breezewiki" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4788,7 +4796,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance -></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
                     <div id="metrics-anonymousoverflow" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4896,7 +4904,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; gap: 16px; flex-wrap: wrap;">
-                    <div id="cert-status-badge" class="chip" style="width: fit-content;" data-tooltip="Overall health of the SSL certificate issuance pipeline">...</div>
+                    <div id="cert-status-badge" class="chip" style="width: fit-content;" data-tooltip="Overall health of the SSL certificate issuance pipeline">Not Installed</div>
                     <button id="ssl-retry-btn" class="btn btn-icon btn-action" style="display:none;" data-tooltip="Force Let's Encrypt re-attempt" onclick="requestSslCheck()">
                         <span class="material-symbols-rounded">refresh</span>
                     </button>
@@ -5216,14 +5224,14 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h3>System & Deployment Logs</h3>
                     <div class="card-header-actions">
-                        <select id="log-filter-level" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 8px; font-size: 12px; border-radius: 8px;">
+                        <select id="log-filter-level" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
                             <option value="ALL">All Levels</option>
                             <option value="INFO">Info</option>
                             <option value="WARN">Warn</option>
                             <option value="ERROR">Error</option>
                             <option value="SECURITY">Security</option>
                         </select>
-                        <select id="log-filter-cat" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 8px; font-size: 12px; border-radius: 8px;">
+                        <select id="log-filter-cat" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
                             <option value="ALL">All Categories</option>
                             <option value="SYSTEM">System</option>
                             <option value="NETWORK">Network</option>
@@ -5264,9 +5272,6 @@ cat >> "$DASHBOARD_FILE" <<EOF
     </div>
 
     <script>
-        // Prevent extension injection errors
-        globalThis.configureInjection = globalThis.configureInjection || (() => {});
-
         const API = "/api"; 
         const ODIDO_API = "/odido-api/api";
         
@@ -5306,7 +5311,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
             
             // Speed indicator (MB/min to Mb/s: * 8 / 60)
             const speedMbs = (rate * 8 / 60).toFixed(2);
-            if (speedIndicator) speedIndicator.textContent = speedMbs + " Mb/s";
+            if (speedIndicator) {
+                speedIndicator.textContent = speedMbs + " Mb/s";
+                speedIndicator.style.display = rate > 0 ? 'block' : 'none';
+            }
 
             if (smoothHistory.length < 2) return;
 
@@ -6692,7 +6700,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
         }
         
-        async function fetchHealth() {
+        async function fetchSystemHealth() {
             try {
                 const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
                 const res = await fetch(API + "/system-health", { headers });

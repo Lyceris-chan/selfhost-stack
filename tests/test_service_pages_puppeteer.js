@@ -1,6 +1,6 @@
 const puppeteer = require('puppeteer');
 
-const DASHBOARD_URL = 'http://10.0.10.248:8081/';
+const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://10.0.10.248:8081/';
 const BREEZEWIKI_PATH = process.env.BREEZEWIKI_PATH || '/paladins/wiki/Talus';
 const INVIDIOUS_VIDEO_ID = process.env.INVIDIOUS_VIDEO_ID || 'dQw4w9WgXcQ';
 

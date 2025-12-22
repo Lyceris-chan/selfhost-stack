@@ -84,3 +84,137 @@ FINAL STATUS:
 - [✓] API: Verified endpoint connectivity, theme saving, and health monitoring.
 - [✓] LOGS: Technical logs humanized and scrollable.
 - [✓] STATUS: System verified as proper and working as intended.
+
+ensure that the text and other components remain readable using the rules in m3.material.io / https://github.com/material-foundation/material-color-utilities
+dashboard is showing api error for everything
+there are still instances of the old -> arrow
+certain chips like migrate DB and clear logs and optimize DB appear to be using a different font
+the ... under certificate status should show that a certificate is also not installed right now like under end point provisioning as the 3 dots aren't clear
+the data status chart says 0 Mb/s on the top right it looks weird there
+the arrow down next to All levels and All categories is too close to the right side 
+ensure there are no other errors in the console after deploying zima.sh
+ensure the entire test suite passes and that everything works and that none of the containers have errors in them
+
+ callback globalThis.configureInjection is not a function (undefined).
+(anonymous) @ unknown
+:8081/fonts/blend/blend.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+(index):3065 Uncaught ReferenceError: fetchSystemHealth is not defined
+    at HTMLDocument.<anonymous> ((index):3065:155)
+:8081/fonts/hct/cam16.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/hct/hct.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/hct/viewing_conditions.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/palettes/core_palette.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/palettes/tonal_palette.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+:8081/fonts/quantize/quantizer_celebi.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/quantize/quantizer_wsmeans.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/quantize/quantizer_map.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/scheme/scheme.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/quantize/quantizer_wu.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/scheme/scheme_android.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/score/score.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/utils/color_utils.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/utils/math_utils.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/utils/image_utils.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/utils/string_utils.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/fonts/utils/theme_utils.js:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+:8081/api/status:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/odido-api/api/status:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/containers:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+(index):1834 Container fetch error: Error: API 502
+    at fetchContainerIds ((index):1796:36)
+fetchContainerIds @ (index):1834
+:8081/api/certificate-status:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/profiles:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/updates:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/metrics:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/theme:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/status:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+(index):2846 Cert status fetch error: SyntaxError: Unexpected token '<', "<html>
+<h"... is not valid JSON
+fetchCertStatus @ (index):2846
+(index):2334 Profile fetch error: SyntaxError: Unexpected token '<', "<html>
+<h"... is not valid JSON
+fetchProfiles @ (index):2334
+(index):2031 Status fetch error: SyntaxError: Unexpected token '<', "<html>
+<h"... is not valid JSON
+fetchStatus @ (index):2031
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+:8081/api/events:1  GET http://192.168.69.206:8081/api/events net::ERR_ABORTED 502 (Bad Gateway)
+:8081/api/events:1  GET http://192.168.69.206:8081/api/events net::ERR_ABORTED 502 (Bad Gateway)
+:8081/api/events:1  GET http://192.168.69.206:8081/api/events net::ERR_ABORTED 502 (Bad Gateway)
