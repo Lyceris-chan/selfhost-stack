@@ -3231,9 +3231,10 @@ cat >> "$COMPOSE_FILE" <<EOF
     cap_drop: [ALL]
     depends_on: {gluetun: {condition: service_healthy}}
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "--tries=1", "http://localhost:8080/settings"]
-      interval: 5m
-      timeout: 3s
+      test: ["CMD", "wget", "--spider", "-q", "--tries=1", "http://localhost:8080/"]
+      interval: 1m
+      timeout: 5s
+      retries: 3
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
@@ -3840,9 +3841,9 @@ cat > "$DASHBOARD_FILE" <<EOF
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            gap: 16px;
-            flex-wrap: wrap; /* Allowed wrap for small screens */
+            margin-bottom: 16px;
+            gap: 12px;
+            flex-wrap: nowrap;
         }
 
         .card-header h2 {
@@ -3857,25 +3858,39 @@ cat > "$DASHBOARD_FILE" <<EOF
             white-space: nowrap;
         }
 
+        .card-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
         .nav-arrow {
             color: var(--md-sys-color-primary);
-            font-size: 24px;
+            font-size: 22px;
             transition: all var(--md-sys-duration-medium) var(--md-sys-motion-easing-emphasized);
-            opacity: 0;
-            transform: translateX(-10px);
+            opacity: 1;
+            transform: translateX(0);
         }
 
         .card:hover .nav-arrow {
-            opacity: 1;
-            transform: translateX(0);
+            transform: translateX(6px);
+        }
+
+        .settings-btn {
+            order: 3;
         }
 
         .card .description {
             font-size: 14px;
             color: var(--md-sys-color-on-surface-variant);
-            margin-bottom: 24px; /* Increased spacing */
+            margin-bottom: 16px; 
             line-height: 20px;
             flex-grow: 1;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
         
         .card h3 {
@@ -4054,6 +4069,9 @@ cat > "$DASHBOARD_FILE" <<EOF
             color: var(--md-sys-color-on-secondary-container);
             border-color: transparent;
             opacity: 0.9;
+        }
+        .portainer-link:hover .material-symbols-rounded {
+            transform: translateX(4px);
         }
         
         .btn-action {
@@ -4449,13 +4467,16 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="card-header">
                     <h2>Invidious</h2>
                     <div style="display: flex; align-items: center; gap: 12px;">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('invidious', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        <button onclick="openServiceSettings('invidious', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                     </div>
                 </div>
                 <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
                 <div class="chip-box">
-                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px;">arrow_forward</span></span>
+                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
+                    <button onclick="migrateService('invidious', 'migrate', 'yes', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Perform database migration and maintenance."><span class="material-symbols-rounded">database_upload</span> Migrate DB</button>
+                    <button onclick="migrateService('invidious', 'clear-logs', 'no', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Clear Invidious application logs."><span class="material-symbols-rounded">delete_sweep</span> Clear Logs</button>
                     <div id="metrics-invidious" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4465,32 +4486,47 @@ cat > "$DASHBOARD_FILE" <<EOF
             <div id="link-redlib" data-url="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib" onclick="navigate(this, event)">
                 <div class="card-header">
                     <h2>Redlib</h2>
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('redlib', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                    <div class="card-header-actions">
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
                         <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        <button onclick="openServiceSettings('redlib', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
                     </div>
                 </div>
                 <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
                     <div id="metrics-redlib" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-wikiless" data-url="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true" data-container="wikiless" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Wikiless</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('wikiless', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header">
+                    <h2>Wikiless</h2>
+                    <div class="card-header-actions">
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        <button onclick="openServiceSettings('wikiless', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                    </div>
+                </div>
                 <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
                     <div id="metrics-wikiless" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-memos" data-url="http://$LAN_IP:$PORT_MEMOS" class="card" data-check="true" data-container="memos" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Memos</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('memos', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header">
+                    <h2>Memos</h2>
+                    <div class="card-header-actions">
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        <button onclick="openServiceSettings('memos', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                    </div>
+                </div>
                 <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
                 <div class="chip-box">
-                    <span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container">Direct Access <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px;">arrow_forward</span></span>
+                    <span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container">Direct Access <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
                     <button onclick="vacuumServiceDb('memos', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Optimize the database by reclaiming unused space (VACUUM). Highly recommended after large deletions."><span class="material-symbols-rounded">compress</span> Optimize DB</button>
                 
                     <div id="metrics-memos" class="chip-box" style="padding-top:0; display:none;">
@@ -4499,45 +4535,80 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div></div>
             </div>
             <div id="link-rimgo" data-url="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true" data-container="rimgo" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Rimgo</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('rimgo', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header">
+                    <h2>Rimgo</h2>
+                    <div class="card-header-actions">
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        <button onclick="openServiceSettings('rimgo', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                    </div>
+                </div>
                 <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
                     <div id="metrics-rimgo" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-scribe" data-url="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true" data-container="scribe" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Scribe</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('scribe', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header">
+                    <h2>Scribe</h2>
+                    <div class="card-header-actions">
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        <button onclick="openServiceSettings('scribe', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                    </div>
+                </div>
                 <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
                     <div id="metrics-scribe" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-breezewiki" data-url="http://$LAN_IP:$PORT_BREEZEWIKI/" class="card" data-check="true" data-container="breezewiki" onclick="navigate(this, event)">
-                <div class="card-header"><h2>BreezeWiki</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('breezewiki', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header">
+                    <h2>BreezeWiki</h2>
+                    <div class="card-header-actions">
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        <button onclick="openServiceSettings('breezewiki', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                    </div>
+                </div>
                 <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
                     <div id="metrics-breezewiki" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-anonymousoverflow" data-url="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true" data-container="anonymousoverflow" onclick="navigate(this, event)">
-                <div class="card-header"><h2>AnonOverflow</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('anonymousoverflow', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header">
+                    <h2>AnonOverflow</h2>
+                    <div class="card-header-actions">
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        <button onclick="openServiceSettings('anonymousoverflow', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                    </div>
+                </div>
                 <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
                     <div id="metrics-anonymousoverflow" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-vert" data-url="http://$LAN_IP:$PORT_VERT" class="card" data-check="true" data-container="vert" onclick="navigate(this, event)">
-                <div class="card-header"><h2>VERT</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('vert', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header">
+                    <h2>VERT</h2>
+                    <div class="card-header-actions">
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        <button onclick="openServiceSettings('vert', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                    </div>
+                </div>
                 <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container">Utility <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px;">arrow_forward</span></span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion"><span class="material-symbols-rounded">memory</span> GPU Accelerated</span>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container">Utility <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion"><span class="material-symbols-rounded">memory</span> GPU Accelerated</span>
                     <div id="metrics-vert" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4551,10 +4622,17 @@ cat > "$DASHBOARD_FILE" <<EOF
         </div>
         <div class="grid-3">
             <div id="link-adguard" data-url="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card" data-check="true" data-container="adguard" onclick="navigate(this, event)">
-                <div class="card-header"><h2>AdGuard Home</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('adguard', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header">
+                    <h2>AdGuard Home</h2>
+                    <div class="card-header-actions">
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        <button onclick="openServiceSettings('adguard', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                    </div>
+                </div>
                 <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
                 <div class="chip-box">
-                    <span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container">Local Access <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px;">arrow_forward</span></span>
+                    <span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container">Local Access <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
                     <button onclick="clearServiceLogs('adguard', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Clear the historical DNS query logs to free up space."><span class="material-symbols-rounded">auto_delete</span> Clear Logs</button>
                     <span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span>
                 
@@ -4564,18 +4642,32 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </div></div>
             </div>
             <div id="link-portainer" data-url="http://$LAN_IP:$PORT_PORTAINER" class="card" data-check="true" data-container="portainer" onclick="navigate(this, event)">
-                <div class="card-header"><h2>Portainer</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('portainer', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header">
+                    <h2>Portainer</h2>
+                    <div class="card-header-actions">
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        <button onclick="openServiceSettings('portainer', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                    </div>
+                </div>
                 <p class="description">A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container">Local Access <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container">Local Access <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
                     <div id="metrics-portainer" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
                     </div></div>
             </div>
             <div id="link-wg-easy" data-url="http://$LAN_IP:$PORT_WG_WEB" class="card" data-check="true" data-container="wg-easy" onclick="navigate(this, event)">
-                <div class="card-header"><h2>WireGuard</h2><div style="display: flex; align-items: center; gap: 12px;"><div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div><button onclick="openServiceSettings('wg-easy', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button><span class="material-symbols-rounded nav-arrow">arrow_forward</span></div></div>
+                <div class="card-header">
+                    <h2>WireGuard</h2>
+                    <div class="card-header-actions">
+                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Initializing...</span></div>
+                        <span class="material-symbols-rounded nav-arrow">arrow_forward</span>
+                        <button onclick="openServiceSettings('wg-easy', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
+                    </div>
+                </div>
                 <p class="description">The primary gateway for <strong>secure remote access</strong>. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container">Local Access <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px;">arrow_forward</span></span>
+                <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container">Local Access <span class="material-symbols-rounded" style="font-size: 14px; margin-left: 4px; transition: transform 0.2s;">arrow_forward</span></span>
                     <div id="metrics-wg-easy" class="chip-box" style="padding-top:0; display:none;">
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
                         <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
@@ -4824,10 +4916,26 @@ cat >> "$DASHBOARD_FILE" <<EOF
         const API = "/api";
         const ODIDO_API = "/odido-api/api";
         
+        // Global State & Data
+        let containerMetrics = {};
+        let containerIds = {};
+        let pendingUpdates = [];
+        let realProfileName = '';
+        let maskedProfileId = '';
+        const profileMaskMap = {};
+
+        async function fetchMetrics() {
+            try {
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/metrics", { headers });
+                if (!res.ok) return;
+                const data = await res.json();
+                containerMetrics = data.metrics || {};
+            } catch(e) { console.error("Metrics fetch error:", e); }
+        }
+
         function getPortainerBaseUrl() {
             if (window.location.hostname !== '$LAN_IP' && !window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
-                // We are likely on a domain (e.g. hub.example.com)
-                // Try to infer portainer subdomain based on the current hostname
                 const parts = window.location.hostname.split('.');
                 if (parts.length >= 2) {
                     const domain = parts.slice(-2).join('.');
@@ -4841,25 +4949,11 @@ cat >> "$DASHBOARD_FILE" <<EOF
         const PORTAINER_URL = getPortainerBaseUrl();
         const DEFAULT_ODIDO_API_KEY = "$ODIDO_API_KEY";
         let storedOdidoKey = localStorage.getItem('odido_api_key');
-        // Ensure the dashboard always uses the latest deployment key
         if (DEFAULT_ODIDO_API_KEY && storedOdidoKey && storedOdidoKey !== DEFAULT_ODIDO_API_KEY) {
             localStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
             storedOdidoKey = DEFAULT_ODIDO_API_KEY;
         }
         let odidoApiKey = storedOdidoKey || DEFAULT_ODIDO_API_KEY;
-        let containerIds = {};
-        let pendingUpdates = [];
-        let containerMetrics = {};
-
-        async function fetchMetrics() {
-            try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/metrics", { headers });
-                if (!res.ok) return;
-                const data = await res.json();
-                containerMetrics = data.metrics || {};
-            } catch(e) {}
-        }
 
         async function fetchUpdates() {
             try {
@@ -4874,12 +4968,53 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const list = document.getElementById('update-list');
                 
                 if (pendingUpdates.length > 0) {
-                    banner.style.display = 'block';
-                    list.textContent = "Updates available for: " + pendingUpdates.join(", ");
+                    if (banner) banner.style.display = 'block';
+                    if (list) list.textContent = "Updates available for: " + pendingUpdates.join(", ");
                 } else {
-                    banner.style.display = 'none';
+                    if (banner) banner.style.display = 'none';
                 }
             } catch(e) {}
+        }
+
+        function openServiceSettings(name, e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            showServiceModal(name);
+        }
+
+        function showServiceModal(name) {
+            const modal = document.getElementById('service-modal');
+            const title = document.getElementById('modal-service-name');
+            const actions = document.getElementById('modal-actions');
+            title.textContent = name.charAt(0).toUpperCase() + name.slice(1) + " Management";
+            
+            // Basic actions for all
+            actions.innerHTML = "<button onclick=\"updateService('" + name + "')\" class=\"btn btn-tonal\" style=\"width:100%\"><span class=\"material-symbols-rounded\">update</span> Update Service</button><button onclick=\"window.open(PORTAINER_URL + '/#!/1/docker/containers/' + (containerIds[name] || ''), '_blank')\" class=\"btn btn-outlined\" style=\"width:100%\"><span class=\"material-symbols-rounded\">dock</span> View in Portainer</button>";
+
+            // Specialized actions
+            if (name === 'invidious') {
+                actions.innerHTML += "<button onclick=\"migrateService('invidious', event)\" class=\"btn btn-filled\" style=\"width:100%\"><span class=\"material-symbols-rounded\">database_upload</span> Migrate Database</button><button onclick=\"clearServiceDb('invidious', event)\" class=\"btn btn-tonal\" style=\"width:100%; color:var(--md-sys-color-error)\"><span class=\"material-symbols-rounded\">delete_forever</span> Wipe All Data</button>";
+            } else if (name === 'adguard') {
+                actions.innerHTML += "<button onclick=\"clearServiceLogs('adguard', event)\" class=\"btn btn-tonal\" style=\"width:100%\"><span class=\"material-symbols-rounded\">auto_delete</span> Clear Query Logs</button>";
+            } else if (name === 'memos') {
+                actions.innerHTML += "<button onclick=\"vacuumServiceDb('memos', event)\" class=\"btn btn-tonal\" style=\"width:100%\"><span class=\"material-symbols-rounded\">compress</span> Optimize Database</button>";
+            }
+
+            modal.style.display = 'flex';
+            updateModalMetrics(name);
+        }
+
+        function closeServiceModal() {
+            document.getElementById('service-modal').style.display = 'none';
+        }
+
+        function updateModalMetrics(name) {
+            const m = containerMetrics[name];
+            if (m) {
+                document.getElementById('modal-cpu').textContent = m.cpu;
+                document.getElementById('modal-cpu-fill').style.width = m.cpu;
+                document.getElementById('modal-mem').textContent = m.mem;
+                document.getElementById('modal-mem-fill').style.width = '50%'; // Approximation
+            }
         }
 
         async function updateAllServices() {
@@ -5047,11 +5182,6 @@ cat >> "$DASHBOARD_FILE" <<EOF
             } catch(e) { console.error('Container fetch error:', e); }
         }
         
-        // Store real profile name for privacy mode masking
-        let realProfileName = '';
-        let maskedProfileId = '';
-        const profileMaskMap = {};
-        
         function navigate(el, e) {
             if (e && (e.target.closest('.portainer-link') || e.target.closest('.btn') || e.target.closest('.chip'))) return;
             const url = el.getAttribute('data-url');
@@ -5198,66 +5328,57 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
                 // Update service statuses from server-side checks
                 if (data.services) {
-                    const statusLabels = {
-                        'healthy': { text: 'Healthy', tip: 'Service is operational and passing health checks' },
-                        'up': { text: 'Online', tip: 'Service is running but lacks specific health checks' },
-                        'starting': { text: 'Starting', tip: 'Service is currently initializing' },
-                        'unhealthy': { text: 'Unhealthy', tip: 'Service is running but failing health checks' },
-                        'down': { text: 'Offline', tip: 'Service is stopped or unreachable' }
-                    };
-
                     for (const [name, status] of Object.entries(data.services)) {
-                        const card = document.getElementById("link-" + name);
+                        const card = document.getElementById('link-' + name);
                         if (card) {
-                            const indicator = card.querySelector('.status-indicator');
                             const dot = card.querySelector('.status-dot');
                             const txt = card.querySelector('.status-text');
+                            const indicator = card.querySelector('.status-indicator');
+                            
                             if (dot && txt && indicator) {
-                                const info = statusLabels[status] || statusLabels['down'];
-                                dot.className = "status-dot " + status;
-                                txt.textContent = info.text;
-                                
-                                // Show detailed health info if unhealthy
-                                let tooltip = info.tip;
                                 if (status === 'unhealthy' && data.health_details && data.health_details[name]) {
-                                    tooltip = "ERROR: " + data.health_details[name];
-                                }
-                                indicator.dataset.tooltip = tooltip;
-
-                                // Apply text-success class if healthy or up
-                                if (status === 'healthy' || status === 'up') {
-                                    txt.classList.add('text-success');
+                                    txt.textContent = 'Issue Detected';
+                                    dot.className = 'status-dot status-down';
+                                    indicator.title = data.health_details[name];
+                                } else if (status === 'healthy' || status === 'up') {
+                                    txt.textContent = 'Healthy';
+                                    dot.className = 'status-dot status-up';
+                                    indicator.title = 'Service is operational';
                                 } else {
-                                    txt.classList.remove('text-success');
+                                    txt.textContent = 'Offline';
+                                    dot.className = 'status-dot status-down';
+                                    indicator.title = 'Service is unreachable';
                                 }
                             }
-                            
-                            // Update metrics chips if present
-                            const metricsBox = document.getElementById("metrics-" + name);
+
+                            // Update Metrics if available
+                            const metricsBox = document.getElementById('metrics-' + name);
                             if (metricsBox && containerMetrics[name]) {
                                 const m = containerMetrics[name];
                                 metricsBox.style.display = 'flex';
-                                metricsBox.querySelector('.cpu-val').textContent = m.cpu.toFixed(0) + '%';
-                                metricsBox.querySelector('.mem-val').textContent = Math.round(m.mem) + 'MB';
-                            } else if (metricsBox) {
-                                metricsBox.style.display = 'none';
+                                const cpuEl = metricsBox.querySelector('.cpu-val');
+                                const memEl = metricsBox.querySelector('.mem-val');
+                                if (cpuEl) cpuEl.textContent = m.cpu;
+                                if (memEl) memEl.textContent = m.mem;
                             }
                         }
                     }
                 }
-            } catch(e) { 
-                console.error('Status fetch error:', e);
-                // On error, mark all services as offline with reason
-                const errorMsg = e.message && e.message.includes('401') ? "Offline (Unauthorized)" : "Offline (API Error)";
-                document.querySelectorAll('.card[data-check="true"]').forEach(c => {
-                    const dot = c.querySelector('.status-dot');
-                    const txt = c.querySelector('.status-text');
-                    if (dot && txt) {
-                        dot.className = "status-dot down";
-                        txt.textContent = errorMsg;
-                        txt.classList.remove('text-success');
-                    }
-                });
+                
+                const dot = document.getElementById('api-dot');
+                const txt = document.getElementById('api-text');
+                if (dot && txt) {
+                    dot.className = 'status-dot status-up';
+                    txt.textContent = 'Connected';
+                }
+            } catch(e) {
+                console.error("Status fetch error:", e);
+                const dot = document.getElementById('api-dot');
+                const txt = document.getElementById('api-text');
+                if (dot && txt) {
+                    dot.className = 'status-dot status-down';
+                    txt.textContent = 'Offline (API Error)';
+                }
             }
         }
         

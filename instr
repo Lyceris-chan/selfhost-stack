@@ -35,13 +35,34 @@ Uncaught ReferenceError: fetchMetrics is not defined
     at fetchStatus ((index):1676:47)
 
 
-text still overlaps Por... Offline (API Error)
+text is still broken for things like Private Instance arrow_forward, the arrow should be visible on both with movement on both when hovered, the settings cog should be on the most right of the chip until hover and the settings cog currently doesnt do anything, ensure none of the buttons got removed that we had before like the update and migrate ones etc 
 
-there is still two cog icons 
-ensure the chips dont go 2 and then 1 under there as its ugly 
+ensure redlib is set to healthy even when these conditions are met in the log in portainer as those arent a cause for concern
+ ERROR redlib::client > Got an invalid response from reddit expected value at line 1 column 1. Status code: 403 Forbidden
 
-give the light mode button a better position place it right of the privacy switch instead 
+Starting Redlib...
+
+Rate limit check failed: Failed to parse page JSON data: expected value at line 1 column 1 | /r/reddit/hot.json?&raw_json=1
+
+This may cause issues with the rate limit.
+
+Please report this error with the above information.
+
+https://github.com/redlib-org/redlib/issues/new?assignees=sigaloid&labels=bug&title=%F0%9F%90%9B+Bug+Report%3A+Rate+limit+mismatch
+
+Running Redlib v0.36.0 on [::]:8080!
+
+ ERROR redlib::utils  > Error page rendered: Post ID is invalid. It may point to a post on a community that has been banned.
+
+ ERROR redlib::utils  > Error page rendered: Post ID is invalid. It may point to a post on a community that has been banned.
+
+ ERROR redlib::utils  > Error page rendered: Post ID is invalid. It may point to a post on a community that has been banned.
+
+ ERROR redlib::utils  > Error page rendered: Post ID is invalid. It may point to a post on a community that has been banned.
+
+ ERROR redlib::utils  > Error page rendered: Post ID is invalid. It may point to a post on a community that has been banned.
 
 
+      
 
 
