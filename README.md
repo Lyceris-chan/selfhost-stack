@@ -189,7 +189,17 @@ Ensure your host meets these specifications for optimal performance, especially 
 | **OS** | Linux (Debian/Ubuntu/Alpine) | Linux (Debian/Ubuntu/Alpine) |
 | **Architecture** | amd64 / arm64 | amd64 |
 
-> **Note:** Building containers from source (e.g., Invidious, Wikiless, BreezeWiki) can be resource-intensive. If you are on the minimum specs, builds may take significantly longer.
+### Scaling by User Capacity
+
+Resource usage scales primarily with simultaneous browsing and background sync tasks. 
+
+| User Count | vCPU | RAM | Performance Notes |
+| :--- | :--- | :--- | :--- |
+| **1-2 Users** | 2 | 4 GB | Baseline. Fast browsing for a single household. |
+| **3-10 Users** | 4 | 8 GB | Recommended for small groups. Handles simultaneous 4K streams well. |
+| **10-30 Users** | 8 | 16 GB | High-capacity. Suitable for small communities or public instances. |
+
+> **Note:** Building containers from source (e.g., Invidious, Wikiless, BreezeWiki) is the most intensive task. On systems with less than 4 vCPUs, updates may cause temporary UI lag for other users during the compilation phase.
 
 ## 🌐 Network Configuration
 
