@@ -284,7 +284,7 @@ uci commit firewall
 
 - **HUB_API_KEY**: Required for sensitive dashboard actions. Can be rotated via UI.
 - **Zero-Leaks**: No external <sup>[5](#explainer-5)</sup> or trackers. We never contact Google directly; fonts are downloaded once during setup (or if the cache is missing) via Fontlay ([privacy policy + source code](https://github.com/miroocloud/fontlay)), then served locally so no further font requests leave your machine. (<sup>[5](#explainer-5)</sup>)
-- **Redaction Mode**: "Safe Display Mode" blurs IPs and sensitive metadata for screenshots.
+- **Redaction Mode**: "Privacy Masking" blurs IPs and sensitive metadata for screenshots.
 - **Secrets**: Core credentials stored in `/DATA/AppData/privacy-hub/.secrets`.
 
 ### API Keys & Cost Notes

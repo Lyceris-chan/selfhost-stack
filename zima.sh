@@ -4456,7 +4456,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                         <span class="status-dot" id="api-dot"></span>
                         <span class="status-text" id="api-text">API: ...</span>
                     </div>
-                    <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for safe display">
+                    <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for privacy">
                         <span class="label-large">Privacy Masking</span>
                         <div class="switch-track">
                             <div class="switch-thumb"></div>
@@ -4708,10 +4708,10 @@ cat > "$DASHBOARD_FILE" <<EOF
             <div class="card">
                 <h3>Certificate Status</h3>
                 <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
-                    <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label">Type</span><span class="stat-value" id="cert-type">Loading...</span></div>
-                    <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label">Domain</span><span class="stat-value sensitive" id="cert-subject">Loading...</span></div>
-                    <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label">Issuer</span><span class="stat-value sensitive" id="cert-issuer">Loading...</span></div>
-                    <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label">Expires</span><span class="stat-value sensitive" id="cert-to">Loading...</span></div>
+                    <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label">Type</span><span class="stat-value" id="cert-type">--</span></div>
+                    <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label">Domain</span><span class="stat-value sensitive" id="cert-subject">--</span></div>
+                    <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label">Issuer</span><span class="stat-value sensitive" id="cert-issuer">--</span></div>
+                    <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label">Expires</span><span class="stat-value sensitive" id="cert-to">--</span></div>
                     <div id="ssl-failure-info" style="display:none; margin-top: 16px; padding: 16px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: 1px solid var(--md-sys-color-error);">
                         <div class="body-small" style="font-weight:600; margin-bottom:4px; display: flex; align-items: center; gap: 8px;">
                             <span class="material-symbols-rounded" style="font-size: 16px;">error</span>
