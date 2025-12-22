@@ -25,23 +25,16 @@ Route your traffic through secure VPNs, eliminate tracking with isolated fronten
 
 ## 🏗️ Getting Started
 
-### Prerequisites & Credentials
-Prepare these ahead of time to ensure a smooth deployment.
+### Prerequisites & Infrastructure
+Prepare these details ahead of time to ensure a smooth deployment.
 
-*   **Docker Hub / DHI Access**: A username and Personal Access Token (PAT) with `read` permissions is required to pull hardened images and avoid rate limits.
+*   **Docker Hub / DHI (Docker Hardened Images)**: A username and Personal Access Token (PAT) with `read` permissions. We use hardened base images from `dhi.io` to minimize security vulnerabilities and bypass rate limits.
     *   *Create at:* [Docker Hub Security Settings](https://hub.docker.com/settings/security)
-*   **WireGuard Configuration**: A `.conf` file from your VPN provider (e.g., ProtonVPN, Mullvad) to enable the privacy tunnel.
-    *   *Note:* Only ProtonVPN is explicitly tested. Ensure "Port Forwarding" is enabled if supported by your provider.
-*   **deSEC Domain (Recommended)**: A free domain and API token from [deSEC.io](https://desec.io) enables trusted SSL certificates and automated Dynamic DNS (DDNS).
-*   **GitHub Token (Optional)**: A classic PAT with `gist` scope is required for the **Scribe** service to function.
-*   **Odido OAuth token (optional, NL unlimited data)**: Used by Odido Booster. Get the OAuth token using [Odido Authenticator](https://github.com/GuusBackup/Odido.Authenticator).
-
-### Key Concepts & Terms
-*   **DHI (Docker Hardened Images)**: Custom images (hosted at `dhi.io`) optimized for security by reducing the attack surface and using minimal base OS components.
-*   **DDNS (Dynamic DNS)**: Automatically synchronization of your domain name with your home's public IP. Essential if your ISP gives you a dynamic IP that changes periodically.
-*   **SSL (Secure Sockets Layer)**: Encrypts the connection between your browser and the hub. We use **Let's Encrypt** for globally trusted certificates (no security warnings).
-*   **PAT (Personal Access Token)**: A secure alternative to passwords for API access (like Docker Hub or GitHub).
-*   **Gluetun**: The VPN gateway container. It acts as a "firewall" that only allows traffic to flow through the encrypted VPN tunnel.
+*   **WireGuard Configuration**: A `.conf` file from your VPN provider (e.g., ProtonVPN). This is required for **Gluetun**, the VPN gateway that "gates" your privacy frontends and hides your home IP from the internet.
+    *   *Note:* Only ProtonVPN is explicitly tested.
+*   **deSEC Domain (Recommended)**: A free domain and token from [deSEC.io](https://desec.io). This enables **DDNS** (automatically syncing your domain with your home IP) and **trusted SSL** certificates via Let's Encrypt (eliminating browser security warnings).
+*   **GitHub Token (Optional)**: A classic PAT with `gist` scope for the **Scribe** frontend.
+*   **Odido OAuth token (optional, NL unlimited data)**: Required for the Odido Booster utility.
 
 <details>
 <summary><strong>ProtonVPN WireGuard (.conf) - tested path</strong></summary>
@@ -118,21 +111,21 @@ The dashboard is built to strictly follow **[Google's Material Design 3](https:/
 
 ## 📦 Included Services
 
-| Service | Category | Purpose | Source |
-| :--- | :--- | :--- | :--- |
-| **Invidious** | Privacy Frontend | Anonymous YouTube browsing (No ads/tracking) | [iv-org/invidious](https://github.com/iv-org/invidious) |
-| **Redlib** | Privacy Frontend | Lightweight Reddit interface | [redlib-org/redlib](https://github.com/redlib-org/redlib) |
-| **Wikiless** | Privacy Frontend | Private Wikipedia access | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) |
-| **Memos** | Utility | Private knowledge base & note-taking | [usememos/memos](https://github.com/usememos/memos) |
-| **AdGuard Home** | Infrastructure | Network-wide DNS filtering & Ad-blocking | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) |
-| **WireGuard** | Infrastructure | Secure remote access gateway | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) |
-| **Portainer** | Management | Advanced container orchestration | [portainer/portainer](https://github.com/portainer/portainer) |
-| **VERT** | Utility | Local file conversion with optional GPU acceleration | [VERT-sh/vert](https://github.com/vert-sh/vert) |
-| **Rimgo** | Privacy Frontend | Lightweight Imgur interface | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) |
-| **BreezeWiki** | Privacy Frontend | De-fandomized Wikipedia/Wiki interface | [cadence/breezewiki](https://gitdab.com/cadence/breezewiki) |
-| **AnonymousOverflow** | Privacy Frontend | Privacy-focused Stack Overflow viewer | [httpjamesm/anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) |
-| **Scribe** | Privacy Frontend | Alternative Medium frontend | [scribe](https://git.sr.ht/~edwardloveall/scribe) |
-| **Odido Booster** | Utility | Automated data bundle booster (NL Odido) | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) |
+| Service & Source | Category | Purpose |
+| :--- | :--- | :--- |
+| **[Invidious](https://github.com/iv-org/invidious)** | Privacy Frontend | Anonymous YouTube (No ads/tracking) |
+| **[Redlib](https://github.com/redlib-org/redlib)** | Privacy Frontend | Lightweight Reddit interface |
+| **[Wikiless](https://github.com/Metastem/Wikiless)** | Privacy Frontend | Private Wikipedia access |
+| **[Memos](https://github.com/usememos/memos)** | Utility | Private knowledge base & notes |
+| **[AdGuard Home](https://github.com/AdguardTeam/AdGuardHome)** | Core | DNS filtering & Ad-blocking |
+| **[WireGuard](https://github.com/wg-easy/wg-easy)** | Core | Secure remote access gateway |
+| **[Portainer](https://github.com/portainer/portainer)** | Admin | Advanced container management |
+| **[VERT](https://github.com/vert-sh/vert)** | Utility | Local, GPU-accelerated file conversion |
+| **[Rimgo](https://codeberg.org/rimgo/rimgo)** | Frontend | Lightweight Imgur interface |
+| **[BreezeWiki](https://gitdab.com/cadence/breezewiki)** | Frontend | De-fandomized Wiki interface |
+| **[AnonOverflow](https://github.com/httpjamesm/anonymousoverflow)** | Frontend | Private Stack Overflow viewer |
+| **[Scribe](https://git.sr.ht/~edwardloveall/scribe)** | Frontend | Alternative Medium frontend |
+| **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)** | Utility | Automated NL data bundle booster |
 
 > 💡 **Tip: Migrating your data to Invidious**
 > You can easily import your existing data to your private Invidious instance. Navigate to **Settings → Import/Export** to upload:
@@ -142,17 +135,19 @@ The dashboard is built to strictly follow **[Google's Material Design 3](https:/
 
 ## 🔗 Service Access (After Deploy)
 
-The dashboard provides one-click launch cards for every service. When deSEC is configured, HTTPS URLs are available at `https://<service>.<domain>:8443/`.
+The dashboard provides one-click launch cards for every service. 
 
-| Service | Local URL | HTTPS (deSEC) |
-| :--- | :--- | :--- |
-| Dashboard | `http://<LAN_IP>:8081` | `https://<domain>:8443/` |
-| Invidious | `http://<LAN_IP>:3000` | `https://invidious.<domain>:8443/` |
-| Redlib | `http://<LAN_IP>:8080` | `https://redlib.<domain>:8443/` |
-| Wikiless | `http://<LAN_IP>:8180` | `https://wikiless.<domain>:8443/` |
-| AdGuard Home | `http://<LAN_IP>:8083` | `https://adguard.<domain>:8443/` |
-| WireGuard UI | `http://<LAN_IP>:51821` | `https://wireguard.<domain>:8443/` |
-| Portainer | `http://<LAN_IP>:9000` | `https://portainer.<domain>:8443/` |
+| Service | Local LAN URL |
+| :--- | :--- |
+| **Dashboard** | `http://<LAN_IP>:8081` |
+| **Invidious** | `http://<LAN_IP>:3000` |
+| **Redlib** | `http://<LAN_IP>:8080` |
+| **Wikiless** | `http://<LAN_IP>:8180` |
+| **AdGuard Home** | `http://<LAN_IP>:8083` |
+| **WireGuard UI** | `http://<LAN_IP>:51821` |
+| **Portainer** | `http://<LAN_IP>:9000` |
+
+> 🔒 **Domain Access**: When deSEC is configured, all services automatically become available via trusted HTTPS at `https://<service>.<domain>:8443/`.
 
 <a id="add-your-own-services"></a>
 <details>
