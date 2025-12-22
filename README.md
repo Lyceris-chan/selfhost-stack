@@ -184,7 +184,7 @@ Ensure your host meets these specifications for optimal performance, especially 
 | Specification | Minimum | Recommended |
 | :--- | :--- | :--- |
 | **CPU** | 2 vCPU | 4 vCPU (or higher) |
-| **RAM** | 2 GB | 4 GB+ |
+| **RAM** | 4 GB | 8 GB+ |
 | **Storage** | 20 GB | 40 GB+ (SSD preferred) |
 | **OS** | Linux (Debian/Ubuntu/Alpine) | Linux (Debian/Ubuntu/Alpine) |
 | **Architecture** | amd64 / arm64 | amd64 |
@@ -198,6 +198,14 @@ Resource usage scales primarily with simultaneous browsing and background sync t
 | **1-2 Users** | 2 | 4 GB | Baseline. Fast browsing for a single household. |
 | **3-10 Users** | 4 | 8 GB | Recommended for small groups. Handles simultaneous 4K streams well. |
 | **10-30 Users** | 8 | 16 GB | High-capacity. Suitable for small communities or public instances. |
+
+### Internal Resource Management (Container Isolation)
+
+To ensure stability and prevent any single service from exhausting host resources, this stack utilizes native **Docker Resource Limits** (configured in `docker-compose.yml` via `zima.sh`).
+
+- **Total Reserved Limit:** The combined maximum RAM limit for all services is capped at approximately **7.5 GB**. 
+- **Isolation:** Even if one service (like Invidious) experiences a traffic spike, it cannot exceed its assigned limit (e.g., 1.5 vCPU, 1 GB RAM), preserving the responsiveness of the Dashboard and AdGuard.
+- **Scaling Capability:** The current configuration is pre-tuned to support up to **30 users** on a machine with 16 GB RAM, leaving 50% of host memory for the OS, filesystem cache, and Docker overhead.
 
 > **Note:** Building containers from source (e.g., Invidious, Wikiless, BreezeWiki) is the most intensive task. On systems with less than 4 vCPUs, updates may cause temporary UI lag for other users during the compilation phase.
 
