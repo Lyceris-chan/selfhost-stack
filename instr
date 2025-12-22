@@ -2,13 +2,13 @@ COMPLETED TASKS & SYSTEM STATUS:
 ==========================================================
 1. Script Output Formatting: Matches requested template with separators and notes.
 2. Log Humanization: Technical "200" and "Hub API" logs replaced with user-friendly status messages.
-3. ReferenceErrors Fixed: fetchMetrics and containerMetrics scoped globally.
+3. ReferenceErrors Fixed: fetchMetrics and containerMetrics scoped globally at script top.
 4. UI Standardized: Card headers follow [Status] [Arrow] [Cog] layout.
 5. Icon Movement: nav-arrow and chip-arrow move dynamically on hover.
 6. Layout Fixes: Fixed card title cutoff (ellipsis) and chip wrapping (horizontal scroll).
 7. Theme Toggle: Positioned to the right of the Privacy Switch.
-8. Redlib Health: Fixed issue where Portainer reported 'Unhealthy' due to 403 errors (while dashboard correctly showed 'Online'). Updated healthcheck to ignore 403s.
-9. Update Engine: Added manual 'Check for Updates' button and backend logic.
+8. Redlib Health: Fixed issue where Portainer reported 'Unhealthy' due to 403 errors. Updated healthcheck to ignore 403s.
+9. Update Engine: Added manual "Check for Updates" button and backend logic.
 10. All Updates: Added a permanent 'Update All Services' button that triggers both global image updates (Watchtower) and source code refreshes.
 11. Material Design 3: Verified full compliance with M3 tokens (color, shape, motion), expressive elevations, and typography.
 12. Backup Safeguards: Updates (individual or global) now trigger automated backups via migrate.sh to prevent data loss.
@@ -21,6 +21,13 @@ DASHBOARD COG FUNCTIONALITY:
 The settings cog triggers a Service Modal providing:
 - Real-time CPU/Memory metrics for the specific container.
 - "Update Service" button (Specific source pull + Rebuild).
-- Global "Update All Services" button (Full image and source refresh).
 - "View in Portainer" deep link to the container ID.
 - Specialized maintenance buttons (Migrate DB, Clear Logs, Optimize DB).
+
+FINAL VERIFICATION (CODE AGENT CHECK):
+==========================================================
+- [✓] BASH: Passed shellcheck and bash -n syntax parsing.
+- [✓] UI: Confirmed element ordering, M3 token integration, and layout robustness via Puppeteer.
+- [✓] API: Verified endpoint whitelisting and background thread safety.
+- [✓] ARCHITECTURE: Verified global state management and update engine fail-safes.
+- [✓] STATUS: System verified as proper and working as intended.
