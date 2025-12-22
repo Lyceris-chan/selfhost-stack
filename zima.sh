@@ -3944,6 +3944,21 @@ cat > "$DASHBOARD_FILE" <<EOF
             transform: translateY(-4px);
         }
         
+        /* Strict M3 Button & Chip States */
+        .btn::before, .chip::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: currentColor;
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
+            pointer-events: none;
+        }
+
+        .btn:hover::before, .chip:hover::before { opacity: 0.08; }
+        .btn:active::before, .chip:active::before { opacity: 0.12; }
+        .btn:focus::before, .chip:focus::before { opacity: 0.12; }
+
         .card.full-width { grid-column: 1 / -1; }
         
         .card-header {
@@ -4992,6 +5007,66 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
                 <p class="body-small profile-hint" style="margin-top: auto; padding-top: 12px;">Click name to activate.</p>
+            </div>
+        </div>
+
+        <div class="section-label">Customization & Info</div>
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Theme Customization</h3>
+                    <div class="card-header-actions">
+                        <button onclick="localStorage.removeItem('theme_seed'); location.reload();" class="btn btn-icon" data-tooltip="Reset theme to default"><span class="material-symbols-rounded">refresh</span></button>
+                    </div>
+                </div>
+                <p class="body-medium description">Personalize the dashboard using Material Design 3 dynamic color algorithms (HCT color space).</p>
+                <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
+                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+                        <div style="position: relative; width: 48px; height: 48px; border-radius: 24px; overflow: hidden; border: 2px solid var(--md-sys-color-primary);">
+                            <input type="color" id="theme-seed-color" onchange="applySeedColor(this.value)" style="position: absolute; top: -10px; left: -10px; width: 80px; height: 80px; cursor: pointer; border: none; background: transparent;">
+                        </div>
+                        <div style="flex: 1;">
+                            <span class="label-large">Custom Seed Color</span>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Tap the circle to choose a primary tone</p>
+                        </div>
+                    </div>
+
+                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+                        <label for="theme-image-upload" class="btn btn-filled" style="width: 48px; height: 48px; padding: 0; border-radius: 24px; cursor: pointer;" data-tooltip="Pick a wallpaper to extract colors">
+                            <span class="material-symbols-rounded">wallpaper</span>
+                        </label>
+                        <input type="file" id="theme-image-upload" accept="image/*" onchange="extractColorFromImage(event)" style="display: none;">
+                        <div style="flex: 1;">
+                            <span class="label-large">Image Extraction</span>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Generate a theme from any photo</p>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
+                        <button onclick="saveThemeSettings()" class="btn btn-tonal" style="flex-grow: 1;"><span class="material-symbols-rounded">save</span> Save Theme</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>System Information</h3>
+                <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
+                <div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1;">
+                    <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace" style="font-size: 12px;">/DATA/AppData/privacy-hub/.secrets</span></div>
+                    <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace" style="font-size: 12px;">/DATA/AppData/privacy-hub/config</span></div>
+                    <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
+                    <div class="stat-row"><span class="stat-label">Privacy Masking</span><span class="stat-value">Active (Local)</span></div>
+                </div>
+                <div style="margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <button onclick="checkUpdates()" class="btn btn-tonal" data-tooltip="Check for updates">
+                        <span class="material-symbols-rounded">system_update_alt</span> Check
+                    </button>
+                    <button onclick="updateAllServices()" class="btn btn-filled" data-tooltip="Update all services">
+                        <span class="material-symbols-rounded">upgrade</span> Update All
+                    </button>
+                    <button onclick="restartStack()" class="btn btn-tonal" style="grid-column: span 2; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
+                        <span class="material-symbols-rounded">restart_alt</span> Restart Stack
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -6272,7 +6347,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 applySeedColor(picker.value);
             }
             
-            showSnackbar(`Switched to ${isLight ? 'Light' : 'Dark'} mode`);
+            showSnackbar(\`Switched to \${isLight ? 'Light' : 'Dark'} mode\`);
         }
 
         function updateThemeIcon() {

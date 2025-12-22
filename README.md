@@ -283,6 +283,7 @@ uci commit firewall
 
 - **HUB_API_KEY**: Required for sensitive dashboard actions. Can be rotated via UI.
 - **Zero-Leaks**: No external <sup>[5](#explainer-5)</sup> or trackers. We never contact Google directly; fonts are downloaded once during setup (or if the cache is missing) via Fontlay ([privacy policy + source code](https://github.com/miroocloud/fontlay)), then served locally so no further font requests leave your machine. (<sup>[5](#explainer-5)</sup>)
+- **Material Design 3**: The dashboard strictly adheres to M3 specifications (`m3.material.io`). Color generation is powered by the [material-color-utilities](https://github.com/material-foundation/material-color-utilities) library (downloaded during setup from `cdn.jsdelivr.net`; [privacy policy](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net)).
 - **Redaction Mode**: "Privacy Masking" blurs IPs and sensitive metadata for screenshots.
 - **Secrets**: Core credentials stored in `/DATA/AppData/privacy-hub/.secrets`.
 
