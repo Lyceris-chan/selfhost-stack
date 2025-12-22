@@ -28,13 +28,24 @@ Route your traffic through secure VPNs, eliminate tracking with isolated fronten
 ### Prerequisites & Infrastructure
 Prepare these details ahead of time to ensure a smooth deployment.
 
-*   **Docker Hub / DHI (Docker Hardened Images)**: A username and Personal Access Token (PAT) with `read` permissions. We use hardened base images from `dhi.io` to minimize security vulnerabilities and bypass rate limits.
-    *   *Create at:* [Docker Hub Security Settings](https://hub.docker.com/settings/security)
-*   **WireGuard Configuration**: A `.conf` file from your VPN provider (e.g., ProtonVPN). This is required for **Gluetun**, the VPN gateway that "gates" your privacy frontends and hides your home IP from the internet.
+*   **Docker Hub / <sup>[1](#explainer-1)</sup> <sup>[4](#explainer-4)</sup> (required)**: One username + <sup>[4](#explainer-4)</sup> is used for both Docker Hub and `dhi.io`. Use a token with **pull/read** permissions only. This is required to pull hardened images and avoid rate limits. Create it at [Docker Hub Access Tokens](https://hub.docker.com/settings/security). (<sup>[1](#explainer-1)</sup>, <sup>[4](#explainer-4)</sup>)
+*   **WireGuard Configuration (recommended)**: A `.conf` file from your VPN provider (e.g., ProtonVPN). This is required for **Gluetun**, the VPN gateway that "gates" your privacy frontends and hides your home IP from the internet.
     *   *Note:* Only ProtonVPN is explicitly tested.
-*   **deSEC Domain (Recommended)**: A free domain and token from [deSEC.io](https://desec.io). This enables **DDNS** (automatically syncing your domain with your home IP) and **trusted SSL** certificates via Let's Encrypt (eliminating browser security warnings).
-*   **GitHub Token (Optional)**: A classic PAT with `gist` scope for the **Scribe** frontend.
+*   **deSEC Domain (Recommended)**: A free domain and <sup>[4](#explainer-4)</sup> from [deSEC.io](https://desec.io). This enables <sup>[2](#explainer-2)</sup> and <sup>[3](#explainer-3)</sup> certificates via Let's Encrypt (eliminating browser security warnings). (<sup>[2](#explainer-2)</sup>, <sup>[3](#explainer-3)</sup>)
+*   **GitHub Token (Optional)**: A classic <sup>[4](#explainer-4)</sup> with `gist` scope for the **Scribe** frontend. (<sup>[4](#explainer-4)</sup>)
 *   **Odido OAuth token (optional, NL unlimited data)**: Required for the Odido Booster utility.
+
+<a id="quick-explainers"></a>
+<details>
+<summary><strong>Quick Explainers (DHI, DDNS, SSL, PAT, CDN)</strong></summary>
+
+1. <a id="explainer-1"></a>**DHI**: Docker Hardened Images. It’s a registry of hardened base images (on `dhi.io`) meant to reduce vulnerabilities in standard images.
+2. <a id="explainer-2"></a>**DDNS**: Dynamic DNS updates your domain when your home IP changes, so your services stay reachable without manual edits.
+3. <a id="explainer-3"></a>**SSL / trusted SSL**: SSL/TLS encrypts traffic. A **trusted** SSL cert is issued by a public CA (like Let’s Encrypt) so devices don’t warn you; a **self-signed** cert still encrypts, but isn’t trusted by default.
+4. <a id="explainer-4"></a>**Classic PAT**: A Personal Access Token you create in your account settings (e.g., GitHub). It’s a password replacement for APIs with specific scopes.
+5. <a id="explainer-5"></a>**CDN**: Content Delivery Network, a third-party network that serves assets. This stack avoids external CDNs for privacy.
+
+</details>
 
 <details>
 <summary><strong>ProtonVPN WireGuard (.conf) - tested path</strong></summary>
@@ -120,7 +131,7 @@ The dashboard is built to strictly follow **[Google's Material Design 3](https:/
 | **[AdGuard Home](https://github.com/AdguardTeam/AdGuardHome)** | Core | DNS filtering & Ad-blocking |
 | **[WireGuard](https://github.com/wg-easy/wg-easy)** | Core | Secure remote access gateway |
 | **[Portainer](https://github.com/portainer/portainer)** | Admin | Advanced container management |
-| **[VERT](https://github.com/vert-sh/vert)** | Utility | Local, GPU-accelerated file conversion |
+| **[VERT](https://github.com/vert-sh/vert)** | Utility | Local, GPU-accelerated file conversion (VERTD requires a valid <sup>[3](#explainer-3)</sup> cert due to quirks) |
 | **[Rimgo](https://codeberg.org/rimgo/rimgo)** | Frontend | Lightweight Imgur interface |
 | **[BreezeWiki](https://gitdab.com/cadence/breezewiki)** | Frontend | De-fandomized Wiki interface |
 | **[AnonOverflow](https://github.com/httpjamesm/anonymousoverflow)** | Frontend | Private Stack Overflow viewer |
