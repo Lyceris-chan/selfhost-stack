@@ -615,7 +615,7 @@ done
 mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR/unbound" "$AGH_CONF_DIR" "$NGINX_CONF_DIR" "$WG_PROFILES_DIR"
 mkdir -p "$DATA_DIR/postgres" "$DATA_DIR/redis" "$DATA_DIR/wireguard" "$DATA_DIR/adguard-work" "$DATA_DIR/portainer" "$DATA_DIR/odido" "$DATA_DIR/companion"
 
-setup_fonts
+# setup_fonts (Moved to hub-api container for privacy)
 
 # Initialize log files and data files
 touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
@@ -3209,7 +3209,8 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             url = f"https://codeberg.org/api/v1/repos/{meta['repo']}/releases/latest"
                         
                         req = urllib.request.Request(url, headers={"User-Agent": "privacy-hub/1.0"})
-                        with urllib.request.urlopen(req, timeout=10) as resp:
+                        opener = get_proxy_opener()
+                        with opener.open(req, timeout=10) as resp:
                             data = json.loads(resp.read().decode())
                             body = data.get("body", "No description available.")
                             name = data.get("name") or data.get("tag_name") or "Latest Release"
