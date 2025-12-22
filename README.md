@@ -79,8 +79,14 @@ If you used the `-p` flag, the script auto-generated secure credentials for you.
 ### Management & Troubleshooting
 *   **Update Services**: Use the "Check Updates" button in the dashboard.
 *   **Restart Stack**: `./zima.sh` (Running it again updates configuration and restarts containers safely).
-*   **Reset Environment**: `./zima.sh -c` (Cleans up containers and networks, keeps data).
-*   **Uninstall**: `./zima.sh -x` (⚠️ Removes everything including data).
+
+| Flag | Description | Action |
+| :--- | :--- | :--- |
+| `-c` | **Clean Reset** | Removes all containers and networks but preserves user data. Useful for fixing network glitches. |
+| `-x` | **Uninstall** | ⚠️ **DESTRUCTIVE**. Removes containers, networks, volumes, and ALL data. |
+| `-p` | **Auto-Passwords** | Generates secure random passwords for all services automatically. |
+| `-y` | **Auto-Confirm** | Skips confirmation prompts (for automated deployments). |
+| `-s` | **Select Services** | Deploy specific services only (e.g., `./zima.sh -s invidious,memos`). |
 
 ## 🖥️ Management Dashboard
 The Privacy Hub features a custom-built, unified management interface designed with **Material Design 3**.
@@ -350,7 +356,19 @@ This script is provided as-is and may change whenever necessary or when I feel l
 
 ### Proton Pass Export (Auto-Generated Credentials)
 
-When you run with `-p` (auto-passwords), the script generates a Proton Pass import CSV at `/DATA/AppData/privacy-hub/protonpass_import.csv`. Passwords and API tokens go into the **Password** column; descriptive context goes into **Note**.
+When you run with `-p` (auto-passwords), the script generates a Proton Pass import CSV at `/DATA/AppData/privacy-hub/protonpass_import.csv`.
+
+<details>
+<summary><strong>👇 How to Import into Proton Pass</strong></summary>
+
+1.  **Download the CSV**: Transfer `/DATA/AppData/privacy-hub/protonpass_import.csv` from your server to your local machine.
+2.  **Open Proton Pass**: Go to Settings → Import.
+3.  **Select Proton Pass (CSV)**: Choose the "Proton Pass (CSV)" option (or generic CSV).
+4.  **Upload**: Select the file. The columns are pre-formatted to match the official Proton Pass template:
+    `name,url,email,username,password,note,totp,vault`
+
+> **Note**: You can safely delete the CSV file from the server after importing.
+</details>
 
 | Entry | URL | Username | Password | Note |
 | :--- | :--- | :--- | :--- | :--- |
