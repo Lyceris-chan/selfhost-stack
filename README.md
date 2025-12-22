@@ -204,23 +204,25 @@ To access your services from anywhere via WireGuard, you must forward the VPN po
 *   This allows the WireGuard handshake to complete securely. No other ports need to be exposed.
 
 ### 2. Router Configuration (OpenWrt Example)
-If you use a custom router like OpenWrt, ensure your Privacy Hub has a stable address and firewall permission.
+If you use a custom router like OpenWrt, ensure your Privacy Hub has a stable address and precise firewall rules. **Step 1 is critical** as it binds the hardware (MAC) to the IP, allowing the firewall to target only your Privacy Hub host.
 
 ```bash
-# 1. Assign Static IP
+# 1. Assign Static IP (Binds hardware MAC to IP)
 uci add dhcp host
 uci set dhcp.@host[-1].name='Privacy-Hub'
-uci set dhcp.@host[-1].mac='00:11:22:33:44:55' # <--- YOUR MAC
-uci set dhcp.@host[-1].ip='192.168.1.100'      # <--- YOUR IP
+uci set dhcp.@host[-1].mac='00:11:22:33:44:55' # <--- YOUR DEVICE MAC
+uci set dhcp.@host[-1].ip='192.168.1.100'      # <--- YOUR DESIRED IP
 uci commit dhcp
 
-# 2. Allow WireGuard Inbound
-uci add firewall rule
-uci set firewall.@rule[-1].name='Allow-WireGuard-Inbound'
-uci set firewall.@rule[-1].src='wan'
-uci set firewall.@rule[-1].proto='udp'
-uci set firewall.@rule[-1].dest_port='51820'
-uci set firewall.@rule[-1].target='ACCEPT'
+# 2. Port Forwarding (Redirect WAN traffic to Hub IP)
+uci add firewall redirect
+uci set firewall.@redirect[-1].name='Forward-WireGuard'
+uci set firewall.@redirect[-1].src='wan'
+uci set firewall.@redirect[-1].proto='udp'
+uci set firewall.@redirect[-1].src_dport='51820'
+uci set firewall.@redirect[-1].dest_ip='192.168.1.100'
+uci set firewall.@redirect[-1].dest_port='51820'
+uci set firewall.@redirect[-1].target='DNAT'
 uci commit firewall
 /etc/init.d/firewall restart
 ```
