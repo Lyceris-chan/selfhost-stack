@@ -3894,8 +3894,6 @@ cat >> "$COMPOSE_FILE" <<EOF
   dashboard:
     image: dhi.io/nginx:1.28-alpine3.21
     container_name: dashboard
-    labels:
-      - "io.dhi.hardened=true"
     networks: [frontnet]
     ports:
       - "$LAN_IP:$PORT_DASHBOARD_WEB:$PORT_DASHBOARD_WEB"
@@ -3906,6 +3904,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$NGINX_CONF:/etc/nginx/conf.d/default.conf:ro"
       - "$AGH_CONF_DIR:/etc/adguard/conf:ro"
     labels:
+      - "io.dhi.hardened=true"
       - "dev.casaos.app.ui.protocol=http"
       - "dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB"
       - "dev.casaos.app.ui.hostname=$LAN_IP"
@@ -4266,6 +4265,11 @@ $(if [ -n "$VERTD_NVIDIA" ]; then echo "        reservations:
               count: all
               capabilities: [gpu]"; fi)
 
+  vert:
+    container_name: vert
+    build:
+      context: "$SRC_DIR/vert"
+      dockerfile: $VERT_DOCKERFILE
     labels:
       - "casaos.skip=true"
       - "com.centurylinklabs.watchtower.enable=false"
