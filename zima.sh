@@ -1284,62 +1284,29 @@ tls:
   port_dns_over_tls: 853
   port_dns_over_quic: 853
   certificate_path: /opt/adguardhome/conf/ssl.crt
-  certificate_path: /opt/adguardhome/conf/ssl.crt
   private_key_path: /opt/adguardhome/conf/ssl.key
   allow_unencrypted_doh: false
-user_rules: []
 EOF
 
-# Always allowlist the user's specific deSEC domain if provided
+# Build user_rules list for AdGuard Home
+AGH_USER_RULES=""
 if [ -n "$DESEC_DOMAIN" ]; then
     log_info "Allowlisting $DESEC_DOMAIN by default."
-    $PYTHON_CMD - "$AGH_YAML" "@@||${DESEC_DOMAIN}^" <<'PY'
-import sys
-import yaml
-yaml_path = sys.argv[1]
-rule = sys.argv[2]
-with open(yaml_path, 'r') as f:
-    config = yaml.safe_load(f)
-if 'user_rules' not in config: config['user_rules'] = []
-if rule not in config['user_rules']:
-    config['user_rules'].append(rule)
-with open(yaml_path, 'w') as f:
-    yaml.dump(config, f)
-PY
+    AGH_USER_RULES="${AGH_USER_RULES}  - '@@||${DESEC_DOMAIN}^'\n"
 fi
 
 if [ "$ALLOW_PROTON_VPN" = true ]; then
     log_info "Allowlisting ProtonVPN domains."
-    # Add rules to the user_rules list in the yaml
-    $PYTHON_CMD - "$AGH_YAML" <<'PY'
-import sys
-import yaml
+    for domain in getproton.me vpn-api.proton.me protonstatus.com protonvpn.ch protonvpn.com protonvpn.net; do
+        AGH_USER_RULES="${AGH_USER_RULES}  - '@@||${domain}^'\n"
+    done
+fi
 
-yaml_path = sys.argv[1]
-
-with open(yaml_path, 'r') as f:
-    config = yaml.safe_load(f)
-
-if 'user_rules' not in config:
-    config['user_rules'] = []
-
-# Only allow ProtonVPN domains
-rules = [
-    "@@||getproton.me^",
-    "@@||vpn-api.proton.me^",
-    "@@||protonstatus.com^",
-    "@@||protonvpn.ch^",
-    "@@||protonvpn.com^",
-    "@@||protonvpn.net^"
-]
-
-for rule in rules:
-    if rule not in config['user_rules']:
-        config['user_rules'].append(rule)
-
-with open(yaml_path, 'w') as f:
-    yaml.dump(config, f)
-PY
+if [ -n "$AGH_USER_RULES" ]; then
+    echo "user_rules:" >> "$AGH_YAML"
+    echo -e "$AGH_USER_RULES" >> "$AGH_YAML"
+else
+    echo "user_rules: []" >> "$AGH_YAML"
 fi
 
 cat >> "$AGH_YAML" <<EOF

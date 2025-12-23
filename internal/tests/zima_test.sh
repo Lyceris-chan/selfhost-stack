@@ -1221,7 +1221,30 @@ tls:
   certificate_path: /opt/adguardhome/conf/ssl.crt
   private_key_path: /opt/adguardhome/conf/ssl.key
   allow_unencrypted_doh: false
-user_rules: []
+EOF
+
+# Build user_rules list for AdGuard Home
+AGH_USER_RULES=""
+if [ -n "$DESEC_DOMAIN" ]; then
+    log_info "Allowlisting $DESEC_DOMAIN by default."
+    AGH_USER_RULES="${AGH_USER_RULES}  - '@@||${DESEC_DOMAIN}^'\n"
+fi
+
+if [ "$ALLOW_PROTON_VPN" = true ]; then
+    log_info "Allowlisting ProtonVPN domains."
+    for domain in getproton.me vpn-api.proton.me protonstatus.com protonvpn.ch protonvpn.com protonvpn.net; do
+        AGH_USER_RULES="${AGH_USER_RULES}  - '@@||${domain}^'\n"
+    done
+fi
+
+if [ -n "$AGH_USER_RULES" ]; then
+    echo "user_rules:" >> "$AGH_YAML"
+    echo -e "$AGH_USER_RULES" >> "$AGH_YAML"
+else
+    echo "user_rules: []" >> "$AGH_YAML"
+fi
+
+cat >> "$AGH_YAML" <<EOF
   # Default DNS blocklist powered by sleepy list ([Lyceris-chan/dns-blocklist-generator](https://github.com/Lyceris-chan/dns-blocklist-generator))
 filters:
   - enabled: true
@@ -1233,56 +1256,6 @@ EOF
 
 # Always allowlist the user's specific deSEC domain if provided
 log_info "DEBUG: DESEC_DOMAIN is '$DESEC_DOMAIN'"
-if [ -n "$DESEC_DOMAIN" ]; then
-    log_info "Allowlisting $DESEC_DOMAIN by default."
-    python3 - "$AGH_YAML" "@@||${DESEC_DOMAIN}^" <<'PY'
-import sys
-import yaml
-yaml_path = sys.argv[1]
-rule = sys.argv[2]
-with open(yaml_path, 'r') as f:
-    config = yaml.safe_load(f)
-if 'user_rules' not in config: config['user_rules'] = []
-if rule not in config['user_rules']:
-    config['user_rules'].append(rule)
-with open(yaml_path, 'w') as f:
-    yaml.dump(config, f)
-PY
-fi
-
-if [ "$ALLOW_PROTON_VPN" = true ]; then
-    log_info "Allowlisting ProtonVPN domains."
-    # Add rules to the user_rules list in the yaml
-    python3 - "$AGH_YAML" <<'PY'
-import sys
-import yaml
-
-yaml_path = sys.argv[1]
-
-with open(yaml_path, 'r') as f:
-    config = yaml.safe_load(f)
-
-if 'user_rules' not in config:
-    config['user_rules'] = []
-
-# Only allow ProtonVPN domains
-rules = [
-    "@@||getproton.me^",
-    "@@||vpn-api.proton.me^",
-    "@@||protonstatus.com^",
-    "@@||protonvpn.ch^",
-    "@@||protonvpn.com^",
-    "@@||protonvpn.net^"
-]
-
-for rule in rules:
-    if rule not in config['user_rules']:
-        config['user_rules'].append(rule)
-
-with open(yaml_path, 'w') as f:
-    yaml.dump(config, f)
-PY
-fi
 
 if [ -n "$DESEC_DOMAIN" ]; then
     cat >> "$AGH_YAML" <<EOF
