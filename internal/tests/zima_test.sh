@@ -20,7 +20,7 @@ set -euo pipefail
 
 # --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
 usage() {
-    echo "Usage: $0 [-c (reset environment)] [-x (reset environment and exit)] [-p (automated password generation)] [-y (auto-confirm cleanup)] [-h|--help]"
+    echo "Usage: $0 [-c (reset environment)] [-x (reset environment and exit)] [-p (automated password generation)] [-y (auto-confirm cleanup)] [-a (allowlist ProtonVPN)] [-h|--help]"
 }
 
 for arg in "$@"; do
@@ -34,13 +34,15 @@ FORCE_CLEAN=false
 CLEAN_ONLY=false
 AUTO_PASSWORD=false
 AUTO_CONFIRM=false
+ALLOWLIST_PERSONAL=false
 SELECTED_SERVICES=""
-while getopts "cpxyh" opt; do
+while getopts "cpxyha" opt; do
   case ${opt} in
     c) FORCE_CLEAN=true ;;
     x) CLEAN_ONLY=true; FORCE_CLEAN=true ;;
     p) AUTO_PASSWORD=true ;;
     y) AUTO_CONFIRM=true ;;
+    a) ALLOWLIST_PERSONAL=true ;;
     h) usage; exit 0 ;;
     *) usage; exit 1 ;;
   esac
@@ -71,8 +73,10 @@ else
     exit 1
 fi
 
+# Global Variables
 APP_NAME="privacy-hub"
 BASE_DIR="/DATA/AppData/$APP_NAME"
+DESEC_DOMAIN="test.dedyn.io"
 
 # Docker Auth Config (stored in /tmp to survive -c cleanup)
 DOCKER_AUTH_DIR="/tmp/$APP_NAME-docker-auth"
@@ -104,7 +108,7 @@ FONTS_DIR="$BASE_DIR/fonts"
 HISTORY_LOG="$BASE_DIR/deployment.log"
 
 # Initialize deSEC variables to prevent unbound variable errors
-DESEC_DOMAIN=""
+DESEC_DOMAIN="${DESEC_DOMAIN:-test.dedyn.io}"
 DESEC_TOKEN=""
 DESEC_MONITOR_DOMAIN=""
 DESEC_MONITOR_TOKEN=""
@@ -730,13 +734,13 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     fi
     
     if [ "$AUTO_CONFIRM" = true ]; then
-        log_info "Auto-confirm enabled: Skipping interactive deSEC/GitHub/Odido setup (using defaults/empty)."
-        DESEC_DOMAIN=""
-        DESEC_TOKEN=""
-        SCRIBE_GH_USER=""
-        SCRIBE_GH_TOKEN=""
-        ODIDO_TOKEN=""
-        ODIDO_USER_ID=""
+        log_info "Auto-confirm enabled: Skipping interactive deSEC/GitHub/Odido setup (preserving environment variables)."
+        DESEC_DOMAIN="${DESEC_DOMAIN:-}"
+        DESEC_TOKEN="${DESEC_TOKEN:-}"
+        SCRIBE_GH_USER="${SCRIBE_GH_USER:-}"
+        SCRIBE_GH_TOKEN="${SCRIBE_GH_TOKEN:-}"
+        ODIDO_TOKEN="${ODIDO_TOKEN:-}"
+        ODIDO_USER_ID="${ODIDO_USER_ID:-}"
     else
         echo "--- deSEC Domain & Certificate Setup ---"
         echo "   Steps:"
@@ -745,7 +749,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo "   3. Create a NEW Token in Token Management (if you lost the old one)"
         echo ""
         echo -n "3. deSEC Domain (e.g., myhome.dedyn.io, or Enter to skip): "
-        DESEC_DOMAIN=""
+        read -r DESEC_DOMAIN
         if [ -n "$DESEC_DOMAIN" ]; then
             echo -n "4. deSEC API Token: "
             read -rs DESEC_TOKEN
@@ -1217,15 +1221,7 @@ tls:
   certificate_path: /opt/adguardhome/conf/ssl.crt
   private_key_path: /opt/adguardhome/conf/ssl.key
   allow_unencrypted_doh: false
-user_rules:
-  - "@@||getproton.me^"
-  - "@@||vpn-api.proton.me^"
-  - "@@||protonstatus.com^"
-  - "@@||protonvpn.ch^"
-  - "@@||protonvpn.com^"
-  - "@@||protonvpn.net^"
-  - "@@||dns.desec.io^"
-  - "@@||desec.io^"
+user_rules: []
   # Default DNS blocklist powered by sleepy list ([Lyceris-chan/dns-blocklist-generator](https://github.com/Lyceris-chan/dns-blocklist-generator))
 filters:
   - enabled: true
@@ -1234,6 +1230,59 @@ filters:
     id: 1
 filters_update_interval: 1
 EOF
+
+# Always allowlist the user's specific deSEC domain if provided
+log_info "DEBUG: DESEC_DOMAIN is '$DESEC_DOMAIN'"
+if [ -n "$DESEC_DOMAIN" ]; then
+    log_info "Allowlisting $DESEC_DOMAIN by default."
+    python3 - "$AGH_YAML" "@@||${DESEC_DOMAIN}^" <<'PY'
+import sys
+import yaml
+yaml_path = sys.argv[1]
+rule = sys.argv[2]
+with open(yaml_path, 'r') as f:
+    config = yaml.safe_load(f)
+if 'user_rules' not in config: config['user_rules'] = []
+if rule not in config['user_rules']:
+    config['user_rules'].append(rule)
+with open(yaml_path, 'w') as f:
+    yaml.dump(config, f)
+PY
+fi
+
+if [ "$ALLOWLIST_PERSONAL" = true ]; then
+    log_info "Applying personal usage allowlist for ProtonVPN."
+    # Add rules to the user_rules list in the yaml
+    python3 - "$AGH_YAML" <<'PY'
+import sys
+import yaml
+
+yaml_path = sys.argv[1]
+
+with open(yaml_path, 'r') as f:
+    config = yaml.safe_load(f)
+
+if 'user_rules' not in config:
+    config['user_rules'] = []
+
+# Only allow ProtonVPN domains
+rules = [
+    "@@||getproton.me^",
+    "@@||vpn-api.proton.me^",
+    "@@||protonstatus.com^",
+    "@@||protonvpn.ch^",
+    "@@||protonvpn.com^",
+    "@@||protonvpn.net^"
+]
+
+for rule in rules:
+    if rule not in config['user_rules']:
+        config['user_rules'].append(rule)
+
+with open(yaml_path, 'w') as f:
+    yaml.dump(config, f)
+PY
+fi
 
 if [ -n "$DESEC_DOMAIN" ]; then
     cat >> "$AGH_YAML" <<EOF

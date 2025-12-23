@@ -749,13 +749,13 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     fi
     
     if [ "$AUTO_CONFIRM" = true ]; then
-        log_info "Auto-confirm enabled: Skipping interactive deSEC/GitHub/Odido setup (using defaults/empty)."
-        DESEC_DOMAIN=""
-        DESEC_TOKEN=""
-        SCRIBE_GH_USER=""
-        SCRIBE_GH_TOKEN=""
-        ODIDO_TOKEN=""
-        ODIDO_USER_ID=""
+        log_info "Auto-confirm enabled: Skipping interactive deSEC/GitHub/Odido setup (preserving environment variables)."
+        DESEC_DOMAIN="${DESEC_DOMAIN:-}"
+        DESEC_TOKEN="${DESEC_TOKEN:-}"
+        SCRIBE_GH_USER="${SCRIBE_GH_USER:-}"
+        SCRIBE_GH_TOKEN="${SCRIBE_GH_TOKEN:-}"
+        ODIDO_TOKEN="${ODIDO_TOKEN:-}"
+        ODIDO_USER_ID="${ODIDO_USER_ID:-}"
     else
         echo "--- deSEC Domain & Certificate Setup ---"
         echo "   Steps:"
@@ -1262,20 +1262,38 @@ tls:
   port_dns_over_tls: 853
   port_dns_over_quic: 853
   certificate_path: /opt/adguardhome/conf/ssl.crt
+  certificate_path: /opt/adguardhome/conf/ssl.crt
   private_key_path: /opt/adguardhome/conf/ssl.key
   allow_unencrypted_doh: false
-user_rules: ["@@||dedyn.io^"]
+user_rules: []
 EOF
 
+# Always allowlist the user's specific deSEC domain if provided
+if [ -n "$DESEC_DOMAIN" ]; then
+    log_info "Allowlisting $DESEC_DOMAIN by default."
+    $PYTHON_CMD - "$AGH_YAML" "@@||${DESEC_DOMAIN}^" <<'PY'
+import sys
+import yaml
+yaml_path = sys.argv[1]
+rule = sys.argv[2]
+with open(yaml_path, 'r') as f:
+    config = yaml.safe_load(f)
+if 'user_rules' not in config: config['user_rules'] = []
+if rule not in config['user_rules']:
+    config['user_rules'].append(rule)
+with open(yaml_path, 'w') as f:
+    yaml.dump(config, f)
+PY
+fi
+
 if [ "$ALLOWLIST_PERSONAL" = true ]; then
-    log_info "Applying personal usage allowlist for ProtonVPN and your deSEC domain."
+    log_info "Applying personal usage allowlist for ProtonVPN."
     # Add rules to the user_rules list in the yaml
-    $PYTHON_CMD - "$AGH_YAML" "$DESEC_DOMAIN" <<'PY'
+    $PYTHON_CMD - "$AGH_YAML" <<'PY'
 import sys
 import yaml
 
 yaml_path = sys.argv[1]
-user_domain = sys.argv[2]
 
 with open(yaml_path, 'r') as f:
     config = yaml.safe_load(f)
@@ -1283,7 +1301,7 @@ with open(yaml_path, 'r') as f:
 if 'user_rules' not in config:
     config['user_rules'] = []
 
-# Only allow ProtonVPN and the specific user domain
+# Only allow ProtonVPN domains
 rules = [
     "@@||getproton.me^",
     "@@||vpn-api.proton.me^",
@@ -1293,10 +1311,9 @@ rules = [
     "@@||protonvpn.net^"
 ]
 
-if user_domain:
-    rules.append(f"@@||{user_domain}^")
-
-config['user_rules'].extend(rules)
+for rule in rules:
+    if rule not in config['user_rules']:
+        config['user_rules'].append(rule)
 
 with open(yaml_path, 'w') as f:
     yaml.dump(config, f)
