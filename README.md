@@ -5,7 +5,7 @@ Route your traffic through secure VPNs, eliminate tracking with isolated fronten
 
 ## 🌟 Key Features & Benefits
 
-*   **Data Sovereignty & Ownership**: By hosting your own frontends (Invidious, Redlib, etc.), you stop upstream giants like Google and Reddit from collecting, profiling, and selling your behavioral data. You own the instance; you own the data.
+*   **Data Independence & Ownership**: By hosting your own frontends (Invidious, Redlib, etc.), you stop upstream giants like Google and Reddit from collecting, profiling, and selling your behavioral data. You own the instance; you own the data.
 *   **Ad-Free by Design**: Enjoy a clean, distraction-free web. AdGuard Home blocks trackers and ads at the DNS level for your entire home, while frontends eliminate in-video ads and sponsored content natively.
 *   **No App Prompts**: Say goodbye to "Install our app" popups. These frontends provide a premium mobile-web experience that works perfectly in any browser without requiring invasive native applications.
 *   **VPN-Gated Privacy**: Sensitive services are routed through a **Gluetun VPN** tunnel. This ensures that even when you browse, end-service providers only see your VPN's IP address, keeping your home location and identity hidden.
@@ -97,7 +97,7 @@ If you used the `-p` flag, the script auto-generated secure credentials for you.
 | Flag | Description | Action |
 | :--- | :--- | :--- |
 | `-c` | **Maintenance Reset** | Removes active containers and networks to resolve glitches, while strictly preserving persistent user data. |
-| `-x` | **REVERT (Factory Reset)** | ⚠️ **Environmental Restoration**. Purges all application artifacts, volumes, and **iptables networking rules** to restore the host system to its original state. |
+| `-x` | **REVERT (Factory Reset)** | ⚠️ **REVERT: Total Cleanup** — This erases only the parts we added. It wipes the Invidious database and any data saved inside our apps during your usage. If you didn't back up your app data, it will be gone forever. It does not touch your personal files (like your Documents or Photos folders); it only clears out our software. |
 | `-p` | **Auto-Passwords** | Generates secure random passwords for all services automatically. |
 
 ## 🛡️ Privacy & Security Features
@@ -111,6 +111,13 @@ This stack eliminates reliance on centralized upstream providers. By resolving q
 *   **Encrypted Local Path**: Native support for **DoH** (RFC 8484) and **DoQ** (RFC 9250) ensures your internal queries are invisible to your ISP.
 *   **Aggressive Caching & Prefetching**: Reduces external network exposure while significantly speeding up frequent queries by resolving expired records in the background.
 *   **Identity Hiding**: Server identity and version metadata are scrubbed to prevent fingerprinting.
+
+### 🛡️ Blocklist Information & DNS Filtering
+Our DNS filtering is powered by a custom-generated blocklist, ensuring a clean and secure browsing experience:
+*   **Source Citation**: Blocklists are generated using the [Lyceris-chan DNS Blocklist Generator](https://github.com/Lyceris-chan/dns-blocklist-generator/).
+*   **Composition**: The list is primarily based on **Hagezi Pro++**, combined with selected AdGuard default lists (deduplicated) for maximum coverage.
+*   **Curation**: We have specifically curated these lists and integrated [Easy List Dutch](https://easylist-downloads.adblockplus.org/easylistdutch.txt) to improve performance for Dutch users.
+*   **🛡️ Note on Aggression**: This blocklist is **aggressive** by design to ensure total privacy. If you experience "over-blocking," we suggest exploring AdGuard's standard default lists as a more balanced alternative.
 
 ## 🧪 Automated Verification & Quality Assurance
 
@@ -203,13 +210,23 @@ This stack utilizes **Digital Independence (DHI)** images (`dhi.io`) to ensure m
 ### 🔑 Inbound Access: WireGuard (WG-Easy)
 While **Gluetun** handles the outbound VPN tunnel for privacy, **WG-Easy** provides the *inbound* tunnel for secure remote access.
 
-*   **Secure Entry**: To access your services from outside your home, connect to your Privacy Hub using a WireGuard client.
+*   **Secure Entry**: To access your services from outside your home, connect to your Privacy Hub using a WireGuard client. Only **UDP Port 51820** is exposed, and it remains completely "invisible" to unauthorized scanners without the correct cryptographic key.
 *   **Client Configuration**: 
     1. Open the WireGuard UI (`http://<LAN_IP>:51821`).
     2. Create a new client (e.g., "Mobile").
     3. **Scan QR Code**: Use the WireGuard app on your phone to scan the generated QR code.
     4. **Download .conf**: Alternatively, download the configuration file for your laptop.
 *   **Routing**: Once connected, your device is virtually "inside" your home network. You can access all services using their local LAN IPs or deSEC subdomains.
+
+### 🌐 Personal Browsing via VPN Proxy
+Your Privacy Hub includes a built-in **HTTP Proxy** routed through your VPN. This allows you to use your ProtonVPN (or other provider) connection for general browsing on any device in your home without installing VPN clients on every machine.
+
+*   **Proxy Address**: `http://<LAN_IP>:8888`
+*   **How to use**: 
+    1.  Go to your browser or system proxy settings.
+    2.  Set the **HTTP Proxy** to your Privacy Hub's LAN IP and port `8888`.
+    3.  All traffic from that browser will now exit via the secure VPN tunnel.
+*   **Benefit**: Ideal for "browser-only" VPN needs while keeping other system traffic direct.
 
 <a id="network-configuration"></a>
 ## 🌐 Network Configuration
@@ -259,10 +276,11 @@ To filter ads and trackers for every device on your WiFi:
 > 1.  **Restart the Hub**: Run `./zima.sh` again to fix configurations and restart containers.
 > 2.  **Emergency Fallback**: If you cannot fix the hub immediately, change your router or device DNS to a trusted public provider like **Mullvad DNS**. They offer advanced [DoH/DoT options](https://mullvad.net/en/help/dns-over-https-and-dns-over-tls) and have a verified [Privacy Policy](https://mullvad.net/en/help/privacy-policy) that aligns with our least-trust model. Use this to restore connectivity until you can repair your self-hosted instance.
 
-### 4. Split Tunnel Configuration (VPN Routing)
+### 4. Split Tunnel Configuration (VPN Routing) & Bandwidth Optimization
 This stack uses a **Split Tunnel** architecture via Gluetun. This means only specific traffic is sent through the VPN, while the rest of your home network remains untouched.
 *   **VPN-Gated Services**: Privacy frontends (Invidious, Redlib, etc.) are locked inside the VPN container. They cannot access the internet if the VPN disconnects (Killswitch enabled).
 *   **Local-Direct Services**: Core management tools (Dashboard, Portainer, AdGuard UI) are accessible directly via your LAN IP. This ensures you never lose control of your hub even if the VPN provider has an outage.
+*   **🚀 Bandwidth Benefits**: Only self-hosted privacy services route through your home WireGuard connection. This preserves your mobile data speed: high-bandwidth streaming services like Netflix or native YouTube apps maintain their full, direct speed on your device rather than being forced to route back through your home upload connection first.
 
 ### 5. Encrypted DNS via Local Rewrites
 By leveraging AdGuard Home's **DNS Rewrites**, you can use advanced encrypted protocols (DoH/DoQ) without needing a constant VPN connection while at home.
@@ -275,7 +293,7 @@ Some "smart" devices (TVs, IoT, Google Home) are hardcoded to bypass your DNS an
 *   **DNS Hijacking (NAT Redirect)**: Catch all rogue traffic on port 53 and force it into your AdGuard instance. [OpenWrt Guide](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/intercept_dns)
 *   **Block DoH/DoT**: Modern apps try to use "DNS over HTTPS" to sneak past filters. You can block this by banning known DoH IPs and ports (853/443). [OpenWrt banIP Guide](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/ban_ip)
 
-> 🚀 **Why do this?** This ensures *total* network sovereignty. Not a single packet leaves your house without your permission. It's a deep rabbit hole, but worth exploring!
+> 🚀 **Why do this?** This ensures *total* network independence. Not a single packet leaves your house without your permission. It's a deep rabbit hole, but worth exploring!
 
 <a id="security-privacy"></a>
 ## 🔒 Security & Privacy
@@ -303,14 +321,29 @@ The stack pairs a recursive Unbound resolver with AdGuard Home. These settings a
 
 ### VPN Firewall & HTTPS Hardening
 *   **Gluetun Firewall Killswitch**: VPN-gated services can only reach the internet when the tunnel is up, with explicit inbound port whitelists.
-*   **LAN-Only Outbound Exceptions**: Gluetun allows RFC1918 subnets so internal services stay reachable without opening non-VPN egress.
+*   **LAN Connectivity**: All traffic to upstream providers like YouTube and Reddit is relayed through the Gluetun VPN, ensuring these services never see your real home IP address. Local management tools remain directly accessible on your network.
 *   **Hardened TLS Gateway**: Nginx is configured for TLS 1.2/1.3 with strong ciphers for HTTPS endpoints.
 
-### Telemetry Controls
-*   **Portainer Analytics Disabled**: Portainer starts with `--no-analytics`, and the script reminds you to disable anonymous statistics in the UI.
+### 🛡️ Self-Healing & High Availability
+The Privacy Hub is designed for long-term stability with automated recovery mechanisms:
+*   **VPN Tunnel Monitoring**: The **Gluetun** container is continuously monitored for both control-plane health and actual internet connectivity (via `connectivity-check.ubuntu.com`). If the VPN tunnel stalls or the provider rotates the session, Docker automatically marks it unhealthy and restarts the gateway.
+*   **Frontend Auto-Recovery**: All privacy frontends (Invidious, Redlib, etc.) utilize a `restart: always` policy. This ensures that if the underlying VPN network resets, the services will automatically restart and reconnect to the fresh tunnel.
+*   **Resource Management**: Every service has strict **CPU and Memory limits** (e.g., Invidious is capped at 1024MB RAM) to prevent memory leaks or background processes from causing host-system starvation during idle periods.
+*   **Upstream Rate Limits & Blocking**: Frontends like Invidious or Scribe may occasionally appear "unavailable" if the upstream provider (YouTube/Medium) blocks the shared VPN IP. Our health checks detect these hangs and automatically restart the frontend, which often triggers a VPN session rotation to a fresh IP.
+*   **Health-Gated Launch**: Infrastructure services (DNS, VPN) must be verified as `healthy` before the high-level frontends are allowed to start, preventing "zombie" containers that have no network access.
 
-### Data Minimization
-Requests originate from the isolated `hub-api` container using generic User-Agents, preventing host or browser fingerprinting. Upstream providers see a generic Linux client from a commercial VPN IP.
+### Telemetry Controls
+*   **Portainer Analytics Disabled**: Portainer is programmatically configured with the `--no-analytics` flag during deployment, ensuring no telemetry is sent to third-party servers without user intervention. This can be verified in the Portainer settings UI under "Anonymous Statistics".
+
+### Data Minimization & Anonymous Interactions
+The stack is engineered to prevent identifying leaks during external interactions:
+*   **Encapsulated Requests**: All external calls (asset synchronization, update checks, and connectivity health checks) are routed through the **Gluetun VPN proxy**. Upstream providers see only the VPN's shared commercial IP, never your home address.
+*   **Specific User-Agent Signatures**: Requests originate using industry-standard signatures to blend in with legitimate traffic:
+    *   **General Requests**: Uses a modern Linux Chrome signature (`Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36...`) for asset synchronization and connectivity checks.
+    *   **Service Specifics**: The Odido booster utilizes a specialized mobile signature (`T-Mobile 5.3.28 (Android 10; 10)`) to perfectly mimic the official application environment and avoid "unauthorized client" blocks.
+    *   **Impact**: This prevents upstream providers from identifying the traffic as coming from a specialized self-hosting tool, reducing the likelihood of automated blocking.
+*   **Zero Personal Data**: No API keys, hardware IDs, or account-linked tokens are transmitted to external infrastructure during these routine maintenance and stability checks.
+*   **Isolated Environment**: Requests are executed from within the `hub-api` container, which lacks access to your personal files or host-system environment variables.
 
 ### Proton Pass Export
 When using `-p`, a verified CSV is generated at `/DATA/AppData/privacy-hub/protonpass_import.csv` for easy import.

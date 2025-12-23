@@ -253,7 +253,7 @@ setup_assets() {
         local dest="$1"
         local url="$2"
         local varname="$3"
-        if ! curl -fsSL "$url" -o "$dest"; then
+        if ! curl -fsSL -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$url" -o "$dest"; then
             log_warn "Asset source failed: $url"
         fi
         printf -v "$varname" '%s' "$url"
@@ -269,7 +269,7 @@ setup_assets() {
 
     # Material Color Utilities (Local for privacy)
     log_info "Downloading Material Color Utilities..."
-    if ! curl -fsSL "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.2.7/dist/material-color-utilities.min.js" -o "$ASSETS_DIR/mcu.js"; then
+    if ! curl -fsSL -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.2.7/dist/material-color-utilities.min.js" -o "$ASSETS_DIR/mcu.js"; then
         log_warn "Failed to download Material Color Utilities. Using fallback logic."
     fi
 
@@ -2382,10 +2382,28 @@ def log_structured(level, message, category="SYSTEM"):
         message = "Service update sequence initiated"
     elif "POST /theme" in message:
         message = "UI theme preferences updated"
+    elif "GET /theme" in message:
+        message = "UI theme configuration synchronized"
     elif "GET /profiles" in message:
         message = "VPN profile list retrieved"
     elif "POST /activate" in message:
         message = "VPN profile activation triggered"
+    elif "POST /upload" in message:
+        message = "VPN configuration profile uploaded"
+    elif "POST /delete" in message:
+        message = "VPN configuration profile deleted"
+    elif "POST /restart-stack" in message:
+        message = "Full system stack restart triggered"
+    elif "POST /batch-update" in message:
+        message = "Batch service update sequence started"
+    elif "POST /rotate-api-key" in message:
+        message = "Dashboard API security key rotated"
+    elif "GET /check-updates" in message:
+        message = "Update availability check requested"
+    elif "GET /changelog" in message:
+        message = "Service changelog retrieved"
+    elif "GET /services" in message:
+        message = "Service catalog synchronized"
     elif "GET /status" in message:
         return # Too noisy
     elif "GET /metrics" in message:
@@ -2448,7 +2466,7 @@ def get_proxy_opener():
     return opener
 
 def download_text(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "privacy-hub/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
     try:
         opener = get_proxy_opener()
         with opener.open(req, timeout=30) as resp:
@@ -2459,7 +2477,7 @@ def download_text(url):
             return resp.read().decode("utf-8", errors="replace")
 
 def download_binary(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "privacy-hub/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
     try:
         opener = get_proxy_opener()
         with opener.open(req, timeout=30) as resp:
@@ -2595,6 +2613,39 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             return
         elif "POST /update-service" in msg:
             log_structured("INFO", "Service update sequence initiated", "NETWORK")
+            return
+        elif "POST /theme" in msg:
+            log_structured("INFO", "UI theme preferences updated", "NETWORK")
+            return
+        elif "GET /theme" in msg:
+            log_structured("INFO", "UI theme configuration synchronized", "NETWORK")
+            return
+        elif "POST /restart-stack" in msg:
+            log_structured("INFO", "Full system stack restart triggered", "ORCHESTRATION")
+            return
+        elif "POST /rotate-api-key" in msg:
+            log_structured("SECURITY", "Dashboard API security key rotated", "AUTH")
+            return
+        elif "POST /batch-update" in msg:
+            log_structured("INFO", "Batch service update sequence started", "MAINTENANCE")
+            return
+        elif "POST /activate" in msg:
+            log_structured("INFO", "VPN profile switch triggered", "NETWORK")
+            return
+        elif "POST /upload" in msg:
+            log_structured("INFO", "VPN configuration profile uploaded", "NETWORK")
+            return
+        elif "POST /delete" in msg:
+            log_structured("INFO", "VPN configuration profile deleted", "NETWORK")
+            return
+        elif "GET /check-updates" in msg:
+            log_structured("INFO", "Update availability check requested", "MAINTENANCE")
+            return
+        elif "GET /changelog" in msg:
+            log_structured("INFO", "Service changelog retrieved", "MAINTENANCE")
+            return
+        elif "GET /services" in msg:
+            log_structured("INFO", "Service catalog synchronized", "NETWORK")
             return
             
         if any(x in msg for x in ['GET /status', 'GET /metrics', 'GET /containers', 'GET /services', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /odido-api/api/status', 'HTTP/1.1" 200', 'HTTP/1.1" 304']):
@@ -3311,7 +3362,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         elif meta["type"] == "codeberg":
                             url = f"https://codeberg.org/api/v1/repos/{meta['repo']}/releases/latest"
                         
-                        req = urllib.request.Request(url, headers={"User-Agent": "privacy-hub/1.0"})
+                        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
                         opener = get_proxy_opener()
                         with opener.open(req, timeout=10) as resp:
                             data = json.loads(resp.read().decode())
@@ -3689,6 +3740,12 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$ACTIVE_WG_CONF:/gluetun/wireguard/wg0.conf:ro"
     env_file:
       - "$GLUETUN_ENV_FILE"
+    healthcheck:
+      # Check both the control server and actual VPN tunnel connectivity
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/v1/vpn/status | grep -q '\"status\":\"running\"' && wget -U \"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\" --spider -q --timeout=5 http://connectivity-check.ubuntu.com || exit 1"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
     deploy:
       resources:
@@ -3828,7 +3885,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     cap_drop: [ALL]
     depends_on: {gluetun: {condition: service_healthy}}
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/robots.txt || [ $? -eq 8 ]"]
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8080/robots.txt || [ $? -eq 8 ]"]
       interval: 1m
       timeout: 5s
       retries: 3
@@ -3902,7 +3959,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     depends_on:
       invidious-db: {condition: service_healthy}
       gluetun: {condition: service_healthy}
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
         limits: {cpus: '1.5', memory: 1024M}
@@ -3919,7 +3976,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - $SRC_DIR/invidious/config/sql:/config/sql
       - $SRC_DIR/invidious/docker/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U kemal -d invidious"], interval: 10s, timeout: 5s, retries: 5}
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
         limits: {cpus: '1.0', memory: 512M}
@@ -3932,7 +3989,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     network_mode: "service:gluetun"
     environment:
       - SERVER_SECRET_KEY=$IV_COMPANION
-    restart: unless-stopped
+    restart: always
     logging:
       options:
         max-size: "1G"
@@ -3957,7 +4014,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     network_mode: "service:gluetun"
     environment: {IMGUR_CLIENT_ID: "546c25a59c58ad7", ADDRESS: "0.0.0.0", PORT: "$PORT_INT_RIMGO"}
     depends_on: {gluetun: {condition: service_healthy}}
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
@@ -3979,8 +4036,13 @@ cat >> "$COMPOSE_FILE" <<EOF
       - bw_debug=false
       - bw_feature_search_suggestions=true
       - bw_strict_proxy=true
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:$PORT_INT_BREEZEWIKI/ || exit 1"]
+      interval: 1m
+      timeout: 5s
+      retries: 3
     depends_on: {gluetun: {condition: service_healthy}}
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 1024M}
@@ -4014,8 +4076,13 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "com.centurylinklabs.watchtower.enable=false"
     network_mode: "service:gluetun"
     env_file: ["./env/scribe.env"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8280/ || exit 1"]
+      interval: 1m
+      timeout: 5s
+      retries: 3
     depends_on: {gluetun: {condition: service_healthy}}
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
@@ -4036,7 +4103,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - PUBLIC_URL=$VERTD_PUB_URL
     # Intel GPU support (conditionally added)
 $VERTD_DEVICES
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
         limits: {cpus: '2.0', memory: 1024M}
@@ -6953,7 +7020,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const m = logData.message || "";
                 if (m.includes('HTTP/1.1" 200') || m.includes('HTTP/1.1" 304')) {
                     // Only filter if it doesn't match a known humanization pattern
-                    const knownPatterns = ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /theme', 'GET /system-health', 'GET /profiles'];
+                    const knownPatterns = ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /theme', 'POST /theme', 'GET /system-health', 'GET /profiles', 'POST /update-service', 'POST /batch-update', 'POST /restart-stack', 'POST /rotate-api-key', 'POST /activate', 'POST /upload', 'POST /delete', 'GET /check-updates', 'GET /changelog'];
                     if (!knownPatterns.some(p => m.includes(p))) return null;
                 }
                 
@@ -6972,16 +7039,23 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 if (message.includes('GET /theme')) message = 'UI theme assets synchronized';
                 if (message.includes('GET /profiles')) message = 'VPN profiles synchronized';
                 if (message.includes('POST /activate')) message = 'VPN profile switch triggered';
+                if (message.includes('POST /upload')) message = 'VPN profile upload completed';
+                if (message.includes('POST /delete')) message = 'VPN profile deletion requested';
                 if (message.includes('Watchtower Notification')) message = 'Container update availability checked';
                 if (message.includes('GET /status')) message = 'Service health status refreshed';
                 if (message.includes('GET /metrics')) message = 'Performance metrics updated';
                 if (message.includes('POST /batch-update')) message = 'Batch update sequence started';
                 if (message.includes('GET /updates')) message = 'Checking repository update status';
+                if (message.includes('GET /services')) message = 'Service catalog synchronized';
+                if (message.includes('GET /check-updates')) message = 'Update availability check requested';
+                if (message.includes('GET /changelog')) message = 'Service changelog retrieved';
                 if (message.includes('POST /config-desec')) message = 'deSEC dynamic DNS updated';
                 if (message.includes('GET /certificate-status')) message = 'SSL certificate validity checked';
                 if (message.includes('GET /containers')) message = 'Container orchestration state audited';
                 if (message.includes('GET /logs')) message = 'System logs retrieved';
                 if (message.includes('GET /events')) message = 'Live log stream connection established';
+                if (message.includes('POST /restart-stack')) message = 'Full system stack restart triggered';
+                if (message.includes('POST /rotate-api-key')) message = 'Dashboard API security key rotated';
 
                 // Category based icons
                 if (logData.category === 'NETWORK') icon = 'lan';
