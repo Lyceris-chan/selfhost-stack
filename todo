@@ -30,7 +30,7 @@
 
 **Service Allowlisting**
 - [x] Determine if ProtonVPN and Desec require allowlisting
-- [x] Implement flag (`-a`) for ProtonVPN personal use only
+- [x] Implement flag (`-a`) to Allow Proton VPN
 - [x] Restricted allowlist to only ProtonVPN and user's deSEC domain
 - [x] Allowlist `dedyn.io` by default for HTTPS compatibility
 

@@ -20,7 +20,7 @@ set -euo pipefail
 
 # --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
 usage() {
-    echo "Usage: $0 [-c (reset environment)] [-x (cleanup and exit)] [-p (auto-passwords)] [-y (auto-confirm)] [-a (allowlist ProtonVPN/deSEC)] [-s services] [-h]"
+    echo "Usage: $0 [-c (reset environment)] [-x (cleanup and exit)] [-p (auto-passwords)] [-y (auto-confirm)] [-a (allow Proton VPN)] [-s services] [-h]"
 }
 
 FORCE_CLEAN=false
@@ -29,7 +29,7 @@ AUTO_PASSWORD=false
 CLEAN_EXIT=false
 RESET_ENV=false
 AUTO_CONFIRM=false
-ALLOWLIST_PERSONAL=false
+ALLOW_PROTON_VPN=false
 SELECTED_SERVICES=""
 
 while getopts "cxpyas:h" opt; do
@@ -38,7 +38,7 @@ while getopts "cxpyas:h" opt; do
         x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
         p) AUTO_PASSWORD=true ;;
         y) AUTO_CONFIRM=true ;;
-        a) ALLOWLIST_PERSONAL=true ;;
+        a) ALLOW_PROTON_VPN=true ;;
         s) SELECTED_SERVICES="${OPTARG}" ;;
         h) 
             usage
@@ -1286,8 +1286,8 @@ with open(yaml_path, 'w') as f:
 PY
 fi
 
-if [ "$ALLOWLIST_PERSONAL" = true ]; then
-    log_info "Applying personal usage allowlist for ProtonVPN."
+if [ "$ALLOW_PROTON_VPN" = true ]; then
+    log_info "Allowlisting ProtonVPN domains."
     # Add rules to the user_rules list in the yaml
     $PYTHON_CMD - "$AGH_YAML" <<'PY'
 import sys

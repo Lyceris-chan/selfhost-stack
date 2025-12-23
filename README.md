@@ -140,7 +140,7 @@ Run the deployment script. It will validate your environment, prompt for credent
 # Deployment with Auto-generated Passwords (Recommended for Beginners)
 ./zima.sh -p
 
-# Deployment with Personal Usage Allowlist (ProtonVPN/deSEC)
+# Deployment with ProtonVPN Allowlist
 ./zima.sh -a
 ```
 
@@ -208,7 +208,7 @@ If you used the `-p` flag, the script auto-generated secure credentials for you.
 | `-c` | **Maintenance Reset** | Removes active containers and networks to resolve glitches, while strictly preserving persistent user data. |
 | `-x` | **REVERT (Factory Reset)** | ⚠️ **REVERT: Total Cleanup** — This erases only the parts we added. It wipes the Invidious database and any data saved inside our apps during your usage. If you didn't back up your app data, it will be gone forever. It does not touch your personal files (like your Documents or Photos folders); it only clears out our software. |
 | `-p` | **Auto-Passwords** | Generates secure random passwords for all services automatically. |
-| `-a` | **Personal Allowlist** | Allowlists essential ProtonVPN domains and your specific deSEC domain in AdGuard Home for personal usage (e.g., browser extensions). **Warning:** This may break DNS isolation and frontend access. |
+| `-a` | **Allow Proton VPN** | Allowlists essential ProtonVPN domains in AdGuard Home. **Warning:** This may break DNS isolation and frontend access. |
 | `-y` | **Auto-Confirm** | Skips all interactive confirmation prompts. |
 
 ## 🛡️ Privacy & Security Features
