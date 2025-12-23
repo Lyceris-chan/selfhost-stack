@@ -31,6 +31,10 @@
 - [x] Audit container and console logs for any hidden failures during -p -y deployment
 - [x] Use -p -y with zima.sh to test non-interactive flow and ensure no key prompts
 - [x] Verify DockerHub credentials (laciachan) and WireGuard secrets are utilized correctly via environment/config without hardcoding
+- [x] Implement strict per-session dynamic tokens (X-Session-Token) for administrative access
+- [x] Add background session cleanup thread with 30-minute expiry and dashboard user toggle
+- [x] Refine Material Symbols rendering and add animated navigation arrows to service cards
+- [x] Finalize M3-compliant scrolling for system logs and horizontal chip sets
 
  NAT-PMP (Port Forwarding) is not required. so dont tell the user to set it up as it reduces the attack surface leaving it off 
 did protonVPN or desec need to be white listed in adguard if not implement a flag and document the flags and help option in the readme to allow me to allowlist proton with those preset rules we use now for my personal usage (to allow proton vpn usage e.g browser extension) will break DNS lookups through wireguard but its my own personal choice and will also break access to the frontend but thats a risk im aware off document this properly

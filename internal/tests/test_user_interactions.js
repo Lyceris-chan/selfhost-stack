@@ -198,12 +198,35 @@ const puppeteer = require('puppeteer');
 
     console.log('8. Opening Service Management Modal (Invidious)...');
     const invidiousCard = await page.$('#link-invidious');
+    
+    // Audit: Navigation Arrow
+    const hasNavArrow = await page.evaluate(() => {
+        const arrow = document.querySelector('#link-invidious .nav-arrow');
+        return !!arrow && window.getComputedStyle(arrow).fontFamily.includes('Material Symbols Rounded');
+    });
+    console.log(`   Service card has navigation arrow: ${hasNavArrow}`);
+
+    // Audit: Absence of Metrics on Chips
+    const hasMetricsOnChips = await page.evaluate(() => {
+        return !!document.querySelector('.card .chip .cpu-val') || !!document.querySelector('.card .chip .mem-val');
+    });
+    console.log(`   Service cards have no metrics chips: ${!hasMetricsOnChips}`);
+
     if (invidiousCard) {
       await invidiousCard.hover();
     }
     await page.waitForSelector('#link-invidious .settings-btn', { visible: true, timeout: 30000 });
     await page.click('#link-invidious .settings-btn');
     await new Promise(r => setTimeout(r, 1000));
+    
+    // Audit: Presence of Metrics in Modal
+    const modalMetricsVisible = await page.evaluate(() => {
+        const cpu = document.getElementById('modal-cpu-text');
+        const mem = document.getElementById('modal-mem-text');
+        return !!cpu && !!mem && cpu.offsetParent !== null;
+    });
+    console.log(`   Management modal shows metrics: ${modalMetricsVisible}`);
+
     let isModalVisible = await page.evaluate(() => {
       const modal = document.getElementById('service-modal');
       return modal && modal.style.display === 'flex';

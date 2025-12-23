@@ -4734,18 +4734,6 @@ cat > "$DASHBOARD_FILE" <<EOF
             margin-right: 4px;
         }
 
-        .nav-arrow {
-            color: var(--md-sys-color-primary);
-            font-size: 22px;
-            transition: all var(--md-sys-duration-medium) var(--md-sys-motion-easing-emphasized);
-            opacity: 1;
-            transform: translateX(0);
-        }
-
-        .card:hover .nav-arrow {
-            transform: translateX(8px);
-        }
-
         .settings-btn {
         }
 
@@ -4956,6 +4944,8 @@ cat > "$DASHBOARD_FILE" <<EOF
             transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
             color: var(--md-sys-color-primary);
             pointer-events: none;
+            font-family: 'Material Symbols Rounded';
+            font-display: block;
         }
 
         .card:hover .nav-arrow {
