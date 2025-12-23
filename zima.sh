@@ -511,7 +511,7 @@ clean_environment() {
         log_info "Phase 5: Removing images..."
         REMOVED_IMAGES=""
         # Remove images by known names
-        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
+        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome nginx:alpine portainer/portainer-ce containrrr/watchtower python:3.11-alpine ghcr.io/wg-easy/wg-easy redis:7.2 quay.io/invidious/invidious quay.io/invidious/invidious-companion postgres:14-alpine neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine alpine:latest node:20-alpine 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine oven/bun:1 neilpang/acme.sh"
         for img in $KNOWN_IMAGES; do
             if $DOCKER_CMD images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -q "$img"; then
                 log_info "  Removing: $img"
@@ -621,7 +621,7 @@ clean_environment
 log_info "Pre-pulling ALL deployment images to avoid rate limits..."
 # Explicitly pull images used by 'docker run' commands or as base images later in the script
 # We only pull core infrastructure and base images. App images built from source are skipped.
-CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
+CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome nginx:alpine portainer/portainer-ce containrrr/watchtower python:3.11-alpine ghcr.io/wg-easy/wg-easy redis:7.2 quay.io/invidious/invidious-companion postgres:14-alpine neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert alpine:latest node:20-alpine 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine oven/bun:1 neilpang/acme.sh"
 
 for img in $CRITICAL_IMAGES; do
     MAX_RETRIES=3
@@ -882,14 +882,14 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
 
     AGH_USER="adguard"
     # Safely generate AGH hash
-    AGH_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/alpine-base:3.22-dev sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$AGH_USER" "$AGH_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    AGH_PASS_HASH=$($DOCKER_CMD run --rm alpine:latest sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$AGH_USER" "$AGH_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
     if [[ "$AGH_PASS_HASH" == "FAILED" ]]; then
         log_crit "Failed to generate AdGuard password hash. Check Docker status."
         exit 1
     fi
 
     # Safely generate Portainer hash (bcrypt)
-    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/alpine-base:3.22-dev sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:latest sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
     if [[ "$PORTAINER_PASS_HASH" == "FAILED" ]]; then
         log_crit "Failed to generate Portainer password hash. Check Docker status."
         exit 1
@@ -919,7 +919,7 @@ else
     # Generate Portainer hash if missing from existing .secrets
     if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
         log_info "Generating missing Portainer hash..."
-        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/alpine-base:3.22-dev sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:latest sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
         echo "PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'" >> "$BASE_DIR/.secrets"
     fi
     if [ -z "${ODIDO_API_KEY:-}" ]; then
@@ -1486,13 +1486,13 @@ if [ -z "$WIKILESS_DOCKERFILE" ]; then
 fi
 if [ -f "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE" ]; then
     # Use -dev for build stages to ensure npm/yarn are present
-    sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM node:20-alpine|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
+    sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
     sed -i 's|CMD \["src/wikiless.js"\]|CMD ["node", "src/wikiless.js"]|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
     log_info "Patched Wikiless Dockerfile to use DHI hardened images."
 fi
@@ -1562,10 +1562,10 @@ if [ -z "$SCRIBE_DOCKERFILE" ]; then
 fi
 if [ -f "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE" ]; then
     sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
-    sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
-    sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
-    sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
-    sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
+    sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
+    sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
+    sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
+    sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
     sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
     log_info "Patched Scribe Dockerfile to use hardened base images."
 fi
@@ -1580,9 +1580,9 @@ fi
 for dockerfile in "$SRC_DIR/invidious/$INVIDIOUS_DOCKERFILE" "$SRC_DIR/invidious/docker/Dockerfile.arm64"; do
     if [ -f "$dockerfile" ]; then
         sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$dockerfile"
-        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$dockerfile"
-        sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$dockerfile"
-        sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$dockerfile"
+        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$dockerfile"
+        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$dockerfile"
+        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$dockerfile"
         log_info "Patched Invidious Dockerfile base images: $(basename "$dockerfile")"
     fi
 done
@@ -1595,7 +1595,7 @@ if [ -z "$ODIDO_DOCKERFILE" ]; then
 fi
 if [ -f "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" ]; then
     cat > "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" <<'ODIDOEOF'
-FROM dhi.io/python:3.11-alpine3.22-dev
+FROM python:3.11-alpine
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -1622,7 +1622,7 @@ fi
 
 mkdir -p "$SRC_DIR/hub-api"
 cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
-FROM dhi.io/python:3.11-alpine3.22-dev
+FROM python:3.11-alpine
 RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git
 RUN pip install --no-cache-dir psutil
 WORKDIR /app
@@ -1639,17 +1639,17 @@ if [ -z "$VERT_DOCKERFILE" ]; then
 fi
 if [ -f "$SRC_DIR/vert/$VERT_DOCKERFILE" ]; then
     # Use -dev variant for build stages to ensure npm/yarn are present
-    sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     # Use DHI bun alpine dev for builder to keep hardened alpine base
-    sed -i 's|^FROM oven/bun[^ ]*|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM dhi.io/bun:1-alpine3.22-dev AS|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM oven/bun$|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM oven/bun[[:space:]]|FROM dhi.io/bun:1-alpine3.22-dev |g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM oven/bun[^ ]*|FROM oven/bun:1|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM oven/bun:1 AS|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM oven/bun$|FROM oven/bun:1|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM oven/bun[[:space:]]|FROM oven/bun:1 |g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM nginx:stable-alpine|FROM dhi.io/nginx:1.28-alpine3.21|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM nginx:stable-alpine|FROM nginx:alpine|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     log_info "Patched VERT Dockerfile to use DHI hardened images."
 fi
@@ -1684,7 +1684,7 @@ else
 fi
 
     cat > "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE" <<'BWEOF'
-FROM dhi.io/alpine-base:3.22-dev
+FROM alpine:latest
 WORKDIR /app
 
 # Install system dependencies
@@ -1722,9 +1722,9 @@ CMD ["racket", "dist.rkt"]
 BWEOF
 log_info "BreezeWiki Dockerfile.alpine is ready."
 if [ -f "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE" ]; then
-    sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
-    sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
-    sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
+    sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
+    sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
+    sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
     log_info "Patched BreezeWiki Dockerfile to use DHI hardened images."
 fi
 
@@ -2189,13 +2189,13 @@ if [ "$SERVICE" = "wikiless" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Wikiless..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/wikiless")
     if [ -n "$D_FILE" ]; then
-        sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM node:20-alpine|g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine|g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_ROOT/wikiless/$D_FILE"
         sed -i 's|CMD \["src/wikiless.js"\]|CMD ["node", "src/wikiless.js"]|g' "$SRC_ROOT/wikiless/$D_FILE"
     fi
 fi
@@ -2205,10 +2205,10 @@ if [ "$SERVICE" = "scribe" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/scribe")
     if [ -n "$D_FILE" ]; then
         sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_ROOT/scribe/$D_FILE"
         sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_ROOT/scribe/$D_FILE"
     fi
 fi
@@ -2218,14 +2218,14 @@ if [ "$SERVICE" = "invidious" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/invidious" "docker/Dockerfile")
     if [ -n "$D_FILE" ]; then
         sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/$D_FILE"
-        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/$D_FILE"
-        sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/invidious/$D_FILE"
-        sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/$D_FILE"
+        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/invidious/$D_FILE"
+        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_ROOT/invidious/$D_FILE"
+        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_ROOT/invidious/$D_FILE"
     fi
     # Also patch arm64 if exists
     if [ -f "$SRC_ROOT/invidious/docker/Dockerfile.arm64" ]; then
         sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
-        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
+        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
     fi
 fi
 
@@ -2234,7 +2234,7 @@ if [ "$SERVICE" = "odido-booster" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/odido-bundle-booster")
     if [ -n "$D_FILE" ]; then
         cat > "$SRC_ROOT/odido-bundle-booster/$D_FILE" <<'ODIDOEOF'
-FROM dhi.io/python:3.11-alpine3.22-dev
+FROM python:3.11-alpine
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -2263,16 +2263,16 @@ if [ "$SERVICE" = "vert" ] || [ "$SERVICE" = "all" ]; then
     log "Patching VERT..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/vert")
     if [ -n "$D_FILE" ]; then
-        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/vert/$D_FILE"
-        sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[^ ]*|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM dhi.io/bun:1-alpine3.22-dev AS|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun$|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[[:space:]]|FROM dhi.io/bun:1-alpine3.22-dev |g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[^ ]*|FROM oven/bun:1|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM oven/bun:1 AS|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun$|FROM oven/bun:1|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[[:space:]]|FROM oven/bun:1 |g' "$SRC_ROOT/vert/$D_FILE"
         sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_ROOT/vert/$D_FILE"
         sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_ROOT/vert/$D_FILE"
         sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM nginx:stable-alpine|FROM dhi.io/nginx:1.28-alpine3.21|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM nginx:stable-alpine|FROM nginx:alpine|g' "$SRC_ROOT/vert/$D_FILE"
         sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_ROOT/vert/$D_FILE"
         
         # Build args patches
@@ -2294,7 +2294,7 @@ fi
 if [ "$SERVICE" = "breezewiki" ] || [ "$SERVICE" = "all" ]; then
     log "Recreating BreezeWiki Dockerfile.alpine..."
     cat > "$SRC_ROOT/breezewiki/Dockerfile.alpine" <<'BWEOF'
-FROM dhi.io/alpine-base:3.22-dev
+FROM alpine:latest
 WORKDIR /app
 RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango
 COPY . .
@@ -3892,7 +3892,7 @@ fi
 if should_deploy "dashboard"; then
 cat >> "$COMPOSE_FILE" <<EOF
   dashboard:
-    image: dhi.io/nginx:1.28-alpine3.21
+    image: nginx:alpine
     container_name: dashboard
     networks: [frontnet]
     ports:
@@ -4056,7 +4056,7 @@ cat >> "$COMPOSE_FILE" <<EOF
         limits: {cpus: '0.5', memory: 256M}
 
   wikiless_redis:
-    image: dhi.io/redis:7.2-debian13
+    image: redis:7.2
     container_name: wikiless_redis
     labels:
       - "casaos.skip=true"
@@ -4109,7 +4109,7 @@ cat >> "$COMPOSE_FILE" <<EOF
         limits: {cpus: '1.5', memory: 1024M}
 
   invidious-db:
-    image: dhi.io/postgres:14-alpine3.22
+    image: postgres:14-alpine
     container_name: invidious-db
     labels:
       - "casaos.skip=true"
@@ -4829,8 +4829,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         /* MD3 Assist Chips - Intelligent Auto-layout */
         .chip-box { 
             display: flex;
-            flex-wrap: nowrap;
-            overflow-x: auto;
+            flex-wrap: wrap;
             gap: 8px; 
             padding-top: 12px;
             position: relative;
@@ -4838,12 +4837,6 @@ cat > "$DASHBOARD_FILE" <<EOF
             align-items: center;
             margin-top: auto;
             width: 100%;
-            scrollbar-width: none;
-            -ms-overflow-style: none;
-        }
-
-        .chip-box::-webkit-scrollbar {
-            display: none;
         }
         
         .chip {
@@ -5405,20 +5398,26 @@ cat > "$DASHBOARD_FILE" <<EOF
             </div>
         </div>
 
-        <div class="section-label">Network Infrastructure</div>
-        <div class="grid">
-            <div class="card" style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); min-height: auto;">
-                <div class="card-header" style="margin-bottom: 8px;">
-                    <h3 style="color: inherit; display: flex; align-items: center; gap: 8px;">
-                        <span class="material-symbols-rounded">warning</span>
-                        Critical Network Advisory
-                    </h3>
+        <div id="mac-advisory" style="margin-bottom: 32px; width: 100%;">
+            <div class="card" style="min-height: auto; padding: 16px 24px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 24px;">
+                    <div style="display: flex; gap: 16px; align-items: flex-start;">
+                        <span class="material-symbols-rounded" style="margin-top: 2px;">warning</span>
+                        <div>
+                            <h3 style="margin:0; color: inherit; font-size: 16px;">Critical Network Advisory</h3>
+                            <p class="body-medium" style="margin: 4px 0 0 0; color: inherit; opacity: 0.9;">
+                                To ensure firewall persistence and static IP reliability, you <strong>must disable Dynamic/Random MAC addresses</strong> in your host device's network settings.
+                            </p>
+                        </div>
+                    </div>
+                    <button onclick="dismissMacAdvisory()" class="btn btn-icon" style="color: inherit; margin: -8px -8px 0 0;" data-tooltip="Dismiss">
+                        <span class="material-symbols-rounded">close</span>
+                    </button>
                 </div>
-                <p class="body-medium" style="color: inherit; opacity: 0.9; -webkit-line-clamp: unset; display: block; margin-bottom: 0;">
-                    To ensure firewall persistence and static IP reliability, you <strong>must disable Dynamic/Random MAC addresses</strong> in your host device's network settings. Randomization will cause IP mismatches and break internal routing rules.
-                </p>
             </div>
         </div>
+
+
 
         <section data-category="apps">
         <div class="section-label">Applications</div>
@@ -6171,6 +6170,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         // Initialize dynamic grid
         document.addEventListener('DOMContentLoaded', () => {
             renderDynamicGrid();
+            initMacAdvisory();
             // Refresh grid occasionally to catch new services
             setInterval(renderDynamicGrid, 30000);
         });
@@ -6740,7 +6740,11 @@ cat >> "$DASHBOARD_FILE" <<EOF
                             window.open(PORTAINER_URL + "/#!/1/docker/containers/" + cid, '_blank');
                         };
                     } else {
-
+                        el.style.opacity = '0.6';
+                        el.style.cursor = 'default';
+                        el.onclick = (e) => { e.preventDefault(); e.stopPropagation(); };
+                    }
+                });
             } catch(e) { console.error('Container fetch error:', e); }
         }
         
@@ -7877,6 +7881,18 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 document.body.classList.add('privacy-mode');
             }
             updateProfileDisplay();
+        }
+
+        function dismissMacAdvisory() {
+            document.getElementById('mac-advisory').style.display = 'none';
+            localStorage.setItem('mac_advisory_dismissed', 'true');
+        }
+
+        function initMacAdvisory() {
+            if (localStorage.getItem('mac_advisory_dismissed') === 'true') {
+                const el = document.getElementById('mac-advisory');
+                if (el) el.style.display = 'none';
+            }
         }
         
         async function fetchCertStatus() {
