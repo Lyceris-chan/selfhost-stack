@@ -4601,7 +4601,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             -webkit-font-smoothing: antialiased;
         }
 
-        .container { max-width: 1280px; width: 100%; margin: 0 auto; position: relative; }
+        .container { max-width: 1440px; width: 100%; margin: 0 auto; position: relative; }
         
         /* Header */
         header {
