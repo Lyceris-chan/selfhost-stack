@@ -1264,35 +1264,41 @@ tls:
   certificate_path: /opt/adguardhome/conf/ssl.crt
   private_key_path: /opt/adguardhome/conf/ssl.key
   allow_unencrypted_doh: false
-user_rules: []
+user_rules: ["@@||dedyn.io^"]
 EOF
 
 if [ "$ALLOWLIST_PERSONAL" = true ]; then
-    log_info "Applying personal usage allowlist for ProtonVPN and deSEC (Note: This may affect DNS isolation)."
+    log_info "Applying personal usage allowlist for ProtonVPN and your deSEC domain."
     # Add rules to the user_rules list in the yaml
-    # We use python to safely append to the list in the YAML we just created
-    $PYTHON_CMD - "$AGH_YAML" <<'PY'
+    $PYTHON_CMD - "$AGH_YAML" "$DESEC_DOMAIN" <<'PY'
 import sys
 import yaml
 
-with open(sys.argv[1], 'r') as f:
+yaml_path = sys.argv[1]
+user_domain = sys.argv[2]
+
+with open(yaml_path, 'r') as f:
     config = yaml.safe_load(f)
 
 if 'user_rules' not in config:
     config['user_rules'] = []
 
-config['user_rules'].extend([
+# Only allow ProtonVPN and the specific user domain
+rules = [
     "@@||getproton.me^",
     "@@||vpn-api.proton.me^",
     "@@||protonstatus.com^",
     "@@||protonvpn.ch^",
     "@@||protonvpn.com^",
-    "@@||protonvpn.net^",
-    "@@||dns.desec.io^",
-    "@@||desec.io^"
-])
+    "@@||protonvpn.net^"
+]
 
-with open(sys.argv[1], 'w') as f:
+if user_domain:
+    rules.append(f"@@||{user_domain}^")
+
+config['user_rules'].extend(rules)
+
+with open(yaml_path, 'w') as f:
     yaml.dump(config, f)
 PY
 fi

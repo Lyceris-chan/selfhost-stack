@@ -30,8 +30,14 @@
 
 **Service Allowlisting**
 - [x] Determine if ProtonVPN and Desec require allowlisting
-- [x] If not required: create optional flag for ProtonVPN personal use only (browser VPN access)
-- [x] If required: document in blocklist section
+- [x] Implement flag (`-a`) for ProtonVPN personal use only
+- [x] Restricted allowlist to only ProtonVPN and user's deSEC domain
+- [x] Allowlist `dedyn.io` by default for HTTPS compatibility
+
+**Documentation & Warnings**
+- [x] Add production stability and fallback DNS implications to README
+- [x] Add "As Is" disclaimer and security best practices regarding Codespaces and secrets
+
 
 **NAT-PMP**
 - [x] Verify if NAT-PMP (Port Forwarding) is necessary for current deployment

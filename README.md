@@ -28,23 +28,21 @@ This automated mode:
 
 **Read the full [Prerequisites](#prerequisites--infrastructure) below for advanced configuration options.**
 
-## 📚 Contents
-- [Quick Start](#quick-start) ⚡ **New users start here**
-- [Getting Started](#getting-started)
-  - [Prerequisites & Infrastructure](#prerequisites--infrastructure)
-  - [Installation](#installation)
-  - [Post-Install: Credentials](#post-install-where-are-my-passwords)
-  - [Troubleshooting](#troubleshooting)
-- [Management Dashboard](#management-dashboard)
-- [Included Services](#included-services)
-- [Network Configuration](#network-configuration)
-  - [Port Forwarding](#port-forwarding)
-  - [DNS Setup](#dns-setup)
-  - [VPN Architecture](#vpn-architecture)
-  - [Advanced Hardening](#advanced-network-hardening-explore)
-- [Security & Privacy](#security-privacy)
-- [System Requirements](#system-requirements--scaling)
-- [Advanced Setup](#advanced-setup)
+---
+
+<a id="disclaimer--security-warning"></a>
+## 🚨 Disclaimer & Security Warning
+
+### Provided "As Is"
+This script and associated configuration files are provided **as is**. While I appreciate improvements and contributions, please ensure your code is fully tested and functional before submitting it. I cannot guarantee that everything will work in every unique environment. It has been verified to work on GitHub Codespaces and locally.
+
+### 🔐 Security Best Practices
+- **DO NOT** use GitHub Codespaces for an actual production deployment. 
+- **NEVER** upload your production secrets (API keys, tokens, VPN configs) to the internet or public repositories.
+- **Minimal Permissions**: Ensure any tokens or PATs you create have the absolute minimal permissions required for their task.
+- **Revoke Immediately**: Revoke and delete any tokens as soon as you are finished with them. **Do not forget this**, as it can compromise your entire infrastructure security.
+
+---
 
 <a id="getting-started"></a>
 ## 🏗️ Getting Started
@@ -210,7 +208,7 @@ If you used the `-p` flag, the script auto-generated secure credentials for you.
 | `-c` | **Maintenance Reset** | Removes active containers and networks to resolve glitches, while strictly preserving persistent user data. |
 | `-x` | **REVERT (Factory Reset)** | ⚠️ **REVERT: Total Cleanup** — This erases only the parts we added. It wipes the Invidious database and any data saved inside our apps during your usage. If you didn't back up your app data, it will be gone forever. It does not touch your personal files (like your Documents or Photos folders); it only clears out our software. |
 | `-p` | **Auto-Passwords** | Generates secure random passwords for all services automatically. |
-| `-a` | **Personal Allowlist** | Allowlists ProtonVPN and deSEC domains in AdGuard Home for personal usage (e.g., browser extensions). **Warning:** This may break DNS isolation and frontend access. |
+| `-a` | **Personal Allowlist** | Allowlists essential ProtonVPN domains and your specific deSEC domain in AdGuard Home for personal usage (e.g., browser extensions). **Warning:** This may break DNS isolation and frontend access. |
 | `-y` | **Auto-Confirm** | Skips all interactive confirmation prompts. |
 
 ## 🛡️ Privacy & Security Features
@@ -334,10 +332,17 @@ Your Privacy Hub machine hosts your DNS resolver. If it loses power, crashes, or
 ```
 
 2. **Emergency Fallback DNS** (If restart fails):
+
    - Open your router's DHCP settings
-   - Change Primary DNS to: **`9.9.9.9`** ([Quad9](https://www.quad9.net/)) or **[`194.242.2.2`](https://mullvad.net/en/help/dns-over-https-and-dns-over-tls)** ([Mullvad DNS](https://mullvad.net/en/help/dns-over-https-and-dns-over-tls))
-   - This restores internet access while you repair the Privacy Hub
+
+   - Change Primary DNS to: **`9.9.9.9`** (Quad9) or **`194.242.2.2`** (Mullvad)
+
+   - This restores internet access while you repair the Privacy Hub.
+
+   - **⚠️ Implications:** When using fallback DNS, your local Privacy Hub services (e.g., `adguard.your-domain.dedyn.io`) will not resolve locally. You will be accessing them via their public IPs, which may trigger SSL warnings if the local DNS override is not active. This is an emergency measure; the stack is designed for production stability and such failures should not generally occur.
+
    
+
    **Why these providers?**
    - [Mullvad DNS](https://mullvad.net/en/help/dns-over-https-and-dns-over-tls): Privacy-focused, supports DoH/DoT. [Read their Privacy Policy here](https://mullvad.net/en/help/privacy-policy/).
    - [Quad9](https://www.quad9.net/): Non-profit, GDPR compliant, and filters malicious domains. [Read their Privacy Policy here](https://www.quad9.net/privacy/policy/).
