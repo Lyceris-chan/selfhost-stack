@@ -79,6 +79,10 @@ BASE_DIR="/DATA/AppData/$APP_NAME"
 
 # Docker Auth Config (stored in /tmp to survive -c cleanup)
 DOCKER_AUTH_DIR="/tmp/$APP_NAME-docker-auth"
+# Ensure clean state for auth
+if [ -d "$DOCKER_AUTH_DIR" ]; then
+    sudo rm -rf "$DOCKER_AUTH_DIR"
+fi
 mkdir -p "$DOCKER_AUTH_DIR"
 sudo chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
 
@@ -204,11 +208,15 @@ authenticate_registries() {
                 log_warn "dhi.io: Authentication failed."
             fi
     
-            # Docker Hub Login
-            if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-                 log_info "Docker Hub: Authentication successful."
+            # Docker Hub Login (Optional)
+            if [ -n "${HUB_USER:-}" ] && [ -n "${HUB_TOKEN:-}" ]; then
+                if echo "$HUB_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$HUB_USER" --password-stdin >/dev/null 2>&1; then
+                     log_info "Docker Hub: Authentication successful."
+                else
+                     log_warn "Docker Hub: Authentication failed."
+                fi
             else
-                 log_warn "Docker Hub: Authentication failed."
+                log_info "No Docker Hub credentials provided (HUB_USER/HUB_TOKEN). Skipping login (anonymous pull)."
             fi
             return 0
         fi
@@ -616,8 +624,22 @@ log_info "Pre-pulling ALL deployment images to avoid rate limits..."
 CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
 
 for img in $CRITICAL_IMAGES; do
-    if ! $DOCKER_CMD pull "$img"; then
-        log_warn "Failed to pull $img. Continuing anyway..."
+    MAX_RETRIES=3
+    count=0
+    success=false
+    while [ $count -lt $MAX_RETRIES ]; do
+        if $DOCKER_CMD pull "$img"; then
+            success=true
+            break
+        fi
+        count=$((count + 1))
+        log_warn "Failed to pull $img. Retrying ($count/$MAX_RETRIES)..."
+        sleep 2
+    done
+    
+    if [ "$success" = false ]; then
+        log_crit "Failed to pull critical image $img after $MAX_RETRIES attempts. Aborting."
+        exit 1
     fi
 done
 
