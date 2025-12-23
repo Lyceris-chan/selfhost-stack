@@ -1124,77 +1124,94 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     log_info "Setting up SSL certificates..."
     mkdir -p "$AGH_CONF_DIR/certbot"
     
-    log_info "Attempting Let's Encrypt certificate..."
-    CERT_SUCCESS=false
-    CERT_LOG_FILE="$AGH_CONF_DIR/certbot/last_run.log"
-
-    # Request Let's Encrypt certificate via DNS-01 challenge
-    # We use a temp file to capture output to avoid 'set -e' issues with $(...) assignments in some shells
-    CERT_TMP_OUT=$(mktemp)
-    if $DOCKER_CMD run --rm \
-        -v "$AGH_CONF_DIR:/acme" \
-        -e "DESEC_Token=$DESEC_TOKEN" \
-        -e "DEDYN_TOKEN=$DESEC_TOKEN" \
-        -e "DESEC_DOMAIN=$DESEC_DOMAIN" \
-        neilpang/acme.sh:latest \
-        --issue \
-        --dns dns_desec \
-        --dnssleep 120 \
-        --debug 2 \
-        -d "$DESEC_DOMAIN" \
-        -d "*.$DESEC_DOMAIN" \
-        --keylength ec-256 \
-        --server letsencrypt \
-        --home /acme \
-        --config-home /acme \
-        --cert-home /acme/certs > "$CERT_TMP_OUT" 2>&1; then
-        CERT_SUCCESS=true
-    else
-        CERT_SUCCESS=false
-    fi
-    CERT_OUTPUT=$(cat "$CERT_TMP_OUT")
-    echo "$CERT_OUTPUT" > "$CERT_LOG_FILE"
-    rm -f "$CERT_TMP_OUT"
-
-    if [ "$CERT_SUCCESS" = true ] && [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]; then
-        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
-        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
-        log_info "Let's Encrypt certificate installed successfully!"
-        log_info "Certificate log saved to $CERT_LOG_FILE"
-    elif [ "$CERT_SUCCESS" = true ] && [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" ]; then
-        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
-        cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
-        log_info "Let's Encrypt certificate installed successfully!"
-        log_info "Certificate log saved to $CERT_LOG_FILE"
-    else
-        RETRY_TIME=$(echo "$CERT_OUTPUT" | grep -oiE 'retry after [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]+ UTC' | head -1 | sed 's/retry after //I')
-        if [ -n "$RETRY_TIME" ]; then
-            RETRY_EPOCH=$(date -u -d "$RETRY_TIME" +%s 2>/dev/null || echo "")
-            NOW_EPOCH=$(date -u +%s)
-            if [ -n "$RETRY_EPOCH" ] && [ "$RETRY_EPOCH" -gt "$NOW_EPOCH" ] 2>/dev/null; then
-                SECS_LEFT=$((RETRY_EPOCH - NOW_EPOCH))
-                HRS_LEFT=$((SECS_LEFT / 3600))
-                MINS_LEFT=$(((SECS_LEFT % 3600) / 60))
-                log_warn "Let's Encrypt rate limited. Retry after $RETRY_TIME (~${HRS_LEFT}h ${MINS_LEFT}m)."
-                log_info "A background task has been scheduled to automatically retry at exactly this time."
-            else
-                log_warn "Let's Encrypt rate limited. Retry after $RETRY_TIME."
-                log_info "A background task has been scheduled to automatically retry at exactly this time."
-            fi
+    # Check for existing valid certificate to avoid rate limits
+    SKIP_CERT_REQ=false
+    if [ -f "$AGH_CONF_DIR/ssl.crt" ] && [ -f "$AGH_CONF_DIR/ssl.key" ]; then
+        log_info "Checking validity of existing SSL certificate..."
+        if $DOCKER_CMD run --rm -v "$AGH_CONF_DIR:/certs" neilpang/acme.sh:latest /bin/sh -c \
+            "openssl x509 -in /certs/ssl.crt -checkend 2592000 -noout && \
+             openssl x509 -in /certs/ssl.crt -noout -subject | grep -q '$DESEC_DOMAIN'" >/dev/null 2>&1; then
+            log_info "Existing SSL certificate is valid for $DESEC_DOMAIN and has >30 days remaining."
+            log_info "Skipping new certificate request to conserve rate limits."
+            SKIP_CERT_REQ=true
         else
-            log_warn "Let's Encrypt failed (see $CERT_LOG_FILE)."
+            log_info "Existing certificate is invalid, expired, or for a different domain. Requesting new one..."
         fi
-        log_warn "Let's Encrypt failed, generating self-signed certificate..."
-        $DOCKER_CMD run --rm \
-            -v "$AGH_CONF_DIR:/certs" \
-            neilpang/acme.sh:latest /bin/sh -c "
-            openssl req -x509 -newkey rsa:4096 -sha256 \
-                -days 365 -nodes \
-                -keyout /certs/ssl.key -out /certs/ssl.crt \
-                -subj '/CN=$DESEC_DOMAIN' \
-                -addext 'subjectAltName=DNS:$DESEC_DOMAIN,DNS:*.$DESEC_DOMAIN,IP:$PUBLIC_IP'
-            "
-        log_info "Generated self-signed certificate for $DESEC_DOMAIN"
+    fi
+
+    if [ "$SKIP_CERT_REQ" = false ]; then
+        log_info "Attempting Let's Encrypt certificate..."
+        CERT_SUCCESS=false
+        CERT_LOG_FILE="$AGH_CONF_DIR/certbot/last_run.log"
+
+        # Request Let's Encrypt certificate via DNS-01 challenge
+        # We use a temp file to capture output to avoid 'set -e' issues with $(...) assignments in some shells
+        CERT_TMP_OUT=$(mktemp)
+        if $DOCKER_CMD run --rm \
+            -v "$AGH_CONF_DIR:/acme" \
+            -e "DESEC_Token=$DESEC_TOKEN" \
+            -e "DEDYN_TOKEN=$DESEC_TOKEN" \
+            -e "DESEC_DOMAIN=$DESEC_DOMAIN" \
+            neilpang/acme.sh:latest \
+            --issue \
+            --dns dns_desec \
+            --dnssleep 120 \
+            --debug 2 \
+            -d "$DESEC_DOMAIN" \
+            -d "*.$DESEC_DOMAIN" \
+            --keylength ec-256 \
+            --server letsencrypt \
+            --home /acme \
+            --config-home /acme \
+            --cert-home /acme/certs > "$CERT_TMP_OUT" 2>&1; then
+            CERT_SUCCESS=true
+        else
+            CERT_SUCCESS=false
+        fi
+        CERT_OUTPUT=$(cat "$CERT_TMP_OUT")
+        echo "$CERT_OUTPUT" > "$CERT_LOG_FILE"
+        rm -f "$CERT_TMP_OUT"
+
+        if [ "$CERT_SUCCESS" = true ] && [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]; then
+            cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
+            cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
+            log_info "Let's Encrypt certificate installed successfully!"
+            log_info "Certificate log saved to $CERT_LOG_FILE"
+        elif [ "$CERT_SUCCESS" = true ] && [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" ]; then
+            cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
+            cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
+            log_info "Let's Encrypt certificate installed successfully!"
+            log_info "Certificate log saved to $CERT_LOG_FILE"
+        else
+            RETRY_TIME=$(echo "$CERT_OUTPUT" | grep -oiE 'retry after [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]+ UTC' | head -1 | sed 's/retry after //I')
+            if [ -n "$RETRY_TIME" ]; then
+                RETRY_EPOCH=$(date -u -d "$RETRY_TIME" +%s 2>/dev/null || echo "")
+                NOW_EPOCH=$(date -u +%s)
+                if [ -n "$RETRY_EPOCH" ] && [ "$RETRY_EPOCH" -gt "$NOW_EPOCH" ] 2>/dev/null; then
+                    SECS_LEFT=$((RETRY_EPOCH - NOW_EPOCH))
+                    HRS_LEFT=$((SECS_LEFT / 3600))
+                    MINS_LEFT=$(((SECS_LEFT % 3600) / 60))
+                    log_warn "Let's Encrypt rate limited. Retry after $RETRY_TIME (~${HRS_LEFT}h ${MINS_LEFT}m)."
+                    log_info "A background task has been scheduled to automatically retry at exactly this time."
+                else
+                    log_warn "Let's Encrypt rate limited. Retry after $RETRY_TIME."
+                    log_info "A background task has been scheduled to automatically retry at exactly this time."
+                fi
+            else
+                log_warn "Let's Encrypt failed (see $CERT_LOG_FILE)."
+            fi
+            log_warn "Let's Encrypt failed, generating self-signed certificate..."
+            $DOCKER_CMD run --rm \
+                -v "$AGH_CONF_DIR:/certs" \
+                neilpang/acme.sh:latest /bin/sh -c "
+                openssl req -x509 -newkey rsa:4096 -sha256 \
+                    -days 365 -nodes \
+                    -keyout /certs/ssl.key -out /certs/ssl.crt \
+                    -subj '/CN=$DESEC_DOMAIN' \
+                    -addext 'subjectAltName=DNS:$DESEC_DOMAIN,DNS:*.$DESEC_DOMAIN,IP:$PUBLIC_IP'
+                "
+            log_info "Generated self-signed certificate for $DESEC_DOMAIN"
+        fi
     fi
     
     DNS_SERVER_NAME="$DESEC_DOMAIN"
