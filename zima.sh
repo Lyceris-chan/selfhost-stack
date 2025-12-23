@@ -2379,6 +2379,29 @@ FONT_ORIGINS = [
     "https://fontlay.com",
 ]
 
+def extract_profile_name(config):
+    """Extract profile name from WireGuard config."""
+    lines = config.split('\n')
+    in_peer = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.lower() == '[peer]':
+            in_peer = True
+            continue
+        if in_peer and stripped.startswith('#'):
+            name = stripped.lstrip('#').strip()
+            if name:
+                return name
+        if in_peer and stripped.startswith('['):
+            break
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            name = stripped.lstrip('#').strip()
+            if name and '=' not in name:
+                return name
+    return None
+
 def init_db():
     """Initialize the SQLite database for logs and metrics."""
     os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
