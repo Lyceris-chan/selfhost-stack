@@ -110,6 +110,7 @@ async function run() {
   console.log(`Dashboard URL: ${DASHBOARD_URL}`);
   const services = await withPage(browser, async (page) => {
     await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForFunction(() => document.querySelectorAll('.card[data-url]').length > 0, { timeout: 30000 }).catch(() => null);
     return page.evaluate(() => {
       return Array.from(document.querySelectorAll('.card[data-url]')).map((card) => ({
         id: card.id || '',

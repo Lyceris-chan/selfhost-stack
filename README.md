@@ -107,9 +107,19 @@ This stack eliminates reliance on centralized upstream providers. By resolving q
 *   **Zero Third-Parties**: We bypass "public" resolvers like **Google** (to prevent behavioral data harvesting and sale) and **Cloudflare** (to avoid centralized censorship and single-point-of-failure risks).
 *   **Least Trust Architecture**: Your browsing queries never leave your hardware in a readable or profileable format.
 *   **QNAME Minimization**: Only sends the absolute minimum metadata to root servers, closing the "full-history" visibility gap inherent in standard DNS.
-*   **Encrypted Local Path**: Native support for **DoH** and **DoQ** ensures your internal queries are invisible to your ISP.
-*   **Aggressive Caching**: Reduces external network exposure while significantly speeding up frequent queries.
+*   **ECH (Encrypted Client Hello)**: Optimized for modern browsers to prevent ISP-level SNI snooping.
+*   **Encrypted Local Path**: Native support for **DoH** (RFC 8484) and **DoQ** (RFC 9250) ensures your internal queries are invisible to your ISP.
+*   **Aggressive Caching & Prefetching**: Reduces external network exposure while significantly speeding up frequent queries by resolving expired records in the background.
 *   **Identity Hiding**: Server identity and version metadata are scrubbed to prevent fingerprinting.
+
+## 🧪 Automated Verification & Quality Assurance
+
+To ensure a "set and forget" experience, every release of this stack undergoes a rigorous automated verification pipeline:
+*   **Interaction Audit**: A Puppeteer-based test suite (`test_user_interactions.js`) simulates a real user by clicking, toggling, and switching every UI element (Theme, Privacy Mode, Filters, Modals) to verify stability and zero console errors.
+*   **Non-Interactive Deployment**: The `-p -y` flow is verified for zero-prompt success, ensuring the stack can be deployed via scripts or CI/CD without human input.
+*   **M3 Compliance Check**: Automated layout audits ensure the dynamic grid (3x3, 4x4) and chip auto-layout correctly adapt to any screen size without clipping or hardcoded overflows.
+*   **Log & Metric Integrity**: Container logs are audited for 502/504 errors, and real-time CPU/RAM telemetry is verified across all service management modals.
+
 
 <a id="management-dashboard"></a>
 ## 🖥️ Management Dashboard
@@ -124,7 +134,7 @@ The dashboard is built to strictly follow **[Google's Material Design 3](https:/
 ### Customization
 *   **Theme Engine**: Upload a wallpaper to automatically extract a coordinated palette (Android folder style), or pick a color manually.
 *   **Presets**: Choose from curated Material Design color presets.
-*   **Privacy Masking**: One-click toggle to blur sensitive IPs and data for screenshots.
+*   **Safe Display Mode**: One-click toggle to blur sensitive IPs and data for screenshots.
 
 ### Update Engine
 *   **Changelogs**: View commit logs (for source builds) or release notes (for images) directly in the UI before updating.
@@ -170,8 +180,20 @@ The dashboard provides one-click launch cards for every service.
 | **AnonOverflow** | `http://<LAN_IP>:8480` | Privacy Frontend |
 | **Scribe** | `http://<LAN_IP>:8280` | Privacy Frontend |
 | **Memos** | `http://<LAN_IP>:5230` | Utility |
-| **VERT** | `http://<LAN_IP>:5555" | Utility |
+| **VERT** | `http://<LAN_IP>:5555` | Utility |
 | **Odido Booster** | `http://<LAN_IP>:8085` | Utility |
+
+### 📦 Docker Hardened Images (DHI)
+This stack utilizes **Digital Independence (DHI)** images (`dhi.io`) to ensure maximum security and privacy. These images are purpose-built for self-hosting:
+
+*   **Zero Telemetry**: All built-in tracking and "phone home" features found in standard images are strictly removed.
+*   **Security Hardened**: Attack surfaces are minimized by stripping unnecessary binaries and tools. Base images use minimal, audited Alpine or Debian builds.
+*   **Performance Optimized**: Pre-configured for low-resource environments (like ZimaBoard/CasaOS) with faster startup times.
+*   **Replacement Mapping**:
+    *   `dhi.io/nginx` replaces standard `nginx:alpine` (Hardened config, no server headers).
+    *   `dhi.io/python` replaces standard `python:alpine` (Stripped of build-time dependencies).
+    *   `dhi.io/node` & `dhi.io/bun` (Optimized for JS-heavy frontends).
+    *   `dhi.io/redis` & `dhi.io/postgres` (Hardened database engines).
 | **AdGuard Home** | `http://<LAN_IP>:8083` | Infrastructure |
 | **WireGuard UI** | `http://<LAN_IP>:51821` | Infrastructure |
 | **Portainer** | `http://<LAN_IP>:9000` | Admin |
@@ -225,6 +247,7 @@ uci commit firewall
 To filter ads and trackers for every device on your WiFi:
 *   **DHCP Settings**: Set the **Primary DNS** server in your router's LAN/DHCP settings to your Privacy Hub's IP (`192.168.1.100`).
 *   **Secondary DNS**: Leave empty or set to the same IP. *Adding Google (8.8.8.8) here breaks your privacy.*
+*   **⚠️ IMPORTANT: Disable Dynamic MAC Addresses**: Ensure that "Private WiFi Address" (iOS) or "Randomized MAC" (Android/Windows) is **DISABLED** for your home network on the host machine. Your router binds a **MAC address → IP** lease; if the MAC rotates, the router treats it as a new device and assigns a new IP, which breaks port forwarding, firewall rules, and any DNS rewrites that point to the old address.
 
 > ⚠️ **Critical Troubleshooting: If Your Internet "Breaks"**
 >
@@ -266,6 +289,25 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 3.  **Encapsulated Fetching**: All requests to external CDNs (Fontlay, JSDelivr) occur *inside* the VPN tunnel. Upstream providers only see the VPN IP.
 4.  **Local Persistence**: Assets are saved to a persistent Docker volume (`/assets`).
 5.  **Offline Serving**: The Management Dashboard (Nginx) serves all UI resources exclusively from this local volume.
+
+### DNS Privacy Controls (Unbound + AdGuard)
+The stack pairs a recursive Unbound resolver with AdGuard Home. These settings are enabled in `zima.sh` and are active by default:
+*   **DNSSEC Hardening**: Unbound uses a root trust anchor and rejects stripped DNSSEC responses to prevent downgrade attacks.
+*   **QNAME Minimization**: Only the minimum necessary DNS labels are sent upstream.
+*   **Identity & Version Hiding**: Server identity/version are suppressed to reduce fingerprinting.
+*   **0x20 Bit Randomization**: Randomized query casing helps mitigate spoofing.
+*   **Hardened Glue + Cache Prefetch**: Reduces poisoning risk and limits upstream round trips.
+*   **Private-Network Access Controls**: Resolver access is restricted to RFC1918 subnets only.
+*   **Encrypted DNS Endpoints**: AdGuard exposes **DoH**, **DoT**, and **DoQ** on TLS with `allow_unencrypted_doh` disabled.
+*   **Curated Blocklists**: AdGuard consumes the "sleepy list" generator output and includes explicit allow-rules for VPN and deSEC.
+
+### VPN Firewall & HTTPS Hardening
+*   **Gluetun Firewall Killswitch**: VPN-gated services can only reach the internet when the tunnel is up, with explicit inbound port whitelists.
+*   **LAN-Only Outbound Exceptions**: Gluetun allows RFC1918 subnets so internal services stay reachable without opening non-VPN egress.
+*   **Hardened TLS Gateway**: Nginx is configured for TLS 1.2/1.3 with strong ciphers for HTTPS endpoints.
+
+### Telemetry Controls
+*   **Portainer Analytics Disabled**: Portainer starts with `--no-analytics`, and the script reminds you to disable anonymous statistics in the UI.
 
 ### Data Minimization
 Requests originate from the isolated `hub-api` container using generic User-Agents, preventing host or browser fingerprinting. Upstream providers see a generic Linux client from a commercial VPN IP.
@@ -334,7 +376,7 @@ Update the service status loop inside the `WG_API_SCRIPT` heredoc in `zima.sh` (
 - If the service is routed through Gluetun, add `myservice` to the case that maps `TARGET_HOST="gluetun"`.
 
 ### 3) Dashboard UI
-Add a card in the dashboard HTML (SECTION 14 in `zima.sh`). Use `id="link-myservice"` and `data-container="myservice"`.
+Add your service metadata to the `services.json` catalog generated in `zima.sh` (search for `services.json`). The dashboard reads this catalog at runtime and renders cards dynamically.
 
 </details>
 

@@ -1,0 +1,31 @@
+- [x] Implement dynamic grid layouts (3x3, 4x4) based on screen size, removing hardcoded service name logic
+- [x] Refine chip width and spacing to strictly follow M3 Material Design auto-layout rules
+- [x] Verify all UI interactions (toggles, switches, buttons) via automated testing
+- [x] Audit container logs and console for errors during `-p -y` execution
+- [x] Execute `zima.sh -p -y` with provided credentials (dockerhub: laciachan, WG secrets) and verify success
+- [x] Inform user: Disable dynamic MAC addresses on their device to ensure firewall consistency
+- [x] memory usage shows as 9 MB / 1024 MB (both sides labeled)
+- [/] ensure UI elements are properly aligned (ongoing verification via Puppeteer)
+- [x] dont show cpu and ram usage on the service chips (moved to settings cog/metrics)
+- [x] remove 'Private Instance' text from all chips
+- [x] make the trash can icon color less aggressive (dimmed surface variant)
+- [x] restyle optimal badge (success-container theme, edge-aligned)
+- [x] log filtering implementation (level and category filters active)
+- [x] human-readable log translations (common API calls translated to plain English)
+- [x] iptables rules clarification (logs specify only stack-specific rules are touched)
+- [x] ensure we strictly follow m3.material.io rules (validating colors and spacing)
+- [x] SIMULATE ALL INTERACTIONS: Click, toggle, and switch every UI element to verify stability
+- [x] clearer update progress (snackbars and detailed logs for builds)
+- [x] ensure theme sticks on restart (implementing persistent theme API)
+- [x] disabling portainer telemetry (confirmed --no-analytics in compose)
+- [x] color reset works as intended (fixed localStorage handling)
+- [x] fix VERT URL typo in dashboard and README
+- [x] implement category filter bar at top
+- [x] explain DHI images in README
+- [x] fix 'View in Portainer' failure logic
+- [x] Make UI grid values dynamic (3x3, 4x4) and not hard-coded for service names
+- [x] Ensure chips width and spacing match intelligently using M3 rules (Auto-layout based on screen size)
+- [x] Add warning/instruction to disable dynamic MAC addresses for firewall reliability (Logged to user)
+- [x] Audit container and console logs for any hidden failures during -p -y deployment
+- [x] Use -p -y with zima.sh to test non-interactive flow and ensure no key prompts
+- [x] Verify DockerHub credentials (laciachan) and WireGuard secrets are utilized correctly via environment/config without hardcoding

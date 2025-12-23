@@ -571,9 +571,9 @@ clean_environment() {
         
        
         # ============================================================
-        # PHASE 9: Reset iptables rules
+        # PHASE 9: Reset stack-specific iptables rules
         # ============================================================
-        log_info "Phase 9: Resetting networking rules..."
+        log_info "Phase 9: Cleaning up specific networking rules (existing host rules will be preserved)..."
         # Only remove rules if they exist to avoid affecting other system configurations
         if sudo iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null; then
             sudo iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
@@ -941,13 +941,18 @@ else
         rm "$ACTIVE_WG_CONF"
     fi
 
-    echo "PASTE YOUR WIREGUARD .CONF CONTENT BELOW."
-    echo "Make sure to include the [Interface] block with PrivateKey."
-    echo "Press ENTER, then Ctrl+D (Linux/Mac) or Ctrl+Z (Windows) to save."
-    echo "----------------------------------------------------------"
-    cat > "$ACTIVE_WG_CONF"
-    echo "" >> "$ACTIVE_WG_CONF" 
-    echo "----------------------------------------------------------"    
+    if [ -n "${WG_CONF_B64:-}" ]; then
+        log_info "WireGuard configuration provided in environment. Decoding..."
+        echo "$WG_CONF_B64" | base64 -d > "$ACTIVE_WG_CONF"
+    else
+        echo "PASTE YOUR WIREGUARD .CONF CONTENT BELOW."
+        echo "Make sure to include the [Interface] block with PrivateKey."
+        echo "Press ENTER, then Ctrl+D (Linux/Mac) or Ctrl+Z (Windows) to save."
+        echo "----------------------------------------------------------"
+        cat > "$ACTIVE_WG_CONF"
+        echo "" >> "$ACTIVE_WG_CONF" 
+        echo "----------------------------------------------------------"
+    fi
     # Sanitize the configuration file
     $PYTHON_CMD - "$ACTIVE_WG_CONF" <<'PY'
 from pathlib import Path
@@ -1212,6 +1217,8 @@ server:
   rrset-cache-size: 100m
   prefetch: yes
   prefetch-key: yes
+  rrset-roundrobin: yes
+  minimal-responses: yes
   auto-trust-anchor-file: "/var/lib/unbound/root.key"
 UNBOUNDEOF
 
@@ -2293,6 +2300,7 @@ CONTROL_SCRIPT = "/usr/local/bin/wg-control.sh"
 LOG_FILE = "/app/deployment.log"
 DB_FILE = "/app/data/logs.db"
 ASSETS_DIR = "/assets"
+SERVICES_FILE = os.path.join(CONFIG_DIR, "services.json")
 
 FONT_SOURCES = {
     "gs.css": [
@@ -2372,7 +2380,21 @@ def log_structured(level, message, category="SYSTEM"):
         message = "System health telemetry synchronized"
     elif "POST /update-service" in message:
         message = "Service update sequence initiated"
+    elif "POST /theme" in message:
+        message = "UI theme preferences updated"
+    elif "GET /profiles" in message:
+        message = "VPN profile list retrieved"
+    elif "POST /activate" in message:
+        message = "VPN profile activation triggered"
     elif "GET /status" in message:
+        return # Too noisy
+    elif "GET /metrics" in message:
+        return # Too noisy
+    elif "GET /containers" in message:
+        return # Too noisy
+    elif "GET /updates" in message:
+        return # Too noisy
+    elif "GET /certificate-status" in message:
         return # Too noisy
         
     entry = {
@@ -2405,6 +2427,19 @@ def log_fonts(message, level="SYSTEM"):
         log_structured(level, message, "FONTS")
     except Exception:
         print(f"[{level}] {message}")
+
+def load_services():
+    try:
+        if os.path.exists(SERVICES_FILE):
+            with open(SERVICES_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and "services" in data:
+                data = data["services"]
+            if isinstance(data, dict):
+                return data
+    except Exception as e:
+        print(f"[WARN] Service catalog load failed: {e}")
+    return {}
 
 def get_proxy_opener():
     # Gluetun proxy is usually available at gluetun:8888 within the same docker network
@@ -2534,6 +2569,17 @@ def ensure_assets():
         except Exception as e:
             log_fonts(f"Failed to download mcu.js: {e}", "WARN")
 
+    # Ensure local SVG icon
+    svg_path = os.path.join(ASSETS_DIR, "privacy-hub.svg")
+    if not os.path.exists(svg_path):
+        try:
+            svg = """<svg xmlns=\\"http://www.w3.org/2000/svg\\" height=\\"128\\" viewBox=\\"0 -960 960 960\\" width=\\"128\\" fill=\\"#D0BCFF\\">\\n    <path d=\\"M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z\\"/>\\n</svg>\\n"""
+            with open(svg_path, "w", encoding="utf-8") as f:
+                f.write(svg)
+            log_fonts("Generated privacy-hub.svg")
+        except Exception as e:
+            log_fonts(f"Failed to generate privacy-hub.svg: {e}", "WARN")
+
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -2551,7 +2597,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             log_structured("INFO", "Service update sequence initiated", "NETWORK")
             return
             
-        if any(x in msg for x in ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /odido-api/api/status', 'HTTP/1.1" 200', 'HTTP/1.1" 304']):
+        if any(x in msg for x in ['GET /status', 'GET /metrics', 'GET /containers', 'GET /services', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /odido-api/api/status', 'HTTP/1.1" 200', 'HTTP/1.1" 304']):
             return
         log_structured("INFO", msg, "NETWORK")
     
@@ -2579,7 +2625,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
     def _check_auth(self):
         # Allow certain GET endpoints without auth for the dashboard
         base_path = self.path.split('?')[0]
-        if self.command == 'GET' and base_path in ['/', '/status', '/profiles', '/containers', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates', '/master-update', '/logs', '/system-health']:
+        if self.command == 'GET' and base_path in ['/', '/status', '/profiles', '/containers', '/services', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates', '/master-update', '/logs', '/system-health']:
             return True
         
         # Watchtower notification (comes from docker network, simple path check)
@@ -2740,6 +2786,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/check-updates':
             try:
+                log_structured("INFO", "Checking for system-wide container and source updates...", "MAINTENANCE")
                 # Trigger Watchtower run-once to check for image updates
                 subprocess.Popen(['docker', 'run', '--rm', '-v', '/var/run/docker.sock:/var/run/docker.sock', 'containrrr/watchtower', '--run-once', '--cleanup', '--include-stopped'])
                 # Also trigger git fetch for sources in background
@@ -2748,6 +2795,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     for repo in os.listdir(src_root):
                         repo_path = os.path.join(src_root, repo)
                         if os.path.isdir(os.path.join(repo_path, ".git")):
+                            log_structured("INFO", f"Refreshing repository: {repo}", "MAINTENANCE")
                             subprocess.Popen(["git", "fetch"], cwd=repo_path)
                 self._send_json({"success": True, "message": "Update check initiated in background"})
             except Exception as e:
@@ -2839,6 +2887,11 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         # Portainer URLs typically work best with long IDs
                         containers[name] = cid
                 self._send_json({"containers": containers})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/services':
+            try:
+                self._send_json({"services": load_services()})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/certificate-status':
@@ -3367,6 +3420,122 @@ fi
 
 if [ ! -f "$CONFIG_DIR/theme.json" ]; then echo "{}" > "$CONFIG_DIR/theme.json"; fi
 chmod 666 "$CONFIG_DIR/theme.json"
+SERVICES_JSON="$CONFIG_DIR/services.json"
+cat > "$SERVICES_JSON" <<EOF
+{
+  "services": {
+    "invidious": {
+      "name": "Invidious",
+      "description": "A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.",
+      "category": "apps",
+      "order": 10,
+      "url": "http://$LAN_IP:$PORT_INVIDIOUS",
+      "actions": [
+        {"type": "migrate", "label": "Migrate DB", "icon": "database_upload", "mode": "migrate", "confirm": true},
+        {"type": "migrate", "label": "Clear Logs", "icon": "delete_sweep", "mode": "clear-logs", "confirm": false}
+      ]
+    },
+    "redlib": {
+      "name": "Redlib",
+      "description": "A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.",
+      "category": "apps",
+      "order": 20,
+      "url": "http://$LAN_IP:$PORT_REDLIB"
+    },
+    "wikiless": {
+      "name": "Wikiless",
+      "description": "A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.",
+      "category": "apps",
+      "order": 30,
+      "url": "http://$LAN_IP:$PORT_WIKILESS"
+    },
+    "rimgo": {
+      "name": "Rimgo",
+      "description": "An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.",
+      "category": "apps",
+      "order": 40,
+      "url": "http://$LAN_IP:$PORT_RIMGO"
+    },
+    "breezewiki": {
+      "name": "BreezeWiki",
+      "description": "A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.",
+      "category": "apps",
+      "order": 50,
+      "url": "http://$LAN_IP:$PORT_BREEZEWIKI/"
+    },
+    "anonymousoverflow": {
+      "name": "AnonOverflow",
+      "description": "A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.",
+      "category": "apps",
+      "order": 60,
+      "url": "http://$LAN_IP:$PORT_ANONYMOUS"
+    },
+    "scribe": {
+      "name": "Scribe",
+      "description": "An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.",
+      "category": "apps",
+      "order": 70,
+      "url": "http://$LAN_IP:$PORT_SCRIBE"
+    },
+    "memos": {
+      "name": "Memos",
+      "description": "A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.",
+      "category": "apps",
+      "order": 80,
+      "url": "http://$LAN_IP:$PORT_MEMOS",
+      "actions": [
+        {"type": "vacuum", "label": "Optimize DB", "icon": "compress"}
+      ],
+      "chips": ["Direct Access"]
+    },
+    "vert": {
+      "name": "VERT",
+      "description": "Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.",
+      "category": "tools",
+      "order": 10,
+      "url": "http://$LAN_IP:$PORT_VERT",
+      "chips": [
+        "Utility",
+        {
+          "label": "GPU Accelerated",
+          "icon": "memory",
+          "variant": "tertiary",
+          "tooltip": "Utilizes local GPU (/dev/dri) for high-performance conversion",
+          "portainer": false
+        }
+      ]
+    },
+    "adguard": {
+      "name": "AdGuard Home",
+      "description": "Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.",
+      "category": "system",
+      "order": 10,
+      "url": "http://$LAN_IP:$PORT_ADGUARD_WEB",
+      "actions": [
+        {"type": "clear-logs", "label": "Clear Logs", "icon": "auto_delete"}
+      ],
+      "chips": ["Local Access", "Encrypted DNS"]
+    },
+    "portainer": {
+      "name": "Portainer",
+      "description": "A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.",
+      "category": "system",
+      "order": 20,
+      "url": "http://$LAN_IP:$PORT_PORTAINER",
+      "chips": ["Local Access"]
+    },
+    "wg-easy": {
+      "name": "WireGuard",
+      "description": "The primary gateway for secure remote access. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.",
+      "category": "system",
+      "order": 30,
+      "url": "http://$LAN_IP:$PORT_WG_WEB",
+      "chips": ["Local Access"]
+    }
+  }
+}
+EOF
+chmod 666 "$SERVICES_JSON"
 
 cat > "$COMPOSE_FILE" <<EOF
 networks:
@@ -3399,7 +3568,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$PATCHES_SCRIPT:/app/patches.sh"
       - "$CERT_MONITOR_SCRIPT:/usr/local/bin/cert-monitor.sh"
       - "$MIGRATE_SCRIPT:/usr/local/bin/migrate.sh"
-      - "$0:/app/zima.sh"
+      - "$(realpath "$0"):/app/zima.sh"
       - "$WG_API_SCRIPT:/app/server.py"
       - "$GLUETUN_ENV_FILE:/app/gluetun.env"
       - "$COMPOSE_FILE:/app/docker-compose.yml"
@@ -3412,6 +3581,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$SRC_DIR:/app/sources"
       - "$BASE_DIR:/project_root:ro"
       - "$CONFIG_DIR/theme.json:/app/theme.json"
+      - "$CONFIG_DIR/services.json:/app/services.json"
     environment:
       - HUB_API_KEY=$ODIDO_API_KEY
       - DOCKER_CONFIG=/root/.docker
@@ -3951,6 +4121,23 @@ cat > "$DASHBOARD_FILE" <<EOF
     <link href="assets/cc.css" rel="stylesheet">
     <link href="assets/ms.css" rel="stylesheet">
     <script>
+        // HTTPS Auto-Switch & Default Logic
+        const isLocalHost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        const isIpHost = window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/);
+        if (window.location.protocol === 'http:' && !isLocalHost && !isIpHost) {
+            const httpsPort = '8443';
+            const httpsUrl = 'https://' + window.location.hostname + ':' + httpsPort + window.location.pathname + window.location.search;
+            // Only redirect if we're not on a standard port or if specifically requested
+            // Use a small delay to ensure page load doesnt flicker
+            setTimeout(() => {
+                fetch(httpsUrl, { mode: 'no-cors' }).then(() => {
+                    window.location.href = httpsUrl;
+                }).catch(() => {
+                    console.log("HTTPS port not reachable, staying on HTTP");
+                });
+            }, 500);
+        }
+        
         // Prevent extension injection errors - defined early
         globalThis.configureInjection = globalThis.configureInjection || (() => {});
     </script>
@@ -3959,6 +4146,54 @@ cat > "$DASHBOARD_FILE" <<EOF
         window.MaterialColorUtilities = MaterialColorUtilities;
     </script>
     <style>
+        /* Alignment & Flicker Fixes */
+        .card, .chip, .btn {
+            backface-visibility: hidden;
+            transform: translateZ(0);
+            -webkit-font-smoothing: subpixel-antialiased;
+        }
+        
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            overflow-x: auto;
+            padding: 4px;
+            scrollbar-width: none;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--md-sys-color-surface);
+            border-bottom: 1px solid var(--md-sys-color-outline-variant);
+        }
+        .filter-bar::-webkit-scrollbar { display: none; }
+        
+        .filter-chip {
+            cursor: pointer;
+            user-select: none;
+            transition: all 200ms ease;
+        }
+        .filter-chip.active {
+            background: var(--md-sys-color-primary-container) !important;
+            color: var(--md-sys-color-on-primary-container) !important;
+            border-color: var(--md-sys-color-primary) !important;
+        }
+        
+        section {
+            display: block;
+            opacity: 1;
+            transition: opacity 200ms ease-in-out;
+        }
+        section.hidden {
+            display: none;
+            opacity: 0;
+        }
+        
+        /* Ensure chips don't flicker during hover */
+        .chip:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--md-sys-elevation-1);
+        }
         /* ============================================
            Material 3 Dark Theme - Strict Implementation
            Reference: https://m3.material.io/
@@ -4094,6 +4329,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             min-height: 100vh;
             line-height: 1.6;
             -webkit-font-smoothing: antialiased;
+            transition: background-color 300ms ease, color 300ms ease;
         }
 
         .code-block, .log-container, .text-field, .stat-value, .monospace {
@@ -4225,12 +4461,25 @@ cat > "$DASHBOARD_FILE" <<EOF
             flex-wrap: wrap;
         }
         
-        /* Grid Layouts */
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; margin-bottom: 32px; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-bottom: 32px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 32px; }
-        @media (max-width: 1100px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+        /* Grid Layouts - M3 Responsive (3x3, 4x4) */
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+            gap: 24px; 
+            margin-bottom: 32px; 
+            width: 100%;
+        }
+        
+        @media (min-width: 1200px) {
+            .grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+        }
+
+        @media (min-width: 1600px) {
+            .grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 450px), 1fr)); gap: 24px; margin-bottom: 32px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 350px), 1fr)); gap: 24px; margin-bottom: 32px; }
         
         /* MD3 Component Refinements - Elevated Cards */
         .card {
@@ -4249,6 +4498,8 @@ cat > "$DASHBOARD_FILE" <<EOF
             box-shadow: var(--md-sys-elevation-1);
             height: 100%;
             cursor: pointer;
+            contain: content;
+            will-change: transform, box-shadow;
         }
         
         .card::before {
@@ -4354,19 +4605,18 @@ cat > "$DASHBOARD_FILE" <<EOF
             letter-spacing: 0.15px;
         }
         
-        /* MD3 Assist Chips */
+        /* MD3 Assist Chips - Intelligent Auto-layout */
         .chip-box { 
-            display: flex; 
+            display: flex;
+            flex-wrap: wrap;
             gap: 8px; 
-            flex-wrap: wrap; 
             padding-top: 12px;
             position: relative;
             z-index: 2;
-            overflow-x: auto; /* Allow chips to scroll horizontally if they overflow */
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+            align-items: center;
+            margin-top: auto;
+            width: 100%;
         }
-        .chip-box::-webkit-scrollbar { display: none; }
         
         .chip {
             display: inline-flex;
@@ -4388,7 +4638,8 @@ cat > "$DASHBOARD_FILE" <<EOF
             position: relative;
             overflow: hidden;
             white-space: nowrap;
-            flex-shrink: 0;
+            text-overflow: ellipsis;
+            max-width: 100%;
         }
 
         .chip .material-symbols-rounded {
@@ -4862,8 +5113,12 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 16px;">
+                    <div id="https-badge" class="chip vpn" style="gap:4px; display:none; height: 32px; padding: 0 12px; border-radius: 16px;" data-tooltip="Connection is secured with end-to-end encryption.">
+                        <span class="material-symbols-rounded" style="font-size:18px;">lock</span>
+                        <span style="font-size: 12px; font-weight: 600;">Secure HTTPS</span>
+                    </div>
                     <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for privacy">
-                        <span class="label-large">Privacy Masking</span>
+                        <span class="label-large">Safe Display Mode</span>
                         <div class="switch-track">
                             <div class="switch-thumb"></div>
                         </div>
@@ -4878,6 +5133,15 @@ cat > "$DASHBOARD_FILE" <<EOF
                 </div>
             </div>
         </header>
+
+        <div class="filter-bar" id="category-filters">
+            <div class="chip filter-chip active" data-target="all" onclick="filterCategory('all')">All Services</div>
+            <div class="chip filter-chip" data-target="apps" onclick="filterCategory('apps')">Applications</div>
+            <div class="chip filter-chip" data-target="system" onclick="filterCategory('system')">Infrastructure</div>
+            <div class="chip filter-chip" data-target="dns" onclick="filterCategory('dns')">DNS & Security</div>
+            <div class="chip filter-chip" data-target="tools" onclick="filterCategory('tools')">Utilities</div>
+            <div class="chip filter-chip" data-target="logs" onclick="filterCategory('logs')">System Logs</div>
+        </div>
 
         <div id="update-banner" style="display:none; margin-bottom: 32px;">
             <div class="card" style="min-height: auto; padding: 24px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);">
@@ -4894,228 +5158,46 @@ cat > "$DASHBOARD_FILE" <<EOF
             </div>
         </div>
 
+        <div class="section-label">Network Infrastructure</div>
+        <div class="grid">
+            <div class="card" style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); min-height: auto;">
+                <div class="card-header" style="margin-bottom: 8px;">
+                    <h3 style="color: inherit; display: flex; align-items: center; gap: 8px;">
+                        <span class="material-symbols-rounded">warning</span>
+                        Critical Network Advisory
+                    </h3>
+                </div>
+                <p class="body-medium" style="color: inherit; opacity: 0.9; -webkit-line-clamp: unset; display: block; margin-bottom: 0;">
+                    To ensure firewall persistence and static IP reliability, you <strong>must disable Dynamic/Random MAC addresses</strong> in your host device's network settings. Randomization will cause IP mismatches and break internal routing rules.
+                </p>
+            </div>
+        </div>
+
+        <section data-category="apps">
         <div class="section-label">Applications</div>
         <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
             <span class="chip category-badge" data-tooltip="Services isolated within a secure VPN tunnel (Gluetun). This allows you to host your own private instances—removing the need to trust third-party hosts—while ensuring your home IP remains hidden from end-service providers."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
             <span class="chip category-badge" data-tooltip="Local services accessed directly through the internal network interface."><span class="material-symbols-rounded">lan</span> Direct Access</span>
             <span class="chip category-badge" data-tooltip="Advanced infrastructure control and container telemetry via Portainer."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
         </div>
-        <div class="grid-3">
-            <div id="link-invidious" data-url="http://$LAN_IP:$PORT_INVIDIOUS" class="card" data-check="true" data-container="invidious" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>Invidious</h2>
-                    <div class="card-header-actions">
-                        <div id="metrics-invidious" class="status-indicator" style="display:none; gap: 8px; background: transparent; border: none; min-width: auto; padding: 0;">
-                            <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px; margin:0;" data-tooltip="CPU Usage"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                            <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px; margin:0;" data-tooltip="RAM Usage"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                        </div>
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
-                        <button onclick="openServiceSettings('invidious', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                    </div>
-                </div>
-                <p class="description">A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.</p>
-                <div class="chip-box">
-                    <span class="chip vpn portainer-link" data-container="invidious" data-tooltip="Manage Invidious Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
-                    <button onclick="migrateService('invidious', 'migrate', 'yes', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Perform database migration and maintenance."><span class="material-symbols-rounded">database_upload</span> Migrate DB</button>
-                    <button onclick="migrateService('invidious', 'clear-logs', 'no', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Clear Invidious application logs."><span class="material-symbols-rounded">delete_sweep</span> Clear Logs</button>
-                </div>
-            </div>
-            <div id="link-redlib" data-url="http://$LAN_IP:$PORT_REDLIB" class="card" data-check="true" data-container="redlib" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>Redlib</h2>
-                    <div class="card-header-actions">
-                        <div id="metrics-redlib" class="status-indicator" style="display:none; gap: 8px; background: transparent; border: none; min-width: auto; padding: 0;">
-                            <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px; margin:0;" data-tooltip="CPU Usage"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                            <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px; margin:0;" data-tooltip="RAM Usage"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                        </div>
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
-                        <button onclick="openServiceSettings('redlib', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                    </div>
-                </div>
-                <p class="description">A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.</p>
-                <div class="chip-box">
-                    <span class="chip vpn portainer-link" data-container="redlib" data-tooltip="Manage Redlib Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
-                </div>
-            </div>
-            <div id="link-wikiless" data-url="http://$LAN_IP:$PORT_WIKILESS" class="card" data-check="true" data-container="wikiless" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>Wikiless</h2>
-                    <div class="card-header-actions">
-                        <div id="metrics-wikiless" class="status-indicator" style="display:none; gap: 8px; background: transparent; border: none; min-width: auto; padding: 0;">
-                            <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px; margin:0;" data-tooltip="CPU Usage"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                            <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px; margin:0;" data-tooltip="RAM Usage"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                        </div>
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
-                        <button onclick="openServiceSettings('wikiless', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                    </div>
-                </div>
-                <p class="description">A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.</p>
-                <div class="chip-box">
-                    <span class="chip vpn portainer-link" data-container="wikiless" data-tooltip="Manage Wikiless Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
-                </div>
-            </div>
-            <div id="link-memos" data-url="http://$LAN_IP:$PORT_MEMOS" class="card" data-check="true" data-container="memos" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>Memos</h2>
-                    <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
-                        <button onclick="openServiceSettings('memos', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        
-                    </div>
-                </div>
-                <p class="description">A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.</p>
-                <div class="chip-box">
-                    <span class="chip admin portainer-link" data-container="memos" data-tooltip="Manage Memos Container">Direct Access</span>
-                    <button onclick="vacuumServiceDb('memos', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Optimize the database by reclaiming unused space (VACUUM). Highly recommended after large deletions."><span class="material-symbols-rounded">compress</span> Optimize DB</button>
-                
-                    <div id="metrics-memos" class="chip-box" style="padding-top:0; display:none;">
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                    </div></div>
-            </div>
-            <div id="link-rimgo" data-url="http://$LAN_IP:$PORT_RIMGO" class="card" data-check="true" data-container="rimgo" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>Rimgo</h2>
-                    <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
-                        <button onclick="openServiceSettings('rimgo', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        
-                    </div>
-                </div>
-                <p class="description">An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="rimgo" data-tooltip="Manage Rimgo Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
-                    <div id="metrics-rimgo" class="chip-box" style="padding-top:0; display:none;">
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                    </div></div>
-            </div>
-            <div id="link-scribe" data-url="http://$LAN_IP:$PORT_SCRIBE" class="card" data-check="true" data-container="scribe" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>Scribe</h2>
-                    <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
-                        <button onclick="openServiceSettings('scribe', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        
-                    </div>
-                </div>
-                <p class="description">An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="scribe" data-tooltip="Manage Scribe Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
-                    <div id="metrics-scribe" class="chip-box" style="padding-top:0; display:none;">
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                    </div></div>
-            </div>
-            <div id="link-breezewiki" data-url="http://$LAN_IP:$PORT_BREEZEWIKI/" class="card" data-check="true" data-container="breezewiki" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>BreezeWiki</h2>
-                    <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
-                        <button onclick="openServiceSettings('breezewiki', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        
-                    </div>
-                </div>
-                <p class="description">A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="breezewiki" data-tooltip="Manage BreezeWiki Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
-                    <div id="metrics-breezewiki" class="chip-box" style="padding-top:0; display:none;">
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                    </div></div>
-            </div>
-            <div id="link-anonymousoverflow" data-url="http://$LAN_IP:$PORT_ANONYMOUS" class="card" data-check="true" data-container="anonymousoverflow" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>AnonOverflow</h2>
-                    <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
-                        <button onclick="openServiceSettings('anonymousoverflow', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        
-                    </div>
-                </div>
-                <p class="description">A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.</p>
-                <div class="chip-box"><span class="chip vpn portainer-link" data-container="anonymousoverflow" data-tooltip="Manage AnonOverflow Container">Private Instance <span class="material-symbols-rounded move-on-hover" style="font-size:18px;">arrow_forward</span></span>
-                    <div id="metrics-anonymousoverflow" class="chip-box" style="padding-top:0; display:none;">
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                    </div></div>
-            </div>
-            <div id="link-vert" data-url="http://$LAN_IP:$PORT_VERT" class="card" data-check="true" data-container="vert" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>VERT</h2>
-                    <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
-                        <button onclick="openServiceSettings('vert', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        
-                    </div>
-                </div>
-                <p class="description">Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="vert" data-tooltip="Manage VERT Container">Utility</span><span class="chip tertiary" data-tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion"><span class="material-symbols-rounded">memory</span> GPU Accelerated</span>
-                    <div id="metrics-vert" class="chip-box" style="padding-top:0; display:none;">
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                    </div></div>
-            </div>
+        <div id="grid-apps" class="grid">
+            <!-- Dynamic Cards Injected Here -->
         </div>
+        </section>
 
+        <section data-category="system">
         <div class="section-label">System Management</div>
         <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
             <span class="chip category-badge" data-tooltip="Core infrastructure management and gateway orchestration"><span class="material-symbols-rounded">settings_input_component</span> Core Services</span>
         </div>
-        <div class="grid-3">
-            <div id="link-adguard" data-url="http://$LAN_IP:$PORT_ADGUARD_WEB" class="card" data-check="true" data-container="adguard" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>AdGuard Home</h2>
-                    <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
-                        <button onclick="openServiceSettings('adguard', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        
-                    </div>
-                </div>
-                <p class="description">Network-wide advertisement and tracker filtration. Centralizes DNS management to prevent data leakage at the source and ensure complete visibility of network traffic.</p>
-                <div class="chip-box">
-                    <span class="chip admin portainer-link" data-container="adguard" data-tooltip="Manage AdGuard Container">Local Access</span>
-                    <button onclick="clearServiceLogs('adguard', event)" class="chip admin" style="cursor:pointer; border:none;" data-tooltip="Clear the historical DNS query logs to free up space."><span class="material-symbols-rounded">auto_delete</span> Clear Logs</button>
-                    <span class="chip tertiary" data-tooltip="DNS-over-HTTPS/TLS/QUIC support enabled">Encrypted DNS</span>
-                
-                    <div id="metrics-adguard" class="chip-box" style="padding-top:0; display:none;">
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                    </div></div>
-            </div>
-            <div id="link-portainer" data-url="http://$LAN_IP:$PORT_PORTAINER" class="card" data-check="true" data-container="portainer" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>Portainer</h2>
-                    <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
-                        <button onclick="openServiceSettings('portainer', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        
-                    </div>
-                </div>
-                <p class="description">A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="portainer" data-tooltip="Manage Portainer Container">Local Access</span>
-                    <div id="metrics-portainer" class="chip-box" style="padding-top:0; display:none;">
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                    </div></div>
-            </div>
-            <div id="link-wg-easy" data-url="http://$LAN_IP:$PORT_WG_WEB" class="card" data-check="true" data-container="wg-easy" onclick="navigate(this, event)">
-                <div class="card-header">
-                    <h2>WireGuard</h2>
-                    <div class="card-header-actions">
-                        <div class="status-indicator"><span class="status-dot"></span><span class="status-text">Connecting...</span></div>
-                        <button onclick="openServiceSettings('wg-easy', event)" class="btn btn-icon settings-btn" data-tooltip="Service Management & Metrics"><span class="material-symbols-rounded">settings</span></button>
-                        
-                    </div>
-                </div>
-                <p class="description">The primary gateway for <strong>secure remote access</strong>. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.</p>
-                <div class="chip-box"><span class="chip admin portainer-link" data-container="wg-easy" data-tooltip="Manage WireGuard Container">Local Access</span>
-                    <div id="metrics-wg-easy" class="chip-box" style="padding-top:0; display:none;">
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">memory</span> <span class="cpu-val">0%</span></span>
-                        <span class="chip tertiary" style="gap:4px; padding:0 8px; height:24px; font-size:11px;"><span class="material-symbols-rounded" style="font-size:14px;">storage</span> <span class="mem-val">0MB</span></span>
-                    </div></div>
-            </div>
+        <div id="grid-system" class="grid">
+            <!-- Dynamic Cards Injected Here -->
         </div>
+        </section>
 
+        <section data-category="dns">
         <div class="section-label">DNS Configuration</div>
-        <div class="grid-2">
+        <div class="grid">
             <div class="card">
                 <h3>Certificate Status</h3>
                 <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
@@ -5244,12 +5326,17 @@ EOF
 fi
 cat >> "$DASHBOARD_FILE" <<EOF
         </div>
+        </section>
 
-        <div class="section-label">Odido Bundle Booster</div>
-        <div class="grid-2">
+        <section data-category="tools">
+        <div class="section-label">Service Utilities</div>
+        <div id="grid-tools" class="grid">
+            <!-- Dynamic Cards Injected Here -->
+        </div>
+        <div class="grid">
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <h3>Data Status</h3>
+                    <h3>Odido Status</h3>
                     <div id="odido-speed-indicator" class="body-small" style="color: var(--md-sys-color-primary); font-weight: 500; display:none;">0 Mb/s</div>
                 </div>
                 <div id="odido-status-container" style="display: flex; flex-direction: column; height: 100%;">
@@ -5331,7 +5418,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         </div>
 
         <div class="section-label">WireGuard Profiles</div>
-        <div class="grid-2">
+        <div class="grid">
             <div class="card">
                 <h3>Upload Profile</h3>
                 <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;" data-tooltip="Give your profile a recognizable name.">
@@ -5351,7 +5438,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         </div>
 
         <div class="section-label">Customization & Info</div>
-        <div class="grid-2">
+        <div class="grid">
             <div class="card">
                 <div class="card-header">
                     <h3>Theme Customization</h3>
@@ -5419,7 +5506,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace" style="font-size: 12px;">/DATA/AppData/privacy-hub/.secrets</span></div>
                     <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace" style="font-size: 12px;">/DATA/AppData/privacy-hub/config</span></div>
                     <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
-                    <div class="stat-row"><span class="stat-label">Privacy Masking</span><span class="stat-value">Active (Local)</span></div>
+                    <div class="stat-row"><span class="stat-label">Safe Display Mode</span><span class="stat-value">Active (Local)</span></div>
                 </div>
                 <div style="margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <button onclick="checkUpdates()" class="btn btn-tonal" data-tooltip="Check for updates">
@@ -5437,16 +5524,18 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 </div>
             </div>
         </div>
+        </section>
 
+        <section data-category="logs">
         <div class="section-label">System & Logs</div>
-        <div class="grid-2">
+        <div class="grid">
             <div class="card">
                 <div class="card-header">
                     <h3>System Health</h3>
                     <div class="card-header-actions">
-                        <div class="status-indicator" id="health-status-indicator" style="background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant);">
-                            <span class="status-dot up" id="health-dot"></span>
-                            <span class="status-text" id="health-text">Optimal</span>
+                        <div class="status-indicator" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 4px 12px; min-width: auto; margin-right: -8px;">
+                            <span class="status-dot up" id="health-dot" style="background: var(--md-sys-color-on-success-container); box-shadow: none;"></span>
+                            <span class="status-text" id="health-text" style="color: inherit; font-weight: 600;">Optimal</span>
                         </div>
                     </div>
                 </div>
@@ -5454,7 +5543,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     <div class="stat-row"><span class="stat-label">System CPU</span><span class="stat-value" id="sys-cpu">0%</span></div>
                     <div class="metric-bar"><div id="sys-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
                     
-                    <div class="stat-row" style="margin-top:8px;"><span class="stat-label">System RAM</span><span class="stat-value" id="sys-ram">0 / 0 MB</span></div>
+                    <div class="stat-row" style="margin-top:8px;"><span class="stat-label">System RAM</span><span class="stat-value" id="sys-ram">0 MB / 0 MB</span></div>
                     <div class="metric-bar"><div id="sys-ram-fill" class="metric-fill" style="width: 0%"></div></div>
 
                     <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
@@ -5505,7 +5594,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div id="log-status" class="body-small" style="color:var(--md-sys-color-on-surface-variant); text-align:right; margin-top:8px;">Connecting...</div>
             </div>
         </div>
-    </div>
+        </section>
 
     <!-- Setup Wizard removed (Automated Deployment) -->
 
@@ -5563,9 +5652,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 <div class="metric-bar"><div id="modal-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
                 
                 <div class="stat-row" style="margin-top:12px;">
-                    <span class="stat-label">Memory <span id="modal-mem-text" style="float:right; font-family:monospace; opacity:0.8;">0 / 0 MB</span></span>
-                    <span class="stat-value" id="modal-mem" style="display:none;">0 / 0 MB</span>
-                </div>
+                                <span class="stat-label">Memory <span id="modal-mem-text" style="float:right; font-family:monospace; opacity:0.8;">0 MB / 0 MB</span></span>
+                                <span class="stat-value" id="modal-mem" style="display:none;">0 MB / 0 MB</span>                </div>
                 <div class="metric-bar"><div id="modal-mem-fill" class="metric-fill" style="width: 0%"></div></div>
             </div>
             <div id="modal-actions" class="btn-group" style="flex-direction: column; gap: 8px;">
@@ -5575,9 +5663,266 @@ cat >> "$DASHBOARD_FILE" <<EOF
     </div>
 
     <script>
+        // Dynamic Service Rendering
+        let serviceCatalog = {};
+
+        function humanizeServiceId(id) {
+            return id
+                .replace(/[-_]+/g, ' ')
+                .replace(/\b\w/g, (c) => c.toUpperCase());
+        }
+
+        async function loadServiceCatalog() {
+            if (Object.keys(serviceCatalog).length) return serviceCatalog;
+            try {
+                const res = await fetch(API + "/services");
+                const data = await res.json();
+                serviceCatalog = data.services || {};
+            } catch (e) {
+                console.warn("Failed to load service catalog:", e);
+                serviceCatalog = {};
+            }
+            return serviceCatalog;
+        }
+
+        function normalizeServiceMeta(id, meta) {
+            const safe = (meta && typeof meta === 'object') ? meta : {};
+            return {
+                name: safe.name || humanizeServiceId(id),
+                description: safe.description || 'Private service hosted locally.',
+                category: safe.category || 'apps',
+                url: safe.url || '',
+                actions: Array.isArray(safe.actions) ? safe.actions : [],
+                chips: Array.isArray(safe.chips) ? safe.chips : [],
+                order: Number.isFinite(safe.order) ? safe.order : 999
+            };
+        }
+
+        function handleServiceAction(id, action, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            if (!action || !action.type) return;
+            if (action.type === 'migrate') {
+                const mode = action.mode || 'migrate';
+                const confirmFlag = action.confirm ? 'yes' : 'no';
+                migrateService(id, mode, confirmFlag, event);
+                return;
+            }
+            if (action.type === 'vacuum') {
+                vacuumServiceDb(id, event);
+                return;
+            }
+            if (action.type === 'clear-logs') {
+                clearServiceLogs(id, event);
+            }
+        }
+
+        function createActionButton(id, action) {
+            const button = document.createElement('button');
+            button.className = 'chip admin';
+            button.type = 'button';
+            const label = action.label || 'Action';
+            if (action.icon) {
+                const icon = document.createElement('span');
+                icon.className = 'material-symbols-rounded';
+                icon.textContent = action.icon;
+                button.appendChild(icon);
+            }
+            button.appendChild(document.createTextNode(label));
+            button.setAttribute('data-tooltip', label);
+            button.onclick = (e) => handleServiceAction(id, action, e);
+            return button;
+        }
+
+        function createChipElement(id, chip) {
+            const chipEl = document.createElement('span');
+            const isObject = chip && typeof chip === 'object';
+            const label = isObject ? (chip.label || '') : String(chip || '');
+            const variant = isObject ? (chip.variant || '') : 'admin';
+            const classes = ['chip'];
+            if (variant) {
+                variant.split(' ').forEach((c) => c && classes.push(c));
+            }
+            if (!isObject || chip.portainer) {
+                classes.push('portainer-link');
+                chipEl.dataset.container = id;
+            }
+            chipEl.className = classes.join(' ');
+            if (isObject && chip.tooltip) chipEl.setAttribute('data-tooltip', chip.tooltip);
+            if (isObject && chip.icon) {
+                const icon = document.createElement('span');
+                icon.className = 'material-symbols-rounded';
+                icon.textContent = chip.icon;
+                chipEl.appendChild(icon);
+            }
+            chipEl.appendChild(document.createTextNode(label));
+            return chipEl;
+        }
+
+        async function renderDynamicGrid() {
+            try {
+                const [containerRes, catalog] = await Promise.all([
+                    fetch(API + "/containers"),
+                    loadServiceCatalog()
+                ]);
+                const data = await containerRes.json();
+                const activeContainers = data.containers || {};
+                containerIds = activeContainers;
+
+                const appsGrid = document.getElementById('grid-apps');
+                const systemGrid = document.getElementById('grid-system');
+                const toolsGrid = document.getElementById('grid-tools');
+                if (!appsGrid || !systemGrid) return;
+
+                appsGrid.innerHTML = '';
+                systemGrid.innerHTML = '';
+                if (toolsGrid) toolsGrid.innerHTML = '';
+
+                const entries = Object.entries(catalog)
+                    .filter(([id]) => activeContainers[id])
+                    .map(([id, meta]) => [id, normalizeServiceMeta(id, meta)]);
+
+                const buckets = { apps: [], system: [], tools: [] };
+                entries.forEach(([id, meta]) => {
+                    if (!buckets[meta.category]) buckets[meta.category] = [];
+                    buckets[meta.category].push([id, meta]);
+                });
+
+                const sortByOrder = (a, b) => {
+                    const orderDelta = (a[1].order || 999) - (b[1].order || 999);
+                    if (orderDelta !== 0) return orderDelta;
+                    return a[1].name.localeCompare(b[1].name);
+                };
+
+                ['apps', 'system', 'tools'].forEach((category) => {
+                    if (!buckets[category]) return;
+                    buckets[category].sort(sortByOrder).forEach(([id, meta]) => {
+                        const card = createServiceCard(id, meta);
+                        if (category === 'apps') appsGrid.appendChild(card);
+                        if (category === 'system') systemGrid.appendChild(card);
+                        if (category === 'tools' && toolsGrid) toolsGrid.appendChild(card);
+                    });
+                });
+
+                // Update metrics after rendering
+                fetchMetrics();
+            } catch (e) {
+                console.error("Failed to render dynamic grid:", e);
+            }
+        }
+
+        function createServiceCard(id, meta) {
+            const card = document.createElement('div');
+            card.id = \`link-\${id}\`;
+            card.className = 'card';
+            card.dataset.url = meta.url || '';
+            card.dataset.container = id;
+            card.dataset.check = 'true';
+            card.onclick = (e) => navigate(card, e);
+
+            const header = document.createElement('div');
+            header.className = 'card-header';
+
+            const title = document.createElement('h2');
+            title.textContent = meta.name || humanizeServiceId(id);
+
+            const actionsWrap = document.createElement('div');
+            actionsWrap.className = 'card-header-actions';
+
+            const indicator = document.createElement('div');
+            indicator.className = 'status-indicator';
+            const dot = document.createElement('span');
+            dot.className = 'status-dot';
+            const text = document.createElement('span');
+            text.className = 'status-text';
+            text.textContent = 'Connecting...';
+            indicator.appendChild(dot);
+            indicator.appendChild(text);
+
+            const settingsBtn = document.createElement('button');
+            settingsBtn.className = 'btn btn-icon settings-btn';
+            settingsBtn.setAttribute('data-tooltip', 'Service Management & Metrics');
+            settingsBtn.onclick = (e) => openServiceSettings(id, e);
+            const settingsIcon = document.createElement('span');
+            settingsIcon.className = 'material-symbols-rounded';
+            settingsIcon.textContent = 'settings';
+            settingsBtn.appendChild(settingsIcon);
+
+            actionsWrap.appendChild(indicator);
+            actionsWrap.appendChild(settingsBtn);
+
+            header.appendChild(title);
+            header.appendChild(actionsWrap);
+
+            const desc = document.createElement('p');
+            desc.className = 'description';
+            desc.textContent = meta.description || 'Private service hosted locally.';
+
+            const chipBox = document.createElement('div');
+            chipBox.className = 'chip-box';
+
+            if (Array.isArray(meta.actions)) {
+                meta.actions.forEach((action) => {
+                    chipBox.appendChild(createActionButton(id, action));
+                });
+            }
+            if (Array.isArray(meta.chips)) {
+                meta.chips.forEach((chip) => {
+                    chipBox.appendChild(createChipElement(id, chip));
+                });
+            }
+
+            card.appendChild(header);
+            card.appendChild(desc);
+            card.appendChild(chipBox);
+            return card;
+        }
+
+        // Initialize dynamic grid
+        document.addEventListener('DOMContentLoaded', () => {
+            renderDynamicGrid();
+            // Refresh grid occasionally to catch new services
+            setInterval(renderDynamicGrid, 30000);
+        });
+
         const API = "/api"; 
         const ODIDO_API = "/odido-api/api";
         
+        function filterCategory(cat) {
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            const targetChip = document.querySelector(\`.filter-chip[data-target="\${cat}"]\`);
+            if (targetChip) targetChip.classList.add('active');
+            
+            // Show/Hide sections
+            document.querySelectorAll('section[data-category]').forEach(s => {
+                if (cat === 'all' || s.dataset.category === cat) {
+                    s.classList.remove('hidden');
+                    s.style.display = 'block';
+                } else {
+                    s.classList.add('hidden');
+                    s.style.display = 'none';
+                }
+            });
+            
+            // Special handling for mixed sections if any
+            document.querySelectorAll('.card[data-category]').forEach(c => {
+                if (cat === 'all' || c.dataset.category === cat) {
+                    c.style.display = 'flex';
+                } else {
+                    // Only hide if the parent section is NOT already hidden (to avoid double hide)
+                    const section = c.closest('section');
+                    if (section && (cat === 'all' || section.dataset.category === cat)) {
+                        c.style.display = 'none';
+                    }
+                }
+            });
+
+            localStorage.setItem('dashboard_filter', cat);
+            showSnackbar(\`Filtering by: \${cat.charAt(0).toUpperCase() + cat.slice(1)}\`, "Dismiss");
+        }
+
         // Global State & Data
         let containerMetrics = {};
         let containerIds = {};
@@ -5696,7 +6041,12 @@ cat >> "$DASHBOARD_FILE" <<EOF
             title.textContent = name.charAt(0).toUpperCase() + name.slice(1) + " Management";
             
             // Basic actions for all
-            actions.innerHTML = "<button onclick=\"updateService('" + name + "')\" class=\"btn btn-tonal\" style=\"width:100%\"><span class=\"material-symbols-rounded\">update</span> Update Service</button><p class=\"body-small\" style=\"margin: 4px 0 12px 0; color: var(--md-sys-color-on-surface-variant);\">Note: Updates may cause temporary high CPU/RAM usage during build.</p><button onclick=\"window.open(PORTAINER_URL + '/#!/1/docker/containers/' + (containerIds[name] || ''), '_blank')\" class=\"btn btn-outlined\" style=\"width:100%\"><span class=\"material-symbols-rounded\">dock</span> View in Portainer</button>";
+            const cid = containerIds[name];
+            const portainerLink = cid ?
+                PORTAINER_URL + "/#!/1/docker/containers/" + cid :
+                PORTAINER_URL + "/#!/1/docker/containers";
+            
+            actions.innerHTML = \`<button onclick="updateService('\${name}')" class="btn btn-tonal" style="width:100%"><span class="material-symbols-rounded">update</span> Update Service</button><p class="body-small" style="margin: 4px 0 12px 0; color: var(--md-sys-color-on-surface-variant);">Note: Updates may cause temporary high CPU/RAM usage during build.</p><button onclick="window.open('\${portainerLink}', '_blank')" class="btn btn-outlined" style="width:100%"><span class="material-symbols-rounded">dock</span> View in Portainer</button>\`;
 
             // Specialized actions
             if (name === 'invidious') {
@@ -5725,7 +6075,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const mem = parseFloat(m.mem) || 0;
                 const limit = parseFloat(m.limit) || 1;
                 const memPercent = Math.min(100, (mem / limit) * 100);
-                document.getElementById('modal-mem-text').textContent = Math.round(mem) + " / " + Math.round(limit) + " MB";
+                document.getElementById('modal-mem-text').textContent = Math.round(mem) + " MB / " + Math.round(limit) + " MB";
                 document.getElementById('modal-mem-fill').style.width = memPercent + "%";
             }
         }
@@ -5838,29 +6188,40 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const selected = Array.from(checkboxes).map(cb => cb.value);
             
             if (selected.length === 0) {
-                alert("No services selected.");
+                showSnackbar("No services selected.", "Dismiss");
                 return;
             }
 
-            if (!confirm("Update " + selected.length + " services? This will trigger backups, updates, migrations, and vacuuming.")) return;
+            if (!confirm("Update " + selected.length + " services? This will trigger backups, updates, and rebuilds (Expect high CPU usage).")) return;
             
             closeUpdateModal();
-            showSnackbar("Batch update initiated for " + selected.length + " services.");
+            showSnackbar(\`Batch update initiated for \${selected.length} services. Rebuilding in background...\`, "Dismiss");
             
             try {
                 const headers = { 'Content-Type': 'application/json' };
                 if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                await fetch(API + "/batch-update", {
+                const res = await fetch(API + "/batch-update", {
                     method: 'POST',
                     headers,
                     body: JSON.stringify({ services: selected })
                 });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                showSnackbar("Batch update request accepted. Check logs for detailed progress.", "OK");
             } catch(e) {
-                showSnackbar("Update failed: " + e.message);
+                showSnackbar("Batch update failed: " + e.message, "Error");
             }
         }
 
         async function updateService(name) {
+            const btn = event?.target.closest('button');
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = \`<span class="material-symbols-rounded" style="animation: spin 2s linear infinite;">sync</span> Updating...\`;
+            }
+            showSnackbar(\`Initiating update for \${name}...\`, "Dismiss");
+
             try {
                 const headers = { 'Content-Type': 'application/json' };
                 if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
@@ -5871,10 +6232,17 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
+                
+                showSnackbar(\`\${name} update complete.\`, "Success");
                 return true;
             } catch(e) {
-                alert("Failed to update " + name + ": " + e.message);
+                showSnackbar(\`Update failed: \${e.message}\`, "Error");
                 return false;
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
             }
         }
         async function migrateService(name, event) {
@@ -6188,16 +6556,6 @@ cat >> "$DASHBOARD_FILE" <<EOF
                                 }
                             }
 
-                            // Update Metrics if available
-                            const metricsBox = document.getElementById('metrics-' + name);
-                            if (metricsBox && containerMetrics[name]) {
-                                const m = containerMetrics[name];
-                                metricsBox.style.display = 'flex';
-                                const cpuEl = metricsBox.querySelector('.cpu-val');
-                                const memEl = metricsBox.querySelector('.mem-val');
-                                if (cpuEl) cpuEl.textContent = m.cpu;
-                                if (memEl) memEl.textContent = m.mem;
-                            }
                         }
                     }
                 }
@@ -6502,7 +6860,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
                     const delBtn = document.createElement('button');
                     delBtn.className = 'btn btn-icon';
-                    delBtn.style.color = 'var(--md-sys-color-error)';
+                    delBtn.style.color = 'var(--md-sys-color-on-surface-variant)';
                     delBtn.title = 'Delete';
                     delBtn.innerHTML = '<span class="material-symbols-rounded">delete</span>';
                     delBtn.onclick = function(e) { e.stopPropagation(); deleteProfile(p); };
@@ -6585,10 +6943,18 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     logData = { message: line, level: 'INFO', category: 'SYSTEM', timestamp: '' };
                 }
 
+                // Apply active filters
+                const filterLevel = document.getElementById('log-filter-level').value;
+                const filterCat = document.getElementById('log-filter-cat').value;
+                if (filterLevel !== 'ALL' && logData.level !== filterLevel) return null;
+                if (filterCat !== 'ALL' && logData.category !== filterCat) return null;
+
                 // Filter out common noise
                 const m = logData.message || "";
-                if (m.includes('GET /status') || m.includes('GET /metrics') || m.includes('GET /containers') || m.includes('GET /updates') || m.includes('GET /logs') || m.includes('GET /certificate-status') || m.includes('HTTP/1.1" 200') || m.includes('HTTP/1.1" 304')) {
-                    return null;
+                if (m.includes('HTTP/1.1" 200') || m.includes('HTTP/1.1" 304')) {
+                    // Only filter if it doesn't match a known humanization pattern
+                    const knownPatterns = ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /theme', 'GET /system-health', 'GET /profiles'];
+                    if (!knownPatterns.some(p => m.includes(p))) return null;
                 }
                 
                 const div = document.createElement('div');
@@ -6598,6 +6964,24 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 let iconColor = 'var(--md-sys-color-primary)';
                 let message = logData.message;
                 let timestamp = logData.timestamp;
+
+                // Humanization logic
+                if (message.includes('GET /system-health')) message = 'System telemetry synchronized';
+                if (message.includes('POST /update-service')) message = 'Service update initiated';
+                if (message.includes('POST /theme')) message = 'UI theme preferences saved';
+                if (message.includes('GET /theme')) message = 'UI theme assets synchronized';
+                if (message.includes('GET /profiles')) message = 'VPN profiles synchronized';
+                if (message.includes('POST /activate')) message = 'VPN profile switch triggered';
+                if (message.includes('Watchtower Notification')) message = 'Container update availability checked';
+                if (message.includes('GET /status')) message = 'Service health status refreshed';
+                if (message.includes('GET /metrics')) message = 'Performance metrics updated';
+                if (message.includes('POST /batch-update')) message = 'Batch update sequence started';
+                if (message.includes('GET /updates')) message = 'Checking repository update status';
+                if (message.includes('POST /config-desec')) message = 'deSEC dynamic DNS updated';
+                if (message.includes('GET /certificate-status')) message = 'SSL certificate validity checked';
+                if (message.includes('GET /containers')) message = 'Container orchestration state audited';
+                if (message.includes('GET /logs')) message = 'System logs retrieved';
+                if (message.includes('GET /events')) message = 'Live log stream connection established';
 
                 // Category based icons
                 if (logData.category === 'NETWORK') icon = 'lan';
@@ -7273,7 +7657,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 if(sysCpuFill) sysCpuFill.style.width = cpu + "%";
                 
                 const sysRam = document.getElementById('sys-ram');
-                if(sysRam) sysRam.textContent = ramUsed + " / " + ramTotal + " MB";
+                if(sysRam) sysRam.textContent = ramUsed + " MB / " + ramTotal + " MB";
                 const sysRamFill = document.getElementById('sys-ram-fill');
                 if(sysRamFill) sysRamFill.style.width = ramPct + "%";
                 
@@ -7392,6 +7776,14 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 apiKeyInput.value = odidoApiKey;
             }
             
+            // Restore filter and check HTTPS
+            const savedFilter = localStorage.getItem('dashboard_filter') || 'all';
+            filterCategory(savedFilter);
+            if (window.location.protocol === 'https:') {
+                const badge = document.getElementById('https-badge');
+                if (badge) badge.style.display = 'inline-flex';
+            }
+
             initPrivacyMode();
             initTheme();
             initStaticPresets();
