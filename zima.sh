@@ -20,7 +20,7 @@ set -euo pipefail
 
 # --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
 usage() {
-    echo "Usage: $0 [-c (reset environment)] [-x (cleanup and exit)] [-p (auto-passwords)] [-y (auto-confirm)] [-s services] [-h]"
+    echo "Usage: $0 [-c (reset environment)] [-x (cleanup and exit)] [-p (auto-passwords)] [-y (auto-confirm)] [-a (allowlist ProtonVPN/deSEC)] [-s services] [-h]"
 }
 
 FORCE_CLEAN=false
@@ -29,14 +29,16 @@ AUTO_PASSWORD=false
 CLEAN_EXIT=false
 RESET_ENV=false
 AUTO_CONFIRM=false
+ALLOWLIST_PERSONAL=false
 SELECTED_SERVICES=""
 
-while getopts "cxpys:h" opt; do
+while getopts "cxpyas:h" opt; do
     case ${opt} in
         c) RESET_ENV=true; FORCE_CLEAN=true ;;
         x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
         p) AUTO_PASSWORD=true ;;
         y) AUTO_CONFIRM=true ;;
+        a) ALLOWLIST_PERSONAL=true ;;
         s) SELECTED_SERVICES="${OPTARG}" ;;
         h) 
             usage
@@ -269,7 +271,7 @@ setup_assets() {
 
     # Material Color Utilities (Local for privacy)
     log_info "Downloading Material Color Utilities..."
-    if ! curl -fsSL -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.2.7/dist/material-color-utilities.min.js" -o "$ASSETS_DIR/mcu.js"; then
+    if ! curl -fsSL -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/dist/material-color-utilities.min.js" -o "$ASSETS_DIR/mcu.js"; then
         log_warn "Failed to download Material Color Utilities. Using fallback logic."
     fi
 
@@ -987,6 +989,8 @@ cat > "$GLUETUN_ENV_FILE" <<EOF
 VPN_SERVICE_PROVIDER=custom
 VPN_TYPE=wireguard
 HTTPPROXY=on
+HTTP_CONTROL_SERVER_AUTH_USER=gluetun
+HTTP_CONTROL_SERVER_AUTH_PASSWORD=$ADMIN_PASS_RAW
 FIREWALL_VPN_INPUT_PORTS=8080,8180,3000,3002,8280,10416,8480
 FIREWALL_OUTBOUND_SUBNETS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 EOF
@@ -1260,15 +1264,40 @@ tls:
   certificate_path: /opt/adguardhome/conf/ssl.crt
   private_key_path: /opt/adguardhome/conf/ssl.key
   allow_unencrypted_doh: false
-user_rules:
-  - "@@||getproton.me^"
-  - "@@||vpn-api.proton.me^"
-  - "@@||protonstatus.com^"
-  - "@@||protonvpn.ch^"
-  - "@@||protonvpn.com^"
-  - "@@||protonvpn.net^"
-  - "@@||dns.desec.io^"
-  - "@@||desec.io^"
+user_rules: []
+EOF
+
+if [ "$ALLOWLIST_PERSONAL" = true ]; then
+    log_info "Applying personal usage allowlist for ProtonVPN and deSEC (Note: This may affect DNS isolation)."
+    # Add rules to the user_rules list in the yaml
+    # We use python to safely append to the list in the YAML we just created
+    $PYTHON_CMD - "$AGH_YAML" <<'PY'
+import sys
+import yaml
+
+with open(sys.argv[1], 'r') as f:
+    config = yaml.safe_load(f)
+
+if 'user_rules' not in config:
+    config['user_rules'] = []
+
+config['user_rules'].extend([
+    "@@||getproton.me^",
+    "@@||vpn-api.proton.me^",
+    "@@||protonstatus.com^",
+    "@@||protonvpn.ch^",
+    "@@||protonvpn.com^",
+    "@@||protonvpn.net^",
+    "@@||dns.desec.io^",
+    "@@||desec.io^"
+])
+
+with open(sys.argv[1], 'w') as f:
+    yaml.dump(config, f)
+PY
+fi
+
+cat >> "$AGH_YAML" <<EOF
   # Default DNS blocklist powered by sleepy list ([Lyceris-chan/dns-blocklist-generator](https://github.com/Lyceris-chan/dns-blocklist-generator))
 filters:
   - enabled: true
@@ -1882,7 +1911,7 @@ elif [ "$ACTION" = "status" ]; then
         # API docs: https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
         
         # Get VPN status from control server
-        VPN_STATUS_RESPONSE=$(docker exec gluetun wget -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
+        VPN_STATUS_RESPONSE=$(docker exec gluetun wget --user=gluetun --password="$ADMIN_PASS_RAW" -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
         if [ -n "$VPN_STATUS_RESPONSE" ]; then
             # Extract status from {"status":"running"} or {"status":"stopped"}
             VPN_RUNNING=$(echo "$VPN_STATUS_RESPONSE" | grep -o '"status":"running"' || echo "")
@@ -1900,7 +1929,7 @@ elif [ "$ACTION" = "status" ]; then
         fi
         
         # Get public IP from control server
-        PUBLIC_IP_RESPONSE=$(docker exec gluetun wget -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
+        PUBLIC_IP_RESPONSE=$(docker exec gluetun wget --user=gluetun --password="$ADMIN_PASS_RAW" -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
         if [ -n "$PUBLIC_IP_RESPONSE" ]; then
             # Extract IP from {"public_ip":"x.x.x.x"}
             EXTRACTED_IP=$(echo "$PUBLIC_IP_RESPONSE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
@@ -3104,10 +3133,6 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 pass
 
     def do_POST(self):
-        if not self._check_auth():
-            self._send_json({"error": "Unauthorized"}, 401)
-            return
-
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length).decode('utf-8')
         
@@ -3115,6 +3140,19 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             data = json.loads(post_data)
         except:
             data = {}
+
+        if self.path == '/verify-admin':
+            password = data.get('password')
+            expected_admin = os.environ.get('ADMIN_PASS_RAW')
+            if expected_admin and password == expected_admin:
+                self._send_json({"success": True})
+            else:
+                self._send_json({"error": "Invalid admin password"}, 401)
+            return
+
+        if not self._check_auth():
+            self._send_json({"error": "Unauthorized"}, 401)
+            return
 
         if self.path == '/watchtower' and self.command == 'POST':
             try:
@@ -3635,6 +3673,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$CONFIG_DIR/services.json:/app/services.json"
     environment:
       - HUB_API_KEY=$ODIDO_API_KEY
+      - ADMIN_PASS_RAW=$ADMIN_PASS_RAW
       - DOCKER_CONFIG=/root/.docker
     entrypoint: ["/bin/sh", "-c", "mkdir -p /app && touch /app/deployment.log /app/.data_usage /app/.wge_data_usage && python3 -u /app/server.py"]
     healthcheck:
@@ -3742,7 +3781,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$GLUETUN_ENV_FILE"
     healthcheck:
       # Check both the control server and actual VPN tunnel connectivity
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/v1/vpn/status | grep -q '\"status\":\"running\"' && wget -U \"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\" --spider -q --timeout=5 http://connectivity-check.ubuntu.com || exit 1"]
+      test: ["CMD-SHELL", "wget --user=gluetun --password=$ADMIN_PASS_RAW -qO- http://127.0.0.1:8000/v1/vpn/status | grep -q '\"status\":\"running\"' && wget -U \"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\" --spider -q --timeout=5 http://connectivity-check.ubuntu.com || exit 1"]
       interval: 1m
       timeout: 10s
       retries: 3
@@ -4220,6 +4259,24 @@ cat > "$DASHBOARD_FILE" <<EOF
             -webkit-font-smoothing: subpixel-antialiased;
         }
         
+        /* Admin Mode Controls */
+        .admin-only {
+            display: none !important;
+        }
+        body.admin-mode .admin-only {
+            display: flex !important;
+        }
+        body.admin-mode .admin-only.btn-icon {
+            display: inline-flex !important;
+        }
+        body.admin-mode .admin-only.chip {
+            display: inline-flex !important;
+        }
+        body.admin-mode .admin-only.section-label, 
+        body.admin-mode .admin-only.section-hint {
+            display: block !important;
+        }
+        
         .filter-bar {
             display: flex;
             gap: 8px;
@@ -4613,7 +4670,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             align-items: center;
             margin-bottom: 16px;
             gap: 12px;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
         }
 
         .card-header h2 {
@@ -4675,7 +4732,8 @@ cat > "$DASHBOARD_FILE" <<EOF
         /* MD3 Assist Chips - Intelligent Auto-layout */
         .chip-box { 
             display: flex;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
+            overflow-x: auto;
             gap: 8px; 
             padding-top: 12px;
             position: relative;
@@ -4683,6 +4741,12 @@ cat > "$DASHBOARD_FILE" <<EOF
             align-items: center;
             margin-top: auto;
             width: 100%;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .chip-box::-webkit-scrollbar {
+            display: none;
         }
         
         .chip {
@@ -4757,7 +4821,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             font-size: 12px;
             color: var(--md-sys-color-on-surface-variant);
             width: fit-content;
-            min-width: 100px;
+            min-width: auto;
             flex-shrink: 0;
         }
         
@@ -4946,6 +5010,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             border-radius: var(--md-sys-shape-corner-large);
             padding: 16px;
             flex-grow: 1;
+            max-height: 400px;
             overflow-y: auto;
             font-size: 13px;
             color: var(--md-sys-color-on-surface-variant);
@@ -5197,6 +5262,9 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <div class="theme-toggle" onclick="toggleTheme()" data-tooltip="Switch between Light and Dark mode">
                         <span class="material-symbols-rounded" id="theme-icon">light_mode</span>
                     </div>
+                    <div class="theme-toggle" id="admin-lock-btn" onclick="toggleAdminMode()" data-tooltip="Enter Admin Mode to manage services">
+                        <span class="material-symbols-rounded" id="admin-icon">admin_panel_settings</span>
+                    </div>
                 </div>
             </div>
         </header>
@@ -5207,10 +5275,10 @@ cat > "$DASHBOARD_FILE" <<EOF
             <div class="chip filter-chip" data-target="system" onclick="filterCategory('system')">Infrastructure</div>
             <div class="chip filter-chip" data-target="dns" onclick="filterCategory('dns')">DNS & Security</div>
             <div class="chip filter-chip" data-target="tools" onclick="filterCategory('tools')">Utilities</div>
-            <div class="chip filter-chip" data-target="logs" onclick="filterCategory('logs')">System Logs</div>
+            <div class="chip filter-chip admin-only" data-target="logs" onclick="filterCategory('logs')">System Logs</div>
         </div>
 
-        <div id="update-banner" style="display:none; margin-bottom: 32px;">
+        <div id="update-banner" class="admin-only" style="display:none; margin-bottom: 32px; width: 100%;">
             <div class="card" style="min-height: auto; padding: 24px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;">
                     <div>
@@ -5294,7 +5362,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     </button>
                 </div>
             </div>
-            <div class="card">
+            <div class="card admin-only">
                 <h3>deSEC Configuration</h3>
                 <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
                 <form onsubmit="saveDesecConfig(); return false;">
@@ -5447,7 +5515,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
                         <div id="odido-buy-status" class="body-small" style="text-align: center; margin-top: 8px; font-weight: 500;"></div>
                         <div class="btn-group" style="justify-content:center; margin-top: 16px;">
-                            <button onclick="buyOdidoBundle()" class="btn btn-tertiary" id="odido-buy-btn">Buy Bundle</button>
+                            <button onclick="buyOdidoBundle()" class="btn btn-tertiary admin-only" id="odido-buy-btn">Buy Bundle</button>
                             <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh Status</button>
                             <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
                         </div>
@@ -5461,7 +5529,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
             </div>
-            <div class="card">
+            <div class="card admin-only">
                 <h3>Configuration</h3>
                 <p class="body-medium description">Authentication and automation settings for backend services:</p>
                 <form onsubmit="saveOdidoConfig(); return false;">
@@ -5486,13 +5554,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
         <div class="section-label">WireGuard Profiles</div>
         <div class="grid">
-            <div class="card">
+            <div class="card admin-only">
                 <h3>Upload Profile</h3>
                 <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;" data-tooltip="Give your profile a recognizable name.">
                 <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..." style="margin-bottom:16px;" data-tooltip="Paste the contents of your WireGuard .conf file."></textarea>
                 <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile. The VPN service will automatically restart to apply the new configuration (~15 seconds).">Upload & Activate</button></div>
             </div>
-            <div class="card profile-card">
+            <div class="card profile-card admin-only">
                 <h3 data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available Profiles</h3>
                 <div id="profile-list" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; min-height: 100px;">
                     <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
@@ -5506,7 +5574,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
         <div class="section-label">Customization & Info</div>
         <div class="grid">
-            <div class="card">
+            <div class="card admin-only">
                 <div class="card-header">
                     <h3>Theme Customization</h3>
                     <div class="card-header-actions">
@@ -5575,7 +5643,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
                     <div class="stat-row"><span class="stat-label">Safe Display Mode</span><span class="stat-value">Active (Local)</span></div>
                 </div>
-                <div style="margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="admin-only" style="margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <button onclick="checkUpdates()" class="btn btn-tonal" data-tooltip="Check for updates">
                         <span class="material-symbols-rounded">system_update_alt</span> Check
                     </button>
@@ -5788,7 +5856,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
         function createActionButton(id, action) {
             const button = document.createElement('button');
-            button.className = 'chip admin';
+            button.className = 'chip admin admin-only';
             button.type = 'button';
             const label = action.label || 'Action';
             if (action.icon) {
@@ -5811,6 +5879,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const classes = ['chip'];
             if (variant) {
                 variant.split(' ').forEach((c) => c && classes.push(c));
+                if (variant.includes('admin')) classes.push('admin-only');
             }
             if (!isObject || chip.portainer) {
                 classes.push('portainer-link');
@@ -5909,7 +5978,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             indicator.appendChild(text);
 
             const settingsBtn = document.createElement('button');
-            settingsBtn.className = 'btn btn-icon settings-btn';
+            settingsBtn.className = 'btn btn-icon settings-btn admin-only';
             settingsBtn.setAttribute('data-tooltip', 'Service Management & Metrics');
             settingsBtn.onclick = (e) => openServiceSettings(id, e);
             const settingsIcon = document.createElement('span');
@@ -5987,13 +6056,61 @@ cat >> "$DASHBOARD_FILE" <<EOF
             });
 
             localStorage.setItem('dashboard_filter', cat);
+            syncSettings();
             showSnackbar(\`Filtering by: \${cat.charAt(0).toUpperCase() + cat.slice(1)}\`, "Dismiss");
         }
 
         // Global State & Data
+        let isAdmin = localStorage.getItem('is_admin') === 'true';
         let containerMetrics = {};
         let containerIds = {};
         let pendingUpdates = [];
+
+        function updateAdminUI() {
+            document.body.classList.toggle('admin-mode', isAdmin);
+            const icon = document.getElementById('admin-icon');
+            if (icon) {
+                icon.textContent = isAdmin ? 'admin_panel_settings' : 'lock_person';
+                icon.parentElement.style.background = isAdmin ? 'var(--md-sys-color-primary-container)' : '';
+                icon.style.color = isAdmin ? 'var(--md-sys-color-on-primary-container)' : 'inherit';
+            }
+            const btn = document.getElementById('admin-lock-btn');
+            if (btn) btn.dataset.tooltip = isAdmin ? "Exit Admin Mode" : "Enter Admin Mode";
+        }
+
+        async function toggleAdminMode() {
+            if (isAdmin) {
+                if (confirm("Exit Admin Mode? Management features will be hidden.")) {
+                    isAdmin = false;
+                    localStorage.setItem('is_admin', 'false');
+                    updateAdminUI();
+                    syncSettings();
+                    showSnackbar("Admin Mode disabled");
+                }
+            } else {
+                const pass = prompt("Enter Admin Password to enable management features:");
+                if (!pass) return;
+                
+                try {
+                    const res = await fetch(API + "/verify-admin", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: pass })
+                    });
+                    if (res.ok) {
+                        isAdmin = true;
+                        localStorage.setItem('is_admin', 'true');
+                        updateAdminUI();
+                        syncSettings();
+                        showSnackbar("Admin Mode enabled. Management tools unlocked.", "Dismiss");
+                    } else {
+                        showSnackbar("Authentication failed: Invalid password", "Retry");
+                    }
+                } catch(e) {
+                    showSnackbar("Error connecting to auth service");
+                }
+            }
+        }
         let realProfileName = '';
         let maskedProfileId = '';
         const profileMaskMap = {};
@@ -6096,16 +6213,19 @@ cat >> "$DASHBOARD_FILE" <<EOF
             } catch(e) {}
         }
 
-        function openServiceSettings(name, e) {
+        async function openServiceSettings(name, e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
-            showServiceModal(name);
+            await showServiceModal(name);
         }
 
-        function showServiceModal(name) {
+        async function showServiceModal(name) {
             const modal = document.getElementById('service-modal');
             const title = document.getElementById('modal-service-name');
             const actions = document.getElementById('modal-actions');
             title.textContent = name.charAt(0).toUpperCase() + name.slice(1) + " Management";
+            
+            // Ensure we have the latest IDs
+            await fetchContainerIds();
             
             // Basic actions for all
             const cid = containerIds[name];
@@ -7147,6 +7267,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             if (hexEl) hexEl.textContent = hex.toUpperCase();
             const colors = generateM3Palette(hex);
             applyThemeColors(colors);
+            await syncSettings();
         }
 
         function renderThemePreset(seedHex) {
@@ -7385,20 +7506,35 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
         }
 
-        async function saveThemeSettings() {
+        async function syncSettings() {
             const seed = document.getElementById('theme-seed-color').value;
-            const colors = generateM3Palette(seed);
+            const isLight = document.documentElement.classList.contains('light-mode');
+            const isPrivacy = document.body.classList.contains('privacy-mode');
+            const activeFilter = localStorage.getItem('dashboard_filter') || 'all';
+            
+            const settings = {
+                seed,
+                theme: isLight ? 'light' : 'dark',
+                privacy_mode: isPrivacy,
+                dashboard_filter: activeFilter,
+                is_admin: isAdmin,
+                timestamp: Date.now()
+            };
+
             try {
                 const headers = { 'Content-Type': 'application/json' };
                 if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                const res = await fetch(API + "/theme", {
+                await fetch(API + "/theme", {
                     method: 'POST',
                     headers,
-                    body: JSON.stringify({ seed, colors })
+                    body: JSON.stringify(settings)
                 });
-                if (res.ok) showSnackbar("Theme settings saved to server");
-                else throw new Error("Failed to save");
-            } catch(e) { showSnackbar("Error saving theme: " + e.message); }
+            } catch(e) { console.warn("Failed to sync settings to server", e); }
+        }
+
+        async function saveThemeSettings() {
+            await syncSettings();
+            showSnackbar("Settings synchronized to server");
         }
 
         async function uninstallStack() {
@@ -7422,17 +7558,49 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
         }
 
-        async function loadThemeSettings() {
+        async function loadAllSettings() {
             try {
                 const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
                 const res = await fetch(API + "/theme", { headers });
                 const data = await res.json();
+                
+                // 1. Seed & Colors
                 if (data.seed) {
                     const picker = document.getElementById('theme-seed-color');
                     if (picker) picker.value = data.seed;
-                    applyThemeColors(data.colors);
+                    applyThemeColors(data.colors || generateM3Palette(data.seed));
                 }
-            } catch(e) {}
+                
+                // 2. Theme (Light/Dark)
+                if (data.theme) {
+                    const isLight = data.theme === 'light';
+                    document.documentElement.classList.toggle('light-mode', isLight);
+                    localStorage.setItem('theme', data.theme);
+                    updateThemeIcon();
+                }
+                
+                // 3. Privacy Mode
+                if (data.hasOwnProperty('privacy_mode')) {
+                    const toggle = document.getElementById('privacy-switch');
+                    if (toggle) toggle.classList.toggle('active', data.privacy_mode);
+                    document.body.classList.toggle('privacy-mode', data.privacy_mode);
+                    localStorage.setItem('privacy_mode', data.privacy_mode ? 'true' : 'false');
+                    updateProfileDisplay();
+                }
+                
+                // 4. Dashboard Filter
+                if (data.dashboard_filter) {
+                    localStorage.setItem('dashboard_filter', data.dashboard_filter);
+                    filterCategory(data.dashboard_filter);
+                }
+
+                // 5. Admin Mode
+                if (data.hasOwnProperty('is_admin')) {
+                    isAdmin = data.is_admin;
+                    localStorage.setItem('is_admin', isAdmin ? 'true' : 'false');
+                    updateAdminUI();
+                }
+            } catch(e) { console.warn("Failed to load settings from server", e); }
         }
 
         function hexToRgb(hex) {
@@ -7495,6 +7663,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 applySeedColor(picker.value);
             }
             
+            syncSettings();
             showSnackbar(\`Switched to \${isLight ? 'Light' : 'Dark'} mode\`);
         }
 
@@ -7527,6 +7696,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 localStorage.setItem('privacy_mode', 'false');
             }
             updateProfileDisplay();
+            syncSettings();
         }
         
         function initPrivacyMode() {
@@ -7862,7 +8032,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
             initTheme();
             initStaticPresets();
             fetchContainerIds();
-            fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates(); fetchMetrics(); loadThemeSettings(); fetchSystemHealth();
+            updateAdminUI();
+            fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates(); fetchMetrics(); loadAllSettings(); fetchSystemHealth();
             setInterval(fetchStatus, 15000);
             setInterval(fetchSystemHealth, 15000);
             setInterval(fetchMetrics, 30000);
@@ -8083,6 +8254,7 @@ Name,URL,Username,Password,Note
 AdGuard Home,http://$LAN_IP:$PORT_ADGUARD_WEB,adguard,$AGH_PASS_RAW,Network-wide advertisement and tracker filtration.
 WireGuard VPN UI,http://$LAN_IP:$PORT_WG_WEB,admin,$VPN_PASS_RAW,WireGuard remote access management interface.
 Portainer UI,http://$LAN_IP:$PORT_PORTAINER,portainer,$ADMIN_PASS_RAW,Docker container management interface.
+Gluetun Control Server,http://$LAN_IP:8000,gluetun,$ADMIN_PASS_RAW,Internal VPN gateway control API.
 deSEC DNS API,,$DESEC_DOMAIN,$DESEC_TOKEN,API token for deSEC dynamic DNS management.
 GitHub Scribe Token,,$SCRIBE_GH_USER,$SCRIBE_GH_TOKEN,GitHub Personal Access Token for Scribe Medium frontend.
 EOF

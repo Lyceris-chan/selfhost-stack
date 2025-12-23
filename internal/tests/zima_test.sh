@@ -3381,12 +3381,22 @@ cat > "$DASHBOARD_FILE" <<EOF
         
         /* MD3 Assist Chips */
         .chip-box { 
-            display: flex; 
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
             gap: 8px; 
-            flex-wrap: wrap; 
             padding-top: 12px;
             position: relative;
             z-index: 2;
+            align-items: center;
+            margin-top: auto;
+            width: 100%;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .chip-box::-webkit-scrollbar {
+            display: none;
         }
         
         .chip {
@@ -3644,7 +3654,8 @@ cat > "$DASHBOARD_FILE" <<EOF
             background: var(--md-sys-color-surface-container-highest);
             border-radius: var(--md-sys-shape-corner-large);
             padding: 16px;
-            height: 320px;
+            flex-grow: 1;
+            max-height: 400px;
             overflow-y: auto;
             font-size: 13px;
             color: var(--md-sys-color-on-surface-variant);

@@ -23,7 +23,7 @@
 - [x] Ensure this works with and without -p flag
 
 - [x] check if everything works stimulate interactions and that the layout works properly and is aligned properly strictly following m3.material.io rules for the grids spacing chips everything 
-
+- [x] System logs on dashboard scroll correctly (fixed max-height implemented)
 ---
 
 ## Technical Investigations

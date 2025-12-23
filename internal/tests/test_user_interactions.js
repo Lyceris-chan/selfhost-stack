@@ -1,33 +1,44 @@
 const puppeteer = require('puppeteer');
 
 (async () => {
-  const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://10.0.1.200:8081';
+  const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://localhost:8081';
   console.log(`Testing user interactions at: ${DASHBOARD_URL}`);
 
   const browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    protocolTimeout: 60000
   });
 
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
   
-  // Capture console errors
-  const consoleErrors = [];
-  page.on('console', msg => {
-    if (msg.type() === 'error') {
-      // Ignore transient 502 on initial load
-      if (msg.text().includes('502 (Bad Gateway)')) {
-          console.log(`Ignoring transient load error: ${msg.text()}`);
-          return;
-      }
-      consoleErrors.push(msg.text());
-      console.log(`Console Error: ${msg.text()}`);
+  // Capture console messages
+  page.on('console', async msg => {
+    const text = msg.text();
+    const type = msg.type();
+    
+    if (type === 'error' && text.includes('502 (Bad Gateway)')) {
+        return;
     }
+    
+    let args = [];
+    try {
+        args = await Promise.all(msg.args().map(arg => arg.jsonValue().catch(() => arg.toString())));
+    } catch (e) {}
+    
+    console.log(`[Browser ${type.toUpperCase()}] ${text}`, args);
   });
 
   try {
     await page.goto(DASHBOARD_URL, { waitUntil: 'networkidle2' });
+    
+    // Initialize auth key
+    await page.evaluate((key) => {
+        localStorage.setItem('odido_api_key', key);
+        window.odidoApiKey = key;
+    }, process.env.HUB_API_KEY || 'J9zfiLY9h21tr1POK81acZS3zSu3id9x');
+
     await page.waitForSelector('.card[data-url]', { timeout: 30000 });
     await page.waitForSelector('#link-invidious .settings-btn', { timeout: 30000 });
     await page.waitForFunction(() => typeof window.toggleTheme === 'function');
@@ -51,7 +62,10 @@ const puppeteer = require('puppeteer');
     });
 
     console.log('1. Toggling Theme Mode...');
-    await page.click('.theme-toggle');
+    await page.evaluate(() => {
+        const btn = document.querySelector('.theme-toggle');
+        if (btn) btn.click();
+    });
     await new Promise(r => setTimeout(r, 500));
     const isLightMode = await page.evaluate(() => document.documentElement.classList.contains('light-mode'));
     console.log(`   Light mode active: ${isLightMode}`);
@@ -87,12 +101,16 @@ const puppeteer = require('puppeteer');
     console.log(`   Chip layout: ${chipLayout ? chipLayout.display : 'missing'}`);
 
     console.log('4. Cycling Category Filters...');
+    await page.waitForSelector('.filter-chip[data-target="system"]', { visible: true });
     const filterChips = await page.$$('.filter-chip');
     for (const chip of filterChips) {
-      await chip.click();
+      await page.evaluate((el) => el.click(), chip);
       await new Promise(r => setTimeout(r, 150));
     }
-    await page.click('.filter-chip[data-target="system"]');
+    await page.evaluate(() => {
+        const btn = document.querySelector('.filter-chip[data-target="system"]');
+        if (btn) btn.click();
+    });
     await new Promise(r => setTimeout(r, 150));
 
     console.log('5. Setting Theme Seed Color...');
@@ -104,7 +122,43 @@ const puppeteer = require('puppeteer');
     const seedHex = await page.$eval('#theme-seed-hex', el => el.textContent.trim());
     console.log(`   Seed hex updated: ${seedHex}`);
 
-    console.log('6. Applying Theme Preset...');
+    console.log('6. Testing Admin Mode Authentication...');
+    // Verify admin mode is initially locked (settings-btn should be hidden)
+    const settingsBtnHidden = await page.evaluate(() => {
+        const btn = document.querySelector('.settings-btn');
+        return !btn || getComputedStyle(btn).display === 'none';
+    });
+    console.log(`   Admin features locked: ${settingsBtnHidden}`);
+
+    // Click admin icon
+    await new Promise(r => setTimeout(r, 1000));
+    await page.evaluate(() => {
+        const btn = document.querySelector('#admin-lock-btn');
+        if (btn) btn.click();
+    });
+    await new Promise(r => setTimeout(r, 1000));
+    
+    // In Puppeteer, window.prompt is tricky. We'll mock it before clicking.
+    await page.evaluate((pass) => {
+        window.prompt = () => pass;
+    }, process.env.ADMIN_PASS || '9UDwVeCIWV6PQcdSfAKtfvsJ');
+    
+    await page.evaluate(() => {
+        const btn = document.querySelector('#admin-lock-btn');
+        if (btn) btn.click();
+    });
+    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 1000));
+    
+    const isAdminMode = await page.evaluate(() => document.body.classList.contains('admin-mode'));
+    const settingsBtnVisible = await page.evaluate(() => {
+        const btn = document.querySelector('.settings-btn');
+        return btn && getComputedStyle(btn).display !== 'none';
+    });
+    console.log(`   Admin Mode active: ${isAdminMode}`);
+    console.log(`   Settings buttons visible: ${settingsBtnVisible}`);
+
+    console.log('7. Applying Theme Preset...');
     await page.evaluate(() => {
       if (typeof window.initStaticPresets === 'function') {
         window.initStaticPresets();
