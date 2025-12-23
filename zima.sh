@@ -4697,22 +4697,22 @@ cat > "$DASHBOARD_FILE" <<EOF
         /* Grid Layouts - M3 Responsive (3x3, 4x4) */
         .grid { 
             display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
             gap: 24px; 
             margin-bottom: 32px; 
             width: 100%;
         }
         
         @media (min-width: 1200px) {
-            .grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+            .grid { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
         }
 
         @media (min-width: 1600px) {
-            .grid { grid-template-columns: repeat(4, 1fr); }
+            .grid { grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); }
         }
         
-        .grid-2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 450px), 1fr)); gap: 24px; margin-bottom: 32px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 350px), 1fr)); gap: 24px; margin-bottom: 32px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 450px), 1fr)); gap: 24px; margin-bottom: 32px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: 24px; margin-bottom: 32px; }
         
         /* MD3 Component Refinements - Elevated Cards */
         .card {
@@ -4861,6 +4861,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             white-space: nowrap;
             text-overflow: ellipsis;
             max-width: 100%;
+            flex: 1 1 auto; /* Allow chips to grow and fill space */
         }
 
         .chip .material-symbols-rounded {
@@ -5418,6 +5419,13 @@ cat > "$DASHBOARD_FILE" <<EOF
         </div>
 
 
+
+        <section data-category="all" id="section-all">
+        <div class="section-label">All Services</div>
+        <div id="grid-all" class="grid">
+            <!-- Dynamic Cards Injected Here -->
+        </div>
+        </section>
 
         <section data-category="apps">
         <div class="section-label">Applications</div>
@@ -6043,20 +6051,22 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 const appsGrid = document.getElementById('grid-apps');
                 const systemGrid = document.getElementById('grid-system');
                 const toolsGrid = document.getElementById('grid-tools');
-                if (!appsGrid || !systemGrid) return;
-
-                appsGrid.innerHTML = '';
-                systemGrid.innerHTML = '';
+                const allGrid = document.getElementById('grid-all');
+                
+                if (appsGrid) appsGrid.innerHTML = '';
+                if (systemGrid) systemGrid.innerHTML = '';
                 if (toolsGrid) toolsGrid.innerHTML = '';
+                if (allGrid) allGrid.innerHTML = '';
 
                 const entries = Object.entries(catalog)
                     .filter(([id]) => activeContainers[id])
                     .map(([id, meta]) => [id, normalizeServiceMeta(id, meta)]);
 
-                const buckets = { apps: [], system: [], tools: [] };
+                const buckets = { apps: [], system: [], tools: [], all: [] };
                 entries.forEach(([id, meta]) => {
                     if (!buckets[meta.category]) buckets[meta.category] = [];
                     buckets[meta.category].push([id, meta]);
+                    buckets.all.push([id, meta]);
                 });
 
                 const sortByOrder = (a, b) => {
@@ -6065,16 +6075,27 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     return a[1].name.localeCompare(b[1].name);
                 };
 
+                // Render categorized grids
                 ['apps', 'system', 'tools'].forEach((category) => {
                     if (!buckets[category]) return;
+                    const grid = document.getElementById(\`grid-\${category}\`);
+                    if (!grid) return;
+                    
                     buckets[category].sort(sortByOrder).forEach(([id, meta]) => {
                         const hardened = activeContainers[id] && activeContainers[id].hardened;
                         const card = createServiceCard(id, meta, hardened);
-                        if (category === 'apps') appsGrid.appendChild(card);
-                        if (category === 'system') systemGrid.appendChild(card);
-                        if (category === 'tools' && toolsGrid) toolsGrid.appendChild(card);
+                        grid.appendChild(card);
                     });
                 });
+
+                // Render All Services grid
+                if (allGrid && buckets.all) {
+                    buckets.all.sort(sortByOrder).forEach(([id, meta]) => {
+                        const hardened = activeContainers[id] && activeContainers[id].hardened;
+                        const card = createServiceCard(id, meta, hardened);
+                        allGrid.appendChild(card);
+                    });
+                }
 
                 // Update metrics after rendering
                 fetchMetrics();
@@ -6183,29 +6204,23 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const targetChip = document.querySelector(\`.filter-chip[data-target="\${cat}"]\`);
             if (targetChip) targetChip.classList.add('active');
             
-            // Show/Hide sections
-            document.querySelectorAll('section[data-category]').forEach(s => {
-                if (cat === 'all' || s.dataset.category === cat) {
-                    s.classList.remove('hidden');
-                    s.style.display = 'block';
-                } else {
-                    s.classList.add('hidden');
-                    s.style.display = 'none';
-                }
-            });
+            const allSection = document.getElementById('section-all');
+            const otherSections = document.querySelectorAll('section[data-category]:not(#section-all)');
             
-            // Special handling for mixed sections if any
-            document.querySelectorAll('.card[data-category]').forEach(c => {
-                if (cat === 'all' || c.dataset.category === cat) {
-                    c.style.display = 'flex';
-                } else {
-                    // Only hide if the parent section is NOT already hidden (to avoid double hide)
-                    const section = c.closest('section');
-                    if (section && (cat === 'all' || section.dataset.category === cat)) {
-                        c.style.display = 'none';
+            if (cat === 'all') {
+                if (allSection) allSection.style.display = 'block';
+                otherSections.forEach(s => s.style.display = 'none');
+            } else {
+                if (allSection) allSection.style.display = 'none';
+                otherSections.forEach(s => {
+                    if (s.dataset.category === cat) {
+                        s.style.display = 'block';
+                        s.classList.remove('hidden');
+                    } else {
+                        s.style.display = 'none';
                     }
-                }
-            });
+                });
+            }
 
             localStorage.setItem('dashboard_filter', cat);
             syncSettings();

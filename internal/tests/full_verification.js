@@ -53,6 +53,11 @@ const puppeteer = require('puppeteer');
   if (chipBoxStyle === 'wrap') console.log(`  - PASS: .chip-box flex-wrap is '${chipBoxStyle}'`);
   else console.error(`  - FAIL: .chip-box flex-wrap is '${chipBoxStyle}'`);
 
+  const chipFlex = await page.$eval('.chip', el => getComputedStyle(el).flex);
+  // flex: 1 1 auto usually computes to "1 1 auto" or "1 1 0%" depending on browser.
+  if (chipFlex.startsWith('1 1')) console.log(`  - PASS: .chip flex is '${chipFlex}'`);
+  else console.error(`  - FAIL: .chip flex is '${chipFlex}'`);
+
   // 3. User Interactions
   console.log("[TEST] Simulating User Interactions...");
   
@@ -63,7 +68,15 @@ const puppeteer = require('puppeteer');
     if (chip) {
       await chip.click();
       console.log(`  - Clicked filter: ${filter}`);
-      await new Promise(r => setTimeout(r, 200)); // Wait for transition
+      await new Promise(r => setTimeout(r, 500)); // Wait for transition/render
+
+      if (filter === 'all') {
+          const gridAllVisible = await page.$eval('#grid-all', el => el.offsetParent !== null);
+          const gridAppsHidden = await page.$eval('#grid-apps', el => el.offsetParent === null); // Should be hidden
+          if (gridAllVisible && gridAppsHidden) console.log("  - PASS: 'All Services' view active.");
+          else console.error("  - FAIL: 'All Services' view check failed.");
+      }
+
       // Verify active class
       const isActive = await page.$eval(`.filter-chip[data-target="${filter}"]`, el => el.classList.contains('active'));
       if (!isActive) console.error(`  - FAIL: Filter ${filter} did not become active.`);
