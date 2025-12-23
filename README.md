@@ -509,7 +509,7 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
 ### Verified Local Environment
 This stack is verified for production usage on **ZimaOS** with the following hardware specifications:
 *   **CPU**: Intel® Core™ i3-10105T @ 3.00GHz (4 Cores, 8 Threads)
-*   **RAM**: 32 GB DDR4 @ 3200 MHz
+*   **RAM**: 32 GB DDR4 @ 2666 MHz
 *   **GPU**: Intel® UHD Graphics 630 (Comet Lake-S GT2)
 *   **Acceleration**: Full support for **Intel Quick Sync** via `vertd` for high-performance file conversion.
 

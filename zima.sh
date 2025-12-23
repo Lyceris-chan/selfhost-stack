@@ -3567,14 +3567,18 @@ should_deploy() {
 }
 
 VERTD_DEVICES=""
+# Hardware acceleration detection (Independent checks for Intel/AMD and NVIDIA)
 if [ -d "/dev/dri" ]; then
-    # Intel (Quick Sync) and AMD (VA-API)
     VERTD_DEVICES="    devices:
       - /dev/dri"
+    if [ -d "/dev/vulkan" ]; then
+        VERTD_DEVICES="${VERTD_DEVICES}
+      - /dev/vulkan"
+    fi
 fi
 
 VERTD_NVIDIA=""
-if command -v nvidia-smi >/dev/null 2>&1; then
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
     VERTD_NVIDIA="    deploy:
       resources:
         reservations:
