@@ -506,6 +506,15 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
 
 ## 🖥️ System Requirements & Scaling
 
+### Verified Local Environment
+This stack is verified for production usage on **ZimaOS** with the following hardware specifications:
+*   **CPU**: Intel® Core™ i3-10105T @ 3.00GHz (4 Cores, 8 Threads)
+*   **RAM**: 32 GB DDR4 @ 3200 MHz
+*   **GPU**: Intel® UHD Graphics 630 (Comet Lake-S GT2)
+*   **Acceleration**: Full support for **Intel Quick Sync** via `vertd` for high-performance file conversion.
+
+> 🚀 **Hardware Transcoding**: While optimized for Intel Quick Sync, `vertd` also supports **AMD (VA-API)** and **NVIDIA (NVENC)** acceleration according to the official VERTD documentation and source code. Ensure the appropriate drivers and `/dev/dri` access are available on your host.
+
 ### Minimum Specifications
 
 | Component | Minimum | Recommended | Notes | 

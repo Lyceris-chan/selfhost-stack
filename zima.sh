@@ -3566,8 +3566,20 @@ should_deploy() {
 
 VERTD_DEVICES=""
 if [ -d "/dev/dri" ]; then
+    # Intel (Quick Sync) and AMD (VA-API)
     VERTD_DEVICES="    devices:
       - /dev/dri"
+fi
+
+VERTD_NVIDIA=""
+if command -v nvidia-smi >/dev/null 2>&1; then
+    VERTD_NVIDIA="    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]"
 fi
 
 if [ ! -f "$CONFIG_DIR/theme.json" ]; then echo "{}" > "$CONFIG_DIR/theme.json"; fi
@@ -4203,12 +4215,17 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "casaos.skip=true"
     environment:
       - PUBLIC_URL=$VERTD_PUB_URL
-    # Intel GPU support (conditionally added)
+    # Hardware Acceleration (Intel Quick Sync, AMD VA-API, NVIDIA)
 $VERTD_DEVICES
     restart: always
     deploy:
       resources:
         limits: {cpus: '2.0', memory: 1024M}
+$(if [ -n "$VERTD_NVIDIA" ]; then echo "        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]"; fi)
 
   vert:
     container_name: vert
