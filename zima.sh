@@ -3008,17 +3008,19 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/containers':
             try:
-                # Get container IDs for Portainer links - use long IDs for better compatibility
+                # Get container IDs and labels
                 result = subprocess.run(
-                    ['docker', 'ps', '-a', '--no-trunc', '--format', '{{.Names}}\t{{.ID}}'],
+                    ['docker', 'ps', '-a', '--no-trunc', '--format', '{{.Names}}\t{{.ID}}\t{{.Labels}}'],
                     capture_output=True, text=True, timeout=10
                 )
                 containers = {}
                 for line in result.stdout.strip().split('\n'):
-                    if '\t' in line:
-                        name, cid = line.split('\t', 1)
-                        # Portainer URLs typically work best with long IDs
-                        containers[name] = cid
+                    parts = line.split('\t')
+                    if len(parts) >= 2:
+                        name, cid = parts[0], parts[1]
+                        labels = parts[2] if len(parts) > 2 else ""
+                        is_hardened = "io.dhi.hardened=true" in labels
+                        containers[name] = {"id": cid, "hardened": is_hardened}
                 self._send_json({"containers": containers})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -3722,6 +3724,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     labels:
       - "casaos.skip=true"
       - "com.centurylinklabs.watchtower.enable=false"
+      - "io.dhi.hardened=true"
     networks: [frontnet]
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -3774,6 +3777,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     container_name: odido-booster
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
+      - "io.dhi.hardened=true"
     networks: [frontnet]
     ports: ["$LAN_IP:8085:8080"]
     environment:
@@ -3818,6 +3822,8 @@ cat >> "$COMPOSE_FILE" <<EOF
   memos:
     image: neosmemo/memos:stable
     container_name: memos
+    labels:
+      - "io.dhi.hardened=true"
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_MEMOS:5230"]
     volumes: ["$MEMOS_HOST_DIR:/var/opt/memos"]
@@ -3872,6 +3878,8 @@ cat >> "$COMPOSE_FILE" <<EOF
   dashboard:
     image: dhi.io/nginx:1.28-alpine3.21
     container_name: dashboard
+    labels:
+      - "io.dhi.hardened=true"
     networks: [frontnet]
     ports:
       - "$LAN_IP:$PORT_DASHBOARD_WEB:$PORT_DASHBOARD_WEB"
@@ -3921,6 +3929,8 @@ cat >> "$COMPOSE_FILE" <<EOF
   adguard:
     image: adguard/adguardhome:latest
     container_name: adguard
+    labels:
+      - "io.dhi.hardened=true"
     networks: [frontnet]
     ports:
       - "$LAN_IP:53:53/udp"
@@ -3946,10 +3956,10 @@ cat >> "$COMPOSE_FILE" <<EOF
     image: klutchell/unbound:latest
     container_name: unbound
     labels:
-      - "casaos.skip=true"
+      - "io.dhi.hardened=true"
     networks:
       frontnet:
-        ipv4_address: $UNBOUND_STATIC_IP
+        ipv4_address: 172.20.0.250
     volumes:
       - "$UNBOUND_CONF:/opt/unbound/etc/unbound/unbound.conf:ro"
     restart: unless-stopped
@@ -3990,6 +4000,8 @@ cat >> "$COMPOSE_FILE" <<EOF
   redlib:
     image: quay.io/redlib/redlib:latest
     container_name: redlib
+    labels:
+      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment: {REDLIB_DEFAULT_WIDE: "on", REDLIB_DEFAULT_USE_HLS: "on", REDLIB_DEFAULT_SHOW_NSFW: "on"}
     restart: always
@@ -4018,6 +4030,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     container_name: wikiless
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
+      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment: {DOMAIN: "$LAN_IP:$PORT_WIKILESS", NONSSL_PORT: "$PORT_INT_WIKILESS", REDIS_URL: "redis://127.0.0.1:6379"}
     healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:8180/ || exit 1", interval: 30s, timeout: 5s, retries: 2}
@@ -4032,6 +4045,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     container_name: wikiless_redis
     labels:
       - "casaos.skip=true"
+      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     volumes: ["$DATA_DIR/redis:/data"]
     healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 5}
@@ -4051,6 +4065,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     container_name: invidious
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
+      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment:
       INVIDIOUS_CONFIG: |
@@ -4083,6 +4098,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     container_name: invidious-db
     labels:
       - "casaos.skip=true"
+      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment: {POSTGRES_DB: invidious, POSTGRES_USER: kemal, POSTGRES_PASSWORD: kemal}
     volumes:
@@ -4125,6 +4141,8 @@ cat >> "$COMPOSE_FILE" <<EOF
     image: codeberg.org/rimgo/rimgo:latest
     pull_policy: if_not_present
     container_name: rimgo
+    labels:
+      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment: {IMGUR_CLIENT_ID: "546c25a59c58ad7", ADDRESS: "0.0.0.0", PORT: "$PORT_INT_RIMGO"}
     depends_on: {gluetun: {condition: service_healthy}}
@@ -4142,6 +4160,8 @@ cat >> "$COMPOSE_FILE" <<EOF
       context: $SRC_DIR/breezewiki
       dockerfile: Dockerfile.alpine
     container_name: breezewiki
+    labels:
+      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment:
       - bw_bind_host=0.0.0.0
@@ -4168,6 +4188,8 @@ cat >> "$COMPOSE_FILE" <<EOF
   anonymousoverflow:
     image: ghcr.io/httpjamesm/anonymousoverflow:release
     container_name: anonymousoverflow
+    labels:
+      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     env_file: ["./env/anonymousoverflow.env"]
     environment: {PORT: "$PORT_INT_ANONYMOUS"}
@@ -4185,9 +4207,9 @@ cat >> "$COMPOSE_FILE" <<EOF
     build:
       context: "$SRC_DIR/scribe"
       dockerfile: $SCRIBE_DOCKERFILE
-    container_name: scribe
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
+      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     env_file: ["./env/scribe.env"]
     healthcheck:
@@ -4213,6 +4235,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
     labels:
       - "casaos.skip=true"
+      - "io.dhi.hardened=true"
     environment:
       - PUBLIC_URL=$VERTD_PUB_URL
     # Hardware Acceleration (Intel Quick Sync, AMD VA-API, NVIDIA)
@@ -4227,25 +4250,10 @@ $(if [ -n "$VERTD_NVIDIA" ]; then echo "        reservations:
               count: all
               capabilities: [gpu]"; fi)
 
-  vert:
-    container_name: vert
-    image: ghcr.io/vert-sh/vert:latest
-    build:
-      context: $SRC_DIR/vert
-      dockerfile: $VERT_DOCKERFILE
-      args:
-        PUB_HOSTNAME: $VERT_PUB_HOSTNAME
-        PUB_PLAUSIBLE_URL: ""
-        PUB_ENV: production
-        PUB_DISABLE_ALL_EXTERNAL_REQUESTS: "true"
-        PUB_DISABLE_FAILURE_BLOCKS: "true"
-        PUB_VERTD_URL: $VERTD_PUB_URL
-        PUB_DONATION_URL: ""
-        PUB_STRIPE_KEY: ""
-        PUB_DISABLE_DONATIONS: "true"
     labels:
       - "casaos.skip=true"
       - "com.centurylinklabs.watchtower.enable=false"
+      - "io.dhi.hardened=true"
     environment:
       - PUB_HOSTNAME=$VERT_PUB_HOSTNAME
       - PUB_PLAUSIBLE_URL=
@@ -6041,7 +6049,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 ['apps', 'system', 'tools'].forEach((category) => {
                     if (!buckets[category]) return;
                     buckets[category].sort(sortByOrder).forEach(([id, meta]) => {
-                        const card = createServiceCard(id, meta);
+                        const hardened = activeContainers[id] && activeContainers[id].hardened;
+                        const card = createServiceCard(id, meta, hardened);
                         if (category === 'apps') appsGrid.appendChild(card);
                         if (category === 'system') systemGrid.appendChild(card);
                         if (category === 'tools' && toolsGrid) toolsGrid.appendChild(card);
@@ -6055,7 +6064,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
         }
 
-        function createServiceCard(id, meta) {
+        function createServiceCard(id, meta, hardened = false) {
             const card = document.createElement('div');
             card.id = \`link-\${id}\`;
             card.className = 'card';
@@ -6109,6 +6118,18 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
             const chipBox = document.createElement('div');
             chipBox.className = 'chip-box';
+
+            if (hardened) {
+                const hardenedBadge = document.createElement('span');
+                hardenedBadge.className = 'chip tertiary';
+                hardenedBadge.style.gap = '4px';
+                hardenedBadge.style.padding = '0 8px';
+                hardenedBadge.style.height = '24px';
+                hardenedBadge.style.fontSize = '11px';
+                hardenedBadge.setAttribute('data-tooltip', 'This container uses a Digital Independence (DHI) hardened image.');
+                hardenedBadge.innerHTML = '<span class="material-symbols-rounded" style="font-size:14px;">verified_user</span> Hardened';
+                chipBox.appendChild(hardenedBadge);
+            }
 
             if (Array.isArray(meta.actions)) {
                 meta.actions.forEach((action) => {
@@ -6378,7 +6399,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
             await fetchContainerIds();
             
             // Basic actions for all
-            const cid = containerIds[name];
+            const containerInfo = containerIds[name];
+            const cid = containerInfo ? containerInfo.id : null;
             const portainerLink = cid ?
                 PORTAINER_URL + "/#!/1/docker/containers/" + cid :
                 PORTAINER_URL + "/#!/1/docker/containers";
@@ -6680,7 +6702,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 // Update all portainer links
                 document.querySelectorAll('.portainer-link').forEach(el => {
                     const containerName = el.dataset.container;
-                    const cid = containerIds[containerName];
+                    const containerInfo = containerIds[containerName];
+                    const cid = containerInfo ? containerInfo.id : null;
                     const originalText = el.getAttribute('data-original-text') || el.textContent.trim();
                     if (!el.getAttribute('data-original-text')) el.setAttribute('data-original-text', originalText);
 
@@ -6691,26 +6714,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         el.textContent = originalText;
                         
                         // Use a fresh onclick handler
-                        el.onclick = function(e) {
+                        el.onclick = (e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            e.stopImmediatePropagation();
-                            const url = PORTAINER_URL + "/#!/1/docker/containers/" + cid;
-                            window.open(url, '_blank');
-                            return false;
+                            window.open(PORTAINER_URL + "/#!/1/docker/containers/" + cid, '_blank');
                         };
                     } else {
-                        el.style.opacity = '0.5';
-                        el.style.cursor = 'default';
-                        el.dataset.tooltip = "Container " + containerName + " not found";
-                        el.textContent = originalText;
-                        el.onclick = (e) => { 
-                            e.preventDefault(); 
-                            e.stopPropagation(); 
-                            e.stopImmediatePropagation();
-                        };
-                    }
-                });
+
             } catch(e) { console.error('Container fetch error:', e); }
         }
         
