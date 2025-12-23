@@ -2321,6 +2321,27 @@ import urllib.request
 import urllib.parse
 import psutil
 import socket
+import secrets
+import uuid
+
+# Global session tracking for authorized browser sessions (cookie-free)
+# Dictionary: {token: expiry_timestamp}
+valid_sessions = {}
+session_cleanup_enabled = True
+
+def cleanup_sessions_thread():
+    """Background thread to purge expired auth sessions."""
+    global valid_sessions
+    while True:
+        if session_cleanup_enabled:
+            now = time.time()
+            expired = [t for t, expiry in valid_sessions.items() if now > expiry]
+            for t in expired:
+                del valid_sessions[t]
+        time.sleep(60)
+
+# Start cleanup thread
+threading.Thread(target=cleanup_sessions_thread, daemon=True).start()
 
 PORT = 55555
 CONFIG_DIR = "/app"
@@ -2712,7 +2733,16 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
         if self.path.startswith('/watchtower'):
             return True
 
-        # Check for API Key in headers
+        # Check for Session Token (per-session authorization)
+        session_token = self.headers.get('X-Session-Token')
+        if session_token and session_token in valid_sessions:
+            if not session_cleanup_enabled or time.time() < valid_sessions[session_token]:
+                return True
+            else:
+                # Token expired
+                del valid_sessions[session_token]
+
+        # Check for API Key in headers (permanent automation key)
         api_key = self.headers.get('X-API-Key')
         expected_key = os.environ.get('HUB_API_KEY')
         
@@ -3141,11 +3171,21 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
         except:
             data = {}
 
+        if self.path == '/toggle-session-cleanup':
+            global session_cleanup_enabled
+            session_cleanup_enabled = data.get('enabled', True)
+            self._send_json({"success": True, "enabled": session_cleanup_enabled})
+            return
+
         if self.path == '/verify-admin':
             password = data.get('password')
             expected_admin = os.environ.get('ADMIN_PASS_RAW')
             if expected_admin and password == expected_admin:
-                self._send_json({"success": True})
+                # Generate a new session token for this browser session
+                token = secrets.token_hex(24)
+                # Session expires in 30 minutes
+                valid_sessions[token] = time.time() + 1800 
+                self._send_json({"success": True, "token": token, "cleanup": session_cleanup_enabled})
             else:
                 self._send_json({"error": "Invalid admin password"}, 401)
             return
@@ -4462,6 +4502,7 @@ cat > "$DASHBOARD_FILE" <<EOF
         
         .material-symbols-rounded {
             font-family: 'Material Symbols Rounded';
+            font-display: block;
             font-weight: normal;
             font-style: normal;
             font-size: 24px;
@@ -4907,6 +4948,19 @@ cat > "$DASHBOARD_FILE" <<EOF
         }
         .portainer-link:hover .material-symbols-rounded {
             transform: translateX(4px);
+        }
+
+        .nav-arrow {
+            opacity: 0;
+            transform: translateX(-8px);
+            transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
+            color: var(--md-sys-color-primary);
+            pointer-events: none;
+        }
+
+        .card:hover .nav-arrow {
+            opacity: 1;
+            transform: translateX(0);
         }
         
         .btn-action {
@@ -5634,6 +5688,28 @@ cat >> "$DASHBOARD_FILE" <<EOF
                     </div>
                 </div>
             </div>
+            <div class="card admin-only">
+                <h3>Security & Privacy</h3>
+                <p class="body-medium description">Manage administrative session behavior and authentication security.</p>
+                <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+                        <div style="flex: 1;">
+                            <span class="label-large">Session Auto-Cleanup</span>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Automatically expire admin sessions after 30 minutes of inactivity.</p>
+                        </div>
+                        <div class="switch" id="session-cleanup-switch" onclick="toggleSessionCleanup()" data-tooltip="When enabled, your admin session will expire automatically.">
+                            <div class="switch-thumb"></div>
+                        </div>
+                    </div>
+                    <div id="session-cleanup-warning" class="chip admin" style="display: none; width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: none;">
+                        <span class="material-symbols-rounded">warning</span>
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span style="font-weight: 600;">Security Warning</span>
+                            <span class="body-medium" style="opacity: 0.8; white-space: normal;">Session auto-cleanup is disabled. Administrative access will remain active indefinitely on this browser until manually exited.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="card">
                 <h3>System Information</h3>
                 <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
@@ -5986,8 +6062,13 @@ cat >> "$DASHBOARD_FILE" <<EOF
             settingsIcon.textContent = 'settings';
             settingsBtn.appendChild(settingsIcon);
 
+            const navArrow = document.createElement('span');
+            navArrow.className = 'material-symbols-rounded nav-arrow';
+            navArrow.textContent = 'arrow_forward';
+
             actionsWrap.appendChild(indicator);
             actionsWrap.appendChild(settingsBtn);
+            actionsWrap.appendChild(navArrow);
 
             header.appendChild(title);
             header.appendChild(actionsWrap);
@@ -6061,7 +6142,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
         }
 
         // Global State & Data
-        let isAdmin = localStorage.getItem('is_admin') === 'true';
+        let isAdmin = sessionStorage.getItem('is_admin') === 'true';
+        let sessionToken = sessionStorage.getItem('session_token') || '';
+        let sessionCleanupEnabled = true;
         let containerMetrics = {};
         let containerIds = {};
         let pendingUpdates = [];
@@ -6076,13 +6159,40 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
             const btn = document.getElementById('admin-lock-btn');
             if (btn) btn.dataset.tooltip = isAdmin ? "Exit Admin Mode" : "Enter Admin Mode";
+
+            // Session cleanup UI
+            const switchEl = document.getElementById('session-cleanup-switch');
+            const warningEl = document.getElementById('session-cleanup-warning');
+            if (switchEl) switchEl.classList.toggle('active', sessionCleanupEnabled);
+            if (warningEl) warningEl.style.display = (isAdmin && !sessionCleanupEnabled) ? 'flex' : 'none';
+        }
+
+        async function toggleSessionCleanup() {
+            const newState = !sessionCleanupEnabled;
+            try {
+                const res = await fetch(API + "/toggle-session-cleanup", {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ enabled: newState })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    sessionCleanupEnabled = data.enabled;
+                    updateAdminUI();
+                    showSnackbar(sessionCleanupEnabled ? "Session auto-cleanup enabled" : "Session auto-cleanup disabled (Persistent Mode)");
+                }
+            } catch (e) {
+                showSnackbar("Failed to toggle session cleanup");
+            }
         }
 
         async function toggleAdminMode() {
             if (isAdmin) {
                 if (confirm("Exit Admin Mode? Management features will be hidden.")) {
                     isAdmin = false;
-                    localStorage.setItem('is_admin', 'false');
+                    sessionStorage.setItem('is_admin', 'false');
+                    sessionStorage.removeItem('session_token');
+                    sessionToken = '';
                     updateAdminUI();
                     syncSettings();
                     showSnackbar("Admin Mode disabled");
@@ -6098,8 +6208,12 @@ cat >> "$DASHBOARD_FILE" <<EOF
                         body: JSON.stringify({ password: pass })
                     });
                     if (res.ok) {
+                        const data = await res.json();
                         isAdmin = true;
-                        localStorage.setItem('is_admin', 'true');
+                        sessionToken = data.token || '';
+                        sessionCleanupEnabled = data.cleanup !== false;
+                        sessionStorage.setItem('is_admin', 'true');
+                        if (sessionToken) sessionStorage.setItem('session_token', sessionToken);
                         updateAdminUI();
                         syncSettings();
                         showSnackbar("Admin Mode enabled. Management tools unlocked.", "Dismiss");
@@ -6163,8 +6277,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
         async function fetchMetrics() {
             try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/metrics", { headers });
+                const res = await fetch(API + "/metrics", { headers: getAuthHeaders() });
                 if (!res.ok) return;
                 const data = await res.json();
                 containerMetrics = data.metrics || {};
@@ -6185,17 +6298,24 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
         const PORTAINER_URL = getPortainerBaseUrl();
         const DEFAULT_ODIDO_API_KEY = "$ODIDO_API_KEY";
-        let storedOdidoKey = localStorage.getItem('odido_api_key');
-        if (DEFAULT_ODIDO_API_KEY && storedOdidoKey && storedOdidoKey !== DEFAULT_ODIDO_API_KEY) {
-            localStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
+        let storedOdidoKey = sessionStorage.getItem('odido_api_key');
+        if (DEFAULT_ODIDO_API_KEY && !storedOdidoKey) {
+            // Keep default key in session only
             storedOdidoKey = DEFAULT_ODIDO_API_KEY;
+            sessionStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
         }
         let odidoApiKey = storedOdidoKey || DEFAULT_ODIDO_API_KEY;
 
+        function getAuthHeaders() {
+            const headers = { 'Content-Type': 'application/json' };
+            if (sessionToken) headers['X-Session-Token'] = sessionToken;
+            else if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+            return headers;
+        }
+
         async function fetchUpdates() {
             try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/updates", { headers });
+                const res = await fetch(API + "/updates", { headers: getAuthHeaders() });
                 if (!res.ok) return;
                 const data = await res.json();
                 const updates = data.updates || {};
@@ -6385,11 +6505,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
             showSnackbar(\`Batch update initiated for \${selected.length} services. Rebuilding in background...\`, "Dismiss");
             
             try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
                 const res = await fetch(API + "/batch-update", {
                     method: 'POST',
-                    headers,
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({ services: selected })
                 });
                 const data = await res.json();
@@ -6410,11 +6528,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
             showSnackbar(\`Initiating update for \${name}...\`, "Dismiss");
 
             try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
                 const res = await fetch(API + "/update-service", {
                     method: 'POST',
-                    headers,
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({ service: name })
                 });
                 const data = await res.json();
@@ -6490,17 +6606,15 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const newKey = prompt("Enter new HUB_API_KEY. Warning: You must update your local .secrets manually if this fails!");
             if (!newKey) return;
             try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
                 const res = await fetch(API + "/rotate-api-key", {
                     method: 'POST',
-                    headers,
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({ new_key: newKey })
                 });
                 const data = await res.json();
                 if (data.success) {
                     odidoApiKey = newKey;
-                    localStorage.setItem('odido_api_key', newKey);
+                    sessionStorage.setItem('odido_api_key', newKey);
                     showSnackbar("API Key rotated successfully!");
                 } else { throw new Error(data.error); }
             } catch(e) { showSnackbar("Rotation failed: " + e.message); }
@@ -6860,7 +6974,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             
             if (apiKey) {
                 odidoApiKey = apiKey;
-                localStorage.setItem('odido_api_key', apiKey);
+                sessionStorage.setItem('odido_api_key', apiKey);
                 data.api_key = apiKey;
             }
             
@@ -6873,7 +6987,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 try {
                     const res = await fetch(API + "/odido-userid", {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: getAuthHeaders(),
                         body: JSON.stringify({ oauth_token: oauthToken })
                     });
                     const result = await res.json();
@@ -6913,11 +7027,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 st.style.color = 'var(--p)';
             }
             try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
                 const res = await fetch(ODIDO_API + "/config", {
                     method: 'POST',
-                    headers,
+                    headers: getAuthHeaders(),
                     body: JSON.stringify(data)
                 });
                 const result = await res.json();
@@ -7522,11 +7634,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
             };
 
             try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
                 await fetch(API + "/theme", {
                     method: 'POST',
-                    headers,
+                    headers: getAuthHeaders(),
                     body: JSON.stringify(settings)
                 });
             } catch(e) { console.warn("Failed to sync settings to server", e); }
@@ -7543,9 +7653,10 @@ cat >> "$DASHBOARD_FILE" <<EOF
             
             showSnackbar("Uninstallation sequence initiated...");
             try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                const res = await fetch(API + "/uninstall", { method: 'POST', headers });
+                const res = await fetch(API + "/uninstall", { 
+                    method: 'POST', 
+                    headers: getAuthHeaders() 
+                });
                 const result = await res.json();
                 if (result.success) {
                     showSnackbar("System removed. Redirecting...");
@@ -7560,8 +7671,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
         async function loadAllSettings() {
             try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/theme", { headers });
+                const res = await fetch(API + "/theme", { headers: getAuthHeaders() });
                 const data = await res.json();
                 
                 // 1. Seed & Colors
@@ -7597,7 +7707,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
                 // 5. Admin Mode
                 if (data.hasOwnProperty('is_admin')) {
                     isAdmin = data.is_admin;
-                    localStorage.setItem('is_admin', isAdmin ? 'true' : 'false');
+                    sessionStorage.setItem('is_admin', isAdmin ? 'true' : 'false');
                     updateAdminUI();
                 }
             } catch(e) { console.warn("Failed to load settings from server", e); }
@@ -7803,7 +7913,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             btn.disabled = true;
             btn.style.opacity = '0.5';
             try {
-                const res = await fetch(API + "/request-ssl-check");
+                const res = await fetch(API + "/request-ssl-check", { headers: getAuthHeaders() });
                 const data = await res.json();
                 if (data.success) {
                     alert("SSL Check triggered in background. This may take 2-3 minutes. Refresh the dashboard later.");
@@ -7819,8 +7929,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         async function checkUpdates() {
             showSnackbar("Update check initiated... checking images and sources.");
             try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/check-updates", { headers });
+                const res = await fetch(API + "/check-updates", { headers: getAuthHeaders() });
                 const data = await res.json();
                 if (data.success) {
                     showSnackbar("Update check is running in background. Results will appear in logs and banners shortly.");
@@ -7838,11 +7947,9 @@ cat >> "$DASHBOARD_FILE" <<EOF
             if (!confirm("Are you sure you want to restart the entire stack? The dashboard and all services will be unreachable for approximately 30 seconds.")) return;
             
             try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
                 const res = await fetch(API + "/restart-stack", {
                     method: 'POST',
-                    headers
+                    headers: getAuthHeaders()
                 });
                 
                 const data = await res.json();
@@ -7885,8 +7992,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
         
         async function fetchSystemHealth() {
             try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/system-health", { headers });
+                const res = await fetch(API + "/system-health", { headers: getAuthHeaders() });
                 if (res.status === 401) throw new Error("401");
                 const data = await res.json();
                 
@@ -8010,8 +8116,8 @@ cat >> "$DASHBOARD_FILE" <<EOF
             });
 
             // Pre-populate Odido API key from deployment
-            if (DEFAULT_ODIDO_API_KEY && !localStorage.getItem('odido_api_key')) {
-                localStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
+            if (DEFAULT_ODIDO_API_KEY && !sessionStorage.getItem('odido_api_key')) {
+                sessionStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
                 odidoApiKey = DEFAULT_ODIDO_API_KEY;
             }
             // Pre-populate the API key input field so users can see their dashboard API key
