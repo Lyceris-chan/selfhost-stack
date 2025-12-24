@@ -4348,6 +4348,32 @@ clean_environment() {
     echo "=========================================================="
     echo "🛡️  ENVIRONMENT VALIDATION & CLEANUP"
     echo "=========================================================="
+
+    check_cert_risk() {
+        if [ -f "$BASE_DIR/config/adguard/ssl.crt" ]; then
+            # Check for standard ACME issuers (Let's Encrypt, ZeroSSL, etc)
+            if grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL" "$BASE_DIR/config/adguard/ssl.crt"; then
+                log_warn "⚠️  VALID SSL CERTIFICATE DETECTED"
+                echo "   A valid CA-signed certificate exists in configuration."
+                echo "   Deleting this file may trigger rate limits (e.g. Let's Encrypt 5/week)."
+                echo "   Location: $BASE_DIR/config/adguard/ssl.crt"
+                echo ""
+                
+                if [ "$AUTO_CONFIRM" = true ]; then
+                    log_warn "Auto-confirm is active. Proceeding with deletion in 3 seconds..."
+                    sleep 3
+                    return 0
+                fi
+
+                read -r -p "   Are you sure you want to DELETE this certificate? [y/N]: " cert_response
+                case "$cert_response" in
+                    [yY][eE][sS]|[yY]) return 0 ;;
+                    *) return 1 ;;
+                esac
+            fi
+        fi
+        return 0
+    }
     
     if [ "$CLEAN_ONLY" = false ]; then
         check_docker_rate_limit
@@ -4385,6 +4411,7 @@ clean_environment() {
 
     if [ -d "$BASE_DIR" ] || $DOCKER_CMD volume ls -q | grep -q "portainer"; then
         if ask_confirm "Wipe ALL application data? This action is irreversible."; then
+            if ! check_cert_risk; then log_info "Data wipe aborted by user (Certificate Protection)."; return 1; fi
             log_info "Clearing BASE_DIR data..."
             if [ -d "$BASE_DIR" ]; then
                 sudo rm -f "$BASE_DIR/.secrets" 2>/dev/null || true
@@ -4531,8 +4558,12 @@ clean_environment() {
         
         # Main data directory
         if [ -d "$BASE_DIR" ]; then
-            log_info "  Removing: $BASE_DIR"
-            sudo rm -rf "$BASE_DIR"
+            if check_cert_risk; then
+                log_info "  Removing: $BASE_DIR"
+                sudo rm -rf "$BASE_DIR"
+            else
+                log_info "  Preserving: $BASE_DIR (Certificate Protection)"
+            fi
         fi
         
         # Alternative locations that might have been created
@@ -5480,24 +5511,165 @@ detect_dockerfile() {
     fi
     return 1
 }
+
+PATCHES_SCRIPT="$BASE_DIR/patches.sh"
+cat > "$PATCHES_SCRIPT" <<'PATCHEOF'
+#!/bin/sh
+SERVICE=$1
+SRC_ROOT=${2:-/app/sources}
+
+log() { echo "[PATCH] $1"; }
+
+detect_dockerfile() {
+    local repo_dir="$1"
+    local preferred="${2:-}"
+    local found=""
+    if [ -n "$preferred" ] && [ -f "$repo_dir/$preferred" ]; then echo "$preferred"; return 0; fi
+    if [ -f "$repo_dir/Dockerfile" ]; then echo "Dockerfile"; return 0; fi
+    if [ -f "$repo_dir/docker/Dockerfile" ]; then echo "docker/Dockerfile"; return 0; fi
+    found=$(find "$repo_dir" -maxdepth 3 -type f -name 'Dockerfile*' 2>/dev/null | head -n 1 || true)
+    if [ -n "$found" ]; then echo "${found#"$repo_dir/"}"; return 0; fi
+    return 1
+}
+
+if [ "$SERVICE" = "wikiless" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching Wikiless..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/wikiless")
+    if [ -n "$D_FILE" ]; then
+        sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM node:20-alpine|g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine|g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|CMD \["src/wikiless.js"\]|CMD ["node", "src/wikiless.js"]|g' "$SRC_ROOT/wikiless/$D_FILE"
+    fi
+fi
+
+if [ "$SERVICE" = "scribe" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching Scribe..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/scribe")
+    if [ -n "$D_FILE" ]; then
+        sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_ROOT/scribe/$D_FILE"
+    fi
+fi
+
+if [ "$SERVICE" = "invidious" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching Invidious..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/invidious" "docker/Dockerfile")
+    if [ -n "$D_FILE" ]; then
+        sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/$D_FILE"
+        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/invidious/$D_FILE"
+        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_ROOT/invidious/$D_FILE"
+        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_ROOT/invidious/$D_FILE"
+    fi
+    # Also patch arm64 if exists
+    if [ -f "$SRC_ROOT/invidious/docker/Dockerfile.arm64" ]; then
+        sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
+        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
+    fi
+fi
+
+if [ "$SERVICE" = "odido-booster" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching Odido..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/odido-bundle-booster")
+    if [ -n "$D_FILE" ]; then
+        cat > "$SRC_ROOT/odido-bundle-booster/$D_FILE" <<'ODIDOEOF'
+FROM python:3.11-alpine
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    APP_DIR=/app \
+    APP_DATA_DIR=/data \
+    PORT=8080
+
+RUN apk add --no-cache su-exec sqlite-libs sqlite-dev build-base
+
+WORKDIR $APP_DIR
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY entrypoint.sh /entrypoint.sh
+
+EXPOSE 8080
+
+ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]
+CMD ["python", "-m", "app.main"]
+ODIDOEOF
+    fi
+fi
+
+if [ "$SERVICE" = "vert" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching VERT..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/vert")
+    if [ -n "$D_FILE" ]; then
+        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[^ ]*|FROM oven/bun:1|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM oven/bun:1 AS|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun$|FROM oven/bun:1|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[[:space:]]|FROM oven/bun:1 |g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM nginx:stable-alpine|FROM nginx:alpine|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_ROOT/vert/$D_FILE"
+        
+        # Build args patches
+        if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_ROOT/vert/$D_FILE"; then
+            if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_ROOT/vert/$D_FILE"; then
+                sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_FAILURE_BLOCKS' "$SRC_ROOT/vert/$D_FILE"
+                sed -i '/^ENV PUB_STRIPE_KEY=${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_FAILURE_BLOCKS=${PUB_DISABLE_FAILURE_BLOCKS}' "$SRC_ROOT/vert/$D_FILE"
+            fi
+        fi
+        if ! grep -q "ARG PUB_DISABLE_DONATIONS" "$SRC_ROOT/vert/$D_FILE"; then
+            if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_ROOT/vert/$D_FILE"; then
+                sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_DONATIONS' "$SRC_ROOT/vert/$D_FILE"
+                sed -i '/^ENV PUB_STRIPE_KEY=${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_DONATIONS=${PUB_DISABLE_DONATIONS}' "$SRC_ROOT/vert/$D_FILE"
+            fi
+        fi
+    fi
+fi
+
+if [ "$SERVICE" = "breezewiki" ] || [ "$SERVICE" = "all" ]; then
+    log "Recreating BreezeWiki Dockerfile.alpine..."
+    cat > "$SRC_ROOT/breezewiki/Dockerfile.alpine" <<'BWEOF'
+FROM alpine:latest
+WORKDIR /app
+RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango
+COPY . .
+RUN raco pkg config --set default-scope installation
+RUN raco pkg install --batch --auto --no-docs --skip-installed \
+    rackunit-lib \
+    web-server-lib \
+    http-easy-lib \
+    html-parsing \
+    html-writing \
+    json-pointer \
+    typed-ini-lib \
+    memo \
+    net-cookies-lib \
+    db \
+    sequence-tools-lib
+EXPOSE 10416
+CMD ["racket", "dist.rkt"]
+BWEOF
+fi
+PATCHEOF
+chmod +x "$PATCHES_SCRIPT"
 clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless"
-# Patch Wikiless to use DHI Node and Alpine images
+bash "$PATCHES_SCRIPT" "wikiless" "$SRC_DIR"
 WIKILESS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wikiless" || true)
 if [ -z "$WIKILESS_DOCKERFILE" ]; then
     log_warn "Wikiless Dockerfile not found - build may fail."
     WIKILESS_DOCKERFILE="Dockerfile"
-fi
-if [ -f "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE" ]; then
-    # Use -dev for build stages to ensure npm/yarn are present
-    sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM node:20-alpine|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    sed -i 's|CMD \["src/wikiless.js"\]|CMD ["node", "src/wikiless.js"]|g' "$SRC_DIR/wikiless/$WIKILESS_DOCKERFILE"
-    log_info "Patched Wikiless Dockerfile to use DHI hardened images."
 fi
 
 cat > "$SRC_DIR/wikiless/wikiless.config" <<'EOF'
@@ -5557,70 +5729,26 @@ const config = {
 module.exports = config
 EOF
 clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe"
-# Patch Scribe to use pinned Crystal, DHI Node, and DHI Alpine images
+bash "$PATCHES_SCRIPT" "scribe" "$SRC_DIR"
 SCRIBE_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/scribe" || true)
 if [ -z "$SCRIBE_DOCKERFILE" ]; then
     log_warn "Scribe Dockerfile not found - build may fail."
     SCRIBE_DOCKERFILE="Dockerfile"
 fi
-if [ -f "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE" ]; then
-    sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
-    sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
-    sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
-    sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
-    sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
-    sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_DIR/scribe/$SCRIBE_DOCKERFILE"
-    log_info "Patched Scribe Dockerfile to use hardened base images."
-fi
 
 clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious"
-# Patch Invidious to use DHI Alpine and pinned Crystal images (Dockerfile lives in docker/)
+bash "$PATCHES_SCRIPT" "invidious" "$SRC_DIR"
 INVIDIOUS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/invidious" "docker/Dockerfile" || true)
 if [ -z "$INVIDIOUS_DOCKERFILE" ]; then
     log_warn "Invidious Dockerfile not found - build may fail."
     INVIDIOUS_DOCKERFILE="Dockerfile"
 fi
-for dockerfile in "$SRC_DIR/invidious/$INVIDIOUS_DOCKERFILE" "$SRC_DIR/invidious/docker/Dockerfile.arm64"; do
-    if [ -f "$dockerfile" ]; then
-        sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$dockerfile"
-        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$dockerfile"
-        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$dockerfile"
-        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$dockerfile"
-        log_info "Patched Invidious Dockerfile base images: $(basename "$dockerfile")"
-    fi
-done
 clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster"
-# Patch Odido Booster to use DHI Python image
+bash "$PATCHES_SCRIPT" "odido-booster" "$SRC_DIR"
 ODIDO_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/odido-bundle-booster" || true)
 if [ -z "$ODIDO_DOCKERFILE" ]; then
     log_warn "Odido Booster Dockerfile not found - build may fail."
     ODIDO_DOCKERFILE="Dockerfile"
-fi
-if [ -f "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" ]; then
-    cat > "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" <<'ODIDOEOF'
-FROM python:3.11-alpine
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    APP_DIR=/app \
-    APP_DATA_DIR=/data \
-    PORT=8080
-
-RUN apk add --no-cache su-exec sqlite-libs sqlite-dev build-base
-
-WORKDIR $APP_DIR
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app ./app
-COPY entrypoint.sh /entrypoint.sh
-
-EXPOSE 8080
-
-ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]
-CMD ["python", "-m", "app.main"]
-ODIDOEOF
-    log_info "Overwrote Odido Booster Dockerfile to use DHI hardened images and non-privileged port."
 fi
 
 mkdir -p "$SRC_DIR/hub-api"
@@ -5634,101 +5762,20 @@ EOF
 HUB_API_DOCKERFILE="Dockerfile"
 
 clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert"
-# Patch VERT to use DHI Node and Alpine images
+bash "$PATCHES_SCRIPT" "vert" "$SRC_DIR"
 VERT_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/vert" || true)
 if [ -z "$VERT_DOCKERFILE" ]; then
     log_warn "VERT Dockerfile not found - build may fail."
     VERT_DOCKERFILE="Dockerfile"
 fi
-if [ -f "$SRC_DIR/vert/$VERT_DOCKERFILE" ]; then
-    # Use -dev variant for build stages to ensure npm/yarn are present
-    sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    # Use DHI bun alpine dev for builder to keep hardened alpine base
-    sed -i 's|^FROM oven/bun[^ ]*|FROM oven/bun:1|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM oven/bun:1 AS|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM oven/bun$|FROM oven/bun:1|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM oven/bun[[:space:]]|FROM oven/bun:1 |g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM nginx:stable-alpine|FROM nginx:alpine|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    log_info "Patched VERT Dockerfile to use DHI hardened images."
-fi
-
-# Patch VERT Dockerfile to add missing build args
-if [ -f "$SRC_DIR/vert/$VERT_DOCKERFILE" ]; then
-    # Patch PUB_DISABLE_FAILURE_BLOCKS if missing
-    if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_DIR/vert/$VERT_DOCKERFILE"; then
-        if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_DIR/vert/$VERT_DOCKERFILE"; then
-            sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_FAILURE_BLOCKS' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-            sed -i '/^ENV PUB_STRIPE_KEY=${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_FAILURE_BLOCKS=${PUB_DISABLE_FAILURE_BLOCKS}' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-            log_info "Patched VERT Dockerfile to add missing PUB_DISABLE_FAILURE_BLOCKS"
-        fi
-    fi
-    # Patch PUB_DISABLE_DONATIONS if missing
-    if ! grep -q "ARG PUB_DISABLE_DONATIONS" "$SRC_DIR/vert/$VERT_DOCKERFILE"; then
-        if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_DIR/vert/$VERT_DOCKERFILE"; then
-            sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_DONATIONS' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-            sed -i '/^ENV PUB_STRIPE_KEY=${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_DONATIONS=${PUB_DISABLE_DONATIONS}' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-            log_info "Patched VERT Dockerfile to add missing PUB_DISABLE_DONATIONS"
-        fi
-    fi
-fi
 
 clone_repo "https://gitdab.com/cadence/breezewiki" "$SRC_DIR/breezewiki"
-# Patch BreezeWiki to use DHI Alpine image
+bash "$PATCHES_SCRIPT" "breezewiki" "$SRC_DIR"
 BREEZEWIKI_DOCKERFILE="Dockerfile.alpine"
 if [ -f "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE" ]; then
-    log_info "Updating BreezeWiki Dockerfile.alpine..."
+    log_info "BreezeWiki Dockerfile.alpine is ready."
 else
-    log_info "Creating BreezeWiki Dockerfile.alpine..."
-fi
-
-    cat > "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE" <<'BWEOF'
-FROM alpine:latest
-WORKDIR /app
-
-# Install system dependencies
-RUN apk add --no-cache \
-    git \
-    racket \
-    ca-certificates \
-    curl \
-    sqlite-libs \
-    fontconfig \
-    cairo \
-    libjpeg-turbo \
-    glib \
-    pango
-
-COPY . .
-
-# Install Racket dependencies explicitly (matches info.rkt build-deps) to avoid lock mismatch
-RUN raco pkg config --set default-scope installation
-RUN raco pkg install --batch --auto --no-docs --skip-installed \
-    rackunit-lib \
-    web-server-lib \
-    http-easy-lib \
-    html-parsing \
-    html-writing \
-    json-pointer \
-    typed-ini-lib \
-    memo \
-    net-cookies-lib \
-    db \
-    sequence-tools-lib
-
-EXPOSE 10416
-CMD ["racket", "dist.rkt"]
-BWEOF
-log_info "BreezeWiki Dockerfile.alpine is ready."
-if [ -f "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE" ]; then
-    sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
-    sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
-    sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE"
-    log_info "Patched BreezeWiki Dockerfile to use DHI hardened images."
+    log_warn "BreezeWiki Dockerfile.alpine missing - build may fail."
 fi
 
 sudo chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$SRC_DIR/breezewiki" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
@@ -6167,159 +6214,6 @@ fi
 fi
 EOF
 chmod +x "$WG_CONTROL_SCRIPT"
-
-PATCHES_SCRIPT="$BASE_DIR/patches.sh"
-cat > "$PATCHES_SCRIPT" <<'PATCHEOF'
-#!/bin/sh
-SERVICE=$1
-SRC_ROOT=${2:-/app/sources}
-
-log() { echo "[PATCH] $1"; }
-
-detect_dockerfile() {
-    local repo_dir="$1"
-    local preferred="${2:-}"
-    local found=""
-    if [ -n "$preferred" ] && [ -f "$repo_dir/$preferred" ]; then echo "$preferred"; return 0; fi
-    if [ -f "$repo_dir/Dockerfile" ]; then echo "Dockerfile"; return 0; fi
-    if [ -f "$repo_dir/docker/Dockerfile" ]; then echo "docker/Dockerfile"; return 0; fi
-    found=$(find "$repo_dir" -maxdepth 3 -type f -name 'Dockerfile*' 2>/dev/null | head -n 1 || true)
-    if [ -n "$found" ]; then echo "${found#"$repo_dir/"}"; return 0; fi
-    return 1
-}
-
-if [ "$SERVICE" = "wikiless" ] || [ "$SERVICE" = "all" ]; then
-    log "Patching Wikiless..."
-    D_FILE=$(detect_dockerfile "$SRC_ROOT/wikiless")
-    if [ -n "$D_FILE" ]; then
-        sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM node:20-alpine|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|CMD \["src/wikiless.js"\]|CMD ["node", "src/wikiless.js"]|g' "$SRC_ROOT/wikiless/$D_FILE"
-    fi
-fi
-
-if [ "$SERVICE" = "scribe" ] || [ "$SERVICE" = "all" ]; then
-    log "Patching Scribe..."
-    D_FILE=$(detect_dockerfile "$SRC_ROOT/scribe")
-    if [ -n "$D_FILE" ]; then
-        sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_ROOT/scribe/$D_FILE"
-    fi
-fi
-
-if [ "$SERVICE" = "invidious" ] || [ "$SERVICE" = "all" ]; then
-    log "Patching Invidious..."
-    D_FILE=$(detect_dockerfile "$SRC_ROOT/invidious" "docker/Dockerfile")
-    if [ -n "$D_FILE" ]; then
-        sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/$D_FILE"
-        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/invidious/$D_FILE"
-        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_ROOT/invidious/$D_FILE"
-        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_ROOT/invidious/$D_FILE"
-    fi
-    # Also patch arm64 if exists
-    if [ -f "$SRC_ROOT/invidious/docker/Dockerfile.arm64" ]; then
-        sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
-        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
-    fi
-fi
-
-if [ "$SERVICE" = "odido-booster" ] || [ "$SERVICE" = "all" ]; then
-    log "Patching Odido..."
-    D_FILE=$(detect_dockerfile "$SRC_ROOT/odido-bundle-booster")
-    if [ -n "$D_FILE" ]; then
-        cat > "$SRC_ROOT/odido-bundle-booster/$D_FILE" <<'ODIDOEOF'
-FROM python:3.11-alpine
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    APP_DIR=/app \
-    APP_DATA_DIR=/data \
-    PORT=8080
-
-RUN apk add --no-cache su-exec sqlite-libs sqlite-dev build-base
-
-WORKDIR $APP_DIR
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app ./app
-COPY entrypoint.sh /entrypoint.sh
-
-EXPOSE 8080
-
-ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]
-CMD ["python", "-m", "app.main"]
-ODIDOEOF
-    fi
-fi
-
-if [ "$SERVICE" = "vert" ] || [ "$SERVICE" = "all" ]; then
-    log "Patching VERT..."
-    D_FILE=$(detect_dockerfile "$SRC_ROOT/vert")
-    if [ -n "$D_FILE" ]; then
-        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/vert/$D_FILE"
-        sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[^ ]*|FROM oven/bun:1|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM oven/bun:1 AS|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun$|FROM oven/bun:1|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[[:space:]]|FROM oven/bun:1 |g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_ROOT/vert/$D_FILE"
-        sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM nginx:stable-alpine|FROM nginx:alpine|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_ROOT/vert/$D_FILE"
-        
-        # Build args patches
-        if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_ROOT/vert/$D_FILE"; then
-            if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_ROOT/vert/$D_FILE"; then
-                sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_FAILURE_BLOCKS' "$SRC_ROOT/vert/$D_FILE"
-                sed -i '/^ENV PUB_STRIPE_KEY=${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_FAILURE_BLOCKS=${PUB_DISABLE_FAILURE_BLOCKS}' "$SRC_ROOT/vert/$D_FILE"
-            fi
-        fi
-        if ! grep -q "ARG PUB_DISABLE_DONATIONS" "$SRC_ROOT/vert/$D_FILE"; then
-            if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_ROOT/vert/$D_FILE"; then
-                sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_DONATIONS' "$SRC_ROOT/vert/$D_FILE"
-                sed -i '/^ENV PUB_STRIPE_KEY=${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_DONATIONS=${PUB_DISABLE_DONATIONS}' "$SRC_ROOT/vert/$D_FILE"
-            fi
-        fi
-    fi
-fi
-
-if [ "$SERVICE" = "breezewiki" ] || [ "$SERVICE" = "all" ]; then
-    log "Recreating BreezeWiki Dockerfile.alpine..."
-    cat > "$SRC_ROOT/breezewiki/Dockerfile.alpine" <<'BWEOF'
-FROM alpine:latest
-WORKDIR /app
-RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango
-COPY . .
-RUN raco pkg config --set default-scope installation
-RUN raco pkg install --batch --auto --no-docs --skip-installed \
-    rackunit-lib \
-    web-server-lib \
-    http-easy-lib \
-    html-parsing \
-    html-writing \
-    json-pointer \
-    typed-ini-lib \
-    memo \
-    net-cookies-lib \
-    db \
-    sequence-tools-lib
-EXPOSE 10416
-CMD ["racket", "dist.rkt"]
-BWEOF
-fi
-PATCHEOF
-chmod +x "$PATCHES_SCRIPT"
 
 cat > "$WG_API_SCRIPT" <<'APIEOF'
 #!/usr/bin/env python3
