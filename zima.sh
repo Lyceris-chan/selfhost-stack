@@ -5640,17 +5640,17 @@ if [ -z "$VERT_DOCKERFILE" ]; then
 fi
 if [ -f "$SRC_DIR/vert/$VERT_DOCKERFILE" ]; then
     # Use -dev variant for build stages to ensure npm/yarn are present
-    sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     # Use DHI bun alpine dev for builder to keep hardened alpine base
-    sed -i 's|^FROM oven/bun[^ ]*|FROM oven/bun:1|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM oven/bun:1 AS|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM oven/bun$|FROM oven/bun:1|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM oven/bun[[:space:]]|FROM oven/bun:1 |g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^RUN apt-get update.*|RUN apt-get update \&\& apt-get install -y --no-install-recommends git \&\& rm -rf /var/lib/apt/lists/*|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i -E '/^[[:space:]]*(&&[[:space:]]*)?apt-get install -y --no-install-recommends git/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i -E '/^[[:space:]]*(&&[[:space:]]*)?rm -rf \/var\/lib\/apt\/lists\/\*/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
-    sed -i 's|^FROM nginx:stable-alpine|FROM nginx:alpine|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM oven/bun[^ ]*|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM dhi.io/bun:1-alpine3.22-dev AS|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM oven/bun$|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM oven/bun[[:space:]]|FROM dhi.io/bun:1-alpine3.22-dev |g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_DIR/vert/$VERT_DOCKERFILE"
+    sed -i 's|^FROM nginx:stable-alpine|FROM dhi.io/nginx:1.28-alpine3.21|g' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_DIR/vert/$VERT_DOCKERFILE"
     log_info "Patched VERT Dockerfile to use DHI hardened images."
 fi
@@ -6264,16 +6264,16 @@ if [ "$SERVICE" = "vert" ] || [ "$SERVICE" = "all" ]; then
     log "Patching VERT..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/vert")
     if [ -n "$D_FILE" ]; then
-        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/vert/$D_FILE"
-        sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[^ ]*|FROM oven/bun:1|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM oven/bun:1 AS|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun$|FROM oven/bun:1|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[[:space:]]|FROM oven/bun:1 |g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^RUN apt-get update.*|RUN apt-get update \&\& apt-get install -y --no-install-recommends git \&\& rm -rf /var/lib/apt/lists/*|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i -E '/^[[:space:]]*(&&[[:space:]]*)?apt-get install -y --no-install-recommends git/d' "$SRC_ROOT/vert/$D_FILE"
-        sed -i -E '/^[[:space:]]*(&&[[:space:]]*)?rm -rf \/var\/lib\/apt\/lists\/\*/d' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM nginx:stable-alpine|FROM nginx:alpine|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[^ ]*|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM dhi.io/bun:1-alpine3.22-dev AS|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun$|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[[:space:]]|FROM dhi.io/bun:1-alpine3.22-dev |g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM nginx:stable-alpine|FROM dhi.io/nginx:1.28-alpine3.21|g' "$SRC_ROOT/vert/$D_FILE"
         sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_ROOT/vert/$D_FILE"
         
         # Build args patches
