@@ -195,18 +195,6 @@ safe_remove_network() {
     $DOCKER_CMD network rm "$net" 2>/dev/null || true
 }
 
-authenticate_registries() {
-if [ "$DASHBOARD_ONLY" = true ]; then
-    log_info "Dashboard-only mode active. Skipping installation and only generating UI."
-    LAN_IP="${LAN_IP:-10.0.1.183}"
-    PUBLIC_IP="${PUBLIC_IP:-1.2.3.4}"
-    ODIDO_API_KEY="${ODIDO_API_KEY:-mock_key}"
-    mkdir -p "$BASE_DIR"
-    mkdir -p "$ASSETS_DIR"
-    generate_dashboard
-    log_info "Dashboard generation complete. Exiting."
-    exit 0
-fi
 generate_dashboard() {
 # Generate the Material Design 3 management dashboard.
 log_info "Compiling Management Dashboard UI..."
@@ -4175,6 +4163,21 @@ cat >> "$DASHBOARD_FILE" <<EOF
 </html>
 EOF
 }
+
+authenticate_registries() {
+    if [ "$DASHBOARD_ONLY" = true ]; then
+        log_info "Dashboard-only mode active. Skipping installation and only generating UI."
+        LAN_IP="${LAN_IP:-10.0.1.183}"
+        PUBLIC_IP="${PUBLIC_IP:-1.2.3.4}"
+        ODIDO_API_KEY="${ODIDO_API_KEY:-mock_key}"
+        PORT_PORTAINER="${PORT_PORTAINER:-9000}"
+        mkdir -p "$BASE_DIR"
+        mkdir -p "$ASSETS_DIR"
+        setup_assets
+        generate_dashboard
+        log_info "Dashboard generation complete. Exiting."
+        exit 0
+    fi
     # Export DOCKER_CONFIG globally
     export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
     
@@ -4395,7 +4398,6 @@ clean_environment() {
                 sudo rm -f "$BASE_DIR/wg-api.sh" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/wg-ip-monitor.log" 2>/dev/null || true
-generate_dashboard
                 sudo rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
