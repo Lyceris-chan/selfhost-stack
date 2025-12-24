@@ -5612,10 +5612,10 @@ if [ "$SERVICE" = "vert" ] || [ "$SERVICE" = "all" ]; then
     if [ -n "$D_FILE" ]; then
         sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/vert/$D_FILE"
         sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[^ ]*|FROM oven/bun:1|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM oven/bun:1 AS|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun$|FROM oven/bun:1|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[[:space:]]|FROM oven/bun:1 |g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[^ ]*|FROM oven/bun:1-alpine|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM oven/bun:1-alpine AS|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun$|FROM oven/bun:1-alpine|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[[:space:]]|FROM oven/bun:1-alpine |g' "$SRC_ROOT/vert/$D_FILE"
         sed -i 's|^FROM nginx:stable-alpine|FROM nginx:alpine|g' "$SRC_ROOT/vert/$D_FILE"
         sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_ROOT/vert/$D_FILE"
         
