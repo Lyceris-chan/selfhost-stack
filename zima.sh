@@ -5598,7 +5598,7 @@ if [ -z "$ODIDO_DOCKERFILE" ]; then
 fi
 if [ -f "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" ]; then
     cat > "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" <<'ODIDOEOF'
-FROM python:3.11-alpine
+FROM dhi.io/python:3.11-alpine3.22-dev
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -6237,7 +6237,7 @@ if [ "$SERVICE" = "odido-booster" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/odido-bundle-booster")
     if [ -n "$D_FILE" ]; then
         cat > "$SRC_ROOT/odido-bundle-booster/$D_FILE" <<'ODIDOEOF'
-FROM python:3.11-alpine
+FROM dhi.io/python:3.11-alpine3.22-dev
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
