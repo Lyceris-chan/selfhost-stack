@@ -495,7 +495,7 @@ clean_environment() {
         log_info "Phase 5: Removing images..."
         REMOVED_IMAGES=""
         # Remove images by known names
-        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
+KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
         for img in $KNOWN_IMAGES; do
             if $DOCKER_CMD images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -q "$img"; then
                 log_info "  Removing: $img"
@@ -598,7 +598,7 @@ clean_environment
 log_info "Pre-pulling ALL deployment images to avoid rate limits..."
 # Explicitly pull images used by 'echo docker run' commands later in the script
 # These images are small but critical for password generation and setup
-CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
+CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
 
 for img in $CRITICAL_IMAGES; do
     if ! $DOCKER_CMD pull "$img"; then
@@ -1534,7 +1534,7 @@ if [ -z "$ODIDO_DOCKERFILE" ]; then
 fi
 if [ -f "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" ]; then
     cat > "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" <<'ODIDOEOF'
-FROM dhi/python:3.11-alpine3.22-dev
+FROM dhi.io/python:3.11-alpine3.22-dev
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -1561,7 +1561,7 @@ fi
 
 mkdir -p "$SRC_DIR/hub-api"
 cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
-FROM dhi/python:3.11-alpine3.22-dev
+FROM dhi.io/python:3.11-alpine3.22-dev
 RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git
 WORKDIR /app
 CMD ["python", "server.py"]
