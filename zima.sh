@@ -19,10 +19,10 @@ set -euo pipefail
 # ==============================================================================
 
 # --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
-REG_USER=""
-REG_TOKEN=""
-LAN_IP_OVERRIDE=""
-WG_CONF_B64=""
+REG_USER="${REG_USER:-}"
+REG_TOKEN="${REG_TOKEN:-}"
+LAN_IP_OVERRIDE="${LAN_IP_OVERRIDE:-}"
+WG_CONF_B64="${WG_CONF_B64:-}"
 
 usage() {
     echo "Usage: $0 [-c (reset environment)] [-x (cleanup and exit)] [-p (auto-passwords)] [-y (auto-confirm)] [-a (allow Proton VPN)] [-s services)] [-D (dashboard only)] [-h]"
@@ -201,20 +201,76 @@ safe_remove_network() {
 }
 
 authenticate_registries() {
-if [ "$DASHBOARD_ONLY" = true ]; then
-    log_info "Dashboard-only mode active. Skipping installation and only generating UI."
-    LAN_IP="${LAN_IP:-10.0.1.183}"
-    PUBLIC_IP="${PUBLIC_IP:-1.2.3.4}"
-    ODIDO_API_KEY="${ODIDO_API_KEY:-mock_key}"
-    mkdir -p "$BASE_DIR"
-    mkdir -p "$ASSETS_DIR"
-    generate_dashboard
-    log_info "Dashboard generation complete. Exiting."
-    exit 0
-fi
+    # Export DOCKER_CONFIG globally
+    export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
+    
+    if [ "$AUTO_CONFIRM" = true ] || [ -n "$REG_TOKEN" ]; then
+        if [ -n "$REG_TOKEN" ]; then
+             log_info "Using provided credentials from environment."
+        else
+             log_info "Auto-confirm enabled: Using default/placeholder credentials."
+             REG_USER="laciachan"
+             REG_TOKEN="DOCKER_TOKEN_PLACEHOLDER"
+        fi
+        
+        # DHI Login
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+            log_info "dhi.io: Authentication successful."
+        else
+            log_warn "dhi.io: Authentication failed."
+        fi
+
+        # Docker Hub Login
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+             log_info "Docker Hub: Authentication successful."
+        else
+             log_warn "Docker Hub: Authentication failed."
+        fi
+        return 0
+    fi
+
+    echo ""
+    echo "--- REGISTRY AUTHENTICATION ---"
+    echo "Please provide your credentials for dhi.io and Docker Hub."
+    echo ""
+
+    while true; do
+        read -r -p "Username: " REG_USER
+        read -rs -p "Token: " REG_TOKEN
+        echo ""
+        
+        # DHI Login
+        DHI_LOGIN_OK=false
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
+            log_info "dhi.io: Authentication successful."
+            DHI_LOGIN_OK=true
+        else
+            log_crit "dhi.io: Authentication failed."
+        fi
+
+        # Docker Hub Login
+        HUB_LOGIN_OK=false
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+             log_info "Docker Hub: Authentication successful."
+             HUB_LOGIN_OK=true
+        else
+             log_warn "Docker Hub: Authentication failed."
+        fi
+
+        if [ "$DHI_LOGIN_OK" = true ]; then
+            return 0
+        fi
+
+        if ! ask_confirm "Authentication failed. Want to try again?"; then return 1; fi
+    done
+}
+
 generate_dashboard() {
 # Generate the Material Design 3 management dashboard.
 log_info "Compiling Management Dashboard UI..."
+if [ -d "$DASHBOARD_FILE" ]; then
+    rm -rf "$DASHBOARD_FILE"
+fi
 cat > "$DASHBOARD_FILE" <<EOF
 <!DOCTYPE html>
 <html lang="en">
@@ -4180,55 +4236,6 @@ cat >> "$DASHBOARD_FILE" <<EOF
 </html>
 EOF
 }
-    # Export DOCKER_CONFIG globally
-    export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
-    
-        # Non-interactive login via environment variables
-        if [ -n "${REG_USER:-}" ] && [ -n "${REG_TOKEN:-}" ]; then
-            log_info "Credentials detected in environment: Attempting non-interactive registry login."
-            
-            # DHI Login
-            if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-                log_info "dhi.io: Authentication successful."
-            else
-                log_warn "dhi.io: Authentication failed."
-            fi
-    
-            # Docker Hub Login (Optional)
-            if [ -n "${HUB_USER:-}" ] && [ -n "${HUB_TOKEN:-}" ]; then
-                if echo "$HUB_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$HUB_USER" --password-stdin >/dev/null 2>&1; then
-                     log_info "Docker Hub: Authentication successful."
-                else
-                     log_warn "Docker Hub: Authentication failed."
-                fi
-            else
-                log_info "No Docker Hub credentials provided (HUB_USER/HUB_TOKEN). Skipping login (anonymous pull)."
-            fi
-            return 0
-        fi
-    
-        # If running with AUTO_CONFIRM but no credentials, warn but proceed to prompt 
-        echo ""
-        echo "--- REGISTRY AUTHENTICATION ---"
-        echo "Please provide your credentials for dhi.io and Docker Hub."
-        echo ""
-    
-        while true; do
-            read -r -p "Username: " REG_USER
-            read -rs -p "Access Token (PAT): " REG_TOKEN
-            echo ""
-            
-            # DHI Login
-            if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
-                log_info "dhi.io: Authentication successful."
-                return 0
-            else
-                log_crit "dhi.io: Authentication failed."
-            fi
-    
-            if ! ask_confirm "Authentication failed. Would you like to retry?"; then return 1; fi
-        done
-}
 
 setup_assets() {
     log_info "Downloading local assets to ensure dashboard privacy and eliminate third-party dependencies."
@@ -4524,7 +4531,7 @@ clean_environment() {
         log_info "Phase 5: Removing images..."
         REMOVED_IMAGES=""
         # Remove images by known names
-        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
+        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21-dev dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/node:20-alpine3.22 dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
         for img in $KNOWN_IMAGES; do
             if $DOCKER_CMD images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -q "$img"; then
                 log_info "  Removing: $img"
@@ -4638,7 +4645,7 @@ clean_environment
 log_info "Pre-pulling ALL deployment images to avoid rate limits..."
 # Explicitly pull images used by 'docker run' commands or as base images later in the script
 # We only pull core infrastructure and base images. App images built from source are skipped.
-CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
+CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21-dev dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/node:20-alpine3.22 dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
 
 for img in $CRITICAL_IMAGES; do
     MAX_RETRIES=3
@@ -5532,17 +5539,17 @@ detect_dockerfile() {
     return 1
 }
 
-if [ "$SERVICE" = "wikiless" ] || [ "$SERVICE" = "all" ]; then
+    if [ "$SERVICE" = "wikiless" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Wikiless..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/wikiless")
     if [ -n "$D_FILE" ]; then
-        sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM node:20-alpine|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/wikiless/$D_FILE"
+        sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
         sed -i 's|CMD \["src/wikiless.js"\]|CMD ["node", "src/wikiless.js"]|g' "$SRC_ROOT/wikiless/$D_FILE"
     fi
 fi
@@ -5552,10 +5559,11 @@ if [ "$SERVICE" = "scribe" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/scribe")
     if [ -n "$D_FILE" ]; then
         sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
+        sed -i '/FROM dhi.io\/alpine-base:3.22-dev/a USER root' "$SRC_ROOT/scribe/$D_FILE"
         sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_ROOT/scribe/$D_FILE"
     fi
 fi
@@ -5565,9 +5573,9 @@ if [ "$SERVICE" = "invidious" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/invidious" "docker/Dockerfile")
     if [ -n "$D_FILE" ]; then
         sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/$D_FILE"
-        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/invidious/$D_FILE"
-        sed -i 's|^FROM alpine[[:space:]]|FROM alpine:latest |g' "$SRC_ROOT/invidious/$D_FILE"
-        sed -i 's|^FROM alpine$|FROM alpine:latest|g' "$SRC_ROOT/invidious/$D_FILE"
+        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/$D_FILE"
+        sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/invidious/$D_FILE"
+        sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/$D_FILE"
     fi
     # Also patch arm64 if exists
     if [ -f "$SRC_ROOT/invidious/docker/Dockerfile.arm64" ]; then
@@ -5581,7 +5589,7 @@ if [ "$SERVICE" = "odido-booster" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/odido-bundle-booster")
     if [ -n "$D_FILE" ]; then
         cat > "$SRC_ROOT/odido-bundle-booster/$D_FILE" <<'ODIDOEOF'
-FROM python:3.11-alpine
+FROM dhi.io/python:3.11-alpine3.22-dev
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -5610,13 +5618,16 @@ if [ "$SERVICE" = "vert" ] || [ "$SERVICE" = "all" ]; then
     log "Patching VERT..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/vert")
     if [ -n "$D_FILE" ]; then
-        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/vert/$D_FILE"
-        sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM node:20-alpine|' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[^ ]*|FROM oven/bun:1-alpine|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM oven/bun:1-alpine AS|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun$|FROM oven/bun:1-alpine|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[[:space:]]|FROM oven/bun:1-alpine |g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM nginx:stable-alpine|FROM nginx:alpine|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[^ ]*|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM dhi.io/bun:1-alpine3.22-dev AS|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun$|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun[[:space:]]|FROM dhi.io/bun:1-alpine3.22-dev |g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM nginx:stable-alpine|FROM dhi.io/nginx:1.28-alpine3.21-dev|g' "$SRC_ROOT/vert/$D_FILE"
         sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_ROOT/vert/$D_FILE"
         
         # Build args patches
@@ -5638,7 +5649,7 @@ fi
 if [ "$SERVICE" = "breezewiki" ] || [ "$SERVICE" = "all" ]; then
     log "Recreating BreezeWiki Dockerfile.alpine..."
     cat > "$SRC_ROOT/breezewiki/Dockerfile.alpine" <<'BWEOF'
-FROM alpine:latest
+FROM dhi.io/alpine-base:3.22-dev
 WORKDIR /app
 RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango
 COPY . .
@@ -5750,7 +5761,7 @@ fi
 
 mkdir -p "$SRC_DIR/hub-api"
 cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
-FROM python:3.11-alpine
+FROM dhi.io/python:3.11-alpine3.22-dev
 RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git
 RUN pip install --no-cache-dir psutil
 WORKDIR /app
@@ -8214,6 +8225,7 @@ x-casaos:
 EOF
 
 # --- SECTION 14: DASHBOARD & UI GENERATION ---
+generate_dashboard
 
 # --- SECTION 15: BACKGROUND DAEMONS & PROACTIVE MONITORING ---
 # Initialize automated background tasks for SSL renewal and Dynamic DNS updates.
