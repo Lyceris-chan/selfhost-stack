@@ -4524,7 +4524,7 @@ clean_environment() {
         log_info "Phase 5: Removing images..."
         REMOVED_IMAGES=""
         # Remove images by known names
-        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome nginx:alpine portainer/portainer-ce containrrr/watchtower python:3.11-alpine ghcr.io/wg-easy/wg-easy redis:7.2 quay.io/invidious/invidious quay.io/invidious/invidious-companion postgres:14-alpine neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine alpine:latest node:20-alpine 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine oven/bun:1 neilpang/acme.sh"
+        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert httpd:alpine dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
         for img in $KNOWN_IMAGES; do
             if $DOCKER_CMD images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -q "$img"; then
                 log_info "  Removing: $img"
@@ -4638,7 +4638,7 @@ clean_environment
 log_info "Pre-pulling ALL deployment images to avoid rate limits..."
 # Explicitly pull images used by 'docker run' commands or as base images later in the script
 # We only pull core infrastructure and base images. App images built from source are skipped.
-CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome nginx:alpine portainer/portainer-ce containrrr/watchtower python:3.11-alpine ghcr.io/wg-easy/wg-easy redis:7.2 quay.io/invidious/invidious-companion postgres:14-alpine neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert alpine:latest node:20-alpine 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine oven/bun:1 neilpang/acme.sh"
+CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian13 quay.io/invidious/invidious quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo quay.io/pussthecatorg/breezewiki ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd ghcr.io/vert-sh/vert dhi.io/alpine-base:3.22-dev dhi.io/node:20-alpine3.22-dev 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/bun:1-alpine3.22-dev neilpang/acme.sh"
 
 for img in $CRITICAL_IMAGES; do
     MAX_RETRIES=3
@@ -7789,7 +7789,7 @@ fi
 if should_deploy "dashboard"; then
 cat >> "$COMPOSE_FILE" <<EOF
   dashboard:
-    image: nginx:alpine
+    image: dhi.io/nginx:1.28-alpine3.21
     container_name: dashboard
     networks: [frontnet]
     ports:
@@ -7953,7 +7953,7 @@ cat >> "$COMPOSE_FILE" <<EOF
         limits: {cpus: '0.5', memory: 256M}
 
   wikiless_redis:
-    image: redis:7.2
+    image: dhi.io/redis:7.2-debian13
     container_name: wikiless_redis
     labels:
       - "casaos.skip=true"
@@ -8006,7 +8006,7 @@ cat >> "$COMPOSE_FILE" <<EOF
         limits: {cpus: '1.5', memory: 1024M}
 
   invidious-db:
-    image: postgres:14-alpine
+    image: dhi.io/postgres:14-alpine3.22
     container_name: invidious-db
     labels:
       - "casaos.skip=true"
