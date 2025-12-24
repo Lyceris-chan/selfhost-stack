@@ -1,17 +1,108 @@
 
 const puppeteer = require('puppeteer');
 
+const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://localhost:8081';
+const MOCK_API = process.env.MOCK_API === '1';
+const servicesList = [
+  'invidious',
+  'redlib',
+  'wikiless',
+  'rimgo',
+  'breezewiki',
+  'anonymousoverflow',
+  'scribe',
+  'memos',
+  'vert',
+  'adguard',
+  'portainer',
+  'wg-easy'
+];
+const serviceUrls = {
+  invidious: 'http://127.0.0.1:3000',
+  redlib: 'http://127.0.0.1:8080',
+  wikiless: 'http://127.0.0.1:8180',
+  rimgo: 'http://127.0.0.1:3002',
+  breezewiki: 'http://127.0.0.1:8380',
+  anonymousoverflow: 'http://127.0.0.1:8480',
+  scribe: 'http://127.0.0.1:8280',
+  memos: 'http://127.0.0.1:5230',
+  vert: 'http://127.0.0.1:5555',
+  adguard: 'http://127.0.0.1:8083',
+  portainer: 'http://127.0.0.1:9000',
+  'wg-easy': 'http://127.0.0.1:51821'
+};
+
 (async () => {
   const browser = await puppeteer.launch({
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
     headless: true // Run in headless mode
   });
   const page = await browser.newPage();
+
+  if (MOCK_API) {
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const url = request.url();
+      if (url.includes('/api/containers')) {
+        const containers = {};
+        servicesList.forEach((service) => {
+          containers[service] = { id: `${service}-id`, state: 'running', hardened: true };
+        });
+        request.respond({
+          contentType: 'application/json',
+          body: JSON.stringify({ containers })
+        });
+        return;
+      }
+      if (url.includes('/api/services')) {
+        const services = {};
+        servicesList.forEach((service, index) => {
+          services[service] = {
+            name: service.charAt(0).toUpperCase() + service.slice(1),
+            category: index < 8 ? 'apps' : (index === 8 ? 'tools' : 'system'),
+            order: index * 10,
+            url: serviceUrls[service] || ''
+          };
+        });
+        request.respond({
+          contentType: 'application/json',
+          body: JSON.stringify({ services })
+        });
+        return;
+      }
+      if (url.includes('/api/status')) {
+        const services = {};
+        servicesList.forEach((service) => { services[service] = 'healthy'; });
+        request.respond({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            gluetun: { status: 'up', healthy: true },
+            services
+          })
+        });
+        return;
+      }
+      if (url.includes('/api/profiles')) {
+        request.respond({
+          contentType: 'application/json',
+          body: JSON.stringify({ profiles: [] })
+        });
+        return;
+      }
+      if (url.includes('/api/') || url.includes('/odido-api/')) {
+        request.respond({
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, status: 'Healthy', containers: {}, updates: {}, services: {}, profiles: [] })
+        });
+        return;
+      }
+      request.continue();
+    });
+  }
   
   // Set viewport to desktop size
   await page.setViewport({ width: 1280, height: 800 });
-
-  const DASHBOARD_URL = 'http://10.0.1.183:8081'; // Using the IP from previous verification
 
   console.log(`[TEST] Navigating to ${DASHBOARD_URL}...`);
   try {
@@ -19,6 +110,9 @@ const puppeteer = require('puppeteer');
     // Clear localStorage to reset state (advisory, theme, filters)
     await page.evaluate(() => localStorage.clear());
     await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => document.querySelectorAll('.card[id^="link-"]').length > 0, { timeout: 10000 }).catch(() => {
+      console.warn("  - WARN: Dynamic cards not found after reload.");
+    });
   } catch (e) {
     console.error("[FAIL] Could not load dashboard:", e);
     await browser.close();
@@ -35,9 +129,13 @@ const puppeteer = require('puppeteer');
       await dismissBtn.click();
       console.log("  - Dismiss button clicked.");
       // Wait for animation/hiding
-      await new Promise(r => setTimeout(r, 500));
-      const isVisible = await page.$eval('#mac-advisory', el => el.style.display !== 'none');
-      if (!isVisible) console.log("  - PASS: Advisory dismissed.");
+      const dismissed = await page.waitForFunction(() => {
+        const el = document.getElementById('mac-advisory');
+        if (!el) return true;
+        const style = window.getComputedStyle(el);
+        return style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || el.classList.contains('hidden');
+      }, { timeout: 2000 }).then(() => true).catch(() => false);
+      if (dismissed) console.log("  - PASS: Advisory dismissed.");
       else console.error("  - FAIL: Advisory still visible.");
     } else console.error("  - FAIL: Dismiss button not found.");
   } else {
@@ -48,15 +146,25 @@ const puppeteer = require('puppeteer');
   console.log("[TEST] Verifying Chip Layout (CSS)...");
   // Wait for dynamic grid to load
   await page.waitForSelector('.chip-box', { timeout: 5000 }).catch(() => console.log("  - Waiting for chips..."));
-  
-  const chipBoxStyle = await page.$eval('.chip-box', el => getComputedStyle(el).flexWrap);
-  if (chipBoxStyle === 'wrap') console.log(`  - PASS: .chip-box flex-wrap is '${chipBoxStyle}'`);
-  else console.error(`  - FAIL: .chip-box flex-wrap is '${chipBoxStyle}'`);
 
-  const chipFlex = await page.$eval('.chip', el => getComputedStyle(el).flex);
-  // flex: 1 1 auto usually computes to "1 1 auto" or "1 1 0%" depending on browser.
-  if (chipFlex.startsWith('1 1')) console.log(`  - PASS: .chip flex is '${chipFlex}'`);
-  else console.error(`  - FAIL: .chip flex is '${chipFlex}'`);
+  const chipBox = await page.$('.chip-box');
+  if (chipBox) {
+    const chipBoxStyle = await page.$eval('.chip-box', el => getComputedStyle(el).flexWrap);
+    if (chipBoxStyle === 'wrap') console.log(`  - PASS: .chip-box flex-wrap is '${chipBoxStyle}'`);
+    else console.error(`  - FAIL: .chip-box flex-wrap is '${chipBoxStyle}'`);
+  } else {
+    console.error("  - FAIL: .chip-box not found.");
+  }
+
+  const chip = await page.$('.chip');
+  if (chip) {
+    const chipFlex = await page.$eval('.chip', el => getComputedStyle(el).flex);
+    // flex: 1 1 auto usually computes to "1 1 auto" or "1 1 0%" depending on browser.
+    if (chipFlex.startsWith('1 1')) console.log(`  - PASS: .chip flex is '${chipFlex}'`);
+    else console.error(`  - FAIL: .chip flex is '${chipFlex}'`);
+  } else {
+    console.error("  - FAIL: .chip not found.");
+  }
 
   // 3. User Interactions
   console.log("[TEST] Simulating User Interactions...");
@@ -71,10 +179,16 @@ const puppeteer = require('puppeteer');
       await new Promise(r => setTimeout(r, 500)); // Wait for transition/render
 
       if (filter === 'all') {
+        const gridAll = await page.$('#grid-all');
+        const gridApps = await page.$('#grid-apps');
+        if (gridAll && gridApps) {
           const gridAllVisible = await page.$eval('#grid-all', el => el.offsetParent !== null);
           const gridAppsHidden = await page.$eval('#grid-apps', el => el.offsetParent === null); // Should be hidden
           if (gridAllVisible && gridAppsHidden) console.log("  - PASS: 'All Services' view active.");
           else console.error("  - FAIL: 'All Services' view check failed.");
+        } else {
+          console.error("  - FAIL: Grid containers not found for 'All Services'.");
+        }
       }
 
       // Verify active class
@@ -105,7 +219,10 @@ const puppeteer = require('puppeteer');
   const themeToggle = await page.$('.theme-toggle');
   if (themeToggle) {
     const startTheme = await page.evaluate(() => document.documentElement.classList.contains('light-mode'));
-    await themeToggle.click();
+    await page.evaluate(() => {
+      const btn = document.querySelector('.theme-toggle');
+      if (btn) btn.click();
+    });
     await new Promise(r => setTimeout(r, 200));
     const endTheme = await page.evaluate(() => document.documentElement.classList.contains('light-mode'));
     if (startTheme !== endTheme) console.log("  - PASS: Theme toggled.");
@@ -128,17 +245,22 @@ const puppeteer = require('puppeteer');
   console.log("  - Admin mode forced via JS.");
   
   // Check if admin-only elements are visible
-  const adminChipVisible = await page.$eval('.filter-chip[data-target="logs"]', el => {
-    return window.getComputedStyle(el).display !== 'none';
-  });
-  if (adminChipVisible) console.log("  - PASS: Admin-only 'Logs' filter is now visible.");
-  else console.error("  - FAIL: Admin-only elements still hidden.");
+  const logsChip = await page.$('.filter-chip[data-target="logs"]');
+  if (logsChip) {
+    const adminChipVisible = await page.$eval('.filter-chip[data-target="logs"]', el => {
+      return window.getComputedStyle(el).display !== 'none';
+    });
+    if (adminChipVisible) console.log("  - PASS: Admin-only 'Logs' filter is now visible.");
+    else console.error("  - FAIL: Admin-only elements still hidden.");
+  } else {
+    console.error("  - FAIL: Admin-only 'Logs' filter not found.");
+  }
 
   // 5. Service Status Check
   console.log("[TEST] Verifying Service Status (waiting for poll)...");
   await new Promise(r => setTimeout(r, 15000)); // Wait 15s for polling cycle
   
-  const statuses = await page.$$eval('.status-text', els => els.map(e => e.textContent.trim()));
+  const statuses = await page.$$eval('.status-text', els => els.map(e => e.textContent.trim())).catch(() => []);
   const total = statuses.length;
   const online = statuses.filter(s => s === 'Connected' || s === 'Healthy' || s === 'Active' || s === 'Running' || s === 'Optimal' || s === 'Connected (Healthy)').length;
   

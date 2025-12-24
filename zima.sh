@@ -20,7 +20,7 @@ set -euo pipefail
 
 # --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
 usage() {
-    echo "Usage: $0 [-c (reset environment)] [-x (cleanup and exit)] [-p (auto-passwords)] [-y (auto-confirm)] [-a (allow Proton VPN)] [-s services] [-h]"
+    echo "Usage: $0 [-c (reset environment)] [-x (cleanup and exit)] [-p (auto-passwords)] [-y (auto-confirm)] [-a (allow Proton VPN)] [-s services)] [-D (dashboard only)] [-h]"
 }
 
 FORCE_CLEAN=false
@@ -31,8 +31,9 @@ RESET_ENV=false
 AUTO_CONFIRM=false
 ALLOW_PROTON_VPN=false
 SELECTED_SERVICES=""
+DASHBOARD_ONLY=false
 
-while getopts "cxpyas:h" opt; do
+while getopts "cxpyas:Dh" opt; do
     case ${opt} in
         c) RESET_ENV=true; FORCE_CLEAN=true ;;
         x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
@@ -40,6 +41,7 @@ while getopts "cxpyas:h" opt; do
         y) AUTO_CONFIRM=true ;;
         a) ALLOW_PROTON_VPN=true ;;
         s) SELECTED_SERVICES="${OPTARG}" ;;
+        D) DASHBOARD_ONLY=true ;;
         h) 
             usage
             exit 0
@@ -194,6 +196,3960 @@ safe_remove_network() {
 }
 
 authenticate_registries() {
+if [ "$DASHBOARD_ONLY" = true ]; then
+    log_info "Dashboard-only mode active. Skipping installation and only generating UI."
+    LAN_IP="${LAN_IP:-10.0.1.183}"
+    PUBLIC_IP="${PUBLIC_IP:-1.2.3.4}"
+    ODIDO_API_KEY="${ODIDO_API_KEY:-mock_key}"
+    mkdir -p "$BASE_DIR"
+    mkdir -p "$ASSETS_DIR"
+    generate_dashboard
+    log_info "Dashboard generation complete. Exiting."
+    exit 0
+fi
+generate_dashboard() {
+# Generate the Material Design 3 management dashboard.
+log_info "Compiling Management Dashboard UI..."
+cat > "$DASHBOARD_FILE" <<EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZimaOS Privacy Hub</title>
+    <link rel="icon" type="image/svg+xml" href="assets/privacy-hub.svg">
+    <!-- Local privacy friendly assets (Hosted Locally) -->
+    <link href="assets/gs.css" rel="stylesheet">
+    <link href="assets/cc.css" rel="stylesheet">
+    <link href="assets/ms.css" rel="stylesheet">
+    <script>
+        // HTTPS Auto-Switch & Default Logic
+        const isLocalHost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        const isIpHost = window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/);
+        if (window.location.protocol === 'http:' && !isLocalHost && !isIpHost) {
+            const httpsPort = '8443';
+            const httpsUrl = 'https://' + window.location.hostname + ':' + httpsPort + window.location.pathname + window.location.search;
+            // Only redirect if we're not on a standard port or if specifically requested
+            // Use a small delay to ensure page load doesnt flicker
+            setTimeout(() => {
+                fetch(httpsUrl, { mode: 'no-cors' }).then(() => {
+                    window.location.href = httpsUrl;
+                }).catch(() => {
+                    console.log("HTTPS port not reachable, staying on HTTP");
+                });
+            }, 500);
+        }
+        
+        // Prevent extension injection errors - defined early
+        globalThis.configureInjection = globalThis.configureInjection || (() => {});
+    </script>
+    <script type="module">
+        import * as MaterialColorUtilities from './assets/mcu.js';
+        window.MaterialColorUtilities = MaterialColorUtilities;
+    </script>
+    <style>
+        /* Alignment & Flicker Fixes */
+        .card, .chip, .btn {
+            backface-visibility: hidden;
+            transform: translateZ(0);
+            -webkit-font-smoothing: subpixel-antialiased;
+        }
+        
+        /* Admin Mode Controls */
+        .admin-only {
+            display: none !important;
+        }
+        body.admin-mode .admin-only {
+            display: flex !important;
+        }
+        body.admin-mode .admin-only.btn-icon {
+            display: inline-flex !important;
+        }
+        body.admin-mode .admin-only.chip {
+            display: inline-flex !important;
+        }
+        body.admin-mode .admin-only.section-label, 
+        body.admin-mode .admin-only.section-hint {
+            display: block !important;
+        }
+        
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            overflow-x: auto;
+            padding: 4px;
+            scrollbar-width: none;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--md-sys-color-surface);
+            border-bottom: 1px solid var(--md-sys-color-outline-variant);
+            flex-wrap: wrap;
+        }
+        .filter-bar::-webkit-scrollbar { display: none; }
+        
+        .filter-chip {
+            cursor: pointer;
+            user-select: none;
+            transition: all 200ms ease;
+        }
+        .filter-chip.active {
+            background: var(--md-sys-color-primary-container) !important;
+            color: var(--md-sys-color-on-primary-container) !important;
+            border-color: var(--md-sys-color-primary) !important;
+        }
+
+        @media (max-width: 720px) {
+            .filter-bar {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+            }
+            .filter-chip {
+                flex: 0 0 auto;
+            }
+        }
+        
+        section {
+            display: block;
+            opacity: 1;
+            transition: opacity 200ms ease-in-out;
+        }
+        section.hidden {
+            display: none;
+            opacity: 0;
+        }
+        
+        /* Ensure chips don't flicker during hover */
+        .chip:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--md-sys-elevation-1);
+        }
+        /* ============================================
+           Material 3 Dark Theme - Strict Implementation
+           Reference: https://m3.material.io/
+           ============================================ */
+        
+        :root {
+            color-scheme: dark;
+            /* M3 Dark Theme Color Tokens (Default) */
+            --md-sys-color-primary: #D0BCFF;
+            --md-sys-color-on-primary: #381E72;
+            --md-sys-color-primary-container: #4F378B;
+            --md-sys-color-on-primary-container: #EADDFF;
+            --md-sys-color-secondary: #CCC2DC;
+            --md-sys-color-on-secondary: #332D41;
+            --md-sys-color-secondary-container: #4A4458;
+            --md-sys-color-on-secondary-container: #E8DEF8;
+            --md-sys-color-tertiary: #EFB8C8;
+            --md-sys-color-on-tertiary: #492532;
+            --md-sys-color-tertiary-container: #633B48;
+            --md-sys-color-on-tertiary-container: #FFD8E4;
+            --md-sys-color-error: #F2B8B5;
+            --md-sys-color-on-error: #601410;
+            --md-sys-color-error-container: #8C1D18;
+            --md-sys-color-on-error-container: #F9DEDC;
+            --md-sys-color-surface: #141218;
+            --md-sys-color-on-surface: #E6E1E5;
+            --md-sys-color-surface-variant: #49454F;
+            --md-sys-color-on-surface-variant: #CAC4D0;
+            --md-sys-color-surface-container-low: #1D1B20;
+            --md-sys-color-surface-container: #211F26;
+            --md-sys-color-surface-container-high: #2B2930;
+            --md-sys-color-surface-container-highest: #36343B;
+            --md-sys-color-surface-bright: #3B383E;
+            --md-sys-color-outline: #938F99;
+            --md-sys-color-outline-variant: #49454F;
+            --md-sys-color-inverse-surface: #E6E1E5;
+            --md-sys-color-inverse-on-surface: #313033;
+            --md-sys-color-success: #A8DAB5;
+            --md-sys-color-on-success: #003912;
+            --md-sys-color-success-container: #00522B;
+            --md-sys-color-warning: #FFCC80;
+            --md-sys-color-on-warning: #4A2800;
+
+            /* MD3 Expressive Motion */
+            --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0.0, 0, 1.0);
+            --md-sys-motion-duration-short: 150ms;
+            --md-sys-motion-duration-medium: 300ms;
+            --md-sys-motion-duration-long: 500ms;
+            
+            /* MD3 Expressive Shapes */
+            --md-sys-shape-corner-extra-large: 28px;
+            --md-sys-shape-corner-large: 16px;
+            --md-sys-shape-corner-medium: 12px;
+            --md-sys-shape-corner-small: 8px;
+            --md-sys-shape-corner-full: 100px;
+
+            /* Elevation */
+            --md-sys-elevation-1: 0 1px 3px 1px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.3);
+            --md-sys-elevation-2: 0 2px 6px 2px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.3);
+            --md-sys-elevation-3: 0 4px 8px 3px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.3);
+            
+            /* State Opacities */
+            --md-sys-state-hover-opacity: 0.08;
+            --md-sys-state-focus-opacity: 0.12;
+            --md-sys-state-pressed-opacity: 0.12;
+        }
+
+        /* M3 Light Theme Tokens */
+        :root.light-mode {
+            color-scheme: light;
+            --md-sys-color-primary: #6750A4;
+            --md-sys-color-on-primary: #FFFFFF;
+            --md-sys-color-primary-container: #EADDFF;
+            --md-sys-color-on-primary-container: #21005D;
+            --md-sys-color-secondary: #625B71;
+            --md-sys-color-on-secondary: #FFFFFF;
+            --md-sys-color-secondary-container: #E8DEF8;
+            --md-sys-color-on-secondary-container: #1D192B;
+            --md-sys-color-tertiary: #7D5260;
+            --md-sys-color-on-tertiary: #FFFFFF;
+            --md-sys-color-tertiary-container: #FFD8E4;
+            --md-sys-color-on-tertiary-container: #31111D;
+            --md-sys-color-error: #B3261E;
+            --md-sys-color-on-error: #FFFFFF;
+            --md-sys-color-error-container: #F9DEDC;
+            --md-sys-color-on-error-container: #410E0B;
+            --md-sys-color-surface: #FEF7FF;
+            --md-sys-color-on-surface: #1D1B20;
+            --md-sys-color-surface-variant: #E7E0EC;
+            --md-sys-color-on-surface-variant: #49454F;
+            --md-sys-color-surface-container-low: #F7F2FA;
+            --md-sys-color-surface-container: #F3EDF7;
+            --md-sys-color-surface-container-high: #ECE6F0;
+            --md-sys-color-surface-container-highest: #E6E0E9;
+            --md-sys-color-surface-bright: #FEF7FF;
+            --md-sys-color-outline: #79747E;
+            --md-sys-color-outline-variant: #C4C7C5;
+            --md-sys-color-inverse-surface: #313033;
+            --md-sys-color-inverse-on-surface: #F4EFF4;
+            --md-sys-color-success: #2E7D32;
+            --md-sys-color-on-success: #FFFFFF;
+            --md-sys-color-success-container: #C8E6C9;
+            --md-sys-color-warning: #ED6C02;
+            --md-sys-color-on-warning: #FFFFFF;
+            
+            /* Adjust elevations for light mode */
+            --md-sys-elevation-1: 0 1px 2px 0 rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
+            --md-sys-elevation-2: 0 1px 2px 0 rgba(0,0,0,0.3), 0 2px 6px 2px rgba(0,0,0,0.15);
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        a {
+            color: var(--md-sys-color-primary);
+            text-decoration: none;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
+        }
+        
+        a:hover {
+            opacity: 0.8;
+            text-decoration: underline;
+        }
+        
+        body {
+            background: var(--md-sys-color-surface);
+            color: var(--md-sys-color-on-surface);
+            font-family: 'Google Sans Flex', 'Google Sans', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            transition: background-color 300ms ease, color 300ms ease;
+            overflow-x: hidden;
+        }
+
+        .code-block, .log-container, .text-field, .stat-value, .monospace {
+            font-family: 'Cascadia Code', 'Consolas', monospace;
+        }
+        
+        .material-symbols-rounded {
+            font-family: 'Material Symbols Rounded';
+            font-display: block;
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container { max-width: 1600px; width: 100%; margin: 0 auto; position: relative; }
+
+        .full-bleed {
+            width: 100vw;
+            max-width: 100vw;
+            margin-left: calc(50% - 50vw);
+            margin-right: calc(50% - 50vw);
+        }
+        
+        /* Header */
+        header {
+            margin-bottom: 56px;
+            padding: 16px 0;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .header-row > div:first-child {
+            flex: 1 1 auto;
+        }
+        
+        h1 {
+            font-family: 'Google Sans Flex', 'Google Sans', sans-serif;
+            font-weight: 400;
+            font-size: 45px;
+            line-height: 52px;
+            margin: 0;
+            color: var(--md-sys-color-primary);
+            letter-spacing: 0;
+        }
+        
+        .subtitle {
+            font-size: 22px;
+            color: var(--md-sys-color-on-surface-variant);
+            margin-top: 12px;
+            font-weight: 400;
+            letter-spacing: 0;
+        }
+
+        .label-large {
+            font-size: 14px;
+            line-height: 20px;
+            font-weight: 500;
+            letter-spacing: 0.1px;
+        }
+
+        .body-medium {
+            font-size: 14px;
+            line-height: 20px;
+            letter-spacing: 0.25px;
+        }
+
+        .body-small {
+            font-size: 12px;
+            line-height: 16px;
+            letter-spacing: 0.4px;
+        }
+
+        .code-label {
+            font-size: 12px;
+            line-height: 16px;
+            letter-spacing: 0.4px;
+            font-weight: 500;
+            color: var(--md-sys-color-on-surface-variant);
+            margin-top: 12px;
+        }
+
+        .profile-hint {
+            color: var(--md-sys-color-on-surface-variant);
+            margin-top: 12px;
+        }
+
+        .feedback {
+            margin-top: 12px;
+            padding: 8px 12px;
+            border-radius: var(--md-sys-shape-corner-medium);
+            background: var(--md-sys-color-surface-container-highest);
+            color: var(--md-sys-color-on-surface-variant);
+            font-size: 12px;
+            line-height: 16px;
+            letter-spacing: 0.4px;
+        }
+
+        .feedback.info { border: 1px solid var(--md-sys-color-outline-variant); }
+        .feedback.success { background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success); }
+        .feedback.error { background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
+        
+        /* Section Labels */
+        .section-label {
+            color: var(--md-sys-color-primary);
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.1px;
+            margin: 48px 0 16px 4px;
+            text-transform: none;
+        }
+        
+        .section-label:first-of-type {
+            margin-top: 8px;
+        }
+        
+        .section-hint {
+            font-size: 14px;
+            color: var(--md-sys-color-on-surface-variant);
+            margin: 0 0 24px 4px;
+            letter-spacing: 0.25px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        
+        /* Grid Layouts - M3 Responsive (3x3, 4x4) */
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+            gap: 24px; 
+            margin-bottom: 32px; 
+            width: 100%;
+        }
+        
+        @media (min-width: 1200px) {
+            .grid { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+        }
+
+        @media (min-width: 1600px) {
+            .grid { grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); }
+        }
+        
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 450px), 1fr)); gap: 24px; margin-bottom: 32px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: 24px; margin-bottom: 32px; }
+        
+        /* MD3 Component Refinements - Elevated Cards */
+        .card {
+            background: var(--md-sys-color-surface-container-low);
+            border-radius: var(--md-sys-shape-corner-extra-large);
+            padding: 32px;
+            text-decoration: none;
+            color: inherit;
+            transition: all var(--md-sys-duration-medium) var(--md-sys-motion-easing-emphasized);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            min-height: 240px;
+            overflow: visible; 
+            box-sizing: border-box;
+            box-shadow: var(--md-sys-elevation-1);
+            height: 100%;
+            cursor: pointer;
+            contain: content;
+            will-change: transform, box-shadow;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: var(--md-sys-color-on-surface);
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .card:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        .card:active::before { opacity: var(--md-sys-state-pressed-opacity); }
+
+        .card:hover { 
+            background: var(--md-sys-color-surface-container);
+            box-shadow: var(--md-sys-elevation-2);
+            transform: translateY(-4px);
+        }
+        
+        /* Strict M3 Button & Chip States */
+        .btn::before, .chip::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: currentColor;
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
+            pointer-events: none;
+        }
+
+        .btn:hover::before, .chip:hover::before { opacity: 0.08; }
+        .btn:active::before, .chip:active::before { opacity: 0.12; }
+        .btn:focus::before, .chip:focus::before { opacity: 0.12; }
+
+        .card.full-width { grid-column: 1 / -1; }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .card-header h2 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 500;
+            color: var(--md-sys-color-on-surface);
+            line-height: 24px;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: normal;
+        }
+
+        .card-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+            margin-right: 4px;
+        }
+
+        .settings-btn {
+        }
+
+        .card .description {
+            font-size: 14px;
+            color: var(--md-sys-color-on-surface-variant);
+            margin: 0 0 16px 0; /* Uniform vertical spacing */
+            line-height: 20px;
+            flex-grow: 1;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .card h3 {
+            margin: 0 0 16px 0;
+            font-size: 16px; /* Title Medium */
+            font-weight: 500;
+            color: var(--md-sys-color-on-surface);
+            line-height: 24px;
+            letter-spacing: 0.15px;
+        }
+        
+        /* MD3 Assist Chips - Intelligent Auto-layout */
+        .chip-box { 
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px; 
+            padding-top: 12px;
+            position: relative;
+            z-index: 2;
+            align-items: center;
+            margin-top: auto;
+            width: 100%;
+        }
+        
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px; 
+            height: 32px;
+            padding: 0 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            letter-spacing: 0.1px;
+            text-decoration: none;
+            transition: all var(--md-sys-motion-duration-short) linear;
+            border: 1px solid var(--md-sys-color-outline);
+            background: transparent;
+            color: var(--md-sys-color-on-surface);
+            position: relative;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            max-width: 100%;
+            flex: 1 1 auto; /* Allow chips to grow and fill space */
+        }
+
+        .chip .material-symbols-rounded {
+            font-size: 18px;
+            pointer-events: none;
+            transition: transform var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
+        }
+
+        .chip:hover .material-symbols-rounded.move-on-hover {
+            transform: translateX(4px);
+        }
+        
+        .chip::before, .btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: currentColor;
+            opacity: 0;
+            transition: opacity var(--md-sys-motion-duration-short) linear;
+            pointer-events: none;
+        }
+        
+        .chip:hover::before, .btn:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+        .chip:active::before, .btn:active::before { opacity: var(--md-sys-state-pressed-opacity); }
+        
+        .chip.vpn { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border: none; }
+        .chip.admin { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border: none; }
+        .chip.tertiary { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); border: none; }
+        
+        /* Category Badges (Informational) */
+        .category-badge {
+            border: none;
+            background: var(--md-sys-color-surface-container-high);
+            color: var(--md-sys-color-on-surface-variant);
+            padding: 0 12px 0 8px;
+            pointer-events: none;
+        }
+        
+        /* Status Indicator */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: var(--md-sys-color-surface-container-highest);
+            padding: 6px 12px;
+            border-radius: var(--md-sys-shape-corner-full);
+            font-size: 12px;
+            color: var(--md-sys-color-on-surface-variant);
+            width: fit-content;
+            min-width: auto;
+            flex-shrink: 0;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--md-sys-color-outline);
+        }
+        
+        .status-dot.up { background: var(--md-sys-color-success); box-shadow: 0 0 8px var(--md-sys-color-success); }
+        .status-dot.down { background: var(--md-sys-color-error); box-shadow: 0 0 8px var(--md-sys-color-error); }
+        .status-dot.healthy { background: var(--md-sys-color-success); box-shadow: 0 0 8px var(--md-sys-color-success); }
+        .status-dot.starting { background: var(--md-sys-color-warning); box-shadow: 0 0 8px var(--md-sys-color-warning); }
+        .status-dot.unhealthy { background: var(--md-sys-color-error); box-shadow: 0 0 8px var(--md-sys-color-error); }
+        
+        /* MD3 Text Fields */
+        .text-field {
+            width: 100%;
+            background: var(--md-sys-color-surface-container-highest);
+            border: none;
+            border-bottom: 1px solid var(--md-sys-color-on-surface-variant);
+            color: var(--md-sys-color-on-surface);
+            padding: 16px;
+            border-radius: 4px 4px 0 0;
+            font-size: 16px;
+            box-sizing: border-box;
+            outline: none;
+            transition: all var(--md-sys-motion-duration-short) linear;
+        }
+        
+        .text-field:focus {
+            border-bottom: 2px solid var(--md-sys-color-primary);
+            background: var(--md-sys-color-surface-container-highest);
+        }
+        
+        textarea.text-field { min-height: 120px; resize: vertical; }
+        
+        /* MD3 Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0 24px;
+            height: 40px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.1px;
+            cursor: pointer;
+            transition: all var(--md-sys-motion-duration-short) linear;
+            border: none;
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+            font-family: inherit;
+        }
+        
+        .btn-filled { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); box-shadow: var(--md-sys-elevation-1); }
+        .btn-tonal { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+        .btn-outlined { background: transparent; color: var(--md-sys-color-primary); border: 1px solid var(--md-sys-color-outline); }
+        .btn-tertiary { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+        
+        .btn-icon:hover {
+            background: rgba(202, 196, 208, 0.08);
+            border-color: var(--md-sys-color-outline);
+        }
+        
+        .portainer-link {
+            text-decoration: none;
+            cursor: pointer;
+            transition: all var(--md-sys-motion-duration-short) linear;
+            position: relative;
+            pointer-events: auto;
+            z-index: 10;
+        }
+        .portainer-link:hover {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            border-color: transparent;
+            opacity: 0.9;
+        }
+        .portainer-link:hover .material-symbols-rounded {
+            transform: translateX(4px);
+        }
+
+        .nav-arrow {
+            opacity: 0;
+            transform: translateX(-8px);
+            transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
+            color: var(--md-sys-color-primary);
+            pointer-events: none;
+            font-family: 'Material Symbols Rounded';
+            font-display: block;
+        }
+
+        .card:hover .nav-arrow {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        
+        .btn-action {
+            background: var(--md-sys-color-secondary-container);
+            color: var(--md-sys-color-on-secondary-container);
+            border-radius: var(--md-sys-shape-corner-medium);
+            box-shadow: var(--md-sys-elevation-1);
+        }
+        
+        .btn-icon { width: 40px; height: 40px; padding: 0; border-radius: 20px; }
+        .btn-icon svg { width: 24px; height: 24px; fill: currentColor; }
+        
+        /* MD3 Switch */
+        .switch-container {
+            display: inline-flex;
+            align-items: center;
+            gap: 16px;
+            cursor: pointer;
+            padding: 8px 0;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        .switch-track {
+            width: 52px;
+            height: 32px;
+            background: var(--md-sys-color-surface-container-highest);
+            border: 2px solid var(--md-sys-color-outline);
+            border-radius: 16px;
+            position: relative;
+            transition: all var(--md-sys-motion-duration-short) linear;
+        }
+
+        .switch-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--md-sys-color-outline);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 6px;
+            transform: translateY(-50%);
+            transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .switch-container.active .switch-track { background: var(--md-sys-color-primary); border-color: var(--md-sys-color-primary); }
+        .switch-container.active .switch-thumb { width: 24px; height: 24px; left: 24px; background: var(--md-sys-color-on-primary); }
+
+        /* Tooltips */
+        [data-tooltip] { 
+            position: relative; 
+        }
+        
+        .tooltip-box {
+            position: fixed;
+            background: var(--md-sys-color-inverse-surface);
+            color: var(--md-sys-color-inverse-on-surface);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 16px;
+            max-width: 280px;
+            z-index: 10000;
+            box-shadow: var(--md-sys-elevation-2);
+            pointer-events: none;
+            opacity: 0;
+            display: none;
+            transition: opacity 150ms var(--md-sys-motion-easing-emphasized);
+            text-align: center;
+        }
+        
+        .tooltip-box.visible { opacity: 1; }
+
+        /* Ensure parent elements don't clip tooltips */
+        .card, .chip, .status-indicator, li, span, div {
+            /* Tooltip container safety */
+        }
+        
+        .card {
+            /* ... existing ... */
+            overflow: visible; /* Changed from hidden to allow tooltips to escape */
+        }
+        
+        /* Prevent card content overlapping */
+        .card > * {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .card::before {
+            /* ... existing ... */
+            z-index: 1;
+        }
+
+        .log-container {
+            background: var(--md-sys-color-surface-container-highest);
+            border-radius: var(--md-sys-shape-corner-large);
+            padding: 16px;
+            flex-grow: 1;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 13px;
+            color: var(--md-sys-color-on-surface-variant);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            line-height: 1.5;
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .log-entry:last-child { border-bottom: none; }
+        
+        .log-icon {
+            font-size: 18px !important;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .log-content {
+            flex-grow: 1;
+            overflow-wrap: anywhere;
+        }
+
+        .log-time {
+            opacity: 0.5;
+            font-size: 0.85em;
+            white-space: nowrap;
+            flex-shrink: 0;
+            margin-top: 3px;
+        }
+
+        /* Snackbar / Toast */
+        .snackbar-container {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .snackbar {
+            min-width: 320px;
+            max-width: 560px;
+            background: var(--md-sys-color-inverse-surface);
+            color: var(--md-sys-color-inverse-on-surface);
+            border-radius: var(--md-sys-shape-corner-small);
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            box-shadow: var(--md-sys-elevation-3);
+            pointer-events: auto;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all var(--md-sys-motion-duration-long) var(--md-sys-motion-easing-emphasized);
+        }
+
+        .snackbar.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .snackbar-content { flex-grow: 1; font-size: 14px; letter-spacing: 0.25px; }
+        .snackbar-action { 
+            color: var(--md-sys-color-primary); 
+            font-weight: 500; 
+            text-transform: uppercase; 
+            cursor: pointer; 
+            font-size: 14px;
+            background: none;
+            border: none;
+            padding: 8px;
+            margin: -8px;
+        }
+
+        /* Theme Toggle */
+        .theme-toggle {
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            background: var(--md-sys-color-surface-container-high);
+            color: var(--md-sys-color-on-surface);
+            transition: all var(--md-sys-motion-duration-short) linear;
+        }
+        
+        .theme-toggle:hover { background: var(--md-sys-color-surface-container-highest); }
+
+        /* Service Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            z-index: 25000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .modal-card {
+            background: var(--md-sys-color-surface-container-high);
+            border-radius: var(--md-sys-shape-corner-extra-large);
+            max-width: 500px;
+            width: 100%;
+            padding: 32px;
+            box-shadow: var(--md-sys-elevation-3);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        .modal-card h2 { font-weight: 400; font-size: 24px; color: var(--md-sys-color-on-surface); margin: 0; }
+
+        .settings-btn { 
+            opacity: 0.5; 
+            transition: all var(--md-sys-motion-duration-short) linear; 
+        }
+        .card:hover .settings-btn { opacity: 1; color: var(--md-sys-color-primary); }
+
+        .modal-header { display: flex; align-items: center; justify-content: space-between; }
+        
+        .metric-bar {
+            height: 4px;
+            width: 100%;
+            background: var(--md-sys-color-surface-container-highest);
+            border-radius: 2px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+        
+        .metric-fill {
+            height: 100%;
+            background: var(--md-sys-color-primary);
+            transition: width 1s ease-in-out;
+        }
+        
+        .code-block {
+            background: var(--md-sys-color-surface-container-highest);
+            border-radius: var(--md-sys-shape-corner-small);
+            padding: 14px 16px;
+            font-size: 13px;
+            color: var(--md-sys-color-primary);
+            margin: 8px 0;
+            overflow-x: auto;
+        }
+        
+        .sensitive { transition: filter 400ms var(--md-sys-motion-easing-emphasized); }
+        .privacy-mode .sensitive { filter: blur(6px); opacity: 0.4; }
+
+        .sensitive-masked { opacity: 0.7; letter-spacing: 0.3px; }
+        
+        .text-success { color: var(--md-sys-color-success); }
+        .success { color: var(--md-sys-color-success); }
+        .error { color: var(--md-sys-color-error); }
+        .stat-row { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px; 
+            font-size: 14px; 
+            gap: 12px;
+        }
+        .stat-label { 
+            color: var(--md-sys-color-on-surface-variant); 
+            flex: 1 1 160px;
+        }
+        .stat-value {
+            text-align: right;
+            flex: 1 1 200px;
+            overflow-wrap: anywhere;
+        }
+        
+        .btn-group { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+        .list-item { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 12px 16px; 
+            margin: 0 -16px;
+            border-bottom: 1px solid var(--md-sys-color-outline-variant); 
+            gap: 16px; 
+            flex-wrap: wrap;
+            transition: background-color var(--md-sys-motion-duration-short) linear;
+            border-radius: var(--md-sys-shape-corner-small);
+        }
+        .list-item:hover {
+            background-color: rgba(230, 225, 229, 0.08);
+        }
+        .list-item:last-child { border-bottom: none; }
+        .list-item-text { cursor: pointer; flex: 1 1 220px; font-weight: 500; overflow-wrap: anywhere; font-size: 16px; letter-spacing: 0.5px; }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        @media (max-width: 720px) {
+            body { padding: 16px; }
+            h1 { font-size: 36px; line-height: 42px; }
+            .subtitle { font-size: 18px; line-height: 24px; }
+        }
+
+        @media (max-width: 600px) {
+            .header-row { gap: 16px; }
+            .switch-container { width: 100%; justify-content: space-between; }
+            .stat-row, .list-item { flex-direction: column; align-items: flex-start; }
+            .stat-value { text-align: left; }
+            .card-header { align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-row">
+                <div>
+                    <h1>Privacy Hub</h1>
+                    <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div id="https-badge" class="chip vpn" style="gap:4px; display:none; height: 32px; padding: 0 12px; border-radius: 16px;" data-tooltip="Connection is secured with end-to-end encryption.">
+                        <span class="material-symbols-rounded" style="font-size:18px;">lock</span>
+                        <span style="font-size: 12px; font-weight: 600;">Secure HTTPS</span>
+                    </div>
+                    <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for privacy">
+                        <span class="label-large">Safe Display Mode</span>
+                        <div class="switch-track">
+                            <div class="switch-thumb"></div>
+                        </div>
+                    </div>
+                    <div class="status-indicator" style="background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant);">
+                        <span class="status-dot" id="api-dot"></span>
+                        <span class="status-text" id="api-text">API: ...</span>
+                    </div>
+                    <div class="theme-toggle" onclick="toggleTheme()" data-tooltip="Switch between Light and Dark mode">
+                        <span class="material-symbols-rounded" id="theme-icon">light_mode</span>
+                    </div>
+                    <div class="theme-toggle" id="admin-lock-btn" onclick="toggleAdminMode()" data-tooltip="Enter Admin Mode to manage services">
+                        <span class="material-symbols-rounded" id="admin-icon">admin_panel_settings</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="filter-bar" id="category-filters">
+            <div class="chip filter-chip active" data-target="all" onclick="filterCategory('all')">All Services</div>
+            <div class="chip filter-chip" data-target="apps" onclick="filterCategory('apps')">Applications</div>
+            <div class="chip filter-chip" data-target="system" onclick="filterCategory('system')">Infrastructure</div>
+            <div class="chip filter-chip" data-target="dns" onclick="filterCategory('dns')">DNS & Security</div>
+            <div class="chip filter-chip" data-target="tools" onclick="filterCategory('tools')">Utilities</div>
+            <div class="chip filter-chip admin-only" data-target="logs" onclick="filterCategory('logs')">System Logs</div>
+        </div>
+
+        <div id="update-banner" class="admin-only full-bleed" style="display:none; margin-bottom: 32px; width: 100%;">
+            <div class="card" style="min-height: auto; padding: 24px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;">
+                    <div>
+                        <h3 style="margin:0; color: inherit;">Updates Available</h3>
+                        <p class="body-medium" id="update-list" style="margin: 8px 0 0 0; color: inherit; opacity: 0.9;">New versions detected for some services.</p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Pull latest source code and rebuild containers for all pending services.">Update All</button>
+                        <button onclick="this.closest('#update-banner').style.display='none'" class="btn btn-outlined" style="border-color: currentColor; color: inherit;">Dismiss</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="mac-advisory" class="full-bleed" style="margin-bottom: 32px; width: 100%;">
+            <div class="card" style="min-height: auto; padding: 16px 24px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 24px;">
+                    <div style="display: flex; gap: 16px; align-items: flex-start;">
+                        <span class="material-symbols-rounded" style="margin-top: 2px;">warning</span>
+                        <div>
+                            <h3 style="margin:0; color: inherit; font-size: 16px;">Critical Network Advisory</h3>
+                            <p class="body-medium" style="margin: 4px 0 0 0; color: inherit; opacity: 0.9;">
+                                To ensure firewall persistence and static IP reliability, you <strong>must disable Dynamic/Random MAC addresses</strong> in your host device's network settings.
+                            </p>
+                        </div>
+                    </div>
+                    <button onclick="dismissMacAdvisory()" class="btn btn-icon" style="color: inherit; margin: -8px -8px 0 0;" data-tooltip="Dismiss">
+                        <span class="material-symbols-rounded">close</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+
+
+        <section data-category="all" id="section-all">
+        <div class="section-label">All Services</div>
+        <div id="grid-all" class="grid">
+            <!-- Dynamic Cards Injected Here -->
+        </div>
+        </section>
+
+        <section data-category="apps">
+        <div class="section-label">Applications</div>
+        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <span class="chip category-badge" data-tooltip="Services isolated within a secure VPN tunnel (Gluetun). This allows you to host your own private instances—removing the need to trust third-party hosts—while ensuring your home IP remains hidden from end-service providers."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
+            <span class="chip category-badge" data-tooltip="Local services accessed directly through the internal network interface."><span class="material-symbols-rounded">lan</span> Direct Access</span>
+            <span class="chip category-badge" data-tooltip="Advanced infrastructure control and container telemetry via Portainer."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
+        </div>
+        <div id="grid-apps" class="grid">
+            <!-- Dynamic Cards Injected Here -->
+        </div>
+        </section>
+
+        <section data-category="system">
+        <div class="section-label">System Management</div>
+        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <span class="chip category-badge" data-tooltip="Core infrastructure management and gateway orchestration"><span class="material-symbols-rounded">settings_input_component</span> Core Services</span>
+        </div>
+        <div id="grid-system" class="grid">
+            <!-- Dynamic Cards Injected Here -->
+        </div>
+        </section>
+
+        <section data-category="dns">
+        <div class="section-label">DNS Configuration</div>
+        <div class="grid">
+            <div class="card">
+                <h3>Certificate Status</h3>
+                <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
+                    <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label">Type</span><span class="stat-value" id="cert-type">Checking...</span></div>
+                    <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label">Domain</span><span class="stat-value sensitive" id="cert-subject">Checking...</span></div>
+                    <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label">Issuer</span><span class="stat-value sensitive" id="cert-issuer">Checking...</span></div>
+                    <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label">Expires</span><span class="stat-value sensitive" id="cert-to">Checking...</span></div>
+                    <div id="ssl-failure-info" style="display:none; margin-top: 16px; padding: 16px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: 1px solid var(--md-sys-color-error);">
+                        <div class="body-small" style="font-weight:600; margin-bottom:4px; display: flex; align-items: center; gap: 8px;">
+                            <span class="material-symbols-rounded" style="font-size: 16px;">error</span>
+                            Pipeline Error
+                        </div>
+                        <div class="body-small" id="ssl-failure-reason" style="opacity: 0.9;">--</div>
+                    </div>
+                    <div id="cert-loading" class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium); border: none; margin-top: 16px;">
+                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span style="font-weight: 600;">Verifying Pipeline</span>
+                            <span class="body-medium" style="opacity: 0.8; white-space: normal;">Checking SSL certificate validity and issuance status...</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; gap: 16px; flex-wrap: wrap;">
+                    <div id="cert-status-badge" class="chip" style="width: fit-content;" data-tooltip="Overall health of the SSL certificate issuance pipeline">Not Installed</div>
+                    <button id="ssl-retry-btn" class="btn btn-icon btn-action" style="display:none;" data-tooltip="Force Let's Encrypt re-attempt" onclick="requestSslCheck()">
+                        <span class="material-symbols-rounded">refresh</span>
+                    </button>
+                </div>
+            </div>
+            <div class="card admin-only">
+                <h3>deSEC Configuration</h3>
+                <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
+                <form onsubmit="saveDesecConfig(); return false;">
+                    <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. yourname.dedyn.io)" style="margin-bottom:12px;" autocomplete="username" data-tooltip="Enter your registered deSEC domain (e.g. yourname.dedyn.io). You can create one for free at desec.io.">
+                    <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="The secret API token from your deSEC account used to verify domain ownership.">
+                    <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
+                        Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
+                    </p>
+                    <div style="text-align:right;">
+                        <button type="submit" class="btn btn-tonal">Save deSEC Config</button>
+                    </div>
+                </form>
+            </div>
+            <div class="card">
+                <h3>Device DNS Settings</h3>
+                <p class="body-medium description">Utilize these RFC-compliant encrypted endpoints to maintain digital independence:</p>
+                <div class="code-label" data-tooltip="Standard unencrypted DNS (Port 53). Recommended only for use within your local LAN.">Standard IPv4 (Local LAN Only)</div>
+                <div class="code-block sensitive">$LAN_IP:53</div>
+                <div class="code-label" data-tooltip="DNS-over-QUIC (DOQ) - RFC 9250. Port 853. High-performance encrypted DNS designed for superior latency and stability.">Secure DOQ (Modern Clients)</div>
+                <div class="code-block sensitive">quic://$LAN_IP</div>
+EOF
+if [ -n "$DESEC_DOMAIN" ]; then
+    cat >> "$DASHBOARD_FILE" <<EOF
+                <div class="code-label" data-tooltip="DNS-over-HTTPS (DOH) - RFC 8484. Standard for web browsers. Queries are indistinguishable from HTTPS traffic.">Secure DOH (Browsers)</div>
+                <div class="code-block sensitive">https://$DESEC_DOMAIN/dns-query</div>
+                <div class="code-label" data-tooltip="DNS-over-TLS (DOT) - RFC 7858. Port 853. The industry standard for Android 'Private DNS' and system resolvers.">Secure DOT (Android / System)</div>
+                <div class="code-block sensitive">$DESEC_DOMAIN:853</div>
+            </div>
+            <div class="card">
+                <h3>Endpoint Provisioning</h3>
+                <div id="dns-setup-trusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
+                    <p class="body-medium description">Globally trusted SSL is active via Let's Encrypt and deSEC. This enables zero-trust encrypted DNS on mobile devices without requiring certificate installation.</p>
+                    <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
+                        <li data-tooltip="For legacy devices within your home network."><b>Local LAN:</b> Configure devices to use <code class="sensitive">$LAN_IP</code>.</li>
+                        <li data-tooltip="Requires establishing the WireGuard VPN tunnel when away from home."><b>VPN Tunnel:</b> Route all traffic through the Privacy Hub.</li>
+                        <li data-tooltip="Android 9+ native feature. Encrypts all DNS queries automatically."><b>Mobile Private DNS:</b> Use the hostname below for native encryption.</li>
+                    </ol>
+                    <div class="code-label" style="margin-top:12px;" data-tooltip="Use this hostname in your Android 'Private DNS' settings.">Mobile Private DNS Hostname</div>
+                    <div class="code-block sensitive" style="margin-top:4px;">$DESEC_DOMAIN</div>
+                    <div style="margin-top: auto; padding-top: 16px;">
+                        <div class="chip vpn" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
+                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-primary-container);">verified_user</span>
+                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span style="font-weight: 600;">Verified Certificate Authority</span>
+                                <span class="body-small" style="opacity: 0.8; white-space: normal;">Trust chain established with Let's Encrypt. Fully compatible with native Private DNS.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="dns-setup-untrusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
+                    <p class="body-medium description" style="color:var(--md-sys-color-error);">Limited Encrypted DNS Coverage</p>
+                    <p class="body-small description">Android 'Private DNS' requires a FQDN. Since no domain is configured, your mobile devices cannot utilize native encrypted DNS without the VPN.</p>
+                    <div style="flex-grow: 1;">
+                        <div class="code-label" data-tooltip="The local IP address of your privacy hub.">Primary Gateway</div>
+                        <div class="code-block sensitive">$LAN_IP</div>
+                    </div>
+                    <div style="margin-top: auto; padding-top: 16px;">
+                        <div class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
+                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
+                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span style="font-weight: 600;">Self-Signed (Local)</span>
+                                <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and Private DNS.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+EOF
+else
+    cat >> "$DASHBOARD_FILE" <<EOF
+                <div class="code-label" data-tooltip="Secured DNS via HTTPS">DNS-over-HTTPS</div>
+                <div class="code-block sensitive">https://$LAN_IP/dns-query</div>
+                <div class="code-label" data-tooltip="Secured DNS via TLS">DNS-over-TLS</div>
+                <div class="code-block sensitive">$LAN_IP:853</div>
+            </div>
+            <div class="card">
+                <h3>Endpoint Provisioning</h3>
+                <p class="body-medium description">The system is currently operating in local-only mode. To maintain privacy, all external traffic should be routed via the local infrastructure:</p>
+                <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
+                    <li>Configure router WAN/LAN DNS to: <b class="sensitive">$LAN_IP</b></li>
+                    <li>Remote Access: Establish WireGuard tunnel before accessing services.</li>
+                    <li>Legacy Support: Standard Port 53 resolution for older hardware.</li>
+                </ol>
+                <div class="code-block sensitive" style="margin-top:12px;">$LAN_IP</div>
+                <div style="margin-top: auto; padding-top: 16px;">
+                    <div class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
+                        <span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span style="font-weight: 600;">Self-Signed (Local)</span>
+                            <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and full mobile support.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+EOF
+fi
+cat >> "$DASHBOARD_FILE" <<EOF
+        </div>
+        </section>
+
+        <section data-category="tools">
+        <div class="section-label">Service Utilities</div>
+        <div id="grid-tools" class="grid">
+            <!-- Dynamic Cards Injected Here -->
+        </div>
+        <div class="grid">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <h3>Odido Status</h3>
+                    <div id="odido-speed-indicator" class="body-small" style="color: var(--md-sys-color-primary); font-weight: 500; display:none;">0 Mb/s</div>
+                </div>
+                <div id="odido-status-container" style="display: flex; flex-direction: column; height: 100%;">
+                    <div id="odido-not-configured" style="display:none;">
+                        <p class="body-medium" style="color:var(--md-sys-color-on-surface-variant);">Odido Bundle Booster service available. Configure credentials via API or link below.</p>
+                        <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-tonal" style="margin-top:12px;">Open API Docs</a>
+                    </div>
+                    <div id="odido-configured" style="display:none; padding-top: 8px; flex-grow: 1; display: flex; flex-direction: column;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div>
+                                <div class="stat-row"><span class="stat-label">Remaining</span><span class="stat-value" id="odido-remaining">--</span></div>
+                                <div class="stat-row"><span class="stat-label">Bundle</span><span class="stat-value" id="odido-bundle-code">--</span></div>
+                                <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value" id="odido-rate">--</span></div>
+                            </div>
+                            <div>
+                                <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value" id="odido-api-status">--</span></div>
+                                <div class="stat-row"><span class="stat-label">Threshold</span><span class="stat-value" id="odido-threshold">--</span></div>
+                                <div class="stat-row"><span class="stat-label">Auto-Renew</span><span class="stat-value" id="odido-auto-renew">--</span></div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 24px; flex-grow: 1; min-height: 120px; position: relative; background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 12px;">
+                            <div style="position: absolute; top: 8px; left: 12px; font-size: 10px; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Consumption Rate (MB/min)</div>
+                            <svg id="odido-graph" width="100%" height="100%" viewBox="0 0 400 120" preserveAspectRatio="none" style="overflow: visible;">
+                                <defs>
+                                    <linearGradient id="graph-gradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="var(--md-sys-color-primary)" stop-opacity="0.3"></stop>
+                                        <stop offset="100%" stop-color="var(--md-sys-color-primary)" stop-opacity="0"></stop>
+                                    </linearGradient>
+                                </defs>
+                                <path id="graph-area" fill="url(#graph-gradient)" d=""></path>
+                                <path id="graph-line" fill="none" stroke="var(--md-sys-color-primary)" stroke-width="2.5" stroke-linejoin="round" d=""></path>
+                                <line x1="0" y1="120" x2="400" y2="120" stroke="var(--md-sys-color-outline-variant)" stroke-width="1"></line>
+                                <g id="graph-grid" stroke="var(--md-sys-color-outline-variant)" stroke-width="0.5" stroke-dasharray="2,2">
+                                    <line x1="0" y1="30" x2="400" y2="30"></line>
+                                    <line x1="0" y1="60" x2="400" y2="60"></line>
+                                    <line x1="0" y1="90" x2="400" y2="90"></line>
+                                </g>
+                            </svg>
+                        </div>
+
+                        <div id="odido-buy-status" class="body-small" style="text-align: center; margin-top: 8px; font-weight: 500;"></div>
+                        <div class="btn-group" style="justify-content:center; margin-top: 16px;">
+                            <button onclick="buyOdidoBundle()" class="btn btn-tertiary admin-only" id="odido-buy-btn">Buy Bundle</button>
+                            <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh Status</button>
+                            <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
+                        </div>
+                    </div>
+                    <div id="odido-loading" class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium); border: none; margin-top: 8px;">
+                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span style="font-weight: 600;">Synchronizing Data</span>
+                            <span class="body-medium" style="opacity: 0.8; white-space: normal;">Connecting to Odido API to retrieve latest bundle status...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card admin-only">
+                <h3>Configuration</h3>
+                <p class="body-medium description">Authentication and automation settings for backend services:</p>
+                <form onsubmit="saveOdidoConfig(); return false;">
+                    <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;" autocomplete="username" data-tooltip="The HUB_API_KEY from your .secrets file.">
+                    <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
+                        The <strong>Dashboard API Key</strong> (HUB_API_KEY) is required to authorize sensitive actions like saving settings. You can find this in your <code>.secrets</code> file on the host.
+                    </p>
+                    <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="OAuth token for Odido API authentication.">
+                    <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
+                        Obtain your OAuth token using the <a href="https://github.com/GuusBackup/Odido.Authenticator" target="_blank" style="color: var(--md-sys-color-primary);">Odido Authenticator</a>.
+                    </p>
+                    <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;" data-tooltip="The product code for your data bundle.">
+                    <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;" data-tooltip="Automatic renewal triggers when data falls below this level.">
+                    <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;" data-tooltip="Lead time before expiration to trigger renewal.">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+                        <div id="odido-config-status" class="body-small" style="font-weight: 500;"></div>
+                        <button type="submit" class="btn btn-tonal">Save Configuration</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="section-label">WireGuard Profiles</div>
+        <div class="grid">
+            <div class="card admin-only">
+                <h3>Upload Profile</h3>
+                <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;" data-tooltip="Give your profile a recognizable name.">
+                <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..." style="margin-bottom:16px;" data-tooltip="Paste the contents of your WireGuard .conf file."></textarea>
+                <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile. The VPN service will automatically restart to apply the new configuration (~15 seconds).">Upload & Activate</button></div>
+            </div>
+            <div class="card profile-card admin-only">
+                <h3 data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available Profiles</h3>
+                <div id="profile-list" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; min-height: 100px;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
+                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <span class="body-medium">Scanning Profiles...</span>
+                    </div>
+                </div>
+                <p class="body-small profile-hint" style="margin-top: auto; padding-top: 12px;">Click name to activate.</p>
+            </div>
+        </div>
+
+        <div class="section-label">Customization & Info</div>
+        <div class="grid">
+            <div class="card admin-only">
+                <div class="card-header">
+                    <h3>Theme Customization</h3>
+                    <div class="card-header-actions">
+                        <button onclick="localStorage.removeItem('theme_seed'); location.reload();" class="btn btn-icon" data-tooltip="Reset theme to default"><span class="material-symbols-rounded">refresh</span></button>
+                    </div>
+                </div>
+                <p class="body-medium description">Personalize the dashboard using Material Design 3 dynamic color algorithms (HCT color space).</p>
+                <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
+                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+                        <div style="position: relative; width: 48px; height: 48px; border-radius: 24px; overflow: hidden; border: 2px solid var(--md-sys-color-primary);">
+                            <input type="color" id="theme-seed-color" onchange="applySeedColor(this.value)" style="position: absolute; top: -10px; left: -10px; width: 80px; height: 80px; cursor: pointer; border: none; background: transparent;">
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="label-large">Custom Seed Color</span>
+                                <span class="body-small monospace" id="theme-seed-hex" style="opacity: 0.7;">#D0BCFF</span>
+                            </div>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Tap the circle to choose a primary tone</p>
+                        </div>
+                    </div>
+
+                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span class="label-large">Theme Presets</span>
+                        </div>
+                        <div id="static-presets" style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <!-- Static presets injected here -->
+                        </div>
+
+                        <div style="height: 1px; background: var(--md-sys-color-outline-variant); opacity: 0.5;"></div>
+
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <label for="theme-image-upload" class="btn btn-filled" style="width: 48px; height: 48px; padding: 0; border-radius: 24px; cursor: pointer; flex-shrink: 0;" data-tooltip="Pick a wallpaper to extract colors">
+                                <span class="material-symbols-rounded">wallpaper</span>
+                            </label>
+                            <input type="file" id="theme-image-upload" accept="image/*" onchange="extractColorsFromImage(event)" style="display: none;">
+                            <div style="flex: 1;">
+                                <span class="label-large">Wallpaper Extraction</span>
+                                <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Upload image to generate palettes</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Extracted Palette -->
+                        <div id="extracted-palette" style="display: flex; gap: 12px; flex-wrap: wrap; min-height: 48px; align-items: center;">
+                            <span class="body-small" style="opacity: 0.5; font-style: italic;">Extracted palettes will appear here...</span>
+                        </div>
+
+                        <!-- Manual Add -->
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="manual-color-input" class="text-field" placeholder="Add Hex (e.g. #FF0000)" style="border-radius: 8px; height: 40px; padding: 0 12px; font-family: monospace;">
+                            <button onclick="addManualColor()" class="btn btn-tonal" style="height: 40px;">Add</button>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
+                        <button onclick="saveThemeSettings()" class="btn btn-tonal" style="flex-grow: 1;"><span class="material-symbols-rounded">save</span> Save Theme</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card admin-only">
+                <h3>Security & Privacy</h3>
+                <p class="body-medium description">Manage administrative session behavior and authentication security.</p>
+                <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+                        <div style="flex: 1;">
+                            <span class="label-large">Session Auto-Cleanup</span>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Automatically expire admin sessions after 30 minutes of inactivity.</p>
+                        </div>
+                        <div class="switch" id="session-cleanup-switch" onclick="toggleSessionCleanup()" data-tooltip="When enabled, your admin session will expire automatically.">
+                            <div class="switch-thumb"></div>
+                        </div>
+                    </div>
+                    <div id="session-cleanup-warning" class="chip admin" style="display: none; width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: none;">
+                        <span class="material-symbols-rounded">warning</span>
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span style="font-weight: 600;">Security Warning</span>
+                            <span class="body-medium" style="opacity: 0.8; white-space: normal;">Session auto-cleanup is disabled. Administrative access will remain active indefinitely on this browser until manually exited.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>System Information</h3>
+                <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
+                <div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1;">
+                    <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace" style="font-size: 12px;">/DATA/AppData/privacy-hub/.secrets</span></div>
+                    <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace" style="font-size: 12px;">/DATA/AppData/privacy-hub/config</span></div>
+                    <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
+                    <div class="stat-row"><span class="stat-label">Safe Display Mode</span><span class="stat-value">Active (Local)</span></div>
+                </div>
+                <div class="admin-only" style="margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <button onclick="checkUpdates()" class="btn btn-tonal" data-tooltip="Check for updates">
+                        <span class="material-symbols-rounded">system_update_alt</span> Check
+                    </button>
+                    <button onclick="updateAllServices()" class="btn btn-filled" data-tooltip="Update all services">
+                        <span class="material-symbols-rounded">upgrade</span> Update All
+                    </button>
+                    <button onclick="restartStack()" class="btn btn-tonal" style="grid-column: span 1; background: var(--md-sys-color-surface-container-highest);">
+                        <span class="material-symbols-rounded">restart_alt</span> Restart
+                    </button>
+                    <button onclick="uninstallStack()" class="btn btn-tonal" style="grid-column: span 1; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Permanently remove all containers and data.">
+                        <span class="material-symbols-rounded">delete_forever</span> Uninstall
+                    </button>
+                </div>
+            </div>
+        </div>
+        </section>
+
+        <section data-category="logs">
+        <div class="section-label">System & Logs</div>
+        <div class="grid">
+            <div class="card">
+                <div class="card-header">
+                    <h3>System Health</h3>
+                    <div class="card-header-actions">
+                        <div class="status-indicator" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 4px 12px; min-width: auto; margin-right: -8px;">
+                            <span class="status-dot up" id="health-dot" style="background: var(--md-sys-color-on-success-container); box-shadow: none;"></span>
+                            <span class="status-text" id="health-text" style="color: inherit; font-weight: 600;">Optimal</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1;">
+                    <div class="stat-row"><span class="stat-label">System CPU</span><span class="stat-value" id="sys-cpu">0%</span></div>
+                    <div class="metric-bar"><div id="sys-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
+                    
+                    <div class="stat-row" style="margin-top:8px;"><span class="stat-label">System RAM</span><span class="stat-value" id="sys-ram">0 MB / 0 MB</span></div>
+                    <div class="metric-bar"><div id="sys-ram-fill" class="metric-fill" style="width: 0%"></div></div>
+
+                    <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 4px;">
+                            <span class="body-small" style="opacity: 0.7;">Project Size</span>
+                            <span class="label-large" id="sys-project-size">-- MB</span>
+                        </div>
+                        <div style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 4px;">
+                            <span class="body-small" style="opacity: 0.7;">System Uptime</span>
+                            <span class="label-large" id="sys-uptime">--</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="material-symbols-rounded" style="font-size: 20px; color: var(--md-sys-color-primary);">hard_drive</span>
+                            <span class="body-medium" data-tooltip="SMART Health Status" id="drive-health-container">Drive Health: <strong id="sys-drive-status">Checking...</strong> <span id="sys-drive-pct"></span></span>
+                        </div>
+                        <span class="body-small" id="sys-disk-percent">--% used</span>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h3>System & Deployment Logs</h3>
+                    <div class="card-header-actions">
+                        <select id="log-filter-level" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
+                            <option value="ALL">All Levels</option>
+                            <option value="INFO">Info</option>
+                            <option value="WARN">Warn</option>
+                            <option value="ERROR">Error</option>
+                            <option value="SECURITY">Security</option>
+                        </select>
+                        <select id="log-filter-cat" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
+                            <option value="ALL">All Categories</option>
+                            <option value="SYSTEM">System</option>
+                            <option value="NETWORK">Network</option>
+                            <option value="MAINTENANCE">Maintenance</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="log-container" class="log-container sensitive" style="display: flex; align-items: center; justify-content: center;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
+                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <span class="body-medium">Connecting to Log Stream...</span>
+                    </div>
+                </div>
+                <div id="log-status" class="body-small" style="color:var(--md-sys-color-on-surface-variant); text-align:right; margin-top:8px;">Connecting...</div>
+            </div>
+        </div>
+        </section>
+
+    <!-- Setup Wizard removed (Automated Deployment) -->
+
+    <!-- Update Selection Modal -->
+    <div id="update-selection-modal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>Select Updates</h2>
+                <button onclick="closeUpdateModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+            </div>
+            <div style="padding: 16px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <span class="body-medium" id="update-fetch-status" style="color: var(--md-sys-color-on-surface-variant);">Scanning for updates...</span>
+                    <button onclick="toggleAllUpdates()" class="btn btn-tonal" style="height: 32px; font-size: 12px;">Reset / Undo</button>
+                </div>
+                <div id="update-list-container" style="background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 8px; max-height: 300px; overflow-y: auto;">
+                    <!-- Checkboxes injected here -->
+                    <div style="padding: 24px; text-align: center; opacity: 0.6;">
+                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
+                        <span class="body-medium">Checking repositories...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="btn-group" style="justify-content: flex-end;">
+                <button onclick="startBatchUpdate()" class="btn btn-filled" id="start-update-btn" disabled>Update Selected</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Changelog Modal -->
+    <div id="changelog-modal" class="modal-overlay" style="z-index: 26000;">
+        <div class="modal-card" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h2 id="changelog-title">Changelog</h2>
+                <button onclick="document.getElementById('changelog-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+            </div>
+            <div id="changelog-content" class="code-block" style="flex-grow: 1; overflow-y: auto; white-space: pre-wrap; margin-top: 16px; font-family: monospace; font-size: 13px;">
+                Loading...
+            </div>
+        </div>
+    </div>
+
+    <!-- Service Management Modal -->
+    <div id="service-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 id="modal-service-name">Service Settings</h2>
+                <button onclick="closeServiceModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+            </div>
+            <div id="modal-metrics" style="background: var(--md-sys-color-surface-container-low); padding: 16px; border-radius: 12px;">
+                <div class="stat-row">
+                    <span class="stat-label">CPU Usage <span id="modal-cpu-text" style="float:right; font-family:monospace; opacity:0.8;">0%</span></span>
+                    <span class="stat-value" id="modal-cpu" style="display:none;">0%</span>
+                </div>
+                <div class="metric-bar"><div id="modal-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
+                
+                <div class="stat-row" style="margin-top:12px;">
+                                <span class="stat-label">Memory <span id="modal-mem-text" style="float:right; font-family:monospace; opacity:0.8;">0 MB / 0 MB</span></span>
+                                <span class="stat-value" id="modal-mem" style="display:none;">0 MB / 0 MB</span>                </div>
+                <div class="metric-bar"><div id="modal-mem-fill" class="metric-fill" style="width: 0%"></div></div>
+            </div>
+            <div id="modal-actions" class="btn-group" style="flex-direction: column; gap: 8px;">
+                <!-- Actions injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dynamic Service Rendering
+        let serviceCatalog = {};
+
+        function humanizeServiceId(id) {
+            return id
+                .replace(/[-_]+/g, ' ')
+                .replace(/\b\w/g, (c) => c.toUpperCase());
+        }
+
+        async function loadServiceCatalog() {
+            if (Object.keys(serviceCatalog).length) return serviceCatalog;
+            try {
+                const res = await fetch(API + "/services");
+                const data = await res.json();
+                serviceCatalog = data.services || {};
+            } catch (e) {
+                console.warn("Failed to load service catalog:", e);
+                serviceCatalog = {};
+            }
+            return serviceCatalog;
+        }
+
+        function normalizeServiceMeta(id, meta) {
+            const safe = (meta && typeof meta === 'object') ? meta : {};
+            return {
+                name: safe.name || humanizeServiceId(id),
+                description: safe.description || 'Private service hosted locally.',
+                category: safe.category || 'apps',
+                url: safe.url || '',
+                actions: Array.isArray(safe.actions) ? safe.actions : [],
+                chips: Array.isArray(safe.chips) ? safe.chips : [],
+                order: Number.isFinite(safe.order) ? safe.order : 999
+            };
+        }
+
+        function handleServiceAction(id, action, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            if (!action || !action.type) return;
+            if (action.type === 'migrate') {
+                const mode = action.mode || 'migrate';
+                const confirmFlag = action.confirm ? 'yes' : 'no';
+                migrateService(id, mode, confirmFlag, event);
+                return;
+            }
+            if (action.type === 'vacuum') {
+                vacuumServiceDb(id, event);
+                return;
+            }
+            if (action.type === 'clear-logs') {
+                clearServiceLogs(id, event);
+            }
+        }
+
+        function createActionButton(id, action) {
+            const button = document.createElement('button');
+            button.className = 'chip admin admin-only';
+            button.type = 'button';
+            const label = action.label || 'Action';
+            if (action.icon) {
+                const icon = document.createElement('span');
+                icon.className = 'material-symbols-rounded';
+                icon.textContent = action.icon;
+                button.appendChild(icon);
+            }
+            button.appendChild(document.createTextNode(label));
+            button.setAttribute('data-tooltip', label);
+            button.onclick = (e) => handleServiceAction(id, action, e);
+            return button;
+        }
+
+        function createChipElement(id, chip) {
+            const chipEl = document.createElement('span');
+            const isObject = chip && typeof chip === 'object';
+            const label = isObject ? (chip.label || '') : String(chip || '');
+            const variant = isObject ? (chip.variant || '') : 'admin';
+            const classes = ['chip'];
+            if (variant) {
+                variant.split(' ').forEach((c) => c && classes.push(c));
+                if (variant.includes('admin')) classes.push('admin-only');
+            }
+            if (!isObject || chip.portainer) {
+                classes.push('portainer-link');
+                chipEl.dataset.container = id;
+            }
+            chipEl.className = classes.join(' ');
+            if (isObject && chip.tooltip) chipEl.setAttribute('data-tooltip', chip.tooltip);
+            if (isObject && chip.icon) {
+                const icon = document.createElement('span');
+                icon.className = 'material-symbols-rounded';
+                icon.textContent = chip.icon;
+                chipEl.appendChild(icon);
+            }
+            chipEl.appendChild(document.createTextNode(label));
+            return chipEl;
+        }
+
+        async function renderDynamicGrid() {
+            try {
+                const [containerRes, catalog] = await Promise.all([
+                    fetch(API + "/containers"),
+                    loadServiceCatalog()
+                ]);
+                const data = await containerRes.json();
+                const activeContainers = data.containers || {};
+                containerIds = activeContainers;
+
+                const appsGrid = document.getElementById('grid-apps');
+                const systemGrid = document.getElementById('grid-system');
+                const toolsGrid = document.getElementById('grid-tools');
+                const allGrid = document.getElementById('grid-all');
+                
+                if (appsGrid) appsGrid.innerHTML = '';
+                if (systemGrid) systemGrid.innerHTML = '';
+                if (toolsGrid) toolsGrid.innerHTML = '';
+                if (allGrid) allGrid.innerHTML = '';
+
+                const entries = Object.entries(catalog)
+                    .filter(([id]) => activeContainers[id])
+                    .map(([id, meta]) => [id, normalizeServiceMeta(id, meta)]);
+
+                const buckets = { apps: [], system: [], tools: [], all: [] };
+                entries.forEach(([id, meta]) => {
+                    if (!buckets[meta.category]) buckets[meta.category] = [];
+                    buckets[meta.category].push([id, meta]);
+                    buckets.all.push([id, meta]);
+                });
+
+                const sortByOrder = (a, b) => {
+                    const orderDelta = (a[1].order || 999) - (b[1].order || 999);
+                    if (orderDelta !== 0) return orderDelta;
+                    return a[1].name.localeCompare(b[1].name);
+                };
+
+                // Render categorized grids
+                ['apps', 'system', 'tools'].forEach((category) => {
+                    if (!buckets[category]) return;
+                    const grid = document.getElementById(\`grid-\${category}\`);
+                    if (!grid) return;
+                    
+                    buckets[category].sort(sortByOrder).forEach(([id, meta]) => {
+                        const hardened = activeContainers[id] && activeContainers[id].hardened;
+                        const card = createServiceCard(id, meta, hardened);
+                        grid.appendChild(card);
+                    });
+                });
+
+                // Render All Services grid
+                if (allGrid && buckets.all) {
+                    buckets.all.sort(sortByOrder).forEach(([id, meta]) => {
+                        const hardened = activeContainers[id] && activeContainers[id].hardened;
+                        const card = createServiceCard(id, meta, hardened);
+                        allGrid.appendChild(card);
+                    });
+                }
+
+                // Update metrics after rendering
+                fetchMetrics();
+            } catch (e) {
+                console.error("Failed to render dynamic grid:", e);
+            }
+        }
+
+        function createServiceCard(id, meta, hardened = false) {
+            const card = document.createElement('div');
+            card.id = \`link-\${id}\`;
+            card.className = 'card';
+            card.dataset.url = meta.url || '';
+            card.dataset.container = id;
+            card.dataset.check = 'true';
+            card.onclick = (e) => navigate(card, e);
+
+            const header = document.createElement('div');
+            header.className = 'card-header';
+
+            const title = document.createElement('h2');
+            title.textContent = meta.name || humanizeServiceId(id);
+
+            const actionsWrap = document.createElement('div');
+            actionsWrap.className = 'card-header-actions';
+
+            const indicator = document.createElement('div');
+            indicator.className = 'status-indicator';
+            const dot = document.createElement('span');
+            dot.className = 'status-dot';
+            const text = document.createElement('span');
+            text.className = 'status-text';
+            text.textContent = 'Connecting...';
+            indicator.appendChild(dot);
+            indicator.appendChild(text);
+
+            const settingsBtn = document.createElement('button');
+            settingsBtn.className = 'btn btn-icon settings-btn admin-only';
+            settingsBtn.setAttribute('data-tooltip', 'Service Management & Metrics');
+            settingsBtn.onclick = (e) => openServiceSettings(id, e);
+            const settingsIcon = document.createElement('span');
+            settingsIcon.className = 'material-symbols-rounded';
+            settingsIcon.textContent = 'settings';
+            settingsBtn.appendChild(settingsIcon);
+
+            const navArrow = document.createElement('span');
+            navArrow.className = 'material-symbols-rounded nav-arrow';
+            navArrow.textContent = 'arrow_forward';
+
+            actionsWrap.appendChild(indicator);
+            actionsWrap.appendChild(settingsBtn);
+            actionsWrap.appendChild(navArrow);
+
+            header.appendChild(title);
+            header.appendChild(actionsWrap);
+
+            const desc = document.createElement('p');
+            desc.className = 'description';
+            desc.textContent = meta.description || 'Private service hosted locally.';
+
+            const chipBox = document.createElement('div');
+            chipBox.className = 'chip-box';
+
+            if (hardened) {
+                const hardenedBadge = document.createElement('span');
+                hardenedBadge.className = 'chip tertiary';
+                hardenedBadge.style.gap = '4px';
+                hardenedBadge.style.padding = '0 8px';
+                hardenedBadge.style.height = '24px';
+                hardenedBadge.style.fontSize = '11px';
+                hardenedBadge.setAttribute('data-tooltip', 'This container uses a Digital Independence (DHI) hardened image.');
+                hardenedBadge.innerHTML = '<span class="material-symbols-rounded" style="font-size:14px;">verified_user</span> Hardened';
+                chipBox.appendChild(hardenedBadge);
+            }
+
+            if (Array.isArray(meta.actions)) {
+                meta.actions.forEach((action) => {
+                    chipBox.appendChild(createActionButton(id, action));
+                });
+            }
+            if (Array.isArray(meta.chips)) {
+                meta.chips.forEach((chip) => {
+                    chipBox.appendChild(createChipElement(id, chip));
+                });
+            }
+
+            card.appendChild(header);
+            card.appendChild(desc);
+            card.appendChild(chipBox);
+            return card;
+        }
+
+        // Initialize dynamic grid
+        document.addEventListener('DOMContentLoaded', () => {
+            renderDynamicGrid();
+            initMacAdvisory();
+            // Refresh grid occasionally to catch new services
+            setInterval(renderDynamicGrid, 30000);
+        });
+
+        const API = "/api"; 
+        const ODIDO_API = "/odido-api/api";
+        
+        function filterCategory(cat) {
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            const targetChip = document.querySelector(\`.filter-chip[data-target="\${cat}"]\`);
+            if (targetChip) targetChip.classList.add('active');
+            
+            const allSection = document.getElementById('section-all');
+            const otherSections = document.querySelectorAll('section[data-category]:not(#section-all)');
+            
+            if (cat === 'all') {
+                if (allSection) allSection.style.display = 'block';
+                otherSections.forEach(s => s.style.display = 'none');
+            } else {
+                if (allSection) allSection.style.display = 'none';
+                otherSections.forEach(s => {
+                    if (s.dataset.category === cat) {
+                        s.style.display = 'block';
+                        s.classList.remove('hidden');
+                    } else {
+                        s.style.display = 'none';
+                    }
+                });
+            }
+
+            localStorage.setItem('dashboard_filter', cat);
+            syncSettings();
+            showSnackbar(\`Filtering by: \${cat.charAt(0).toUpperCase() + cat.slice(1)}\`, "Dismiss");
+        }
+
+        // Global State & Data
+        let isAdmin = sessionStorage.getItem('is_admin') === 'true';
+        let sessionToken = sessionStorage.getItem('session_token') || '';
+        let sessionCleanupEnabled = true;
+        let containerMetrics = {};
+        let containerIds = {};
+        let pendingUpdates = [];
+
+        function updateAdminUI() {
+            document.body.classList.toggle('admin-mode', isAdmin);
+            const icon = document.getElementById('admin-icon');
+            if (icon) {
+                icon.textContent = isAdmin ? 'admin_panel_settings' : 'lock_person';
+                icon.parentElement.style.background = isAdmin ? 'var(--md-sys-color-primary-container)' : '';
+                icon.style.color = isAdmin ? 'var(--md-sys-color-on-primary-container)' : 'inherit';
+            }
+            const btn = document.getElementById('admin-lock-btn');
+            if (btn) btn.dataset.tooltip = isAdmin ? "Exit Admin Mode" : "Enter Admin Mode";
+
+            // Session cleanup UI
+            const switchEl = document.getElementById('session-cleanup-switch');
+            const warningEl = document.getElementById('session-cleanup-warning');
+            if (switchEl) switchEl.classList.toggle('active', sessionCleanupEnabled);
+            if (warningEl) warningEl.style.display = (isAdmin && !sessionCleanupEnabled) ? 'flex' : 'none';
+        }
+
+        async function toggleSessionCleanup() {
+            const newState = !sessionCleanupEnabled;
+            try {
+                const res = await fetch(API + "/toggle-session-cleanup", {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ enabled: newState })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    sessionCleanupEnabled = data.enabled;
+                    updateAdminUI();
+                    showSnackbar(sessionCleanupEnabled ? "Session auto-cleanup enabled" : "Session auto-cleanup disabled (Persistent Mode)");
+                }
+            } catch (e) {
+                showSnackbar("Failed to toggle session cleanup");
+            }
+        }
+
+        async function toggleAdminMode() {
+            if (isAdmin) {
+                if (confirm("Exit Admin Mode? Management features will be hidden.")) {
+                    isAdmin = false;
+                    sessionStorage.setItem('is_admin', 'false');
+                    sessionStorage.removeItem('session_token');
+                    sessionToken = '';
+                    updateAdminUI();
+                    syncSettings();
+                    showSnackbar("Admin Mode disabled");
+                }
+            } else {
+                const pass = prompt("Enter Admin Password to enable management features:");
+                if (!pass) return;
+                
+                try {
+                    const res = await fetch(API + "/verify-admin", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: pass })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        isAdmin = true;
+                        sessionToken = data.token || '';
+                        sessionCleanupEnabled = data.cleanup !== false;
+                        sessionStorage.setItem('is_admin', 'true');
+                        if (sessionToken) sessionStorage.setItem('session_token', sessionToken);
+                        updateAdminUI();
+                        syncSettings();
+                        showSnackbar("Admin Mode enabled. Management tools unlocked.", "Dismiss");
+                    } else {
+                        showSnackbar("Authentication failed: Invalid password", "Retry");
+                    }
+                } catch(e) {
+                    showSnackbar("Error connecting to auth service");
+                }
+            }
+        }
+        let realProfileName = '';
+        let maskedProfileId = '';
+        const profileMaskMap = {};
+        let odidoHistory = [];
+
+        async function updateOdidoGraph(rate, remaining) {
+            const now = Date.now();
+            odidoHistory.push({ time: now, rate: rate, remaining: remaining });
+            if (odidoHistory.length > 50) odidoHistory.shift();
+
+            const svg = document.getElementById('odido-graph');
+            const line = document.getElementById('graph-line');
+            const area = document.getElementById('graph-area');
+            const speedIndicator = document.getElementById('odido-speed-indicator');
+            if (!svg || !line || !area) return;
+
+            const width = 400;
+            const height = 120;
+            
+            // Smooth the rate for the graph
+            const smoothHistory = odidoHistory.map((d, i) => {
+                const start = Math.max(0, i - 2);
+                const end = Math.min(odidoHistory.length - 1, i + 2);
+                const subset = odidoHistory.slice(start, end + 1);
+                const avgRate = subset.reduce((acc, curr) => acc + curr.rate, 0) / subset.length;
+                return { ...d, smoothRate: avgRate };
+            });
+
+            const maxRate = Math.max(...smoothHistory.map(d => d.smoothRate), 0.1);
+            
+            // Speed indicator (MB/min to Mb/s: * 8 / 60)
+            const speedMbs = (rate * 8 / 60).toFixed(2);
+            if (speedIndicator) {
+                speedIndicator.textContent = speedMbs + " Mb/s";
+                speedIndicator.style.display = rate > 0 ? 'block' : 'none';
+            }
+
+            if (smoothHistory.length < 2) return;
+
+            let points = "";
+            smoothHistory.forEach((d, i) => {
+                const x = (i / (smoothHistory.length - 1)) * width;
+                const y = height - (d.smoothRate / (maxRate * 1.2)) * height;
+                points += (i === 0 ? "M" : " L") + x + "," + y;
+            });
+
+            line.setAttribute("d", points);
+            area.setAttribute("d", points + " L" + width + "," + height + " L0," + height + " Z");
+        }
+
+        async function fetchMetrics() {
+            try {
+                const res = await fetch(API + "/metrics", { headers: getAuthHeaders() });
+                if (!res.ok) return;
+                const data = await res.json();
+                containerMetrics = data.metrics || {};
+            } catch(e) { console.error("Metrics fetch error:", e); }
+        }
+
+        function getPortainerBaseUrl() {
+            if (window.location.hostname !== '$LAN_IP' && !window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+                const parts = window.location.hostname.split('.');
+                if (parts.length >= 2) {
+                    const domain = parts.slice(-2).join('.');
+                    const port = window.location.port ? ":" + window.location.port : "";
+                    return "https://portainer." + domain + port;
+                }
+            }
+            return "http://$LAN_IP:$PORT_PORTAINER";
+        }
+
+        const PORTAINER_URL = getPortainerBaseUrl();
+        const DEFAULT_ODIDO_API_KEY = "$ODIDO_API_KEY";
+        let storedOdidoKey = sessionStorage.getItem('odido_api_key');
+        if (DEFAULT_ODIDO_API_KEY && !storedOdidoKey) {
+            // Keep default key in session only
+            storedOdidoKey = DEFAULT_ODIDO_API_KEY;
+            sessionStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
+        }
+        let odidoApiKey = storedOdidoKey || DEFAULT_ODIDO_API_KEY;
+
+        function getAuthHeaders() {
+            const headers = { 'Content-Type': 'application/json' };
+            if (sessionToken) headers['X-Session-Token'] = sessionToken;
+            else if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+            return headers;
+        }
+
+        async function fetchUpdates() {
+            try {
+                const res = await fetch(API + "/updates", { headers: getAuthHeaders() });
+                if (!res.ok) return;
+                const data = await res.json();
+                const updates = data.updates || {};
+                pendingUpdates = Object.keys(updates);
+                
+                const banner = document.getElementById('update-banner');
+                const list = document.getElementById('update-list');
+                
+                if (pendingUpdates.length > 0) {
+                    if (banner) banner.style.display = 'block';
+                    if (list) list.textContent = "Updates available for: " + pendingUpdates.join(", ");
+                } else {
+                    if (banner) banner.style.display = 'none';
+                }
+            } catch(e) {}
+        }
+
+        async function openServiceSettings(name, e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            await showServiceModal(name);
+        }
+
+        async function showServiceModal(name) {
+            const modal = document.getElementById('service-modal');
+            const title = document.getElementById('modal-service-name');
+            const actions = document.getElementById('modal-actions');
+            title.textContent = name.charAt(0).toUpperCase() + name.slice(1) + " Management";
+            
+            // Ensure we have the latest IDs
+            await fetchContainerIds();
+            
+            // Basic actions for all
+            const containerInfo = containerIds[name];
+            const cid = containerInfo ? containerInfo.id : null;
+            const portainerLink = cid ?
+                PORTAINER_URL + "/#!/1/docker/containers/" + cid :
+                PORTAINER_URL + "/#!/1/docker/containers";
+            
+            actions.innerHTML = \`<button onclick="updateService('\${name}')" class="btn btn-tonal" style="width:100%"><span class="material-symbols-rounded">update</span> Update Service</button><p class="body-small" style="margin: 4px 0 12px 0; color: var(--md-sys-color-on-surface-variant);">Note: Updates may cause temporary high CPU/RAM usage during build.</p><button onclick="window.open('\${portainerLink}', '_blank')" class="btn btn-outlined" style="width:100%"><span class="material-symbols-rounded">dock</span> View in Portainer</button>\`;
+
+            // Specialized actions
+            if (name === 'invidious') {
+                actions.innerHTML += "<button onclick=\"migrateService('invidious', event)\" class=\"btn btn-filled\" style=\"width:100%\"><span class=\"material-symbols-rounded\">database_upload</span> Migrate Database</button><button onclick=\"clearServiceDb('invidious', event)\" class=\"btn btn-tonal\" style=\"width:100%; color:var(--md-sys-color-error)\"><span class=\"material-symbols-rounded\">delete_forever</span> Wipe All Data</button>";
+            } else if (name === 'adguard') {
+                actions.innerHTML += "<button onclick=\"clearServiceLogs('adguard', event)\" class=\"btn btn-tonal\" style=\"width:100%\"><span class=\"material-symbols-rounded\">auto_delete</span> Clear Query Logs</button>";
+            } else if (name === 'memos') {
+                actions.innerHTML += "<button onclick=\"vacuumServiceDb('memos', event)\" class=\"btn btn-tonal\" style=\"width:100%\"><span class=\"material-symbols-rounded\">compress</span> Optimize Database</button>";
+            }
+
+            modal.style.display = 'flex';
+            updateModalMetrics(name);
+        }
+
+        function closeServiceModal() {
+            document.getElementById('service-modal').style.display = 'none';
+        }
+
+        function updateModalMetrics(name) {
+            const m = containerMetrics[name];
+            if (m) {
+                const cpu = parseFloat(m.cpu) || 0;
+                document.getElementById('modal-cpu-text').textContent = cpu.toFixed(1) + "%";
+                document.getElementById('modal-cpu-fill').style.width = Math.min(100, cpu) + "%";
+                
+                const mem = parseFloat(m.mem) || 0;
+                const limit = parseFloat(m.limit) || 1;
+                const memPercent = Math.min(100, (mem / limit) * 100);
+                document.getElementById('modal-mem-text').textContent = Math.round(mem) + " MB / " + Math.round(limit) + " MB";
+                document.getElementById('modal-mem-fill').style.width = memPercent + "%";
+            }
+        }
+
+        async function updateAllServices() {
+            openUpdateModal();
+        }
+
+        let isAllSelected = true;
+
+        function openUpdateModal() {
+            const modal = document.getElementById('update-selection-modal');
+            modal.style.display = 'flex';
+            document.getElementById('start-update-btn').disabled = true;
+            
+            // Trigger check
+            fetch(API + "/check-updates", { headers: odidoApiKey ? { 'X-API-Key': odidoApiKey } : {} });
+            
+            // Poll for results
+            const listContainer = document.getElementById('update-list-container');
+            const statusLabel = document.getElementById('update-fetch-status');
+            
+            let attempts = 0;
+            const poll = setInterval(async () => {
+                attempts++;
+                statusLabel.textContent = "Scanning repositories... (" + attempts + ")";
+                try {
+                    const res = await fetch(API + "/updates", { headers: odidoApiKey ? { 'X-API-Key': odidoApiKey } : {} });
+                    const data = await res.json();
+                    const updates = data.updates || {};
+                    const keys = Object.keys(updates);
+                    
+                    if (keys.length > 0 || attempts > 5) {
+                        clearInterval(poll);
+                        renderUpdateList(keys);
+                        statusLabel.textContent = keys.length + " updates found.";
+                        document.getElementById('start-update-btn').disabled = keys.length === 0;
+                    }
+                } catch(e) {}
+            }, 2000);
+        }
+
+        function closeUpdateModal() {
+            document.getElementById('update-selection-modal').style.display = 'none';
+        }
+
+        function renderUpdateList(services) {
+            const el = document.getElementById('update-list-container');
+            el.innerHTML = '';
+            if (services.length === 0) {
+                el.innerHTML = '<div style="padding: 24px; text-align: center; opacity: 0.7;">No updates found. System is up to date.</div>';
+                return;
+            }
+            services.forEach(svc => {
+                const row = document.createElement('div');
+                row.className = 'list-item';
+                row.style.margin = '4px 0';
+                row.style.background = 'transparent';
+                row.style.border = 'none';
+                row.innerHTML = \`
+                    <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+                        <label style="display:flex; align-items:center; gap:12px; cursor:pointer; flex-grow:1;">
+                            <input type="checkbox" class="update-checkbox" value="\${svc}" checked style="width:18px; height:18px; accent-color:var(--md-sys-color-primary);">
+                            <span class="list-item-text">\${svc}</span>
+                        </label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <button onclick="viewChangelog('\${svc}')" class="btn btn-icon" style="width:32px; height:32px;" data-tooltip="View Changes">
+                                <span class="material-symbols-rounded" style="font-size:18px;">description</span>
+                            </button>
+                            <span class="chip tertiary" style="height:24px; font-size:11px;">Update Available</span>
+                        </div>
+                    </div>
+                \`;
+                el.appendChild(row);
+            });
+        }
+
+        async function viewChangelog(service) {
+            const modal = document.getElementById('changelog-modal');
+            const title = document.getElementById('changelog-title');
+            const content = document.getElementById('changelog-content');
+            
+            title.textContent = "Changes: " + service;
+            content.textContent = "Fetching release notes...";
+            modal.style.display = 'flex';
+            
+            try {
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/changelog?service=" + service, { headers });
+                const data = await res.json();
+                
+                if (data.error) throw new Error(data.error);
+                content.textContent = data.changelog || "No changelog information available.";
+            } catch (e) {
+                content.textContent = "Failed to load changelog: " + e.message;
+            }
+        }
+
+        function toggleAllUpdates() {
+            const checkboxes = document.querySelectorAll('.update-checkbox');
+            isAllSelected = !isAllSelected;
+            // If the user wants to "Undo" (reset), we assume resetting to ALL checked.
+            // The prompt says "undo button for the unchecked checkboxes list", which I interpret as "Check All".
+            checkboxes.forEach(cb => cb.checked = true);
+            isAllSelected = true; 
+        }
+
+        async function startBatchUpdate() {
+            const checkboxes = document.querySelectorAll('.update-checkbox:checked');
+            const selected = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (selected.length === 0) {
+                showSnackbar("No services selected.", "Dismiss");
+                return;
+            }
+
+            if (!confirm("Update " + selected.length + " services? This will trigger backups, updates, and rebuilds (Expect high CPU usage).")) return;
+            
+            closeUpdateModal();
+            showSnackbar(\`Batch update initiated for \${selected.length} services. Rebuilding in background...\`, "Dismiss");
+            
+            try {
+                const res = await fetch(API + "/batch-update", {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ services: selected })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                showSnackbar("Batch update request accepted. Check logs for detailed progress.", "OK");
+            } catch(e) {
+                showSnackbar("Batch update failed: " + e.message, "Error");
+            }
+        }
+
+        async function updateService(name) {
+            const btn = event?.target.closest('button');
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = \`<span class="material-symbols-rounded" style="animation: spin 2s linear infinite;">sync</span> Updating...\`;
+            }
+            showSnackbar(\`Initiating update for \${name}...\`, "Dismiss");
+
+            try {
+                const res = await fetch(API + "/update-service", {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ service: name })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                
+                showSnackbar(\`\${name} update complete.\`, "Success");
+                return true;
+            } catch(e) {
+                showSnackbar(\`Update failed: \${e.message}\`, "Error");
+                return false;
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            }
+        }
+        async function migrateService(name, event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            const doBackup = document.getElementById('invidious-backup-toggle')?.checked ? 'yes' : 'no';
+            if (!confirm("Run foolproof migration for " + name + "?" + (doBackup === 'yes' ? " This will create a database backup first." : " WARNING: No backup will be created."))) return;
+            try {
+                const res = await fetch(API + "/migrate?service=" + name + "&backup=" + doBackup);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                alert("Migration successful!\n\n" + data.output);
+            } catch(e) {
+                alert("Migration failed: " + e.message);
+            }
+        }
+
+        async function clearServiceDb(name, event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            const doBackup = document.getElementById('invidious-backup-toggle')?.checked ? 'yes' : 'no';
+            if (!confirm("DANGER: This will permanently DELETE all subscriptions and preferences for " + name + "." + (doBackup === 'yes' ? " A backup will be created first." : " WARNING: NO BACKUP WILL BE CREATED.") + " Continue?")) return;
+            try {
+                const res = await fetch(API + "/clear-db?service=" + name + "&backup=" + doBackup);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                alert("Database cleared successfully!\n\n" + data.output);
+            } catch(e) {
+                showSnackbar("Action failed: " + e.message);
+            }
+        }
+
+        async function clearServiceLogs(name, event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            if (!confirm("Clear all historical query logs for " + name + "? This cannot be undone.")) return;
+            try {
+                const res = await fetch(API + "/clear-logs?service=" + name);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                showSnackbar("Logs cleared successfully!");
+            } catch(e) {
+                showSnackbar("Failed to clear logs: " + e.message);
+            }
+        }
+
+        async function vacuumServiceDb(name, event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            showSnackbar("Optimizing database... please wait.");
+            try {
+                const res = await fetch(API + "/vacuum?service=" + name);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                showSnackbar("Database optimized successfully!");
+            } catch(e) {
+                showSnackbar("Optimization failed: " + e.message);
+            }
+        }
+        
+        async function rotateApiKey() {
+            const newKey = prompt("Enter new HUB_API_KEY. Warning: You must update your local .secrets manually if this fails!");
+            if (!newKey) return;
+            try {
+                const res = await fetch(API + "/rotate-api-key", {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ new_key: newKey })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    odidoApiKey = newKey;
+                    sessionStorage.setItem('odido_api_key', newKey);
+                    showSnackbar("API Key rotated successfully!");
+                } else { throw new Error(data.error); }
+            } catch(e) { showSnackbar("Rotation failed: " + e.message); }
+        }
+
+        async function filterLogs() {
+            const level = document.getElementById('log-filter-level').value;
+            const category = document.getElementById('log-filter-cat').value;
+            let url = API + "/logs";
+            const params = [];
+            if (level !== 'ALL') params.push("level=" + level);
+            if (category !== 'ALL') params.push("category=" + category);
+            if (params.length) url += "?" + params.join("&");
+            
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                const el = document.getElementById('log-container');
+                el.innerHTML = '';
+                (data.logs || []).forEach(log => {
+                    el.appendChild(parseLogLine(JSON.stringify(log)));
+                });
+            } catch(e) { showSnackbar("Failed to filter logs"); }
+        }
+        
+        async function fetchContainerIds() {
+            try {
+                const res = await fetch(API + "/containers");
+                if (!res.ok) throw new Error("API " + res.status);
+                const data = await res.json();
+                containerIds = data.containers || {};
+                
+                // Update all portainer links
+                document.querySelectorAll('.portainer-link').forEach(el => {
+                    const containerName = el.dataset.container;
+                    const containerInfo = containerIds[containerName];
+                    const cid = containerInfo ? containerInfo.id : null;
+                    const originalText = el.getAttribute('data-original-text') || el.textContent.trim();
+                    if (!el.getAttribute('data-original-text')) el.setAttribute('data-original-text', originalText);
+
+                    if (cid) {
+                        el.style.opacity = '1';
+                        el.style.cursor = 'pointer';
+                        el.dataset.tooltip = "Manage " + containerName + " in Portainer";
+                        el.textContent = originalText;
+                        
+                        // Use a fresh onclick handler
+                        el.onclick = (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.open(PORTAINER_URL + "/#!/1/docker/containers/" + cid, '_blank');
+                        };
+                    } else {
+                        el.style.opacity = '0.6';
+                        el.style.cursor = 'default';
+                        el.onclick = (e) => { e.preventDefault(); e.stopPropagation(); };
+                    }
+                });
+            } catch(e) { console.error('Container fetch error:', e); }
+        }
+        
+        function navigate(el, e) {
+            if (e && (e.target.closest('.portainer-link') || e.target.closest('.btn') || e.target.closest('.chip'))) return;
+            const url = el.getAttribute('data-url');
+            if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+                window.open(url, '_blank');
+            }
+        }
+
+        function generateRandomId() {
+            const chars = 'abcdef0123456789';
+            let id = '';
+            for (let i = 0; i < 8; i++) id += chars.charAt(Math.floor(Math.random() * chars.length));
+            return 'profile-' + id;
+        }
+        
+        function updateProfileDisplay() {
+            const vpnActive = document.getElementById('vpn-active');
+            const isPrivate = document.body.classList.contains('privacy-mode');
+            if (vpnActive && realProfileName) {
+                if (isPrivate) {
+                    if (!maskedProfileId) maskedProfileId = generateRandomId();
+                    vpnActive.textContent = maskedProfileId;
+                    vpnActive.classList.add('sensitive-masked');
+                } else {
+                    vpnActive.textContent = realProfileName;
+                    vpnActive.classList.remove('sensitive-masked');
+                }
+            }
+            updateProfileListDisplay();
+        }
+
+        function getProfileLabel(name) {
+            const isPrivate = document.body.classList.contains('privacy-mode');
+            if (!isPrivate) return name;
+            if (!profileMaskMap[name]) profileMaskMap[name] = generateRandomId();
+            return profileMaskMap[name];
+        }
+
+        function updateProfileListDisplay() {
+            const items = document.querySelectorAll('#profile-list .list-item-text');
+            items.forEach((item) => {
+                const realName = item.dataset.realName;
+                if (realName) item.textContent = getProfileLabel(realName);
+            });
+        }
+        
+        async function saveDesecConfig() {
+            const domain = document.getElementById('desec-domain-input').value.trim();
+            const token = document.getElementById('desec-token-input').value.trim();
+            if (!domain && !token) {
+                showSnackbar("Please provide domain or token");
+                return;
+            }
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(API + "/config-desec", {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ domain, token })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showSnackbar("deSEC configuration saved! Certificates updating in background.");
+                    document.getElementById('desec-domain-input').value = '';
+                    document.getElementById('desec-token-input').value = '';
+                } else {
+                    throw new Error(result.error || "Unknown error");
+                }
+            } catch (e) {
+                showSnackbar("Failed to save deSEC config: " + e.message);
+            }
+        }
+        
+        async function fetchStatus() {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            try {
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/status", { headers, signal: controller.signal });
+                clearTimeout(timeoutId);
+                
+                if (res.status === 401) {
+                    throw new Error("401 Unauthorized");
+                }
+                
+                const data = await res.json();
+                const setText = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = value;
+                    return el;
+                };
+                const g = data.gluetun || {};
+                const vpnStatus = document.getElementById('vpn-status');
+                if (vpnStatus) {
+                    if (g.status === "up" && g.healthy) {
+                        vpnStatus.textContent = "Connected (Healthy)";
+                        vpnStatus.className = "stat-value text-success";
+                        vpnStatus.title = "VPN tunnel is active and passing health checks";
+                    } else if (g.status === "up") {
+                        vpnStatus.textContent = "Connected";
+                        vpnStatus.className = "stat-value text-success";
+                        vpnStatus.title = "VPN tunnel is active";
+                    } else {
+                        vpnStatus.textContent = "Disconnected";
+                        vpnStatus.className = "stat-value error";
+                        vpnStatus.title = "VPN tunnel is not established";
+                    }
+                }
+                realProfileName = g.active_profile || "Unknown";
+                updateProfileDisplay();
+                setText('vpn-endpoint', g.endpoint || "--");
+                setText('vpn-public-ip', g.public_ip || "--");
+                setText('vpn-connection', g.handshake_ago || "Never");
+                setText('vpn-session-rx', formatBytes(g.session_rx || 0));
+                setText('vpn-session-tx', formatBytes(g.session_tx || 0));
+                setText('vpn-total-rx', formatBytes(g.total_rx || 0));
+                setText('vpn-total-tx', formatBytes(g.total_tx || 0));
+                const w = data.wgeasy || {};
+                const wgeStat = document.getElementById('wge-status');
+                if (wgeStat) {
+                    if (w.status === "up") {
+                        wgeStat.textContent = "Running";
+                        wgeStat.className = "stat-value text-success";
+                        wgeStat.title = "WireGuard management service is operational";
+                    } else {
+                        wgeStat.textContent = "Stopped";
+                        wgeStat.className = "stat-value error";
+                        wgeStat.title = "WireGuard management service is not running";
+                    }
+                }
+                setText('wge-host', w.host || "--");
+                setText('wge-clients', w.clients || "0");
+                const wgeConnected = document.getElementById('wge-connected');
+                const connectedCount = parseInt(w.connected) || 0;
+                if (wgeConnected) {
+                    wgeConnected.textContent = connectedCount > 0 ? connectedCount + " active" : "None";
+                    wgeConnected.className = connectedCount > 0 ? "stat-value text-success" : "stat-value";
+                }
+                setText('wge-session-rx', formatBytes(w.session_rx || 0));
+                setText('wge-session-tx', formatBytes(w.session_tx || 0));
+                setText('wge-total-rx', formatBytes(w.total_rx || 0));
+                setText('wge-total-tx', formatBytes(w.total_tx || 0));
+
+                // Update service statuses from server-side checks
+                if (data.services) {
+                    for (const [name, status] of Object.entries(data.services)) {
+                        const card = document.getElementById('link-' + name);
+                        if (card) {
+                            const dot = card.querySelector('.status-dot');
+                            const txt = card.querySelector('.status-text');
+                            const indicator = card.querySelector('.status-indicator');
+                            
+                            if (dot && txt && indicator) {
+                                if (status === 'unhealthy' && data.health_details && data.health_details[name]) {
+                                    txt.textContent = 'Issue Detected';
+                                    dot.className = 'status-dot down';
+                                    indicator.title = data.health_details[name];
+                                } else if (status === 'healthy' || status === 'up') {
+                                    txt.textContent = 'Connected';
+                                    dot.className = 'status-dot up';
+                                    indicator.title = 'Service is connected and operational';
+                                } else if (status === 'starting') {
+                                    txt.textContent = 'Connecting...';
+                                    dot.className = 'status-dot starting';
+                                    indicator.title = 'Service is currently initializing';
+                                } else {
+                                    txt.textContent = 'Offline';
+                                    dot.className = 'status-dot down';
+                                    indicator.title = 'Service is unreachable';
+                                }
+                            }
+
+                        }
+                    }
+                }
+                
+                const dot = document.getElementById('api-dot');
+                const txt = document.getElementById('api-text');
+                if (dot && txt) {
+                    dot.className = 'status-dot up';
+                    txt.textContent = 'Connected';
+                }
+            } catch(e) {
+                console.error("Status fetch error:", e);
+                const dot = document.getElementById('api-dot');
+                const txt = document.getElementById('api-text');
+                if (dot && txt) {
+                    dot.className = 'status-dot down';
+                    txt.textContent = 'Offline';
+                }
+                // Force indicators out of "Connecting..." state on API failure
+                document.querySelectorAll('.status-indicator').forEach(indicator => {
+                    const dot = indicator.querySelector('.status-dot');
+                    const text = indicator.querySelector('.status-text');
+                    if (dot && text && !dot.id.includes('api')) {
+                        dot.className = 'status-dot down';
+                        text.textContent = 'API Offline';
+                        indicator.title = 'The Management Hub is unreachable. Real-time metrics, VPN switching, and service update controls are unavailable until connection is restored.';
+                    }
+                });
+            }
+        }
+        
+        async function fetchOdidoStatus() {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            try {
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(ODIDO_API + "/status", { headers, signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    document.getElementById('odido-loading').style.display = 'none';
+                    document.getElementById('odido-not-configured').style.display = 'none';
+                    document.getElementById('odido-configured').style.display = 'block';
+                    document.getElementById('odido-remaining').textContent = '--';
+                    document.getElementById('odido-bundle-code').textContent = '--';
+                    document.getElementById('odido-threshold').textContent = '--';
+                    const apiStatus = document.getElementById('odido-api-status');
+                    
+                    if (res.status === 401) {
+                        apiStatus.textContent = 'Dashboard API Key Invalid';
+                        apiStatus.style.color = 'var(--md-sys-color-error)';
+                    } else if (res.status === 400 || (data.detail && data.detail.includes('credentials'))) {
+                        apiStatus.textContent = 'Odido Account Not Linked';
+                        apiStatus.style.color = 'var(--md-sys-color-warning)';
+                    } else {
+                        apiStatus.textContent = "Service Error: " + res.status;
+                        apiStatus.style.color = 'var(--md-sys-color-error)';
+                    }
+                    return;
+                }
+                const data = await res.json();
+                document.getElementById('odido-loading').style.display = 'none';
+                document.getElementById('odido-not-configured').style.display = 'none';
+                document.getElementById('odido-configured').style.display = 'block';
+                const state = data.state || {};
+                const config = data.config || {};
+                const remaining = state.remaining_mb || 0;
+                const threshold = config.absolute_min_threshold_mb || 100;
+                const rate = data.consumption_rate_mb_per_min || 0;
+                const bundleCode = config.bundle_code || 'A0DAY01';
+                const hasOdidoCreds = config.odido_user_id && config.odido_token;
+                // Also consider as "connected" if we have real data from the API
+                const hasRealData = remaining > 0 || state.last_updated_ts;
+                const isConfigured = hasOdidoCreds || hasRealData;
+                document.getElementById('odido-remaining').textContent = Math.round(remaining) + " MB";
+                document.getElementById('odido-bundle-code').textContent = bundleCode;
+                document.getElementById('odido-threshold').textContent = threshold + " MB";
+                document.getElementById('odido-auto-renew').textContent = config.auto_renew_enabled ? 'Enabled' : 'Disabled';
+                document.getElementById('odido-rate').textContent = rate.toFixed(3) + " MB/min";
+                const apiStatus = document.getElementById('odido-api-status');
+                apiStatus.textContent = isConfigured ? 'Connected' : 'Not configured';
+                apiStatus.style.color = isConfigured ? 'var(--md-sys-color-success)' : 'var(--md-sys-color-warning)';
+                
+                updateOdidoGraph(rate, remaining);
+
+                const maxData = config.bundle_size_mb || 1024;
+                const percent = Math.min(100, (remaining / maxData) * 100);
+                const bar = document.getElementById('odido-bar');
+                if (bar) {
+                    bar.style.width = percent + "%";
+                    bar.className = 'progress-indicator';
+                    if (remaining < threshold) bar.classList.add('critical');
+                    else if (remaining < threshold * 2) bar.classList.add('low');
+                }
+            } catch(e) {
+                // Network error or service unavailable - show not-configured with error info
+                const loading = document.getElementById('odido-loading');
+                if (loading) loading.style.display = 'none';
+                const notConf = document.getElementById('odido-not-configured');
+                if (notConf) notConf.style.display = 'block';
+                const conf = document.getElementById('odido-configured');
+                if (conf) conf.style.display = 'none';
+                console.error('Odido status error:', e);
+            }
+        }
+        
+        async function saveOdidoConfig() {
+            const st = document.getElementById('odido-config-status');
+            const data = {};
+            const apiKey = document.getElementById('odido-api-key').value.trim();
+            const oauthToken = document.getElementById('odido-oauth-token').value.trim();
+            const bundleCode = document.getElementById('odido-bundle-code-input').value.trim();
+            const threshold = document.getElementById('odido-threshold-input').value.trim();
+            const leadTime = document.getElementById('odido-lead-time-input').value.trim();
+            
+            if (apiKey) {
+                odidoApiKey = apiKey;
+                sessionStorage.setItem('odido_api_key', apiKey);
+                data.api_key = apiKey;
+            }
+            
+            // If OAuth token provided, fetch User ID automatically via hub-api API (uses curl)
+            if (oauthToken) {
+                if (st) {
+                    st.textContent = 'Fetching User ID from Odido API...';
+                    st.style.color = 'var(--p)';
+                }
+                try {
+                    const res = await fetch(API + "/odido-userid", {
+                        method: 'POST',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({ oauth_token: oauthToken })
+                    });
+                    const result = await res.json();
+                    if (result.error) throw new Error(result.error);
+                    if (result.user_id) {
+                        data.odido_user_id = result.user_id;
+                        data.odido_token = oauthToken;
+                        if (st) {
+                            st.textContent = "User ID fetched: " + result.user_id;
+                            st.style.color = 'var(--ok)';
+                        }
+                    } else {
+                        throw new Error('Could not extract User ID from Odido API response');
+                    }
+                } catch(e) {
+                    if (st) {
+                        st.textContent = "Failed to fetch User ID: " + e.message;
+                        st.style.color = 'var(--err)';
+                    }
+                    return;
+                }
+            }
+            
+            if (bundleCode) data.bundle_code = bundleCode;
+            if (threshold) data.absolute_min_threshold_mb = parseInt(threshold);
+            if (leadTime) data.lead_time_minutes = parseInt(leadTime);
+            
+            if (Object.keys(data).length === 0) {
+                if (st) {
+                    st.textContent = 'Please fill in at least one field';
+                    st.style.color = 'var(--err)';
+                }
+                return;
+            }
+            if (st) {
+                st.textContent = 'Saving configuration...';
+                st.style.color = 'var(--p)';
+            }
+            try {
+                const res = await fetch(ODIDO_API + "/config", {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.detail) throw new Error(result.detail);
+                if (st) {
+                    st.textContent = 'Configuration saved!';
+                    st.style.color = 'var(--ok)';
+                }
+                document.getElementById('odido-api-key').value = '';
+                document.getElementById('odido-oauth-token').value = '';
+                document.getElementById('odido-bundle-code-input').value = '';
+                document.getElementById('odido-threshold-input').value = '';
+                document.getElementById('odido-lead-time-input').value = '';
+                fetchOdidoStatus();
+            } catch(e) {
+                if (st) {
+                    st.textContent = e.message;
+                    st.style.color = 'var(--err)';
+                }
+            }
+        }
+        
+        async function buyOdidoBundle() {
+            const st = document.getElementById('odido-buy-status');
+            const btn = document.getElementById('odido-buy-btn');
+            btn.disabled = true;
+            if (st) {
+                st.textContent = 'Purchasing bundle from Odido...';
+                st.style.color = 'var(--p)';
+            }
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(ODIDO_API + "/odido/buy-bundle", {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({})
+                });
+                const result = await res.json();
+                if (result.detail) throw new Error(result.detail);
+                if (st) {
+                    st.textContent = 'Bundle purchased successfully!';
+                    st.style.color = 'var(--ok)';
+                }
+                setTimeout(fetchOdidoStatus, 2000);
+            } catch(e) {
+                if (st) {
+                    st.textContent = e.message;
+                    st.style.color = 'var(--err)';
+                }
+            }
+            btn.disabled = false;
+        }
+        
+        async function refreshOdidoRemaining() {
+            const st = document.getElementById('odido-buy-status');
+            if (st) {
+                st.textContent = 'Fetching from Odido API...';
+                st.style.color = 'var(--p)';
+            }
+            try {
+                const headers = {};
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const res = await fetch(ODIDO_API + "/odido/remaining", { headers });
+                const result = await res.json();
+                if (result.detail) throw new Error(result.detail);
+                if (st) {
+                    st.textContent = "Live data: " + Math.round(result.remaining_mb || 0) + " MB remaining";
+                    st.style.color = 'var(--ok)';
+                }
+                setTimeout(fetchOdidoStatus, 1000);
+            } catch(e) {
+                if (st) {
+                    st.textContent = e.message;
+                    st.style.color = 'var(--err)';
+                }
+            }
+        }
+        
+        async function fetchProfiles() {
+            try {
+                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
+                const res = await fetch(API + "/profiles", { headers });
+                if (res.status === 401) throw new Error("401");
+                const data = await res.json();
+                const el = document.getElementById('profile-list');
+                el.innerHTML = '';
+                el.style.flexDirection = 'column';
+                el.style.alignItems = 'stretch';
+                el.style.justifyContent = 'flex-start';
+                el.style.gap = '4px';
+                
+                if (data.profiles.length === 0) {
+                    el.innerHTML = '<div style="text-align:center; padding: 24px; opacity: 0.6;"><span class="material-symbols-rounded" style="font-size: 48px;">folder_open</span><p class="body-medium">No profiles found</p></div>';
+                    return;
+                }
+
+                data.profiles.forEach(p => {
+                    const row = document.createElement('div');
+                    row.className = 'list-item';
+                    row.style.margin = '0';
+                    row.style.borderRadius = '12px';
+                    row.style.background = 'var(--md-sys-color-surface-container-low)';
+                    row.style.border = '1px solid var(--md-sys-color-outline-variant)';
+
+                    const content = document.createElement('div');
+                    content.style.display = 'flex';
+                    content.style.alignItems = 'center';
+                    content.style.gap = '12px';
+                    content.style.flex = '1';
+                    content.style.cursor = 'pointer';
+                    content.onclick = function() { activateProfile(p); };
+
+                    const icon = document.createElement('span');
+                    icon.className = 'material-symbols-rounded';
+                    icon.textContent = 'vpn_key';
+                    icon.style.color = 'var(--md-sys-color-primary)';
+
+                    const name = document.createElement('span');
+                    name.className = 'list-item-text';
+                    name.style.flex = '1';
+                    name.dataset.realName = p;
+                    name.textContent = getProfileLabel(p);
+
+                    content.appendChild(icon);
+                    content.appendChild(name);
+
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'btn btn-icon';
+                    delBtn.style.color = 'var(--md-sys-color-on-surface-variant)';
+                    delBtn.title = 'Delete';
+                    delBtn.innerHTML = '<span class="material-symbols-rounded">delete</span>';
+                    delBtn.onclick = function(e) { e.stopPropagation(); deleteProfile(p); };
+
+                    row.appendChild(content);
+                    row.appendChild(delBtn);
+                    el.appendChild(row);
+                });
+                updateProfileListDisplay();
+            } catch(e) {
+                console.error("Profile fetch error:", e);
+            }
+        }
+        async function uploadProfile() {
+            const nameInput = document.getElementById('prof-name').value;
+            const config = document.getElementById('prof-conf').value;
+            const st = document.getElementById('upload-status');
+            if(!config) { if(st) st.textContent="Error: Config content missing"; else alert("Error: Config content missing"); return; }
+            if(st) st.textContent = "Uploading...";
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                const upRes = await fetch(API + "/upload", { 
+                    method:'POST', 
+                    headers: headers,
+                    body:JSON.stringify({name: nameInput, config: config}) 
+                });
+                const upData = await upRes.json();
+                if(upData.error) throw new Error(upData.error);
+                const activeName = upData.name;
+                if(st) st.textContent = "Activating " + activeName + "...";
+                await fetch(API + "/activate", { 
+                    method:'POST', 
+                    headers: headers,
+                    body:JSON.stringify({name: activeName}) 
+                });
+                if(st) st.textContent = "Success! VPN restarting."; else alert("Success! VPN restarting.");
+                fetchProfiles(); document.getElementById('prof-name').value=""; document.getElementById('prof-conf').value="";
+            } catch(e) { if(st) st.textContent = e.message; else alert(e.message); }
+        }
+        
+        async function activateProfile(name) {
+            if(!confirm("Switch to " + name + "?")) return;
+            try { 
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                await fetch(API + "/activate", { 
+                    method:'POST', 
+                    headers: headers,
+                    body:JSON.stringify({name: name}) 
+                }); 
+                alert("Profile switched. VPN restarting."); 
+            } catch(e) { alert("Error"); }
+        }
+        
+        async function deleteProfile(name) {
+            if(!confirm("Delete " + name + "?")) return;
+            try { 
+                const headers = { 'Content-Type': 'application/json' };
+                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+                await fetch(API + "/delete", { 
+                    method:'POST', 
+                    headers: headers,
+                    body:JSON.stringify({name: name}) 
+                }); 
+                fetchProfiles(); 
+            } catch(e) { alert("Error"); }
+        }
+        
+        function startLogStream() {
+            const el = document.getElementById('log-container');
+            const status = document.getElementById('log-status');
+            const evtSource = new EventSource(API + "/events");
+            
+            function parseLogLine(line) {
+                let logData = null;
+                try {
+                    logData = JSON.parse(line);
+                } catch(e) {
+                    logData = { message: line, level: 'INFO', category: 'SYSTEM', timestamp: '' };
+                }
+
+                // Apply active filters
+                const filterLevel = document.getElementById('log-filter-level').value;
+                const filterCat = document.getElementById('log-filter-cat').value;
+                if (filterLevel !== 'ALL' && logData.level !== filterLevel) return null;
+                if (filterCat !== 'ALL' && logData.category !== filterCat) return null;
+
+                // Filter out common noise
+                const m = logData.message || "";
+                if (m.includes('HTTP/1.1" 200') || m.includes('HTTP/1.1" 304')) {
+                    // Only filter if it doesn't match a known humanization pattern
+                    const knownPatterns = ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /theme', 'POST /theme', 'GET /system-health', 'GET /profiles', 'POST /update-service', 'POST /batch-update', 'POST /restart-stack', 'POST /rotate-api-key', 'POST /activate', 'POST /upload', 'POST /delete', 'GET /check-updates', 'GET /changelog'];
+                    if (!knownPatterns.some(p => m.includes(p))) return null;
+                }
+                
+                const div = document.createElement('div');
+                div.className = 'log-entry';
+                
+                let icon = 'info';
+                let iconColor = 'var(--md-sys-color-primary)';
+                let message = logData.message;
+                let timestamp = logData.timestamp;
+
+                // Humanization logic
+                if (message.includes('GET /system-health')) message = 'System telemetry synchronized';
+                if (message.includes('POST /update-service')) message = 'Service update initiated';
+                if (message.includes('POST /theme')) message = 'UI theme preferences saved';
+                if (message.includes('GET /theme')) message = 'UI theme assets synchronized';
+                if (message.includes('GET /profiles')) message = 'VPN profiles synchronized';
+                if (message.includes('POST /activate')) message = 'VPN profile switch triggered';
+                if (message.includes('POST /upload')) message = 'VPN profile upload completed';
+                if (message.includes('POST /delete')) message = 'VPN profile deletion requested';
+                if (message.includes('Watchtower Notification')) message = 'Container update availability checked';
+                if (message.includes('GET /status')) message = 'Service health status refreshed';
+                if (message.includes('GET /metrics')) message = 'Performance metrics updated';
+                if (message.includes('POST /batch-update')) message = 'Batch update sequence started';
+                if (message.includes('GET /updates')) message = 'Checking repository update status';
+                if (message.includes('GET /services')) message = 'Service catalog synchronized';
+                if (message.includes('GET /check-updates')) message = 'Update availability check requested';
+                if (message.includes('GET /changelog')) message = 'Service changelog retrieved';
+                if (message.includes('POST /config-desec')) message = 'deSEC dynamic DNS updated';
+                if (message.includes('GET /certificate-status')) message = 'SSL certificate validity checked';
+                if (message.includes('GET /containers')) message = 'Container orchestration state audited';
+                if (message.includes('GET /logs')) message = 'System logs retrieved';
+                if (message.includes('GET /events')) message = 'Live log stream connection established';
+                if (message.includes('POST /restart-stack')) message = 'Full system stack restart triggered';
+                if (message.includes('POST /rotate-api-key')) message = 'Dashboard API security key rotated';
+
+                // Category based icons
+                if (logData.category === 'NETWORK') icon = 'lan';
+                if (logData.category === 'AUTH' || logData.category === 'SECURITY') icon = 'lock';
+                if (logData.category === 'MAINTENANCE') icon = 'build';
+                if (logData.category === 'ORCHESTRATION') icon = 'hub';
+
+                // Level based colors
+                if (logData.level === 'WARN') {
+                    icon = 'warning';
+                    iconColor = 'var(--md-sys-color-warning)';
+                } else if (logData.level === 'ERROR') {
+                    icon = 'error';
+                    iconColor = 'var(--md-sys-color-error)';
+                } else if (logData.level === 'ACCESS') {
+                    icon = 'api';
+                    // Simplify common access logs
+                    if (message.includes('GET /status')) message = 'Health check processed';
+                    if (message.includes('GET /events')) message = 'Log stream connection';
+                }
+
+                div.innerHTML = \`
+                    <span class="material-symbols-rounded log-icon" style="color: \${iconColor}">\${icon}</span>
+                    <div class="log-content">\${message}</div>
+                    <span class="log-time">\${timestamp}</span>
+                \`;
+                return div;
+            }
+
+            evtSource.onmessage = function(e) {
+                if (!e.data) return;
+                const entry = parseLogLine(e.data);
+                if (!entry) return;
+                
+                // Clear the loader if it's still there
+                if (el.querySelector('.body-medium')) {
+                    el.innerHTML = '';
+                    el.style.alignItems = 'flex-start';
+                    el.style.justifyContent = 'flex-start';
+                }
+                
+                el.appendChild(entry);
+                if (el.childNodes.length > 500) el.removeChild(el.firstChild);
+                el.scrollTop = el.scrollHeight;
+            };
+            evtSource.onopen = function() { status.textContent = "Live"; status.style.color = "var(--md-sys-color-success)"; };
+            evtSource.onerror = function() { status.textContent = "Reconnecting..."; status.style.color = "var(--md-sys-color-error)"; evtSource.close(); setTimeout(startLogStream, 3000); };
+        }
+        
+        function formatBytes(a,b=2){if(!+a)return"0 B";const c=0>b?0:b,d=Math.floor(Math.log(a)/Math.log(1024));return parseFloat((a/Math.pow(1024,d)).toFixed(c)) + " " + ["B","KiB","MiB","GiB","TiB"][d]}
+        
+        // Snackbar implementation
+        const snackbarContainer = document.createElement('div');
+        snackbarContainer.className = 'snackbar-container';
+        document.body.appendChild(snackbarContainer);
+
+        function showSnackbar(message, actionText = '', actionCallback = null) {
+            const snackbar = document.createElement('div');
+            snackbar.className = 'snackbar';
+            
+            let html = \`<div class="snackbar-content">\${message}</div>\`;
+            if (actionText) {
+                html += \`<button class="snackbar-action">\${actionText}</button>\`;
+            }
+            snackbar.innerHTML = html;
+            
+            if (actionCallback) {
+                snackbar.querySelector('.snackbar-action').onclick = () => {
+                    actionCallback();
+                    snackbar.classList.remove('visible');
+                    setTimeout(() => snackbar.remove(), 500);
+                };
+            }
+
+            snackbarContainer.appendChild(snackbar);
+            // Trigger reflow
+            snackbar.offsetHeight;
+            snackbar.classList.add('visible');
+
+            setTimeout(() => {
+                snackbar.classList.remove('visible');
+                setTimeout(() => snackbar.remove(), 500);
+            }, 1500);
+        }
+
+        // Theme customization logic
+        async function applySeedColor(hex) {
+            const hexEl = document.getElementById('theme-seed-hex');
+            if (hexEl) hexEl.textContent = hex.toUpperCase();
+            const colors = generateM3Palette(hex);
+            applyThemeColors(colors);
+            await syncSettings();
+        }
+
+        function renderThemePreset(seedHex) {
+            const colors = generateM3Palette(seedHex);
+            const container = document.createElement('div');
+            container.style.width = '48px';
+            container.style.height = '48px';
+            container.style.borderRadius = '24px';
+            container.style.backgroundColor = colors.surfaceContainer; // Background of the "folder"
+            container.style.cursor = 'pointer';
+            container.style.border = '1px solid var(--md-sys-color-outline-variant)';
+            container.style.transition = 'transform 0.2s, border-color 0.2s';
+            container.title = "Apply " + seedHex;
+            container.style.display = 'grid';
+            container.style.gridTemplateColumns = '1fr 1fr';
+            container.style.gridTemplateRows = '1fr 1fr';
+            container.style.overflow = 'hidden';
+            container.style.padding = '4px';
+            container.style.gap = '2px';
+
+            const c1 = document.createElement('div'); c1.style.background = colors.primary; c1.style.borderRadius = '50%';
+            const c2 = document.createElement('div'); c2.style.background = colors.secondary; c2.style.borderRadius = '50%';
+            const c3 = document.createElement('div'); c3.style.background = colors.tertiary; c3.style.borderRadius = '50%';
+            const c4 = document.createElement('div'); c4.style.background = colors.primaryContainer; c4.style.borderRadius = '50%';
+
+            container.appendChild(c1); container.appendChild(c2); container.appendChild(c3); container.appendChild(c4);
+
+            container.onmouseover = () => { container.style.transform = 'scale(1.1)'; container.style.borderColor = 'var(--md-sys-color-primary)'; };
+            container.onmouseout = () => { container.style.transform = 'scale(1)'; container.style.borderColor = 'var(--md-sys-color-outline-variant)'; };
+            container.onclick = () => { applySeedColor(seedHex); };
+            
+            return container;
+        }
+
+        function initStaticPresets() {
+            const presets = ['#D0BCFF', '#93000A', '#FFA500', '#006e1c', '#0061a4', '#555555'];
+            const container = document.getElementById('static-presets');
+            if(container) {
+                container.innerHTML = '';
+                presets.forEach(hex => container.appendChild(renderThemePreset(hex)));
+            }
+        }
+
+        async function extractColorsFromImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const img = new Image();
+                img.src = e.target.result;
+                await new Promise(r => img.onload = r);
+
+                // Downscale for performance (max 128x128 is usually enough for color extraction)
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const scale = Math.min(1, 128 / Math.max(img.width, img.height));
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const pixels = imageData.data;
+                const argbPixels = [];
+                
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const r = pixels[i];
+                    const g = pixels[i + 1];
+                    const b = pixels[i + 2];
+                    const a = pixels[i + 3];
+                    if (a < 255) continue; // Skip transparent
+                    // ARGB int format
+                    const argb = (a << 24) | (r << 16) | (g << 8) | b;
+                    argbPixels.push(argb);
+                }
+
+                if (typeof MaterialColorUtilities !== 'undefined' && MaterialColorUtilities.QuantizerCelebi) {
+                    // Use official extraction
+                    const result = MaterialColorUtilities.QuantizerCelebi.quantize(argbPixels, 128);
+                    const ranked = MaterialColorUtilities.Score.score(result);
+                    
+                    // Clear previous
+                    const container = document.getElementById('extracted-palette');
+                    container.innerHTML = '';
+                    
+                    // Take top 4 or all if fewer
+                    const topColors = ranked.slice(0, 4);
+                    if (topColors.length === 0) {
+                        // Fallback to naive average if algo fails
+                        fallbackExtraction(pixels);
+                        return;
+                    }
+
+                    topColors.forEach(argb => {
+                        const hex = hexFromArgb(argb);
+                        container.appendChild(renderThemePreset(hex));
+                    });
+                    
+                    // Auto-select first
+                    applySeedColor(hexFromArgb(topColors[0]));
+                } else {
+                    // Library missing? Fallback
+                    fallbackExtraction(pixels);
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function fallbackExtraction(data) {
+            let r = 0, g = 0, b = 0;
+            const step = Math.max(1, Math.floor(data.length / 4000));
+            let count = 0;
+            for (let i = 0; i < data.length; i += step * 4) { 
+                r += data[i]; g += data[i+1]; b += data[i+2];
+                count++;
+            }
+            const avgHex = rgbToHex(Math.round(r/count), Math.round(g/count), Math.round(b/count));
+            const container = document.getElementById('extracted-palette');
+            container.innerHTML = '';
+            container.appendChild(renderThemePreset(avgHex));
+            applySeedColor(avgHex);
+        }
+
+        function addManualColor() {
+            const input = document.getElementById('manual-color-input');
+            let val = input.value.trim();
+            if (!val.startsWith('#')) val = '#' + val;
+            if (/^#[0-9A-F]{6}$/i.test(val)) {
+                // Clear placeholder text if it exists
+                const container = document.getElementById('extracted-palette');
+                if (container.querySelector('span')) container.innerHTML = '';
+                
+                container.appendChild(renderThemePreset(val));
+                applySeedColor(val);
+                input.value = '';
+            } else {
+                alert("Invalid Hex Code");
+            }
+        }
+
+        function addColorChip(hex) {
+            // Deprecated, replaced by renderThemePreset but kept if needed for fallback logic not using renderThemePreset
+            // For now we remove it to keep code clean as we replaced calls
+        }
+
+        function rgbToHex(r, g, b) {
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
+        function hexFromArgb(argb) {
+            const r = (argb >> 16) & 255;
+            const g = (argb >> 8) & 255;
+            const b = argb & 255;
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
+        function getLuminance(hex) {
+            const rgb = hexToRgb(hex);
+            const rs = rgb.r / 255;
+            const gs = rgb.g / 255;
+            const bs = rgb.b / 255;
+            const r = rs <= 0.03928 ? rs / 12.92 : Math.pow((rs + 0.055) / 1.055, 2.4);
+            const g = gs <= 0.03928 ? gs / 12.92 : Math.pow((gs + 0.055) / 1.055, 2.4);
+            const b = bs <= 0.03928 ? bs / 12.92 : Math.pow((bs + 0.055) / 1.055, 2.4);
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        }
+
+        function generateM3Palette(seedHex) {
+            if (typeof MaterialColorUtilities === 'undefined') {
+                // Fallback if library fails to load
+                const rgb = hexToRgb(seedHex);
+                const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+                const lum = getLuminance(seedHex);
+                const onPrimary = lum > 0.4 ? '#000000' : '#ffffff';
+                return {
+                    primary: seedHex,
+                    onPrimary: onPrimary,
+                    primaryContainer: hslToHex(hsl.h, hsl.s, Math.min(0.9, hsl.l + 0.3)),
+                    onPrimaryContainer: hslToHex(hsl.h, hsl.s, Math.max(0.1, hsl.l - 0.4)),
+                    secondary: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, hsl.l),
+                    onSecondary: onPrimary,
+                    secondaryContainer: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, Math.min(0.9, hsl.l + 0.3)),
+                    onSecondaryContainer: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, Math.max(0.1, hsl.l - 0.4)),
+                    tertiary: hslToHex((hsl.h + 0.5) % 1, hsl.s, hsl.l),
+                    onTertiary: onPrimary,
+                    tertiaryContainer: hslToHex((hsl.h + 0.5) % 1, hsl.s, Math.min(0.9, hsl.l + 0.3)),
+                    onTertiaryContainer: hslToHex((hsl.h + 0.5) % 1, hsl.s, Math.max(0.1, hsl.l - 0.4)),
+                    error: '#ba1a1a',
+                    onError: '#ffffff',
+                    errorContainer: '#ffdad6',
+                    onErrorContainer: '#410002',
+                    outline: '#79747e',
+                    outlineVariant: '#c4c7c5',
+                    surface: '#141218',
+                    onSurface: '#e6e1e5',
+                    surfaceVariant: '#49454f',
+                    onSurfaceVariant: '#cac4d0'
+                };
+            }
+
+            const argb = MaterialColorUtilities.argbFromHex(seedHex);
+            const isDark = !document.documentElement.classList.contains('light-mode');
+            const theme = MaterialColorUtilities.themeFromSourceColor(argb);
+            const scheme = isDark ? theme.schemes.dark : theme.schemes.light;
+
+            return {
+                primary: hexFromArgb(scheme.primary),
+                onPrimary: hexFromArgb(scheme.onPrimary),
+                primaryContainer: hexFromArgb(scheme.primaryContainer),
+                onPrimaryContainer: hexFromArgb(scheme.onPrimaryContainer),
+                secondary: hexFromArgb(scheme.secondary),
+                onSecondary: hexFromArgb(scheme.onSecondary),
+                secondaryContainer: hexFromArgb(scheme.secondaryContainer),
+                onSecondaryContainer: hexFromArgb(scheme.onSecondaryContainer),
+                tertiary: hexFromArgb(scheme.tertiary),
+                onTertiary: hexFromArgb(scheme.onTertiary),
+                tertiaryContainer: hexFromArgb(scheme.tertiaryContainer),
+                onTertiaryContainer: hexFromArgb(scheme.onTertiaryContainer),
+                error: hexFromArgb(scheme.error),
+                onError: hexFromArgb(scheme.onError),
+                errorContainer: hexFromArgb(scheme.errorContainer),
+                onErrorContainer: hexFromArgb(scheme.onErrorContainer),
+                outline: hexFromArgb(scheme.outline),
+                outlineVariant: hexFromArgb(scheme.outlineVariant),
+                surface: hexFromArgb(scheme.surface),
+                onSurface: hexFromArgb(scheme.onSurface),
+                surfaceVariant: hexFromArgb(scheme.surfaceVariant),
+                onSurfaceVariant: hexFromArgb(scheme.onSurfaceVariant)
+            };
+        }
+
+        function applyThemeColors(colors) {
+            const root = document.documentElement;
+            for (const [key, value] of Object.entries(colors)) {
+                root.style.setProperty('--md-sys-color-' + key.replace(/[A-Z]/g, m => "-" + m.toLowerCase()), value);
+            }
+        }
+
+        async function syncSettings() {
+            const seed = document.getElementById('theme-seed-color').value;
+            const isLight = document.documentElement.classList.contains('light-mode');
+            const isPrivacy = document.body.classList.contains('privacy-mode');
+            const activeFilter = localStorage.getItem('dashboard_filter') || 'all';
+            
+            const settings = {
+                seed,
+                theme: isLight ? 'light' : 'dark',
+                privacy_mode: isPrivacy,
+                dashboard_filter: activeFilter,
+                is_admin: isAdmin,
+                timestamp: Date.now()
+            };
+
+            try {
+                await fetch(API + "/theme", {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify(settings)
+                });
+            } catch(e) { console.warn("Failed to sync settings to server", e); }
+        }
+
+        async function saveThemeSettings() {
+            await syncSettings();
+            showSnackbar("Settings synchronized to server");
+        }
+
+        async function uninstallStack() {
+            if (!confirm("⚠️ DANGER: This will permanently remove all containers, volumes, and data. This cannot be undone. Are you absolutely sure?")) return;
+            if (!confirm("LAST WARNING: Final confirmation required to proceed with uninstallation.")) return;
+            
+            showSnackbar("Uninstallation sequence initiated...");
+            try {
+                const res = await fetch(API + "/uninstall", { 
+                    method: 'POST', 
+                    headers: getAuthHeaders() 
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showSnackbar("System removed. Redirecting...");
+                    setTimeout(() => window.location.href = "about:blank", 3000);
+                } else {
+                    throw new Error(result.error || "Uninstall failed");
+                }
+            } catch (e) {
+                showSnackbar("Error during uninstall: " + e.message);
+            }
+        }
+
+        async function loadAllSettings() {
+            try {
+                const res = await fetch(API + "/theme", { headers: getAuthHeaders() });
+                const data = await res.json();
+                
+                // 1. Seed & Colors
+                if (data.seed) {
+                    const picker = document.getElementById('theme-seed-color');
+                    if (picker) picker.value = data.seed;
+                    applyThemeColors(data.colors || generateM3Palette(data.seed));
+                }
+                
+                // 2. Theme (Light/Dark)
+                if (data.theme) {
+                    const isLight = data.theme === 'light';
+                    document.documentElement.classList.toggle('light-mode', isLight);
+                    localStorage.setItem('theme', data.theme);
+                    updateThemeIcon();
+                }
+                
+                // 3. Privacy Mode
+                if (data.hasOwnProperty('privacy_mode')) {
+                    const toggle = document.getElementById('privacy-switch');
+                    if (toggle) toggle.classList.toggle('active', data.privacy_mode);
+                    document.body.classList.toggle('privacy-mode', data.privacy_mode);
+                    localStorage.setItem('privacy_mode', data.privacy_mode ? 'true' : 'false');
+                    updateProfileDisplay();
+                }
+                
+                // 4. Dashboard Filter
+                if (data.dashboard_filter) {
+                    localStorage.setItem('dashboard_filter', data.dashboard_filter);
+                    filterCategory(data.dashboard_filter);
+                }
+
+                // 5. Admin Mode
+                if (data.hasOwnProperty('is_admin')) {
+                    isAdmin = data.is_admin;
+                    sessionStorage.setItem('is_admin', isAdmin ? 'true' : 'false');
+                    updateAdminUI();
+                }
+            } catch(e) { console.warn("Failed to load settings from server", e); }
+        }
+
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : { r:0, g:0, b:0 };
+        }
+
+        function rgbToHsl(r, g, b) {
+            r /= 255, g /= 255, b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, l = (max + min) / 2;
+            if (max == min) h = s = 0;
+            else {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            return { h, s, l };
+        }
+
+        function hslToHex(h, s, l) {
+            let r, g, b;
+            if (s == 0) r = g = b = l;
+            else {
+                const hue2rgb = (p, q, t) => {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return p + (q - p) * 6 * t;
+                    if (t < 1/2) return q;
+                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                    return p;
+                };
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                r = hue2rgb(p, q, h + 1/3);
+                g = hue2rgb(p, q, h);
+                b = hue2rgb(p, q, h - 1/3);
+            }
+            return rgbToHex(Math.round(r * 255), Math.round(g * 255), Math.round(b * 255));
+        }
+
+        // Theme management
+        function toggleTheme() {
+            const isLight = document.documentElement.classList.toggle('light-mode');
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            updateThemeIcon();
+            
+            // Regenerate palette for new mode if seed exists
+            const picker = document.getElementById('theme-seed-color');
+            if (picker && picker.value) {
+                applySeedColor(picker.value);
+            }
+            
+            syncSettings();
+            showSnackbar(\`Switched to \${isLight ? 'Light' : 'Dark'} mode\`);
+        }
+
+        function updateThemeIcon() {
+            const icon = document.getElementById('theme-icon');
+            const isLight = document.documentElement.classList.contains('light-mode');
+            if (icon) icon.textContent = isLight ? 'dark_mode' : 'light_mode';
+        }
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            const systemPrefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+            
+            if (savedTheme === 'light' || (!savedTheme && systemPrefersLight)) {
+                document.documentElement.classList.add('light-mode');
+            }
+            updateThemeIcon();
+        }
+
+        // Privacy toggle functionality
+        function togglePrivacy() {
+            const toggle = document.getElementById('privacy-switch');
+            const body = document.body;
+            const isPrivate = toggle.classList.toggle('active');
+            if (isPrivate) {
+                body.classList.add('privacy-mode');
+                localStorage.setItem('privacy_mode', 'true');
+            } else {
+                body.classList.remove('privacy-mode');
+                localStorage.setItem('privacy_mode', 'false');
+            }
+            updateProfileDisplay();
+            syncSettings();
+        }
+        
+        function initPrivacyMode() {
+            const savedMode = localStorage.getItem('privacy_mode');
+            if (savedMode === 'true') {
+                const toggle = document.getElementById('privacy-switch');
+                if (toggle) toggle.classList.add('active');
+                document.body.classList.add('privacy-mode');
+            }
+            updateProfileDisplay();
+        }
+
+        function dismissMacAdvisory() {
+            document.getElementById('mac-advisory').style.display = 'none';
+            localStorage.setItem('mac_advisory_dismissed', 'true');
+        }
+
+        function initMacAdvisory() {
+            if (localStorage.getItem('mac_advisory_dismissed') === 'true') {
+                const el = document.getElementById('mac-advisory');
+                if (el) el.style.display = 'none';
+            }
+        }
+        
+        async function fetchCertStatus() {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                const res = await fetch(API + "/certificate-status", { signal: controller.signal });
+                clearTimeout(timeoutId);
+                
+                if (res.status === 401) throw new Error("401");
+                const data = await res.json();
+                
+                const loadingBox = document.getElementById('cert-loading');
+                if (loadingBox) loadingBox.style.display = 'none';
+
+                document.getElementById('cert-type').textContent = data.type || "--";
+                document.getElementById('cert-subject').textContent = data.subject || "--";
+                document.getElementById('cert-issuer').textContent = data.issuer || "--";
+                
+                // Make the year slightly bolder
+                const expiresEl = document.getElementById('cert-to');
+                if (data.expires && data.expires !== "--") {
+                    const parts = data.expires.split(' ');
+                    if (parts.length > 0) {
+                        const lastPart = parts[parts.length - 1];
+                        const rest = data.expires.substring(0, data.expires.lastIndexOf(lastPart));
+                        expiresEl.innerHTML = rest + '<span style="font-weight: 600;">' + lastPart + '</span>';
+                    } else {
+                        expiresEl.textContent = data.expires;
+                    }
+                } else {
+                    expiresEl.textContent = "--";
+                }
+                
+                const badge = document.getElementById('cert-status-badge');
+                const isTrusted = data.status && data.status.includes("Trusted");
+                const isSelfSigned = data.status && data.status.includes("Self-Signed");
+                const domain = isTrusted ? data.subject : "";
+
+                if (isTrusted) {
+                    badge.className = "chip vpn"; // Use primary-container color
+                    badge.innerHTML = '<span class="material-symbols-rounded" style="font-size:16px;">verified</span> Trusted';
+                    badge.dataset.tooltip = "✓ Globally Trusted: Valid certificate from Let's Encrypt.";
+                } else if (isSelfSigned) {
+                    badge.className = "chip admin"; // Use secondary-container color
+                    badge.innerHTML = '<span class="material-symbols-rounded" style="font-size:16px;">warning</span> Self-Signed';
+                    badge.dataset.tooltip = "⚠ Self-Signed (Local): Devices will show security warnings. deSEC configuration recommended.";
+                } else {
+                    badge.className = "chip tertiary";
+                    badge.textContent = data.status || "Unknown";
+                    badge.dataset.tooltip = "Status unknown or certificate missing.";
+                }
+                
+                const failInfo = document.getElementById('ssl-failure-info');
+                const trustedInfo = document.getElementById('dns-setup-trusted');
+                const untrustedInfo = document.getElementById('dns-setup-untrusted');
+                const retryBtn = document.getElementById('ssl-retry-btn');
+
+                if (data.error) {
+                    failInfo.style.display = 'block';
+                    document.getElementById('ssl-failure-reason').textContent = data.error;
+                    if (trustedInfo) trustedInfo.style.display = 'none';
+                    if (untrustedInfo) untrustedInfo.style.display = 'block';
+                    if (retryBtn) retryBtn.style.display = 'inline-flex';
+                    
+                    // Handle authentication or rate limit errors
+                    if (data.status === "Auth Error") {
+                        showSnackbar("SSL Authentication Error: Please check your deSEC credentials.");
+                    } else if (data.status === "Rate Limited" || data.status === "Issuance Failed") {
+                        showSnackbar("SSL Issue: " + data.error);
+                    }
+                } else {
+                    failInfo.style.display = 'none';
+                    if (isTrusted) {
+                        if (trustedInfo) trustedInfo.style.display = 'block';
+                        if (untrustedInfo) untrustedInfo.style.display = 'none';
+                        if (retryBtn) retryBtn.style.display = 'none';
+                    } else {
+                        if (trustedInfo) trustedInfo.style.display = 'none';
+                        if (untrustedInfo) untrustedInfo.style.display = 'block';
+                        if (retryBtn) retryBtn.style.display = 'inline-flex';
+                    }
+                }
+            } catch(e) { 
+                console.error('Cert status fetch error:', e);
+            } finally {
+                const loadingBox = document.getElementById('cert-loading');
+                if (loadingBox) loadingBox.style.display = 'none';
+            }
+        }
+
+        async function requestSslCheck() {
+            const btn = document.getElementById('ssl-retry-btn');
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            try {
+                const res = await fetch(API + "/request-ssl-check", { headers: getAuthHeaders() });
+                const data = await res.json();
+                if (data.success) {
+                    alert("SSL Check triggered in background. This may take 2-3 minutes. Refresh the dashboard later.");
+                } else {
+                    alert("Failed to trigger SSL check: " + (data.error || "Unknown error"));
+                }
+            } catch (e) {
+                alert("Network error while triggering SSL check.");
+            }
+            setTimeout(() => { btn.disabled = false; btn.style.opacity = '1'; }, 10000);
+        }
+
+        async function checkUpdates() {
+            showSnackbar("Update check initiated... checking images and sources.");
+            try {
+                const res = await fetch(API + "/check-updates", { headers: getAuthHeaders() });
+                const data = await res.json();
+                if (data.success) {
+                    showSnackbar("Update check is running in background. Results will appear in logs and banners shortly.");
+                    // Refresh source updates after a short delay
+                    setTimeout(fetchUpdates, 5000);
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch(e) {
+                showSnackbar("Failed to initiate update check: " + e.message);
+            }
+        }
+
+        async function restartStack() {
+            if (!confirm("Are you sure you want to restart the entire stack? The dashboard and all services will be unreachable for approximately 30 seconds.")) return;
+            
+            try {
+                const res = await fetch(API + "/restart-stack", {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                
+                const data = await res.json();
+                if (data.success) {
+                    // Show a persistent overlay or alert
+                    document.body.innerHTML = \`
+                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:var(--md-sys-color-surface); color:var(--md-sys-color-on-surface); font-family:sans-serif; text-align:center; padding:24px;">
+                            <span class="material-symbols-rounded" style="font-size:64px; color:var(--md-sys-color-primary); margin-bottom:24px;">restart_alt</span>
+                            <h1>Restarting Stack...</h1>
+                            <p style="margin-top:16px; opacity:0.8;">The management interface is rebooting. This page will automatically refresh when the services are back online.</p>
+                            <div style="margin-top:32px; width:48px; height:48px; border:4px solid var(--md-sys-color-surface-container-highest); border-top:4px solid var(--md-sys-color-primary); border-radius:50%; animation: spin 1s linear infinite;"></div>
+                            <style>
+                                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                            </style>
+                        </div>
+                    \`;
+                    
+                    // Poll for availability
+                    let attempts = 0;
+                    const checkAvailability = setInterval(async () => {
+                        attempts++;
+                        try {
+                            const ping = await fetch(window.location.href, { mode: 'no-cors' });
+                            clearInterval(checkAvailability);
+                            window.location.reload();
+                        } catch (e) {
+                            if (attempts > 60) {
+                                clearInterval(checkAvailability);
+                                alert("Restart is taking longer than expected. Please refresh the page manually.");
+                            }
+                        }
+                    }, 2000);
+                } else {
+                    throw new Error(data.error || "Unknown error");
+                }
+            } catch (e) {
+                alert("Failed to initiate restart: " + e.message);
+            }
+        }
+        
+        async function fetchSystemHealth() {
+            try {
+                const res = await fetch(API + "/system-health", { headers: getAuthHeaders() });
+                if (res.status === 401) throw new Error("401");
+                const data = await res.json();
+                
+                const cpu = Math.round(data.cpu_percent || 0);
+                const ramUsed = Math.round(data.ram_used || 0);
+                const ramTotal = Math.round(data.ram_total || 0);
+                const ramPct = Math.round((ramUsed / ramTotal) * 100);
+
+                const sysCpu = document.getElementById('sys-cpu');
+                if(sysCpu) sysCpu.textContent = cpu + "%";
+                const sysCpuFill = document.getElementById('sys-cpu-fill');
+                if(sysCpuFill) sysCpuFill.style.width = cpu + "%";
+                
+                const sysRam = document.getElementById('sys-ram');
+                if(sysRam) sysRam.textContent = ramUsed + " MB / " + ramTotal + " MB";
+                const sysRamFill = document.getElementById('sys-ram-fill');
+                if(sysRamFill) sysRamFill.style.width = ramPct + "%";
+                
+                const sysProj = document.getElementById('sys-project-size');
+                if(sysProj) sysProj.textContent = (data.project_size || 0).toFixed(1) + " MB";
+                
+                const uptime = data.uptime || 0;
+                const d = Math.floor(uptime / 86400);
+                const h = Math.floor((uptime % 86400) / 3600);
+                const m = Math.floor((uptime % 3600) / 60);
+                const sysUp = document.getElementById('sys-uptime');
+                if(sysUp) sysUp.textContent = d + "d " + h + "h " + m + "m";
+
+                const driveStatus = document.getElementById('sys-drive-status');
+                const drivePct = document.getElementById('sys-drive-pct');
+                const driveContainer = document.getElementById('drive-health-container');
+                const diskPercent = document.getElementById('sys-disk-percent');
+                
+                if(driveStatus) driveStatus.textContent = data.drive_status || "Unknown";
+                if(drivePct) drivePct.textContent = (data.drive_health_pct || 0) + "% Health";
+                if(diskPercent) diskPercent.textContent = (data.disk_percent || 0).toFixed(1) + "% used";
+
+                if (driveStatus) {
+                    if (data.drive_status === "Action Required") {
+                        driveStatus.style.color = "var(--md-sys-color-error)";
+                    } else if (data.drive_status && data.drive_status.includes("Warning")) {
+                        driveStatus.style.color = "var(--md-sys-color-warning)";
+                    } else {
+                        driveStatus.style.color = "var(--md-sys-color-success)";
+                    }
+                }
+
+                if (driveContainer) {
+                    if (data.smart_alerts && data.smart_alerts.length > 0) {
+                        driveContainer.dataset.tooltip = "SMART Alerts:\n" + data.smart_alerts.join("\n");
+                    } else {
+                        driveContainer.dataset.tooltip = "Drive is reporting healthy SMART status.";
+                    }
+                }
+
+            } catch(e) { console.error("Health fetch error:", e); }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load deSEC config if available
+            fetch(API + "/status").then(r => r.json()).then(data => {
+                if (data.gluetun && data.gluetun.desec_domain) {
+                    document.getElementById('desec-domain-input').placeholder = data.gluetun.desec_domain;
+                }
+            }).catch(() => {});
+
+            // Tooltip Initialization
+            const tooltipBox = document.createElement('div');
+            tooltipBox.className = 'tooltip-box';
+            document.body.appendChild(tooltipBox);
+            
+            let tooltipTimeout = null;
+
+            document.addEventListener('mouseover', (e) => {
+                const target = e.target.closest('[data-tooltip]');
+                if (!target) return;
+
+                if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                
+                tooltipTimeout = setTimeout(() => {
+                    tooltipBox.textContent = target.dataset.tooltip;
+                    tooltipBox.style.display = 'block';
+                    // Trigger reflow
+                    tooltipBox.offsetHeight;
+                    tooltipBox.classList.add('visible');
+
+                    const rect = target.getBoundingClientRect();
+                    const boxRect = tooltipBox.getBoundingClientRect();
+                    
+                    let top = rect.top - boxRect.height - 12;
+                    let left = rect.left + (rect.width / 2) - (boxRect.width / 2);
+
+                    // Edge collision detection (with 12px safety margin)
+                    if (top < 12) top = rect.bottom + 12;
+                    if (left < 12) left = 12;
+                    if (left + boxRect.width > window.innerWidth - 12) {
+                        left = window.innerWidth - boxRect.width - 12;
+                    }
+                    
+                    // Final safety: ensure it doesn't go off bottom
+                    if (top + boxRect.height > window.innerHeight - 12) {
+                        top = window.innerHeight - boxRect.height - 12;
+                    }
+
+                    tooltipBox.style.top = top + 'px';
+                    tooltipBox.style.left = left + 'px';
+                }, 150); 
+            });
+
+            document.addEventListener('mouseout', (e) => {
+                if (e.target.closest('[data-tooltip]')) {
+                    if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                    tooltipBox.classList.remove('visible');
+                    // Hide after transition
+                    setTimeout(() => {
+                        if (!tooltipBox.classList.contains('visible')) {
+                            tooltipBox.style.display = 'none';
+                        }
+                    }, 150);
+                }
+            });
+
+            // Pre-populate Odido API key from deployment
+            if (DEFAULT_ODIDO_API_KEY && !sessionStorage.getItem('odido_api_key')) {
+                sessionStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
+                odidoApiKey = DEFAULT_ODIDO_API_KEY;
+            }
+            // Pre-populate the API key input field so users can see their dashboard API key
+            const apiKeyInput = document.getElementById('odido-api-key');
+            if (apiKeyInput && odidoApiKey) {
+                apiKeyInput.value = odidoApiKey;
+            }
+            
+            // Restore filter and check HTTPS
+            const savedFilter = localStorage.getItem('dashboard_filter') || 'all';
+            filterCategory(savedFilter);
+            if (window.location.protocol === 'https:') {
+                const badge = document.getElementById('https-badge');
+                if (badge) badge.style.display = 'inline-flex';
+            }
+
+            initPrivacyMode();
+            initTheme();
+            initStaticPresets();
+            fetchContainerIds();
+            updateAdminUI();
+            fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates(); fetchMetrics(); loadAllSettings(); fetchSystemHealth();
+            setInterval(fetchStatus, 15000);
+            setInterval(fetchSystemHealth, 15000);
+            setInterval(fetchMetrics, 30000);
+            setInterval(fetchUpdates, 300000); // Check for source updates every 5 mins
+            setInterval(fetchOdidoStatus, 60000);  // Reduced polling frequency to respect Odido API
+            setInterval(fetchContainerIds, 60000);
+        });
+    </script>
+</body>
+</html>
+EOF
+}
     # Export DOCKER_CONFIG globally
     export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
     
@@ -414,6 +4370,7 @@ clean_environment() {
                 sudo rm -f "$BASE_DIR/wg-api.sh" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/wg-ip-monitor.log" 2>/dev/null || true
+generate_dashboard
                 sudo rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
@@ -4337,3928 +8294,6 @@ x-casaos:
 EOF
 
 # --- SECTION 14: DASHBOARD & UI GENERATION ---
-# Generate the Material Design 3 management dashboard.
-log_info "Compiling Management Dashboard UI..."
-cat > "$DASHBOARD_FILE" <<EOF
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZimaOS Privacy Hub</title>
-    <link rel="icon" type="image/svg+xml" href="assets/privacy-hub.svg">
-    <!-- Local privacy friendly assets (Hosted Locally) -->
-    <link href="assets/gs.css" rel="stylesheet">
-    <link href="assets/cc.css" rel="stylesheet">
-    <link href="assets/ms.css" rel="stylesheet">
-    <script>
-        // HTTPS Auto-Switch & Default Logic
-        const isLocalHost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-        const isIpHost = window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/);
-        if (window.location.protocol === 'http:' && !isLocalHost && !isIpHost) {
-            const httpsPort = '8443';
-            const httpsUrl = 'https://' + window.location.hostname + ':' + httpsPort + window.location.pathname + window.location.search;
-            // Only redirect if we're not on a standard port or if specifically requested
-            // Use a small delay to ensure page load doesnt flicker
-            setTimeout(() => {
-                fetch(httpsUrl, { mode: 'no-cors' }).then(() => {
-                    window.location.href = httpsUrl;
-                }).catch(() => {
-                    console.log("HTTPS port not reachable, staying on HTTP");
-                });
-            }, 500);
-        }
-        
-        // Prevent extension injection errors - defined early
-        globalThis.configureInjection = globalThis.configureInjection || (() => {});
-    </script>
-    <script type="module">
-        import * as MaterialColorUtilities from './assets/mcu.js';
-        window.MaterialColorUtilities = MaterialColorUtilities;
-    </script>
-    <style>
-        /* Alignment & Flicker Fixes */
-        .card, .chip, .btn {
-            backface-visibility: hidden;
-            transform: translateZ(0);
-            -webkit-font-smoothing: subpixel-antialiased;
-        }
-        
-        /* Admin Mode Controls */
-        .admin-only {
-            display: none !important;
-        }
-        body.admin-mode .admin-only {
-            display: flex !important;
-        }
-        body.admin-mode .admin-only.btn-icon {
-            display: inline-flex !important;
-        }
-        body.admin-mode .admin-only.chip {
-            display: inline-flex !important;
-        }
-        body.admin-mode .admin-only.section-label, 
-        body.admin-mode .admin-only.section-hint {
-            display: block !important;
-        }
-        
-        .filter-bar {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 24px;
-            overflow-x: auto;
-            padding: 4px;
-            scrollbar-width: none;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            background: var(--md-sys-color-surface);
-            border-bottom: 1px solid var(--md-sys-color-outline-variant);
-        }
-        .filter-bar::-webkit-scrollbar { display: none; }
-        
-        .filter-chip {
-            cursor: pointer;
-            user-select: none;
-            transition: all 200ms ease;
-        }
-        .filter-chip.active {
-            background: var(--md-sys-color-primary-container) !important;
-            color: var(--md-sys-color-on-primary-container) !important;
-            border-color: var(--md-sys-color-primary) !important;
-        }
-        
-        section {
-            display: block;
-            opacity: 1;
-            transition: opacity 200ms ease-in-out;
-        }
-        section.hidden {
-            display: none;
-            opacity: 0;
-        }
-        
-        /* Ensure chips don't flicker during hover */
-        .chip:hover {
-            transform: translateY(-1px);
-            box-shadow: var(--md-sys-elevation-1);
-        }
-        /* ============================================
-           Material 3 Dark Theme - Strict Implementation
-           Reference: https://m3.material.io/
-           ============================================ */
-        
-        :root {
-            color-scheme: dark;
-            /* M3 Dark Theme Color Tokens (Default) */
-            --md-sys-color-primary: #D0BCFF;
-            --md-sys-color-on-primary: #381E72;
-            --md-sys-color-primary-container: #4F378B;
-            --md-sys-color-on-primary-container: #EADDFF;
-            --md-sys-color-secondary: #CCC2DC;
-            --md-sys-color-on-secondary: #332D41;
-            --md-sys-color-secondary-container: #4A4458;
-            --md-sys-color-on-secondary-container: #E8DEF8;
-            --md-sys-color-tertiary: #EFB8C8;
-            --md-sys-color-on-tertiary: #492532;
-            --md-sys-color-tertiary-container: #633B48;
-            --md-sys-color-on-tertiary-container: #FFD8E4;
-            --md-sys-color-error: #F2B8B5;
-            --md-sys-color-on-error: #601410;
-            --md-sys-color-error-container: #8C1D18;
-            --md-sys-color-on-error-container: #F9DEDC;
-            --md-sys-color-surface: #141218;
-            --md-sys-color-on-surface: #E6E1E5;
-            --md-sys-color-surface-variant: #49454F;
-            --md-sys-color-on-surface-variant: #CAC4D0;
-            --md-sys-color-surface-container-low: #1D1B20;
-            --md-sys-color-surface-container: #211F26;
-            --md-sys-color-surface-container-high: #2B2930;
-            --md-sys-color-surface-container-highest: #36343B;
-            --md-sys-color-surface-bright: #3B383E;
-            --md-sys-color-outline: #938F99;
-            --md-sys-color-outline-variant: #49454F;
-            --md-sys-color-inverse-surface: #E6E1E5;
-            --md-sys-color-inverse-on-surface: #313033;
-            --md-sys-color-success: #A8DAB5;
-            --md-sys-color-on-success: #003912;
-            --md-sys-color-success-container: #00522B;
-            --md-sys-color-warning: #FFCC80;
-            --md-sys-color-on-warning: #4A2800;
-
-            /* MD3 Expressive Motion */
-            --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0.0, 0, 1.0);
-            --md-sys-motion-duration-short: 150ms;
-            --md-sys-motion-duration-medium: 300ms;
-            --md-sys-motion-duration-long: 500ms;
-            
-            /* MD3 Expressive Shapes */
-            --md-sys-shape-corner-extra-large: 28px;
-            --md-sys-shape-corner-large: 16px;
-            --md-sys-shape-corner-medium: 12px;
-            --md-sys-shape-corner-small: 8px;
-            --md-sys-shape-corner-full: 100px;
-
-            /* Elevation */
-            --md-sys-elevation-1: 0 1px 3px 1px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.3);
-            --md-sys-elevation-2: 0 2px 6px 2px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.3);
-            --md-sys-elevation-3: 0 4px 8px 3px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.3);
-            
-            /* State Opacities */
-            --md-sys-state-hover-opacity: 0.08;
-            --md-sys-state-focus-opacity: 0.12;
-            --md-sys-state-pressed-opacity: 0.12;
-        }
-
-        /* M3 Light Theme Tokens */
-        :root.light-mode {
-            color-scheme: light;
-            --md-sys-color-primary: #6750A4;
-            --md-sys-color-on-primary: #FFFFFF;
-            --md-sys-color-primary-container: #EADDFF;
-            --md-sys-color-on-primary-container: #21005D;
-            --md-sys-color-secondary: #625B71;
-            --md-sys-color-on-secondary: #FFFFFF;
-            --md-sys-color-secondary-container: #E8DEF8;
-            --md-sys-color-on-secondary-container: #1D192B;
-            --md-sys-color-tertiary: #7D5260;
-            --md-sys-color-on-tertiary: #FFFFFF;
-            --md-sys-color-tertiary-container: #FFD8E4;
-            --md-sys-color-on-tertiary-container: #31111D;
-            --md-sys-color-error: #B3261E;
-            --md-sys-color-on-error: #FFFFFF;
-            --md-sys-color-error-container: #F9DEDC;
-            --md-sys-color-on-error-container: #410E0B;
-            --md-sys-color-surface: #FEF7FF;
-            --md-sys-color-on-surface: #1D1B20;
-            --md-sys-color-surface-variant: #E7E0EC;
-            --md-sys-color-on-surface-variant: #49454F;
-            --md-sys-color-surface-container-low: #F7F2FA;
-            --md-sys-color-surface-container: #F3EDF7;
-            --md-sys-color-surface-container-high: #ECE6F0;
-            --md-sys-color-surface-container-highest: #E6E0E9;
-            --md-sys-color-surface-bright: #FEF7FF;
-            --md-sys-color-outline: #79747E;
-            --md-sys-color-outline-variant: #C4C7C5;
-            --md-sys-color-inverse-surface: #313033;
-            --md-sys-color-inverse-on-surface: #F4EFF4;
-            --md-sys-color-success: #2E7D32;
-            --md-sys-color-on-success: #FFFFFF;
-            --md-sys-color-success-container: #C8E6C9;
-            --md-sys-color-warning: #ED6C02;
-            --md-sys-color-on-warning: #FFFFFF;
-            
-            /* Adjust elevations for light mode */
-            --md-sys-elevation-1: 0 1px 2px 0 rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
-            --md-sys-elevation-2: 0 1px 2px 0 rgba(0,0,0,0.3), 0 2px 6px 2px rgba(0,0,0,0.15);
-        }
-        
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        
-        a {
-            color: var(--md-sys-color-primary);
-            text-decoration: none;
-            transition: opacity var(--md-sys-motion-duration-short) linear;
-        }
-        
-        a:hover {
-            opacity: 0.8;
-            text-decoration: underline;
-        }
-        
-        body {
-            background: var(--md-sys-color-surface);
-            color: var(--md-sys-color-on-surface);
-            font-family: 'Google Sans Flex', 'Google Sans', system-ui, -apple-system, sans-serif;
-            margin: 0;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            line-height: 1.6;
-            -webkit-font-smoothing: antialiased;
-            transition: background-color 300ms ease, color 300ms ease;
-        }
-
-        .code-block, .log-container, .text-field, .stat-value, .monospace {
-            font-family: 'Cascadia Code', 'Consolas', monospace;
-        }
-        
-        .material-symbols-rounded {
-            font-family: 'Material Symbols Rounded';
-            font-display: block;
-            font-weight: normal;
-            font-style: normal;
-            font-size: 24px;
-            line-height: 1;
-            letter-spacing: normal;
-            text-transform: none;
-            display: inline-block;
-            white-space: nowrap;
-            word-wrap: normal;
-            direction: ltr;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        .container { max-width: 1440px; width: 100%; margin: 0 auto; position: relative; }
-        
-        /* Header */
-        header {
-            margin-bottom: 56px;
-            padding: 16px 0;
-        }
-
-        .header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 24px;
-            flex-wrap: wrap;
-        }
-
-        .header-row > div:first-child {
-            flex: 1 1 auto;
-        }
-        
-        h1 {
-            font-family: 'Google Sans Flex', 'Google Sans', sans-serif;
-            font-weight: 400;
-            font-size: 45px;
-            line-height: 52px;
-            margin: 0;
-            color: var(--md-sys-color-primary);
-            letter-spacing: 0;
-        }
-        
-        .subtitle {
-            font-size: 22px;
-            color: var(--md-sys-color-on-surface-variant);
-            margin-top: 12px;
-            font-weight: 400;
-            letter-spacing: 0;
-        }
-
-        .label-large {
-            font-size: 14px;
-            line-height: 20px;
-            font-weight: 500;
-            letter-spacing: 0.1px;
-        }
-
-        .body-medium {
-            font-size: 14px;
-            line-height: 20px;
-            letter-spacing: 0.25px;
-        }
-
-        .body-small {
-            font-size: 12px;
-            line-height: 16px;
-            letter-spacing: 0.4px;
-        }
-
-        .code-label {
-            font-size: 12px;
-            line-height: 16px;
-            letter-spacing: 0.4px;
-            font-weight: 500;
-            color: var(--md-sys-color-on-surface-variant);
-            margin-top: 12px;
-        }
-
-        .profile-hint {
-            color: var(--md-sys-color-on-surface-variant);
-            margin-top: 12px;
-        }
-
-        .feedback {
-            margin-top: 12px;
-            padding: 8px 12px;
-            border-radius: var(--md-sys-shape-corner-medium);
-            background: var(--md-sys-color-surface-container-highest);
-            color: var(--md-sys-color-on-surface-variant);
-            font-size: 12px;
-            line-height: 16px;
-            letter-spacing: 0.4px;
-        }
-
-        .feedback.info { border: 1px solid var(--md-sys-color-outline-variant); }
-        .feedback.success { background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success); }
-        .feedback.error { background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
-        
-        /* Section Labels */
-        .section-label {
-            color: var(--md-sys-color-primary);
-            font-size: 14px;
-            font-weight: 500;
-            letter-spacing: 0.1px;
-            margin: 48px 0 16px 4px;
-            text-transform: none;
-        }
-        
-        .section-label:first-of-type {
-            margin-top: 8px;
-        }
-        
-        .section-hint {
-            font-size: 14px;
-            color: var(--md-sys-color-on-surface-variant);
-            margin: 0 0 24px 4px;
-            letter-spacing: 0.25px;
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-        
-        /* Grid Layouts - M3 Responsive (3x3, 4x4) */
-        .grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
-            gap: 24px; 
-            margin-bottom: 32px; 
-            width: 100%;
-        }
-        
-        @media (min-width: 1200px) {
-            .grid { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
-        }
-
-        @media (min-width: 1600px) {
-            .grid { grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); }
-        }
-        
-        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 450px), 1fr)); gap: 24px; margin-bottom: 32px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: 24px; margin-bottom: 32px; }
-        
-        /* MD3 Component Refinements - Elevated Cards */
-        .card {
-            background: var(--md-sys-color-surface-container-low);
-            border-radius: var(--md-sys-shape-corner-extra-large);
-            padding: 32px;
-            text-decoration: none;
-            color: inherit;
-            transition: all var(--md-sys-duration-medium) var(--md-sys-motion-easing-emphasized);
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            min-height: 240px;
-            overflow: visible; 
-            box-sizing: border-box;
-            box-shadow: var(--md-sys-elevation-1);
-            height: 100%;
-            cursor: pointer;
-            contain: content;
-            will-change: transform, box-shadow;
-        }
-        
-        .card::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: inherit;
-            background: var(--md-sys-color-on-surface);
-            opacity: 0;
-            transition: opacity var(--md-sys-motion-duration-short) linear;
-            pointer-events: none;
-            z-index: 1;
-        }
-        
-        .card:hover::before { opacity: var(--md-sys-state-hover-opacity); }
-        .card:active::before { opacity: var(--md-sys-state-pressed-opacity); }
-
-        .card:hover { 
-            background: var(--md-sys-color-surface-container);
-            box-shadow: var(--md-sys-elevation-2);
-            transform: translateY(-4px);
-        }
-        
-        /* Strict M3 Button & Chip States */
-        .btn::before, .chip::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: currentColor;
-            opacity: 0;
-            transition: opacity var(--md-sys-motion-duration-short) linear;
-            pointer-events: none;
-        }
-
-        .btn:hover::before, .chip:hover::before { opacity: 0.08; }
-        .btn:active::before, .chip:active::before { opacity: 0.12; }
-        .btn:focus::before, .chip:focus::before { opacity: 0.12; }
-
-        .card.full-width { grid-column: 1 / -1; }
-        
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .card-header h2 {
-            margin: 0;
-            font-size: 20px;
-            font-weight: 500;
-            color: var(--md-sys-color-on-surface);
-            line-height: 24px;
-            flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: normal;
-        }
-
-        .card-header-actions {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-shrink: 0;
-            margin-right: 4px;
-        }
-
-        .settings-btn {
-        }
-
-        .card .description {
-            font-size: 14px;
-            color: var(--md-sys-color-on-surface-variant);
-            margin: 0 0 16px 0; /* Uniform vertical spacing */
-            line-height: 20px;
-            flex-grow: 1;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-        
-        .card h3 {
-            margin: 0 0 16px 0;
-            font-size: 16px; /* Title Medium */
-            font-weight: 500;
-            color: var(--md-sys-color-on-surface);
-            line-height: 24px;
-            letter-spacing: 0.15px;
-        }
-        
-        /* MD3 Assist Chips - Intelligent Auto-layout */
-        .chip-box { 
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px; 
-            padding-top: 12px;
-            position: relative;
-            z-index: 2;
-            align-items: center;
-            margin-top: auto;
-            width: 100%;
-        }
-        
-        .chip {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px; 
-            height: 32px;
-            padding: 0 16px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-            font-family: inherit;
-            letter-spacing: 0.1px;
-            text-decoration: none;
-            transition: all var(--md-sys-motion-duration-short) linear;
-            border: 1px solid var(--md-sys-color-outline);
-            background: transparent;
-            color: var(--md-sys-color-on-surface);
-            position: relative;
-            overflow: hidden;
-            white-space: nowrap;
-            text-overflow: ellipsis;
-            max-width: 100%;
-            flex: 1 1 auto; /* Allow chips to grow and fill space */
-        }
-
-        .chip .material-symbols-rounded {
-            font-size: 18px;
-            pointer-events: none;
-            transition: transform var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
-        }
-
-        .chip:hover .material-symbols-rounded.move-on-hover {
-            transform: translateX(4px);
-        }
-        
-        .chip::before, .btn::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: currentColor;
-            opacity: 0;
-            transition: opacity var(--md-sys-motion-duration-short) linear;
-            pointer-events: none;
-        }
-        
-        .chip:hover::before, .btn:hover::before { opacity: var(--md-sys-state-hover-opacity); }
-        .chip:active::before, .btn:active::before { opacity: var(--md-sys-state-pressed-opacity); }
-        
-        .chip.vpn { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border: none; }
-        .chip.admin { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border: none; }
-        .chip.tertiary { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); border: none; }
-        
-        /* Category Badges (Informational) */
-        .category-badge {
-            border: none;
-            background: var(--md-sys-color-surface-container-high);
-            color: var(--md-sys-color-on-surface-variant);
-            padding: 0 12px 0 8px;
-            pointer-events: none;
-        }
-        
-        /* Status Indicator */
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            background: var(--md-sys-color-surface-container-highest);
-            padding: 6px 12px;
-            border-radius: var(--md-sys-shape-corner-full);
-            font-size: 12px;
-            color: var(--md-sys-color-on-surface-variant);
-            width: fit-content;
-            min-width: auto;
-            flex-shrink: 0;
-        }
-        
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--md-sys-color-outline);
-        }
-        
-        .status-dot.up { background: var(--md-sys-color-success); box-shadow: 0 0 8px var(--md-sys-color-success); }
-        .status-dot.down { background: var(--md-sys-color-error); box-shadow: 0 0 8px var(--md-sys-color-error); }
-        .status-dot.healthy { background: var(--md-sys-color-success); box-shadow: 0 0 8px var(--md-sys-color-success); }
-        .status-dot.starting { background: var(--md-sys-color-warning); box-shadow: 0 0 8px var(--md-sys-color-warning); }
-        .status-dot.unhealthy { background: var(--md-sys-color-error); box-shadow: 0 0 8px var(--md-sys-color-error); }
-        
-        /* MD3 Text Fields */
-        .text-field {
-            width: 100%;
-            background: var(--md-sys-color-surface-container-highest);
-            border: none;
-            border-bottom: 1px solid var(--md-sys-color-on-surface-variant);
-            color: var(--md-sys-color-on-surface);
-            padding: 16px;
-            border-radius: 4px 4px 0 0;
-            font-size: 16px;
-            box-sizing: border-box;
-            outline: none;
-            transition: all var(--md-sys-motion-duration-short) linear;
-        }
-        
-        .text-field:focus {
-            border-bottom: 2px solid var(--md-sys-color-primary);
-            background: var(--md-sys-color-surface-container-highest);
-        }
-        
-        textarea.text-field { min-height: 120px; resize: vertical; }
-        
-        /* MD3 Buttons */
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 0 24px;
-            height: 40px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 500;
-            letter-spacing: 0.1px;
-            cursor: pointer;
-            transition: all var(--md-sys-motion-duration-short) linear;
-            border: none;
-            position: relative;
-            overflow: hidden;
-            text-decoration: none;
-            font-family: inherit;
-        }
-        
-        .btn-filled { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); box-shadow: var(--md-sys-elevation-1); }
-        .btn-tonal { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
-        .btn-outlined { background: transparent; color: var(--md-sys-color-primary); border: 1px solid var(--md-sys-color-outline); }
-        .btn-tertiary { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
-        
-        .btn-icon:hover {
-            background: rgba(202, 196, 208, 0.08);
-            border-color: var(--md-sys-color-outline);
-        }
-        
-        .portainer-link {
-            text-decoration: none;
-            cursor: pointer;
-            transition: all var(--md-sys-motion-duration-short) linear;
-            position: relative;
-            pointer-events: auto;
-            z-index: 10;
-        }
-        .portainer-link:hover {
-            background: var(--md-sys-color-secondary-container);
-            color: var(--md-sys-color-on-secondary-container);
-            border-color: transparent;
-            opacity: 0.9;
-        }
-        .portainer-link:hover .material-symbols-rounded {
-            transform: translateX(4px);
-        }
-
-        .nav-arrow {
-            opacity: 0;
-            transform: translateX(-8px);
-            transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
-            color: var(--md-sys-color-primary);
-            pointer-events: none;
-            font-family: 'Material Symbols Rounded';
-            font-display: block;
-        }
-
-        .card:hover .nav-arrow {
-            opacity: 1;
-            transform: translateX(0);
-        }
-        
-        .btn-action {
-            background: var(--md-sys-color-secondary-container);
-            color: var(--md-sys-color-on-secondary-container);
-            border-radius: var(--md-sys-shape-corner-medium);
-            box-shadow: var(--md-sys-elevation-1);
-        }
-        
-        .btn-icon { width: 40px; height: 40px; padding: 0; border-radius: 20px; }
-        .btn-icon svg { width: 24px; height: 24px; fill: currentColor; }
-        
-        /* MD3 Switch */
-        .switch-container {
-            display: inline-flex;
-            align-items: center;
-            gap: 16px;
-            cursor: pointer;
-            padding: 8px 0;
-            flex-shrink: 0;
-            white-space: nowrap;
-        }
-
-        .switch-track {
-            width: 52px;
-            height: 32px;
-            background: var(--md-sys-color-surface-container-highest);
-            border: 2px solid var(--md-sys-color-outline);
-            border-radius: 16px;
-            position: relative;
-            transition: all var(--md-sys-motion-duration-short) linear;
-        }
-
-        .switch-thumb {
-            width: 16px;
-            height: 16px;
-            background: var(--md-sys-color-outline);
-            border-radius: 50%;
-            position: absolute;
-            top: 50%;
-            left: 6px;
-            transform: translateY(-50%);
-            transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .switch-container.active .switch-track { background: var(--md-sys-color-primary); border-color: var(--md-sys-color-primary); }
-        .switch-container.active .switch-thumb { width: 24px; height: 24px; left: 24px; background: var(--md-sys-color-on-primary); }
-
-        /* Tooltips */
-        [data-tooltip] { 
-            position: relative; 
-        }
-        
-        .tooltip-box {
-            position: fixed;
-            background: var(--md-sys-color-inverse-surface);
-            color: var(--md-sys-color-inverse-on-surface);
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 400;
-            line-height: 16px;
-            max-width: 280px;
-            z-index: 10000;
-            box-shadow: var(--md-sys-elevation-2);
-            pointer-events: none;
-            opacity: 0;
-            display: none;
-            transition: opacity 150ms var(--md-sys-motion-easing-emphasized);
-            text-align: center;
-        }
-        
-        .tooltip-box.visible { opacity: 1; }
-
-        /* Ensure parent elements don't clip tooltips */
-        .card, .chip, .status-indicator, li, span, div {
-            /* Tooltip container safety */
-        }
-        
-        .card {
-            /* ... existing ... */
-            overflow: visible; /* Changed from hidden to allow tooltips to escape */
-        }
-        
-        /* Prevent card content overlapping */
-        .card > * {
-            position: relative;
-            z-index: 2;
-        }
-        
-        .card::before {
-            /* ... existing ... */
-            z-index: 1;
-        }
-
-        .log-container {
-            background: var(--md-sys-color-surface-container-highest);
-            border-radius: var(--md-sys-shape-corner-large);
-            padding: 16px;
-            flex-grow: 1;
-            max-height: 400px;
-            overflow-y: auto;
-            font-size: 13px;
-            color: var(--md-sys-color-on-surface-variant);
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .log-entry {
-            display: flex;
-            gap: 12px;
-            align-items: flex-start;
-            line-height: 1.5;
-            padding: 2px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-
-        .log-entry:last-child { border-bottom: none; }
-        
-        .log-icon {
-            font-size: 18px !important;
-            flex-shrink: 0;
-            margin-top: 2px;
-        }
-
-        .log-content {
-            flex-grow: 1;
-            overflow-wrap: anywhere;
-        }
-
-        .log-time {
-            opacity: 0.5;
-            font-size: 0.85em;
-            white-space: nowrap;
-            flex-shrink: 0;
-            margin-top: 3px;
-        }
-
-        /* Snackbar / Toast */
-        .snackbar-container {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 20000;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            pointer-events: none;
-        }
-
-        .snackbar {
-            min-width: 320px;
-            max-width: 560px;
-            background: var(--md-sys-color-inverse-surface);
-            color: var(--md-sys-color-inverse-on-surface);
-            border-radius: var(--md-sys-shape-corner-small);
-            padding: 14px 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            box-shadow: var(--md-sys-elevation-3);
-            pointer-events: auto;
-            opacity: 0;
-            transform: translateY(20px);
-            transition: all var(--md-sys-motion-duration-long) var(--md-sys-motion-easing-emphasized);
-        }
-
-        .snackbar.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .snackbar-content { flex-grow: 1; font-size: 14px; letter-spacing: 0.25px; }
-        .snackbar-action { 
-            color: var(--md-sys-color-primary); 
-            font-weight: 500; 
-            text-transform: uppercase; 
-            cursor: pointer; 
-            font-size: 14px;
-            background: none;
-            border: none;
-            padding: 8px;
-            margin: -8px;
-        }
-
-        /* Theme Toggle */
-        .theme-toggle {
-            width: 40px;
-            height: 40px;
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            background: var(--md-sys-color-surface-container-high);
-            color: var(--md-sys-color-on-surface);
-            transition: all var(--md-sys-motion-duration-short) linear;
-        }
-        
-        .theme-toggle:hover { background: var(--md-sys-color-surface-container-highest); }
-
-        /* Service Modal */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(4px);
-            z-index: 25000;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-        }
-
-        .modal-card {
-            background: var(--md-sys-color-surface-container-high);
-            border-radius: var(--md-sys-shape-corner-extra-large);
-            max-width: 500px;
-            width: 100%;
-            padding: 32px;
-            box-shadow: var(--md-sys-elevation-3);
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-        }
-        .modal-card h2 { font-weight: 400; font-size: 24px; color: var(--md-sys-color-on-surface); margin: 0; }
-
-        .settings-btn { 
-            opacity: 0.5; 
-            transition: all var(--md-sys-motion-duration-short) linear; 
-        }
-        .card:hover .settings-btn { opacity: 1; color: var(--md-sys-color-primary); }
-
-        .modal-header { display: flex; align-items: center; justify-content: space-between; }
-        
-        .metric-bar {
-            height: 4px;
-            width: 100%;
-            background: var(--md-sys-color-surface-container-highest);
-            border-radius: 2px;
-            margin-top: 4px;
-            overflow: hidden;
-        }
-        
-        .metric-fill {
-            height: 100%;
-            background: var(--md-sys-color-primary);
-            transition: width 1s ease-in-out;
-        }
-        
-        .code-block {
-            background: var(--md-sys-color-surface-container-highest);
-            border-radius: var(--md-sys-shape-corner-small);
-            padding: 14px 16px;
-            font-size: 13px;
-            color: var(--md-sys-color-primary);
-            margin: 8px 0;
-            overflow-x: auto;
-        }
-        
-        .sensitive { transition: filter 400ms var(--md-sys-motion-easing-emphasized); }
-        .privacy-mode .sensitive { filter: blur(6px); opacity: 0.4; }
-
-        .sensitive-masked { opacity: 0.7; letter-spacing: 0.3px; }
-        
-        .text-success { color: var(--md-sys-color-success); }
-        .success { color: var(--md-sys-color-success); }
-        .error { color: var(--md-sys-color-error); }
-        .stat-row { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center;
-            flex-wrap: wrap;
-            margin-bottom: 12px; 
-            font-size: 14px; 
-            gap: 12px;
-        }
-        .stat-label { 
-            color: var(--md-sys-color-on-surface-variant); 
-            flex: 1 1 160px;
-        }
-        .stat-value {
-            text-align: right;
-            flex: 1 1 200px;
-            overflow-wrap: anywhere;
-        }
-        
-        .btn-group { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-        .list-item { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 12px 16px; 
-            margin: 0 -16px;
-            border-bottom: 1px solid var(--md-sys-color-outline-variant); 
-            gap: 16px; 
-            flex-wrap: wrap;
-            transition: background-color var(--md-sys-motion-duration-short) linear;
-            border-radius: var(--md-sys-shape-corner-small);
-        }
-        .list-item:hover {
-            background-color: rgba(230, 225, 229, 0.08);
-        }
-        .list-item:last-child { border-bottom: none; }
-        .list-item-text { cursor: pointer; flex: 1 1 220px; font-weight: 500; overflow-wrap: anywhere; font-size: 16px; letter-spacing: 0.5px; }
-
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        @media (max-width: 720px) {
-            body { padding: 16px; }
-            h1 { font-size: 36px; line-height: 42px; }
-            .subtitle { font-size: 18px; line-height: 24px; }
-        }
-
-        @media (max-width: 600px) {
-            .header-row { gap: 16px; }
-            .switch-container { width: 100%; justify-content: space-between; }
-            .stat-row, .list-item { flex-direction: column; align-items: flex-start; }
-            .stat-value { text-align: left; }
-            .card-header { align-items: flex-start; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <div class="header-row">
-                <div>
-                    <h1>Privacy Hub</h1>
-                    <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
-                </div>
-                <div style="display: flex; align-items: center; gap: 16px;">
-                    <div id="https-badge" class="chip vpn" style="gap:4px; display:none; height: 32px; padding: 0 12px; border-radius: 16px;" data-tooltip="Connection is secured with end-to-end encryption.">
-                        <span class="material-symbols-rounded" style="font-size:18px;">lock</span>
-                        <span style="font-size: 12px; font-weight: 600;">Secure HTTPS</span>
-                    </div>
-                    <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for privacy">
-                        <span class="label-large">Safe Display Mode</span>
-                        <div class="switch-track">
-                            <div class="switch-thumb"></div>
-                        </div>
-                    </div>
-                    <div class="status-indicator" style="background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant);">
-                        <span class="status-dot" id="api-dot"></span>
-                        <span class="status-text" id="api-text">API: ...</span>
-                    </div>
-                    <div class="theme-toggle" onclick="toggleTheme()" data-tooltip="Switch between Light and Dark mode">
-                        <span class="material-symbols-rounded" id="theme-icon">light_mode</span>
-                    </div>
-                    <div class="theme-toggle" id="admin-lock-btn" onclick="toggleAdminMode()" data-tooltip="Enter Admin Mode to manage services">
-                        <span class="material-symbols-rounded" id="admin-icon">admin_panel_settings</span>
-                    </div>
-                </div>
-            </div>
-        </header>
-
-        <div class="filter-bar" id="category-filters">
-            <div class="chip filter-chip active" data-target="all" onclick="filterCategory('all')">All Services</div>
-            <div class="chip filter-chip" data-target="apps" onclick="filterCategory('apps')">Applications</div>
-            <div class="chip filter-chip" data-target="system" onclick="filterCategory('system')">Infrastructure</div>
-            <div class="chip filter-chip" data-target="dns" onclick="filterCategory('dns')">DNS & Security</div>
-            <div class="chip filter-chip" data-target="tools" onclick="filterCategory('tools')">Utilities</div>
-            <div class="chip filter-chip admin-only" data-target="logs" onclick="filterCategory('logs')">System Logs</div>
-        </div>
-
-        <div id="update-banner" class="admin-only" style="display:none; margin-bottom: 32px; width: 100%;">
-            <div class="card" style="min-height: auto; padding: 24px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;">
-                    <div>
-                        <h3 style="margin:0; color: inherit;">Updates Available</h3>
-                        <p class="body-medium" id="update-list" style="margin: 8px 0 0 0; color: inherit; opacity: 0.9;">New versions detected for some services.</p>
-                    </div>
-                    <div style="display: flex; gap: 12px;">
-                        <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Pull latest source code and rebuild containers for all pending services.">Update All</button>
-                        <button onclick="this.closest('#update-banner').style.display='none'" class="btn btn-outlined" style="border-color: currentColor; color: inherit;">Dismiss</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="mac-advisory" style="margin-bottom: 32px; width: 100%;">
-            <div class="card" style="min-height: auto; padding: 16px 24px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 24px;">
-                    <div style="display: flex; gap: 16px; align-items: flex-start;">
-                        <span class="material-symbols-rounded" style="margin-top: 2px;">warning</span>
-                        <div>
-                            <h3 style="margin:0; color: inherit; font-size: 16px;">Critical Network Advisory</h3>
-                            <p class="body-medium" style="margin: 4px 0 0 0; color: inherit; opacity: 0.9;">
-                                To ensure firewall persistence and static IP reliability, you <strong>must disable Dynamic/Random MAC addresses</strong> in your host device's network settings.
-                            </p>
-                        </div>
-                    </div>
-                    <button onclick="dismissMacAdvisory()" class="btn btn-icon" style="color: inherit; margin: -8px -8px 0 0;" data-tooltip="Dismiss">
-                        <span class="material-symbols-rounded">close</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-
-
-        <section data-category="all" id="section-all">
-        <div class="section-label">All Services</div>
-        <div id="grid-all" class="grid">
-            <!-- Dynamic Cards Injected Here -->
-        </div>
-        </section>
-
-        <section data-category="apps">
-        <div class="section-label">Applications</div>
-        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span class="chip category-badge" data-tooltip="Services isolated within a secure VPN tunnel (Gluetun). This allows you to host your own private instances—removing the need to trust third-party hosts—while ensuring your home IP remains hidden from end-service providers."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
-            <span class="chip category-badge" data-tooltip="Local services accessed directly through the internal network interface."><span class="material-symbols-rounded">lan</span> Direct Access</span>
-            <span class="chip category-badge" data-tooltip="Advanced infrastructure control and container telemetry via Portainer."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
-        </div>
-        <div id="grid-apps" class="grid">
-            <!-- Dynamic Cards Injected Here -->
-        </div>
-        </section>
-
-        <section data-category="system">
-        <div class="section-label">System Management</div>
-        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span class="chip category-badge" data-tooltip="Core infrastructure management and gateway orchestration"><span class="material-symbols-rounded">settings_input_component</span> Core Services</span>
-        </div>
-        <div id="grid-system" class="grid">
-            <!-- Dynamic Cards Injected Here -->
-        </div>
-        </section>
-
-        <section data-category="dns">
-        <div class="section-label">DNS Configuration</div>
-        <div class="grid">
-            <div class="card">
-                <h3>Certificate Status</h3>
-                <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
-                    <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label">Type</span><span class="stat-value" id="cert-type">Checking...</span></div>
-                    <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label">Domain</span><span class="stat-value sensitive" id="cert-subject">Checking...</span></div>
-                    <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label">Issuer</span><span class="stat-value sensitive" id="cert-issuer">Checking...</span></div>
-                    <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label">Expires</span><span class="stat-value sensitive" id="cert-to">Checking...</span></div>
-                    <div id="ssl-failure-info" style="display:none; margin-top: 16px; padding: 16px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: 1px solid var(--md-sys-color-error);">
-                        <div class="body-small" style="font-weight:600; margin-bottom:4px; display: flex; align-items: center; gap: 8px;">
-                            <span class="material-symbols-rounded" style="font-size: 16px;">error</span>
-                            Pipeline Error
-                        </div>
-                        <div class="body-small" id="ssl-failure-reason" style="opacity: 0.9;">--</div>
-                    </div>
-                    <div id="cert-loading" class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium); border: none; margin-top: 16px;">
-                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        <div style="display: flex; flex-direction: column; gap: 2px;">
-                            <span style="font-weight: 600;">Verifying Pipeline</span>
-                            <span class="body-medium" style="opacity: 0.8; white-space: normal;">Checking SSL certificate validity and issuance status...</span>
-                        </div>
-                    </div>
-                </div>
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; gap: 16px; flex-wrap: wrap;">
-                    <div id="cert-status-badge" class="chip" style="width: fit-content;" data-tooltip="Overall health of the SSL certificate issuance pipeline">Not Installed</div>
-                    <button id="ssl-retry-btn" class="btn btn-icon btn-action" style="display:none;" data-tooltip="Force Let's Encrypt re-attempt" onclick="requestSslCheck()">
-                        <span class="material-symbols-rounded">refresh</span>
-                    </button>
-                </div>
-            </div>
-            <div class="card admin-only">
-                <h3>deSEC Configuration</h3>
-                <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
-                <form onsubmit="saveDesecConfig(); return false;">
-                    <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. yourname.dedyn.io)" style="margin-bottom:12px;" autocomplete="username" data-tooltip="Enter your registered deSEC domain (e.g. yourname.dedyn.io). You can create one for free at desec.io.">
-                    <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="The secret API token from your deSEC account used to verify domain ownership.">
-                    <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
-                        Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
-                    </p>
-                    <div style="text-align:right;">
-                        <button type="submit" class="btn btn-tonal">Save deSEC Config</button>
-                    </div>
-                </form>
-            </div>
-            <div class="card">
-                <h3>Device DNS Settings</h3>
-                <p class="body-medium description">Utilize these RFC-compliant encrypted endpoints to maintain digital independence:</p>
-                <div class="code-label" data-tooltip="Standard unencrypted DNS (Port 53). Recommended only for use within your local LAN.">Standard IPv4 (Local LAN Only)</div>
-                <div class="code-block sensitive">$LAN_IP:53</div>
-                <div class="code-label" data-tooltip="DNS-over-QUIC (DOQ) - RFC 9250. Port 853. High-performance encrypted DNS designed for superior latency and stability.">Secure DOQ (Modern Clients)</div>
-                <div class="code-block sensitive">quic://$LAN_IP</div>
-EOF
-if [ -n "$DESEC_DOMAIN" ]; then
-    cat >> "$DASHBOARD_FILE" <<EOF
-                <div class="code-label" data-tooltip="DNS-over-HTTPS (DOH) - RFC 8484. Standard for web browsers. Queries are indistinguishable from HTTPS traffic.">Secure DOH (Browsers)</div>
-                <div class="code-block sensitive">https://$DESEC_DOMAIN/dns-query</div>
-                <div class="code-label" data-tooltip="DNS-over-TLS (DOT) - RFC 7858. Port 853. The industry standard for Android 'Private DNS' and system resolvers.">Secure DOT (Android / System)</div>
-                <div class="code-block sensitive">$DESEC_DOMAIN:853</div>
-            </div>
-            <div class="card">
-                <h3>Endpoint Provisioning</h3>
-                <div id="dns-setup-trusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
-                    <p class="body-medium description">Globally trusted SSL is active via Let's Encrypt and deSEC. This enables zero-trust encrypted DNS on mobile devices without requiring certificate installation.</p>
-                    <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
-                        <li data-tooltip="For legacy devices within your home network."><b>Local LAN:</b> Configure devices to use <code class="sensitive">$LAN_IP</code>.</li>
-                        <li data-tooltip="Requires establishing the WireGuard VPN tunnel when away from home."><b>VPN Tunnel:</b> Route all traffic through the Privacy Hub.</li>
-                        <li data-tooltip="Android 9+ native feature. Encrypts all DNS queries automatically."><b>Mobile Private DNS:</b> Use the hostname below for native encryption.</li>
-                    </ol>
-                    <div class="code-label" style="margin-top:12px;" data-tooltip="Use this hostname in your Android 'Private DNS' settings.">Mobile Private DNS Hostname</div>
-                    <div class="code-block sensitive" style="margin-top:4px;">$DESEC_DOMAIN</div>
-                    <div style="margin-top: auto; padding-top: 16px;">
-                        <div class="chip vpn" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
-                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-primary-container);">verified_user</span>
-                            <div style="display: flex; flex-direction: column; gap: 2px;">
-                                <span style="font-weight: 600;">Verified Certificate Authority</span>
-                                <span class="body-small" style="opacity: 0.8; white-space: normal;">Trust chain established with Let's Encrypt. Fully compatible with native Private DNS.</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div id="dns-setup-untrusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
-                    <p class="body-medium description" style="color:var(--md-sys-color-error);">Limited Encrypted DNS Coverage</p>
-                    <p class="body-small description">Android 'Private DNS' requires a FQDN. Since no domain is configured, your mobile devices cannot utilize native encrypted DNS without the VPN.</p>
-                    <div style="flex-grow: 1;">
-                        <div class="code-label" data-tooltip="The local IP address of your privacy hub.">Primary Gateway</div>
-                        <div class="code-block sensitive">$LAN_IP</div>
-                    </div>
-                    <div style="margin-top: auto; padding-top: 16px;">
-                        <div class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
-                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
-                            <div style="display: flex; flex-direction: column; gap: 2px;">
-                                <span style="font-weight: 600;">Self-Signed (Local)</span>
-                                <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and Private DNS.</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-EOF
-else
-    cat >> "$DASHBOARD_FILE" <<EOF
-                <div class="code-label" data-tooltip="Secured DNS via HTTPS">DNS-over-HTTPS</div>
-                <div class="code-block sensitive">https://$LAN_IP/dns-query</div>
-                <div class="code-label" data-tooltip="Secured DNS via TLS">DNS-over-TLS</div>
-                <div class="code-block sensitive">$LAN_IP:853</div>
-            </div>
-            <div class="card">
-                <h3>Endpoint Provisioning</h3>
-                <p class="body-medium description">The system is currently operating in local-only mode. To maintain privacy, all external traffic should be routed via the local infrastructure:</p>
-                <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
-                    <li>Configure router WAN/LAN DNS to: <b class="sensitive">$LAN_IP</b></li>
-                    <li>Remote Access: Establish WireGuard tunnel before accessing services.</li>
-                    <li>Legacy Support: Standard Port 53 resolution for older hardware.</li>
-                </ol>
-                <div class="code-block sensitive" style="margin-top:12px;">$LAN_IP</div>
-                <div style="margin-top: auto; padding-top: 16px;">
-                    <div class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
-                        <span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
-                        <div style="display: flex; flex-direction: column; gap: 2px;">
-                            <span style="font-weight: 600;">Self-Signed (Local)</span>
-                            <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and full mobile support.</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-EOF
-fi
-cat >> "$DASHBOARD_FILE" <<EOF
-        </div>
-        </section>
-
-        <section data-category="tools">
-        <div class="section-label">Service Utilities</div>
-        <div id="grid-tools" class="grid">
-            <!-- Dynamic Cards Injected Here -->
-        </div>
-        <div class="grid">
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <h3>Odido Status</h3>
-                    <div id="odido-speed-indicator" class="body-small" style="color: var(--md-sys-color-primary); font-weight: 500; display:none;">0 Mb/s</div>
-                </div>
-                <div id="odido-status-container" style="display: flex; flex-direction: column; height: 100%;">
-                    <div id="odido-not-configured" style="display:none;">
-                        <p class="body-medium" style="color:var(--md-sys-color-on-surface-variant);">Odido Bundle Booster service available. Configure credentials via API or link below.</p>
-                        <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-tonal" style="margin-top:12px;">Open API Docs</a>
-                    </div>
-                    <div id="odido-configured" style="display:none; padding-top: 8px; flex-grow: 1; display: flex; flex-direction: column;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                            <div>
-                                <div class="stat-row"><span class="stat-label">Remaining</span><span class="stat-value" id="odido-remaining">--</span></div>
-                                <div class="stat-row"><span class="stat-label">Bundle</span><span class="stat-value" id="odido-bundle-code">--</span></div>
-                                <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value" id="odido-rate">--</span></div>
-                            </div>
-                            <div>
-                                <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value" id="odido-api-status">--</span></div>
-                                <div class="stat-row"><span class="stat-label">Threshold</span><span class="stat-value" id="odido-threshold">--</span></div>
-                                <div class="stat-row"><span class="stat-label">Auto-Renew</span><span class="stat-value" id="odido-auto-renew">--</span></div>
-                            </div>
-                        </div>
-                        
-                        <div style="margin-top: 24px; flex-grow: 1; min-height: 120px; position: relative; background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 12px;">
-                            <div style="position: absolute; top: 8px; left: 12px; font-size: 10px; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Consumption Rate (MB/min)</div>
-                            <svg id="odido-graph" width="100%" height="100%" viewBox="0 0 400 120" preserveAspectRatio="none" style="overflow: visible;">
-                                <defs>
-                                    <linearGradient id="graph-gradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stop-color="var(--md-sys-color-primary)" stop-opacity="0.3"></stop>
-                                        <stop offset="100%" stop-color="var(--md-sys-color-primary)" stop-opacity="0"></stop>
-                                    </linearGradient>
-                                </defs>
-                                <path id="graph-area" fill="url(#graph-gradient)" d=""></path>
-                                <path id="graph-line" fill="none" stroke="var(--md-sys-color-primary)" stroke-width="2.5" stroke-linejoin="round" d=""></path>
-                                <line x1="0" y1="120" x2="400" y2="120" stroke="var(--md-sys-color-outline-variant)" stroke-width="1"></line>
-                                <g id="graph-grid" stroke="var(--md-sys-color-outline-variant)" stroke-width="0.5" stroke-dasharray="2,2">
-                                    <line x1="0" y1="30" x2="400" y2="30"></line>
-                                    <line x1="0" y1="60" x2="400" y2="60"></line>
-                                    <line x1="0" y1="90" x2="400" y2="90"></line>
-                                </g>
-                            </svg>
-                        </div>
-
-                        <div id="odido-buy-status" class="body-small" style="text-align: center; margin-top: 8px; font-weight: 500;"></div>
-                        <div class="btn-group" style="justify-content:center; margin-top: 16px;">
-                            <button onclick="buyOdidoBundle()" class="btn btn-tertiary admin-only" id="odido-buy-btn">Buy Bundle</button>
-                            <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh Status</button>
-                            <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
-                        </div>
-                    </div>
-                    <div id="odido-loading" class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium); border: none; margin-top: 8px;">
-                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        <div style="display: flex; flex-direction: column; gap: 2px;">
-                            <span style="font-weight: 600;">Synchronizing Data</span>
-                            <span class="body-medium" style="opacity: 0.8; white-space: normal;">Connecting to Odido API to retrieve latest bundle status...</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="card admin-only">
-                <h3>Configuration</h3>
-                <p class="body-medium description">Authentication and automation settings for backend services:</p>
-                <form onsubmit="saveOdidoConfig(); return false;">
-                    <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;" autocomplete="username" data-tooltip="The HUB_API_KEY from your .secrets file.">
-                    <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
-                        The <strong>Dashboard API Key</strong> (HUB_API_KEY) is required to authorize sensitive actions like saving settings. You can find this in your <code>.secrets</code> file on the host.
-                    </p>
-                    <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="OAuth token for Odido API authentication.">
-                    <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
-                        Obtain your OAuth token using the <a href="https://github.com/GuusBackup/Odido.Authenticator" target="_blank" style="color: var(--md-sys-color-primary);">Odido Authenticator</a>.
-                    </p>
-                    <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;" data-tooltip="The product code for your data bundle.">
-                    <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;" data-tooltip="Automatic renewal triggers when data falls below this level.">
-                    <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;" data-tooltip="Lead time before expiration to trigger renewal.">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
-                        <div id="odido-config-status" class="body-small" style="font-weight: 500;"></div>
-                        <button type="submit" class="btn btn-tonal">Save Configuration</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <div class="section-label">WireGuard Profiles</div>
-        <div class="grid">
-            <div class="card admin-only">
-                <h3>Upload Profile</h3>
-                <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;" data-tooltip="Give your profile a recognizable name.">
-                <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..." style="margin-bottom:16px;" data-tooltip="Paste the contents of your WireGuard .conf file."></textarea>
-                <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile. The VPN service will automatically restart to apply the new configuration (~15 seconds).">Upload & Activate</button></div>
-            </div>
-            <div class="card profile-card admin-only">
-                <h3 data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available Profiles</h3>
-                <div id="profile-list" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; min-height: 100px;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
-                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        <span class="body-medium">Scanning Profiles...</span>
-                    </div>
-                </div>
-                <p class="body-small profile-hint" style="margin-top: auto; padding-top: 12px;">Click name to activate.</p>
-            </div>
-        </div>
-
-        <div class="section-label">Customization & Info</div>
-        <div class="grid">
-            <div class="card admin-only">
-                <div class="card-header">
-                    <h3>Theme Customization</h3>
-                    <div class="card-header-actions">
-                        <button onclick="localStorage.removeItem('theme_seed'); location.reload();" class="btn btn-icon" data-tooltip="Reset theme to default"><span class="material-symbols-rounded">refresh</span></button>
-                    </div>
-                </div>
-                <p class="body-medium description">Personalize the dashboard using Material Design 3 dynamic color algorithms (HCT color space).</p>
-                <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
-                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
-                        <div style="position: relative; width: 48px; height: 48px; border-radius: 24px; overflow: hidden; border: 2px solid var(--md-sys-color-primary);">
-                            <input type="color" id="theme-seed-color" onchange="applySeedColor(this.value)" style="position: absolute; top: -10px; left: -10px; width: 80px; height: 80px; cursor: pointer; border: none; background: transparent;">
-                        </div>
-                        <div style="flex: 1;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span class="label-large">Custom Seed Color</span>
-                                <span class="body-small monospace" id="theme-seed-hex" style="opacity: 0.7;">#D0BCFF</span>
-                            </div>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Tap the circle to choose a primary tone</p>
-                        </div>
-                    </div>
-
-                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
-                        <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <span class="label-large">Theme Presets</span>
-                        </div>
-                        <div id="static-presets" style="display: flex; gap: 12px; flex-wrap: wrap;">
-                            <!-- Static presets injected here -->
-                        </div>
-
-                        <div style="height: 1px; background: var(--md-sys-color-outline-variant); opacity: 0.5;"></div>
-
-                        <div style="display: flex; align-items: center; gap: 16px;">
-                            <label for="theme-image-upload" class="btn btn-filled" style="width: 48px; height: 48px; padding: 0; border-radius: 24px; cursor: pointer; flex-shrink: 0;" data-tooltip="Pick a wallpaper to extract colors">
-                                <span class="material-symbols-rounded">wallpaper</span>
-                            </label>
-                            <input type="file" id="theme-image-upload" accept="image/*" onchange="extractColorsFromImage(event)" style="display: none;">
-                            <div style="flex: 1;">
-                                <span class="label-large">Wallpaper Extraction</span>
-                                <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Upload image to generate palettes</p>
-                            </div>
-                        </div>
-                        
-                        <!-- Extracted Palette -->
-                        <div id="extracted-palette" style="display: flex; gap: 12px; flex-wrap: wrap; min-height: 48px; align-items: center;">
-                            <span class="body-small" style="opacity: 0.5; font-style: italic;">Extracted palettes will appear here...</span>
-                        </div>
-
-                        <!-- Manual Add -->
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" id="manual-color-input" class="text-field" placeholder="Add Hex (e.g. #FF0000)" style="border-radius: 8px; height: 40px; padding: 0 12px; font-family: monospace;">
-                            <button onclick="addManualColor()" class="btn btn-tonal" style="height: 40px;">Add</button>
-                        </div>
-                    </div>
-
-                    <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
-                        <button onclick="saveThemeSettings()" class="btn btn-tonal" style="flex-grow: 1;"><span class="material-symbols-rounded">save</span> Save Theme</button>
-                    </div>
-                </div>
-            </div>
-            <div class="card admin-only">
-                <h3>Security & Privacy</h3>
-                <p class="body-medium description">Manage administrative session behavior and authentication security.</p>
-                <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
-                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
-                        <div style="flex: 1;">
-                            <span class="label-large">Session Auto-Cleanup</span>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Automatically expire admin sessions after 30 minutes of inactivity.</p>
-                        </div>
-                        <div class="switch" id="session-cleanup-switch" onclick="toggleSessionCleanup()" data-tooltip="When enabled, your admin session will expire automatically.">
-                            <div class="switch-thumb"></div>
-                        </div>
-                    </div>
-                    <div id="session-cleanup-warning" class="chip admin" style="display: none; width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: none;">
-                        <span class="material-symbols-rounded">warning</span>
-                        <div style="display: flex; flex-direction: column; gap: 2px;">
-                            <span style="font-weight: 600;">Security Warning</span>
-                            <span class="body-medium" style="opacity: 0.8; white-space: normal;">Session auto-cleanup is disabled. Administrative access will remain active indefinitely on this browser until manually exited.</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <h3>System Information</h3>
-                <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
-                <div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1;">
-                    <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace" style="font-size: 12px;">/DATA/AppData/privacy-hub/.secrets</span></div>
-                    <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace" style="font-size: 12px;">/DATA/AppData/privacy-hub/config</span></div>
-                    <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
-                    <div class="stat-row"><span class="stat-label">Safe Display Mode</span><span class="stat-value">Active (Local)</span></div>
-                </div>
-                <div class="admin-only" style="margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <button onclick="checkUpdates()" class="btn btn-tonal" data-tooltip="Check for updates">
-                        <span class="material-symbols-rounded">system_update_alt</span> Check
-                    </button>
-                    <button onclick="updateAllServices()" class="btn btn-filled" data-tooltip="Update all services">
-                        <span class="material-symbols-rounded">upgrade</span> Update All
-                    </button>
-                    <button onclick="restartStack()" class="btn btn-tonal" style="grid-column: span 1; background: var(--md-sys-color-surface-container-highest);">
-                        <span class="material-symbols-rounded">restart_alt</span> Restart
-                    </button>
-                    <button onclick="uninstallStack()" class="btn btn-tonal" style="grid-column: span 1; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Permanently remove all containers and data.">
-                        <span class="material-symbols-rounded">delete_forever</span> Uninstall
-                    </button>
-                </div>
-            </div>
-        </div>
-        </section>
-
-        <section data-category="logs">
-        <div class="section-label">System & Logs</div>
-        <div class="grid">
-            <div class="card">
-                <div class="card-header">
-                    <h3>System Health</h3>
-                    <div class="card-header-actions">
-                        <div class="status-indicator" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 4px 12px; min-width: auto; margin-right: -8px;">
-                            <span class="status-dot up" id="health-dot" style="background: var(--md-sys-color-on-success-container); box-shadow: none;"></span>
-                            <span class="status-text" id="health-text" style="color: inherit; font-weight: 600;">Optimal</span>
-                        </div>
-                    </div>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1;">
-                    <div class="stat-row"><span class="stat-label">System CPU</span><span class="stat-value" id="sys-cpu">0%</span></div>
-                    <div class="metric-bar"><div id="sys-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
-                    
-                    <div class="stat-row" style="margin-top:8px;"><span class="stat-label">System RAM</span><span class="stat-value" id="sys-ram">0 MB / 0 MB</span></div>
-                    <div class="metric-bar"><div id="sys-ram-fill" class="metric-fill" style="width: 0%"></div></div>
-
-                    <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                        <div style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 4px;">
-                            <span class="body-small" style="opacity: 0.7;">Project Size</span>
-                            <span class="label-large" id="sys-project-size">-- MB</span>
-                        </div>
-                        <div style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 4px;">
-                            <span class="body-small" style="opacity: 0.7;">System Uptime</span>
-                            <span class="label-large" id="sys-uptime">--</span>
-                        </div>
-                    </div>
-
-                    <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; justify-content: space-between; align-items: center;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span class="material-symbols-rounded" style="font-size: 20px; color: var(--md-sys-color-primary);">hard_drive</span>
-                            <span class="body-medium" data-tooltip="SMART Health Status" id="drive-health-container">Drive Health: <strong id="sys-drive-status">Checking...</strong> <span id="sys-drive-pct"></span></span>
-                        </div>
-                        <span class="body-small" id="sys-disk-percent">--% used</span>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-header">
-                    <h3>System & Deployment Logs</h3>
-                    <div class="card-header-actions">
-                        <select id="log-filter-level" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
-                            <option value="ALL">All Levels</option>
-                            <option value="INFO">Info</option>
-                            <option value="WARN">Warn</option>
-                            <option value="ERROR">Error</option>
-                            <option value="SECURITY">Security</option>
-                        </select>
-                        <select id="log-filter-cat" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
-                            <option value="ALL">All Categories</option>
-                            <option value="SYSTEM">System</option>
-                            <option value="NETWORK">Network</option>
-                            <option value="MAINTENANCE">Maintenance</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="log-container" class="log-container sensitive" style="display: flex; align-items: center; justify-content: center;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
-                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        <span class="body-medium">Connecting to Log Stream...</span>
-                    </div>
-                </div>
-                <div id="log-status" class="body-small" style="color:var(--md-sys-color-on-surface-variant); text-align:right; margin-top:8px;">Connecting...</div>
-            </div>
-        </div>
-        </section>
-
-    <!-- Setup Wizard removed (Automated Deployment) -->
-
-    <!-- Update Selection Modal -->
-    <div id="update-selection-modal" class="modal-overlay">
-        <div class="modal-card" style="max-width: 600px;">
-            <div class="modal-header">
-                <h2>Select Updates</h2>
-                <button onclick="closeUpdateModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
-            </div>
-            <div style="padding: 16px 0;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <span class="body-medium" id="update-fetch-status" style="color: var(--md-sys-color-on-surface-variant);">Scanning for updates...</span>
-                    <button onclick="toggleAllUpdates()" class="btn btn-tonal" style="height: 32px; font-size: 12px;">Reset / Undo</button>
-                </div>
-                <div id="update-list-container" style="background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 8px; max-height: 300px; overflow-y: auto;">
-                    <!-- Checkboxes injected here -->
-                    <div style="padding: 24px; text-align: center; opacity: 0.6;">
-                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
-                        <span class="body-medium">Checking repositories...</span>
-                    </div>
-                </div>
-            </div>
-            <div class="btn-group" style="justify-content: flex-end;">
-                <button onclick="startBatchUpdate()" class="btn btn-filled" id="start-update-btn" disabled>Update Selected</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Changelog Modal -->
-    <div id="changelog-modal" class="modal-overlay" style="z-index: 26000;">
-        <div class="modal-card" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
-            <div class="modal-header">
-                <h2 id="changelog-title">Changelog</h2>
-                <button onclick="document.getElementById('changelog-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
-            </div>
-            <div id="changelog-content" class="code-block" style="flex-grow: 1; overflow-y: auto; white-space: pre-wrap; margin-top: 16px; font-family: monospace; font-size: 13px;">
-                Loading...
-            </div>
-        </div>
-    </div>
-
-    <!-- Service Management Modal -->
-    <div id="service-modal" class="modal-overlay">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h2 id="modal-service-name">Service Settings</h2>
-                <button onclick="closeServiceModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
-            </div>
-            <div id="modal-metrics" style="background: var(--md-sys-color-surface-container-low); padding: 16px; border-radius: 12px;">
-                <div class="stat-row">
-                    <span class="stat-label">CPU Usage <span id="modal-cpu-text" style="float:right; font-family:monospace; opacity:0.8;">0%</span></span>
-                    <span class="stat-value" id="modal-cpu" style="display:none;">0%</span>
-                </div>
-                <div class="metric-bar"><div id="modal-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
-                
-                <div class="stat-row" style="margin-top:12px;">
-                                <span class="stat-label">Memory <span id="modal-mem-text" style="float:right; font-family:monospace; opacity:0.8;">0 MB / 0 MB</span></span>
-                                <span class="stat-value" id="modal-mem" style="display:none;">0 MB / 0 MB</span>                </div>
-                <div class="metric-bar"><div id="modal-mem-fill" class="metric-fill" style="width: 0%"></div></div>
-            </div>
-            <div id="modal-actions" class="btn-group" style="flex-direction: column; gap: 8px;">
-                <!-- Actions injected via JS -->
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Dynamic Service Rendering
-        let serviceCatalog = {};
-
-        function humanizeServiceId(id) {
-            return id
-                .replace(/[-_]+/g, ' ')
-                .replace(/\b\w/g, (c) => c.toUpperCase());
-        }
-
-        async function loadServiceCatalog() {
-            if (Object.keys(serviceCatalog).length) return serviceCatalog;
-            try {
-                const res = await fetch(API + "/services");
-                const data = await res.json();
-                serviceCatalog = data.services || {};
-            } catch (e) {
-                console.warn("Failed to load service catalog:", e);
-                serviceCatalog = {};
-            }
-            return serviceCatalog;
-        }
-
-        function normalizeServiceMeta(id, meta) {
-            const safe = (meta && typeof meta === 'object') ? meta : {};
-            return {
-                name: safe.name || humanizeServiceId(id),
-                description: safe.description || 'Private service hosted locally.',
-                category: safe.category || 'apps',
-                url: safe.url || '',
-                actions: Array.isArray(safe.actions) ? safe.actions : [],
-                chips: Array.isArray(safe.chips) ? safe.chips : [],
-                order: Number.isFinite(safe.order) ? safe.order : 999
-            };
-        }
-
-        function handleServiceAction(id, action, event) {
-            if (event) {
-                event.preventDefault();
-                event.stopPropagation();
-            }
-            if (!action || !action.type) return;
-            if (action.type === 'migrate') {
-                const mode = action.mode || 'migrate';
-                const confirmFlag = action.confirm ? 'yes' : 'no';
-                migrateService(id, mode, confirmFlag, event);
-                return;
-            }
-            if (action.type === 'vacuum') {
-                vacuumServiceDb(id, event);
-                return;
-            }
-            if (action.type === 'clear-logs') {
-                clearServiceLogs(id, event);
-            }
-        }
-
-        function createActionButton(id, action) {
-            const button = document.createElement('button');
-            button.className = 'chip admin admin-only';
-            button.type = 'button';
-            const label = action.label || 'Action';
-            if (action.icon) {
-                const icon = document.createElement('span');
-                icon.className = 'material-symbols-rounded';
-                icon.textContent = action.icon;
-                button.appendChild(icon);
-            }
-            button.appendChild(document.createTextNode(label));
-            button.setAttribute('data-tooltip', label);
-            button.onclick = (e) => handleServiceAction(id, action, e);
-            return button;
-        }
-
-        function createChipElement(id, chip) {
-            const chipEl = document.createElement('span');
-            const isObject = chip && typeof chip === 'object';
-            const label = isObject ? (chip.label || '') : String(chip || '');
-            const variant = isObject ? (chip.variant || '') : 'admin';
-            const classes = ['chip'];
-            if (variant) {
-                variant.split(' ').forEach((c) => c && classes.push(c));
-                if (variant.includes('admin')) classes.push('admin-only');
-            }
-            if (!isObject || chip.portainer) {
-                classes.push('portainer-link');
-                chipEl.dataset.container = id;
-            }
-            chipEl.className = classes.join(' ');
-            if (isObject && chip.tooltip) chipEl.setAttribute('data-tooltip', chip.tooltip);
-            if (isObject && chip.icon) {
-                const icon = document.createElement('span');
-                icon.className = 'material-symbols-rounded';
-                icon.textContent = chip.icon;
-                chipEl.appendChild(icon);
-            }
-            chipEl.appendChild(document.createTextNode(label));
-            return chipEl;
-        }
-
-        async function renderDynamicGrid() {
-            try {
-                const [containerRes, catalog] = await Promise.all([
-                    fetch(API + "/containers"),
-                    loadServiceCatalog()
-                ]);
-                const data = await containerRes.json();
-                const activeContainers = data.containers || {};
-                containerIds = activeContainers;
-
-                const appsGrid = document.getElementById('grid-apps');
-                const systemGrid = document.getElementById('grid-system');
-                const toolsGrid = document.getElementById('grid-tools');
-                const allGrid = document.getElementById('grid-all');
-                
-                if (appsGrid) appsGrid.innerHTML = '';
-                if (systemGrid) systemGrid.innerHTML = '';
-                if (toolsGrid) toolsGrid.innerHTML = '';
-                if (allGrid) allGrid.innerHTML = '';
-
-                const entries = Object.entries(catalog)
-                    .filter(([id]) => activeContainers[id])
-                    .map(([id, meta]) => [id, normalizeServiceMeta(id, meta)]);
-
-                const buckets = { apps: [], system: [], tools: [], all: [] };
-                entries.forEach(([id, meta]) => {
-                    if (!buckets[meta.category]) buckets[meta.category] = [];
-                    buckets[meta.category].push([id, meta]);
-                    buckets.all.push([id, meta]);
-                });
-
-                const sortByOrder = (a, b) => {
-                    const orderDelta = (a[1].order || 999) - (b[1].order || 999);
-                    if (orderDelta !== 0) return orderDelta;
-                    return a[1].name.localeCompare(b[1].name);
-                };
-
-                // Render categorized grids
-                ['apps', 'system', 'tools'].forEach((category) => {
-                    if (!buckets[category]) return;
-                    const grid = document.getElementById(\`grid-\${category}\`);
-                    if (!grid) return;
-                    
-                    buckets[category].sort(sortByOrder).forEach(([id, meta]) => {
-                        const hardened = activeContainers[id] && activeContainers[id].hardened;
-                        const card = createServiceCard(id, meta, hardened);
-                        grid.appendChild(card);
-                    });
-                });
-
-                // Render All Services grid
-                if (allGrid && buckets.all) {
-                    buckets.all.sort(sortByOrder).forEach(([id, meta]) => {
-                        const hardened = activeContainers[id] && activeContainers[id].hardened;
-                        const card = createServiceCard(id, meta, hardened);
-                        allGrid.appendChild(card);
-                    });
-                }
-
-                // Update metrics after rendering
-                fetchMetrics();
-            } catch (e) {
-                console.error("Failed to render dynamic grid:", e);
-            }
-        }
-
-        function createServiceCard(id, meta, hardened = false) {
-            const card = document.createElement('div');
-            card.id = \`link-\${id}\`;
-            card.className = 'card';
-            card.dataset.url = meta.url || '';
-            card.dataset.container = id;
-            card.dataset.check = 'true';
-            card.onclick = (e) => navigate(card, e);
-
-            const header = document.createElement('div');
-            header.className = 'card-header';
-
-            const title = document.createElement('h2');
-            title.textContent = meta.name || humanizeServiceId(id);
-
-            const actionsWrap = document.createElement('div');
-            actionsWrap.className = 'card-header-actions';
-
-            const indicator = document.createElement('div');
-            indicator.className = 'status-indicator';
-            const dot = document.createElement('span');
-            dot.className = 'status-dot';
-            const text = document.createElement('span');
-            text.className = 'status-text';
-            text.textContent = 'Connecting...';
-            indicator.appendChild(dot);
-            indicator.appendChild(text);
-
-            const settingsBtn = document.createElement('button');
-            settingsBtn.className = 'btn btn-icon settings-btn admin-only';
-            settingsBtn.setAttribute('data-tooltip', 'Service Management & Metrics');
-            settingsBtn.onclick = (e) => openServiceSettings(id, e);
-            const settingsIcon = document.createElement('span');
-            settingsIcon.className = 'material-symbols-rounded';
-            settingsIcon.textContent = 'settings';
-            settingsBtn.appendChild(settingsIcon);
-
-            const navArrow = document.createElement('span');
-            navArrow.className = 'material-symbols-rounded nav-arrow';
-            navArrow.textContent = 'arrow_forward';
-
-            actionsWrap.appendChild(indicator);
-            actionsWrap.appendChild(settingsBtn);
-            actionsWrap.appendChild(navArrow);
-
-            header.appendChild(title);
-            header.appendChild(actionsWrap);
-
-            const desc = document.createElement('p');
-            desc.className = 'description';
-            desc.textContent = meta.description || 'Private service hosted locally.';
-
-            const chipBox = document.createElement('div');
-            chipBox.className = 'chip-box';
-
-            if (hardened) {
-                const hardenedBadge = document.createElement('span');
-                hardenedBadge.className = 'chip tertiary';
-                hardenedBadge.style.gap = '4px';
-                hardenedBadge.style.padding = '0 8px';
-                hardenedBadge.style.height = '24px';
-                hardenedBadge.style.fontSize = '11px';
-                hardenedBadge.setAttribute('data-tooltip', 'This container uses a Digital Independence (DHI) hardened image.');
-                hardenedBadge.innerHTML = '<span class="material-symbols-rounded" style="font-size:14px;">verified_user</span> Hardened';
-                chipBox.appendChild(hardenedBadge);
-            }
-
-            if (Array.isArray(meta.actions)) {
-                meta.actions.forEach((action) => {
-                    chipBox.appendChild(createActionButton(id, action));
-                });
-            }
-            if (Array.isArray(meta.chips)) {
-                meta.chips.forEach((chip) => {
-                    chipBox.appendChild(createChipElement(id, chip));
-                });
-            }
-
-            card.appendChild(header);
-            card.appendChild(desc);
-            card.appendChild(chipBox);
-            return card;
-        }
-
-        // Initialize dynamic grid
-        document.addEventListener('DOMContentLoaded', () => {
-            renderDynamicGrid();
-            initMacAdvisory();
-            // Refresh grid occasionally to catch new services
-            setInterval(renderDynamicGrid, 30000);
-        });
-
-        const API = "/api"; 
-        const ODIDO_API = "/odido-api/api";
-        
-        function filterCategory(cat) {
-            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-            const targetChip = document.querySelector(\`.filter-chip[data-target="\${cat}"]\`);
-            if (targetChip) targetChip.classList.add('active');
-            
-            const allSection = document.getElementById('section-all');
-            const otherSections = document.querySelectorAll('section[data-category]:not(#section-all)');
-            
-            if (cat === 'all') {
-                if (allSection) allSection.style.display = 'block';
-                otherSections.forEach(s => s.style.display = 'none');
-            } else {
-                if (allSection) allSection.style.display = 'none';
-                otherSections.forEach(s => {
-                    if (s.dataset.category === cat) {
-                        s.style.display = 'block';
-                        s.classList.remove('hidden');
-                    } else {
-                        s.style.display = 'none';
-                    }
-                });
-            }
-
-            localStorage.setItem('dashboard_filter', cat);
-            syncSettings();
-            showSnackbar(\`Filtering by: \${cat.charAt(0).toUpperCase() + cat.slice(1)}\`, "Dismiss");
-        }
-
-        // Global State & Data
-        let isAdmin = sessionStorage.getItem('is_admin') === 'true';
-        let sessionToken = sessionStorage.getItem('session_token') || '';
-        let sessionCleanupEnabled = true;
-        let containerMetrics = {};
-        let containerIds = {};
-        let pendingUpdates = [];
-
-        function updateAdminUI() {
-            document.body.classList.toggle('admin-mode', isAdmin);
-            const icon = document.getElementById('admin-icon');
-            if (icon) {
-                icon.textContent = isAdmin ? 'admin_panel_settings' : 'lock_person';
-                icon.parentElement.style.background = isAdmin ? 'var(--md-sys-color-primary-container)' : '';
-                icon.style.color = isAdmin ? 'var(--md-sys-color-on-primary-container)' : 'inherit';
-            }
-            const btn = document.getElementById('admin-lock-btn');
-            if (btn) btn.dataset.tooltip = isAdmin ? "Exit Admin Mode" : "Enter Admin Mode";
-
-            // Session cleanup UI
-            const switchEl = document.getElementById('session-cleanup-switch');
-            const warningEl = document.getElementById('session-cleanup-warning');
-            if (switchEl) switchEl.classList.toggle('active', sessionCleanupEnabled);
-            if (warningEl) warningEl.style.display = (isAdmin && !sessionCleanupEnabled) ? 'flex' : 'none';
-        }
-
-        async function toggleSessionCleanup() {
-            const newState = !sessionCleanupEnabled;
-            try {
-                const res = await fetch(API + "/toggle-session-cleanup", {
-                    method: 'POST',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({ enabled: newState })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    sessionCleanupEnabled = data.enabled;
-                    updateAdminUI();
-                    showSnackbar(sessionCleanupEnabled ? "Session auto-cleanup enabled" : "Session auto-cleanup disabled (Persistent Mode)");
-                }
-            } catch (e) {
-                showSnackbar("Failed to toggle session cleanup");
-            }
-        }
-
-        async function toggleAdminMode() {
-            if (isAdmin) {
-                if (confirm("Exit Admin Mode? Management features will be hidden.")) {
-                    isAdmin = false;
-                    sessionStorage.setItem('is_admin', 'false');
-                    sessionStorage.removeItem('session_token');
-                    sessionToken = '';
-                    updateAdminUI();
-                    syncSettings();
-                    showSnackbar("Admin Mode disabled");
-                }
-            } else {
-                const pass = prompt("Enter Admin Password to enable management features:");
-                if (!pass) return;
-                
-                try {
-                    const res = await fetch(API + "/verify-admin", {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ password: pass })
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        isAdmin = true;
-                        sessionToken = data.token || '';
-                        sessionCleanupEnabled = data.cleanup !== false;
-                        sessionStorage.setItem('is_admin', 'true');
-                        if (sessionToken) sessionStorage.setItem('session_token', sessionToken);
-                        updateAdminUI();
-                        syncSettings();
-                        showSnackbar("Admin Mode enabled. Management tools unlocked.", "Dismiss");
-                    } else {
-                        showSnackbar("Authentication failed: Invalid password", "Retry");
-                    }
-                } catch(e) {
-                    showSnackbar("Error connecting to auth service");
-                }
-            }
-        }
-        let realProfileName = '';
-        let maskedProfileId = '';
-        const profileMaskMap = {};
-        let odidoHistory = [];
-
-        async function updateOdidoGraph(rate, remaining) {
-            const now = Date.now();
-            odidoHistory.push({ time: now, rate: rate, remaining: remaining });
-            if (odidoHistory.length > 50) odidoHistory.shift();
-
-            const svg = document.getElementById('odido-graph');
-            const line = document.getElementById('graph-line');
-            const area = document.getElementById('graph-area');
-            const speedIndicator = document.getElementById('odido-speed-indicator');
-            if (!svg || !line || !area) return;
-
-            const width = 400;
-            const height = 120;
-            
-            // Smooth the rate for the graph
-            const smoothHistory = odidoHistory.map((d, i) => {
-                const start = Math.max(0, i - 2);
-                const end = Math.min(odidoHistory.length - 1, i + 2);
-                const subset = odidoHistory.slice(start, end + 1);
-                const avgRate = subset.reduce((acc, curr) => acc + curr.rate, 0) / subset.length;
-                return { ...d, smoothRate: avgRate };
-            });
-
-            const maxRate = Math.max(...smoothHistory.map(d => d.smoothRate), 0.1);
-            
-            // Speed indicator (MB/min to Mb/s: * 8 / 60)
-            const speedMbs = (rate * 8 / 60).toFixed(2);
-            if (speedIndicator) {
-                speedIndicator.textContent = speedMbs + " Mb/s";
-                speedIndicator.style.display = rate > 0 ? 'block' : 'none';
-            }
-
-            if (smoothHistory.length < 2) return;
-
-            let points = "";
-            smoothHistory.forEach((d, i) => {
-                const x = (i / (smoothHistory.length - 1)) * width;
-                const y = height - (d.smoothRate / (maxRate * 1.2)) * height;
-                points += (i === 0 ? "M" : " L") + x + "," + y;
-            });
-
-            line.setAttribute("d", points);
-            area.setAttribute("d", points + " L" + width + "," + height + " L0," + height + " Z");
-        }
-
-        async function fetchMetrics() {
-            try {
-                const res = await fetch(API + "/metrics", { headers: getAuthHeaders() });
-                if (!res.ok) return;
-                const data = await res.json();
-                containerMetrics = data.metrics || {};
-            } catch(e) { console.error("Metrics fetch error:", e); }
-        }
-
-        function getPortainerBaseUrl() {
-            if (window.location.hostname !== '$LAN_IP' && !window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
-                const parts = window.location.hostname.split('.');
-                if (parts.length >= 2) {
-                    const domain = parts.slice(-2).join('.');
-                    const port = window.location.port ? ":" + window.location.port : "";
-                    return "https://portainer." + domain + port;
-                }
-            }
-            return "http://$LAN_IP:$PORT_PORTAINER";
-        }
-
-        const PORTAINER_URL = getPortainerBaseUrl();
-        const DEFAULT_ODIDO_API_KEY = "$ODIDO_API_KEY";
-        let storedOdidoKey = sessionStorage.getItem('odido_api_key');
-        if (DEFAULT_ODIDO_API_KEY && !storedOdidoKey) {
-            // Keep default key in session only
-            storedOdidoKey = DEFAULT_ODIDO_API_KEY;
-            sessionStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
-        }
-        let odidoApiKey = storedOdidoKey || DEFAULT_ODIDO_API_KEY;
-
-        function getAuthHeaders() {
-            const headers = { 'Content-Type': 'application/json' };
-            if (sessionToken) headers['X-Session-Token'] = sessionToken;
-            else if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-            return headers;
-        }
-
-        async function fetchUpdates() {
-            try {
-                const res = await fetch(API + "/updates", { headers: getAuthHeaders() });
-                if (!res.ok) return;
-                const data = await res.json();
-                const updates = data.updates || {};
-                pendingUpdates = Object.keys(updates);
-                
-                const banner = document.getElementById('update-banner');
-                const list = document.getElementById('update-list');
-                
-                if (pendingUpdates.length > 0) {
-                    if (banner) banner.style.display = 'block';
-                    if (list) list.textContent = "Updates available for: " + pendingUpdates.join(", ");
-                } else {
-                    if (banner) banner.style.display = 'none';
-                }
-            } catch(e) {}
-        }
-
-        async function openServiceSettings(name, e) {
-            if (e) { e.preventDefault(); e.stopPropagation(); }
-            await showServiceModal(name);
-        }
-
-        async function showServiceModal(name) {
-            const modal = document.getElementById('service-modal');
-            const title = document.getElementById('modal-service-name');
-            const actions = document.getElementById('modal-actions');
-            title.textContent = name.charAt(0).toUpperCase() + name.slice(1) + " Management";
-            
-            // Ensure we have the latest IDs
-            await fetchContainerIds();
-            
-            // Basic actions for all
-            const containerInfo = containerIds[name];
-            const cid = containerInfo ? containerInfo.id : null;
-            const portainerLink = cid ?
-                PORTAINER_URL + "/#!/1/docker/containers/" + cid :
-                PORTAINER_URL + "/#!/1/docker/containers";
-            
-            actions.innerHTML = \`<button onclick="updateService('\${name}')" class="btn btn-tonal" style="width:100%"><span class="material-symbols-rounded">update</span> Update Service</button><p class="body-small" style="margin: 4px 0 12px 0; color: var(--md-sys-color-on-surface-variant);">Note: Updates may cause temporary high CPU/RAM usage during build.</p><button onclick="window.open('\${portainerLink}', '_blank')" class="btn btn-outlined" style="width:100%"><span class="material-symbols-rounded">dock</span> View in Portainer</button>\`;
-
-            // Specialized actions
-            if (name === 'invidious') {
-                actions.innerHTML += "<button onclick=\"migrateService('invidious', event)\" class=\"btn btn-filled\" style=\"width:100%\"><span class=\"material-symbols-rounded\">database_upload</span> Migrate Database</button><button onclick=\"clearServiceDb('invidious', event)\" class=\"btn btn-tonal\" style=\"width:100%; color:var(--md-sys-color-error)\"><span class=\"material-symbols-rounded\">delete_forever</span> Wipe All Data</button>";
-            } else if (name === 'adguard') {
-                actions.innerHTML += "<button onclick=\"clearServiceLogs('adguard', event)\" class=\"btn btn-tonal\" style=\"width:100%\"><span class=\"material-symbols-rounded\">auto_delete</span> Clear Query Logs</button>";
-            } else if (name === 'memos') {
-                actions.innerHTML += "<button onclick=\"vacuumServiceDb('memos', event)\" class=\"btn btn-tonal\" style=\"width:100%\"><span class=\"material-symbols-rounded\">compress</span> Optimize Database</button>";
-            }
-
-            modal.style.display = 'flex';
-            updateModalMetrics(name);
-        }
-
-        function closeServiceModal() {
-            document.getElementById('service-modal').style.display = 'none';
-        }
-
-        function updateModalMetrics(name) {
-            const m = containerMetrics[name];
-            if (m) {
-                const cpu = parseFloat(m.cpu) || 0;
-                document.getElementById('modal-cpu-text').textContent = cpu.toFixed(1) + "%";
-                document.getElementById('modal-cpu-fill').style.width = Math.min(100, cpu) + "%";
-                
-                const mem = parseFloat(m.mem) || 0;
-                const limit = parseFloat(m.limit) || 1;
-                const memPercent = Math.min(100, (mem / limit) * 100);
-                document.getElementById('modal-mem-text').textContent = Math.round(mem) + " MB / " + Math.round(limit) + " MB";
-                document.getElementById('modal-mem-fill').style.width = memPercent + "%";
-            }
-        }
-
-        async function updateAllServices() {
-            openUpdateModal();
-        }
-
-        let isAllSelected = true;
-
-        function openUpdateModal() {
-            const modal = document.getElementById('update-selection-modal');
-            modal.style.display = 'flex';
-            document.getElementById('start-update-btn').disabled = true;
-            
-            // Trigger check
-            fetch(API + "/check-updates", { headers: odidoApiKey ? { 'X-API-Key': odidoApiKey } : {} });
-            
-            // Poll for results
-            const listContainer = document.getElementById('update-list-container');
-            const statusLabel = document.getElementById('update-fetch-status');
-            
-            let attempts = 0;
-            const poll = setInterval(async () => {
-                attempts++;
-                statusLabel.textContent = "Scanning repositories... (" + attempts + ")";
-                try {
-                    const res = await fetch(API + "/updates", { headers: odidoApiKey ? { 'X-API-Key': odidoApiKey } : {} });
-                    const data = await res.json();
-                    const updates = data.updates || {};
-                    const keys = Object.keys(updates);
-                    
-                    if (keys.length > 0 || attempts > 5) {
-                        clearInterval(poll);
-                        renderUpdateList(keys);
-                        statusLabel.textContent = keys.length + " updates found.";
-                        document.getElementById('start-update-btn').disabled = keys.length === 0;
-                    }
-                } catch(e) {}
-            }, 2000);
-        }
-
-        function closeUpdateModal() {
-            document.getElementById('update-selection-modal').style.display = 'none';
-        }
-
-        function renderUpdateList(services) {
-            const el = document.getElementById('update-list-container');
-            el.innerHTML = '';
-            if (services.length === 0) {
-                el.innerHTML = '<div style="padding: 24px; text-align: center; opacity: 0.7;">No updates found. System is up to date.</div>';
-                return;
-            }
-            services.forEach(svc => {
-                const row = document.createElement('div');
-                row.className = 'list-item';
-                row.style.margin = '4px 0';
-                row.style.background = 'transparent';
-                row.style.border = 'none';
-                row.innerHTML = \`
-                    <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
-                        <label style="display:flex; align-items:center; gap:12px; cursor:pointer; flex-grow:1;">
-                            <input type="checkbox" class="update-checkbox" value="\${svc}" checked style="width:18px; height:18px; accent-color:var(--md-sys-color-primary);">
-                            <span class="list-item-text">\${svc}</span>
-                        </label>
-                        <div style="display:flex; gap:8px; align-items:center;">
-                            <button onclick="viewChangelog('\${svc}')" class="btn btn-icon" style="width:32px; height:32px;" data-tooltip="View Changes">
-                                <span class="material-symbols-rounded" style="font-size:18px;">description</span>
-                            </button>
-                            <span class="chip tertiary" style="height:24px; font-size:11px;">Update Available</span>
-                        </div>
-                    </div>
-                \`;
-                el.appendChild(row);
-            });
-        }
-
-        async function viewChangelog(service) {
-            const modal = document.getElementById('changelog-modal');
-            const title = document.getElementById('changelog-title');
-            const content = document.getElementById('changelog-content');
-            
-            title.textContent = "Changes: " + service;
-            content.textContent = "Fetching release notes...";
-            modal.style.display = 'flex';
-            
-            try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/changelog?service=" + service, { headers });
-                const data = await res.json();
-                
-                if (data.error) throw new Error(data.error);
-                content.textContent = data.changelog || "No changelog information available.";
-            } catch (e) {
-                content.textContent = "Failed to load changelog: " + e.message;
-            }
-        }
-
-        function toggleAllUpdates() {
-            const checkboxes = document.querySelectorAll('.update-checkbox');
-            isAllSelected = !isAllSelected;
-            // If the user wants to "Undo" (reset), we assume resetting to ALL checked.
-            // The prompt says "undo button for the unchecked checkboxes list", which I interpret as "Check All".
-            checkboxes.forEach(cb => cb.checked = true);
-            isAllSelected = true; 
-        }
-
-        async function startBatchUpdate() {
-            const checkboxes = document.querySelectorAll('.update-checkbox:checked');
-            const selected = Array.from(checkboxes).map(cb => cb.value);
-            
-            if (selected.length === 0) {
-                showSnackbar("No services selected.", "Dismiss");
-                return;
-            }
-
-            if (!confirm("Update " + selected.length + " services? This will trigger backups, updates, and rebuilds (Expect high CPU usage).")) return;
-            
-            closeUpdateModal();
-            showSnackbar(\`Batch update initiated for \${selected.length} services. Rebuilding in background...\`, "Dismiss");
-            
-            try {
-                const res = await fetch(API + "/batch-update", {
-                    method: 'POST',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({ services: selected })
-                });
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
-                showSnackbar("Batch update request accepted. Check logs for detailed progress.", "OK");
-            } catch(e) {
-                showSnackbar("Batch update failed: " + e.message, "Error");
-            }
-        }
-
-        async function updateService(name) {
-            const btn = event?.target.closest('button');
-            const originalHtml = btn ? btn.innerHTML : '';
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = \`<span class="material-symbols-rounded" style="animation: spin 2s linear infinite;">sync</span> Updating...\`;
-            }
-            showSnackbar(\`Initiating update for \${name}...\`, "Dismiss");
-
-            try {
-                const res = await fetch(API + "/update-service", {
-                    method: 'POST',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({ service: name })
-                });
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
-                
-                showSnackbar(\`\${name} update complete.\`, "Success");
-                return true;
-            } catch(e) {
-                showSnackbar(\`Update failed: \${e.message}\`, "Error");
-                return false;
-            } finally {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                }
-            }
-        }
-        async function migrateService(name, event) {
-            if (event) { event.preventDefault(); event.stopPropagation(); }
-            const doBackup = document.getElementById('invidious-backup-toggle')?.checked ? 'yes' : 'no';
-            if (!confirm("Run foolproof migration for " + name + "?" + (doBackup === 'yes' ? " This will create a database backup first." : " WARNING: No backup will be created."))) return;
-            try {
-                const res = await fetch(API + "/migrate?service=" + name + "&backup=" + doBackup);
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
-                alert("Migration successful!\n\n" + data.output);
-            } catch(e) {
-                alert("Migration failed: " + e.message);
-            }
-        }
-
-        async function clearServiceDb(name, event) {
-            if (event) { event.preventDefault(); event.stopPropagation(); }
-            const doBackup = document.getElementById('invidious-backup-toggle')?.checked ? 'yes' : 'no';
-            if (!confirm("DANGER: This will permanently DELETE all subscriptions and preferences for " + name + "." + (doBackup === 'yes' ? " A backup will be created first." : " WARNING: NO BACKUP WILL BE CREATED.") + " Continue?")) return;
-            try {
-                const res = await fetch(API + "/clear-db?service=" + name + "&backup=" + doBackup);
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
-                alert("Database cleared successfully!\n\n" + data.output);
-            } catch(e) {
-                showSnackbar("Action failed: " + e.message);
-            }
-        }
-
-        async function clearServiceLogs(name, event) {
-            if (event) { event.preventDefault(); event.stopPropagation(); }
-            if (!confirm("Clear all historical query logs for " + name + "? This cannot be undone.")) return;
-            try {
-                const res = await fetch(API + "/clear-logs?service=" + name);
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
-                showSnackbar("Logs cleared successfully!");
-            } catch(e) {
-                showSnackbar("Failed to clear logs: " + e.message);
-            }
-        }
-
-        async function vacuumServiceDb(name, event) {
-            if (event) { event.preventDefault(); event.stopPropagation(); }
-            showSnackbar("Optimizing database... please wait.");
-            try {
-                const res = await fetch(API + "/vacuum?service=" + name);
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
-                showSnackbar("Database optimized successfully!");
-            } catch(e) {
-                showSnackbar("Optimization failed: " + e.message);
-            }
-        }
-        
-        async function rotateApiKey() {
-            const newKey = prompt("Enter new HUB_API_KEY. Warning: You must update your local .secrets manually if this fails!");
-            if (!newKey) return;
-            try {
-                const res = await fetch(API + "/rotate-api-key", {
-                    method: 'POST',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({ new_key: newKey })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    odidoApiKey = newKey;
-                    sessionStorage.setItem('odido_api_key', newKey);
-                    showSnackbar("API Key rotated successfully!");
-                } else { throw new Error(data.error); }
-            } catch(e) { showSnackbar("Rotation failed: " + e.message); }
-        }
-
-        async function filterLogs() {
-            const level = document.getElementById('log-filter-level').value;
-            const category = document.getElementById('log-filter-cat').value;
-            let url = API + "/logs";
-            const params = [];
-            if (level !== 'ALL') params.push("level=" + level);
-            if (category !== 'ALL') params.push("category=" + category);
-            if (params.length) url += "?" + params.join("&");
-            
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                const el = document.getElementById('log-container');
-                el.innerHTML = '';
-                (data.logs || []).forEach(log => {
-                    el.appendChild(parseLogLine(JSON.stringify(log)));
-                });
-            } catch(e) { showSnackbar("Failed to filter logs"); }
-        }
-        
-        async function fetchContainerIds() {
-            try {
-                const res = await fetch(API + "/containers");
-                if (!res.ok) throw new Error("API " + res.status);
-                const data = await res.json();
-                containerIds = data.containers || {};
-                
-                // Update all portainer links
-                document.querySelectorAll('.portainer-link').forEach(el => {
-                    const containerName = el.dataset.container;
-                    const containerInfo = containerIds[containerName];
-                    const cid = containerInfo ? containerInfo.id : null;
-                    const originalText = el.getAttribute('data-original-text') || el.textContent.trim();
-                    if (!el.getAttribute('data-original-text')) el.setAttribute('data-original-text', originalText);
-
-                    if (cid) {
-                        el.style.opacity = '1';
-                        el.style.cursor = 'pointer';
-                        el.dataset.tooltip = "Manage " + containerName + " in Portainer";
-                        el.textContent = originalText;
-                        
-                        // Use a fresh onclick handler
-                        el.onclick = (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            window.open(PORTAINER_URL + "/#!/1/docker/containers/" + cid, '_blank');
-                        };
-                    } else {
-                        el.style.opacity = '0.6';
-                        el.style.cursor = 'default';
-                        el.onclick = (e) => { e.preventDefault(); e.stopPropagation(); };
-                    }
-                });
-            } catch(e) { console.error('Container fetch error:', e); }
-        }
-        
-        function navigate(el, e) {
-            if (e && (e.target.closest('.portainer-link') || e.target.closest('.btn') || e.target.closest('.chip'))) return;
-            const url = el.getAttribute('data-url');
-            if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-                window.open(url, '_blank');
-            }
-        }
-
-        function generateRandomId() {
-            const chars = 'abcdef0123456789';
-            let id = '';
-            for (let i = 0; i < 8; i++) id += chars.charAt(Math.floor(Math.random() * chars.length));
-            return 'profile-' + id;
-        }
-        
-        function updateProfileDisplay() {
-            const vpnActive = document.getElementById('vpn-active');
-            const isPrivate = document.body.classList.contains('privacy-mode');
-            if (vpnActive && realProfileName) {
-                if (isPrivate) {
-                    if (!maskedProfileId) maskedProfileId = generateRandomId();
-                    vpnActive.textContent = maskedProfileId;
-                    vpnActive.classList.add('sensitive-masked');
-                } else {
-                    vpnActive.textContent = realProfileName;
-                    vpnActive.classList.remove('sensitive-masked');
-                }
-            }
-            updateProfileListDisplay();
-        }
-
-        function getProfileLabel(name) {
-            const isPrivate = document.body.classList.contains('privacy-mode');
-            if (!isPrivate) return name;
-            if (!profileMaskMap[name]) profileMaskMap[name] = generateRandomId();
-            return profileMaskMap[name];
-        }
-
-        function updateProfileListDisplay() {
-            const items = document.querySelectorAll('#profile-list .list-item-text');
-            items.forEach((item) => {
-                const realName = item.dataset.realName;
-                if (realName) item.textContent = getProfileLabel(realName);
-            });
-        }
-        
-        async function saveDesecConfig() {
-            const domain = document.getElementById('desec-domain-input').value.trim();
-            const token = document.getElementById('desec-token-input').value.trim();
-            if (!domain && !token) {
-                showSnackbar("Please provide domain or token");
-                return;
-            }
-            try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                const res = await fetch(API + "/config-desec", {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({ domain, token })
-                });
-                const result = await res.json();
-                if (result.success) {
-                    showSnackbar("deSEC configuration saved! Certificates updating in background.");
-                    document.getElementById('desec-domain-input').value = '';
-                    document.getElementById('desec-token-input').value = '';
-                } else {
-                    throw new Error(result.error || "Unknown error");
-                }
-            } catch (e) {
-                showSnackbar("Failed to save deSEC config: " + e.message);
-            }
-        }
-        
-        async function fetchStatus() {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
-            try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/status", { headers, signal: controller.signal });
-                clearTimeout(timeoutId);
-                
-                if (res.status === 401) {
-                    throw new Error("401 Unauthorized");
-                }
-                
-                const data = await res.json();
-                const setText = (id, value) => {
-                    const el = document.getElementById(id);
-                    if (el) el.textContent = value;
-                    return el;
-                };
-                const g = data.gluetun || {};
-                const vpnStatus = document.getElementById('vpn-status');
-                if (vpnStatus) {
-                    if (g.status === "up" && g.healthy) {
-                        vpnStatus.textContent = "Connected (Healthy)";
-                        vpnStatus.className = "stat-value text-success";
-                        vpnStatus.title = "VPN tunnel is active and passing health checks";
-                    } else if (g.status === "up") {
-                        vpnStatus.textContent = "Connected";
-                        vpnStatus.className = "stat-value text-success";
-                        vpnStatus.title = "VPN tunnel is active";
-                    } else {
-                        vpnStatus.textContent = "Disconnected";
-                        vpnStatus.className = "stat-value error";
-                        vpnStatus.title = "VPN tunnel is not established";
-                    }
-                }
-                realProfileName = g.active_profile || "Unknown";
-                updateProfileDisplay();
-                setText('vpn-endpoint', g.endpoint || "--");
-                setText('vpn-public-ip', g.public_ip || "--");
-                setText('vpn-connection', g.handshake_ago || "Never");
-                setText('vpn-session-rx', formatBytes(g.session_rx || 0));
-                setText('vpn-session-tx', formatBytes(g.session_tx || 0));
-                setText('vpn-total-rx', formatBytes(g.total_rx || 0));
-                setText('vpn-total-tx', formatBytes(g.total_tx || 0));
-                const w = data.wgeasy || {};
-                const wgeStat = document.getElementById('wge-status');
-                if (wgeStat) {
-                    if (w.status === "up") {
-                        wgeStat.textContent = "Running";
-                        wgeStat.className = "stat-value text-success";
-                        wgeStat.title = "WireGuard management service is operational";
-                    } else {
-                        wgeStat.textContent = "Stopped";
-                        wgeStat.className = "stat-value error";
-                        wgeStat.title = "WireGuard management service is not running";
-                    }
-                }
-                setText('wge-host', w.host || "--");
-                setText('wge-clients', w.clients || "0");
-                const wgeConnected = document.getElementById('wge-connected');
-                const connectedCount = parseInt(w.connected) || 0;
-                if (wgeConnected) {
-                    wgeConnected.textContent = connectedCount > 0 ? connectedCount + " active" : "None";
-                    wgeConnected.className = connectedCount > 0 ? "stat-value text-success" : "stat-value";
-                }
-                setText('wge-session-rx', formatBytes(w.session_rx || 0));
-                setText('wge-session-tx', formatBytes(w.session_tx || 0));
-                setText('wge-total-rx', formatBytes(w.total_rx || 0));
-                setText('wge-total-tx', formatBytes(w.total_tx || 0));
-
-                // Update service statuses from server-side checks
-                if (data.services) {
-                    for (const [name, status] of Object.entries(data.services)) {
-                        const card = document.getElementById('link-' + name);
-                        if (card) {
-                            const dot = card.querySelector('.status-dot');
-                            const txt = card.querySelector('.status-text');
-                            const indicator = card.querySelector('.status-indicator');
-                            
-                            if (dot && txt && indicator) {
-                                if (status === 'unhealthy' && data.health_details && data.health_details[name]) {
-                                    txt.textContent = 'Issue Detected';
-                                    dot.className = 'status-dot down';
-                                    indicator.title = data.health_details[name];
-                                } else if (status === 'healthy' || status === 'up') {
-                                    txt.textContent = 'Connected';
-                                    dot.className = 'status-dot up';
-                                    indicator.title = 'Service is connected and operational';
-                                } else if (status === 'starting') {
-                                    txt.textContent = 'Connecting...';
-                                    dot.className = 'status-dot starting';
-                                    indicator.title = 'Service is currently initializing';
-                                } else {
-                                    txt.textContent = 'Offline';
-                                    dot.className = 'status-dot down';
-                                    indicator.title = 'Service is unreachable';
-                                }
-                            }
-
-                        }
-                    }
-                }
-                
-                const dot = document.getElementById('api-dot');
-                const txt = document.getElementById('api-text');
-                if (dot && txt) {
-                    dot.className = 'status-dot up';
-                    txt.textContent = 'Connected';
-                }
-            } catch(e) {
-                console.error("Status fetch error:", e);
-                const dot = document.getElementById('api-dot');
-                const txt = document.getElementById('api-text');
-                if (dot && txt) {
-                    dot.className = 'status-dot down';
-                    txt.textContent = 'Offline';
-                }
-                // Force indicators out of "Connecting..." state on API failure
-                document.querySelectorAll('.status-indicator').forEach(indicator => {
-                    const dot = indicator.querySelector('.status-dot');
-                    const text = indicator.querySelector('.status-text');
-                    if (dot && text && !dot.id.includes('api')) {
-                        dot.className = 'status-dot down';
-                        text.textContent = 'API Offline';
-                        indicator.title = 'The Management Hub is unreachable. Real-time metrics, VPN switching, and service update controls are unavailable until connection is restored.';
-                    }
-                });
-            }
-        }
-        
-        async function fetchOdidoStatus() {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
-            try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(ODIDO_API + "/status", { headers, signal: controller.signal });
-                clearTimeout(timeoutId);
-                if (!res.ok) {
-                    const data = await res.json().catch(() => ({}));
-                    document.getElementById('odido-loading').style.display = 'none';
-                    document.getElementById('odido-not-configured').style.display = 'none';
-                    document.getElementById('odido-configured').style.display = 'block';
-                    document.getElementById('odido-remaining').textContent = '--';
-                    document.getElementById('odido-bundle-code').textContent = '--';
-                    document.getElementById('odido-threshold').textContent = '--';
-                    const apiStatus = document.getElementById('odido-api-status');
-                    
-                    if (res.status === 401) {
-                        apiStatus.textContent = 'Dashboard API Key Invalid';
-                        apiStatus.style.color = 'var(--md-sys-color-error)';
-                    } else if (res.status === 400 || (data.detail && data.detail.includes('credentials'))) {
-                        apiStatus.textContent = 'Odido Account Not Linked';
-                        apiStatus.style.color = 'var(--md-sys-color-warning)';
-                    } else {
-                        apiStatus.textContent = "Service Error: " + res.status;
-                        apiStatus.style.color = 'var(--md-sys-color-error)';
-                    }
-                    return;
-                }
-                const data = await res.json();
-                document.getElementById('odido-loading').style.display = 'none';
-                document.getElementById('odido-not-configured').style.display = 'none';
-                document.getElementById('odido-configured').style.display = 'block';
-                const state = data.state || {};
-                const config = data.config || {};
-                const remaining = state.remaining_mb || 0;
-                const threshold = config.absolute_min_threshold_mb || 100;
-                const rate = data.consumption_rate_mb_per_min || 0;
-                const bundleCode = config.bundle_code || 'A0DAY01';
-                const hasOdidoCreds = config.odido_user_id && config.odido_token;
-                // Also consider as "connected" if we have real data from the API
-                const hasRealData = remaining > 0 || state.last_updated_ts;
-                const isConfigured = hasOdidoCreds || hasRealData;
-                document.getElementById('odido-remaining').textContent = Math.round(remaining) + " MB";
-                document.getElementById('odido-bundle-code').textContent = bundleCode;
-                document.getElementById('odido-threshold').textContent = threshold + " MB";
-                document.getElementById('odido-auto-renew').textContent = config.auto_renew_enabled ? 'Enabled' : 'Disabled';
-                document.getElementById('odido-rate').textContent = rate.toFixed(3) + " MB/min";
-                const apiStatus = document.getElementById('odido-api-status');
-                apiStatus.textContent = isConfigured ? 'Connected' : 'Not configured';
-                apiStatus.style.color = isConfigured ? 'var(--md-sys-color-success)' : 'var(--md-sys-color-warning)';
-                
-                updateOdidoGraph(rate, remaining);
-
-                const maxData = config.bundle_size_mb || 1024;
-                const percent = Math.min(100, (remaining / maxData) * 100);
-                const bar = document.getElementById('odido-bar');
-                if (bar) {
-                    bar.style.width = percent + "%";
-                    bar.className = 'progress-indicator';
-                    if (remaining < threshold) bar.classList.add('critical');
-                    else if (remaining < threshold * 2) bar.classList.add('low');
-                }
-            } catch(e) {
-                // Network error or service unavailable - show not-configured with error info
-                const loading = document.getElementById('odido-loading');
-                if (loading) loading.style.display = 'none';
-                const notConf = document.getElementById('odido-not-configured');
-                if (notConf) notConf.style.display = 'block';
-                const conf = document.getElementById('odido-configured');
-                if (conf) conf.style.display = 'none';
-                console.error('Odido status error:', e);
-            }
-        }
-        
-        async function saveOdidoConfig() {
-            const st = document.getElementById('odido-config-status');
-            const data = {};
-            const apiKey = document.getElementById('odido-api-key').value.trim();
-            const oauthToken = document.getElementById('odido-oauth-token').value.trim();
-            const bundleCode = document.getElementById('odido-bundle-code-input').value.trim();
-            const threshold = document.getElementById('odido-threshold-input').value.trim();
-            const leadTime = document.getElementById('odido-lead-time-input').value.trim();
-            
-            if (apiKey) {
-                odidoApiKey = apiKey;
-                sessionStorage.setItem('odido_api_key', apiKey);
-                data.api_key = apiKey;
-            }
-            
-            // If OAuth token provided, fetch User ID automatically via hub-api API (uses curl)
-            if (oauthToken) {
-                if (st) {
-                    st.textContent = 'Fetching User ID from Odido API...';
-                    st.style.color = 'var(--p)';
-                }
-                try {
-                    const res = await fetch(API + "/odido-userid", {
-                        method: 'POST',
-                        headers: getAuthHeaders(),
-                        body: JSON.stringify({ oauth_token: oauthToken })
-                    });
-                    const result = await res.json();
-                    if (result.error) throw new Error(result.error);
-                    if (result.user_id) {
-                        data.odido_user_id = result.user_id;
-                        data.odido_token = oauthToken;
-                        if (st) {
-                            st.textContent = "User ID fetched: " + result.user_id;
-                            st.style.color = 'var(--ok)';
-                        }
-                    } else {
-                        throw new Error('Could not extract User ID from Odido API response');
-                    }
-                } catch(e) {
-                    if (st) {
-                        st.textContent = "Failed to fetch User ID: " + e.message;
-                        st.style.color = 'var(--err)';
-                    }
-                    return;
-                }
-            }
-            
-            if (bundleCode) data.bundle_code = bundleCode;
-            if (threshold) data.absolute_min_threshold_mb = parseInt(threshold);
-            if (leadTime) data.lead_time_minutes = parseInt(leadTime);
-            
-            if (Object.keys(data).length === 0) {
-                if (st) {
-                    st.textContent = 'Please fill in at least one field';
-                    st.style.color = 'var(--err)';
-                }
-                return;
-            }
-            if (st) {
-                st.textContent = 'Saving configuration...';
-                st.style.color = 'var(--p)';
-            }
-            try {
-                const res = await fetch(ODIDO_API + "/config", {
-                    method: 'POST',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify(data)
-                });
-                const result = await res.json();
-                if (result.detail) throw new Error(result.detail);
-                if (st) {
-                    st.textContent = 'Configuration saved!';
-                    st.style.color = 'var(--ok)';
-                }
-                document.getElementById('odido-api-key').value = '';
-                document.getElementById('odido-oauth-token').value = '';
-                document.getElementById('odido-bundle-code-input').value = '';
-                document.getElementById('odido-threshold-input').value = '';
-                document.getElementById('odido-lead-time-input').value = '';
-                fetchOdidoStatus();
-            } catch(e) {
-                if (st) {
-                    st.textContent = e.message;
-                    st.style.color = 'var(--err)';
-                }
-            }
-        }
-        
-        async function buyOdidoBundle() {
-            const st = document.getElementById('odido-buy-status');
-            const btn = document.getElementById('odido-buy-btn');
-            btn.disabled = true;
-            if (st) {
-                st.textContent = 'Purchasing bundle from Odido...';
-                st.style.color = 'var(--p)';
-            }
-            try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                const res = await fetch(ODIDO_API + "/odido/buy-bundle", {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({})
-                });
-                const result = await res.json();
-                if (result.detail) throw new Error(result.detail);
-                if (st) {
-                    st.textContent = 'Bundle purchased successfully!';
-                    st.style.color = 'var(--ok)';
-                }
-                setTimeout(fetchOdidoStatus, 2000);
-            } catch(e) {
-                if (st) {
-                    st.textContent = e.message;
-                    st.style.color = 'var(--err)';
-                }
-            }
-            btn.disabled = false;
-        }
-        
-        async function refreshOdidoRemaining() {
-            const st = document.getElementById('odido-buy-status');
-            if (st) {
-                st.textContent = 'Fetching from Odido API...';
-                st.style.color = 'var(--p)';
-            }
-            try {
-                const headers = {};
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                const res = await fetch(ODIDO_API + "/odido/remaining", { headers });
-                const result = await res.json();
-                if (result.detail) throw new Error(result.detail);
-                if (st) {
-                    st.textContent = "Live data: " + Math.round(result.remaining_mb || 0) + " MB remaining";
-                    st.style.color = 'var(--ok)';
-                }
-                setTimeout(fetchOdidoStatus, 1000);
-            } catch(e) {
-                if (st) {
-                    st.textContent = e.message;
-                    st.style.color = 'var(--err)';
-                }
-            }
-        }
-        
-        async function fetchProfiles() {
-            try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/profiles", { headers });
-                if (res.status === 401) throw new Error("401");
-                const data = await res.json();
-                const el = document.getElementById('profile-list');
-                el.innerHTML = '';
-                el.style.flexDirection = 'column';
-                el.style.alignItems = 'stretch';
-                el.style.justifyContent = 'flex-start';
-                el.style.gap = '4px';
-                
-                if (data.profiles.length === 0) {
-                    el.innerHTML = '<div style="text-align:center; padding: 24px; opacity: 0.6;"><span class="material-symbols-rounded" style="font-size: 48px;">folder_open</span><p class="body-medium">No profiles found</p></div>';
-                    return;
-                }
-
-                data.profiles.forEach(p => {
-                    const row = document.createElement('div');
-                    row.className = 'list-item';
-                    row.style.margin = '0';
-                    row.style.borderRadius = '12px';
-                    row.style.background = 'var(--md-sys-color-surface-container-low)';
-                    row.style.border = '1px solid var(--md-sys-color-outline-variant)';
-
-                    const content = document.createElement('div');
-                    content.style.display = 'flex';
-                    content.style.alignItems = 'center';
-                    content.style.gap = '12px';
-                    content.style.flex = '1';
-                    content.style.cursor = 'pointer';
-                    content.onclick = function() { activateProfile(p); };
-
-                    const icon = document.createElement('span');
-                    icon.className = 'material-symbols-rounded';
-                    icon.textContent = 'vpn_key';
-                    icon.style.color = 'var(--md-sys-color-primary)';
-
-                    const name = document.createElement('span');
-                    name.className = 'list-item-text';
-                    name.style.flex = '1';
-                    name.dataset.realName = p;
-                    name.textContent = getProfileLabel(p);
-
-                    content.appendChild(icon);
-                    content.appendChild(name);
-
-                    const delBtn = document.createElement('button');
-                    delBtn.className = 'btn btn-icon';
-                    delBtn.style.color = 'var(--md-sys-color-on-surface-variant)';
-                    delBtn.title = 'Delete';
-                    delBtn.innerHTML = '<span class="material-symbols-rounded">delete</span>';
-                    delBtn.onclick = function(e) { e.stopPropagation(); deleteProfile(p); };
-
-                    row.appendChild(content);
-                    row.appendChild(delBtn);
-                    el.appendChild(row);
-                });
-                updateProfileListDisplay();
-            } catch(e) {
-                console.error("Profile fetch error:", e);
-            }
-        }
-        async function uploadProfile() {
-            const nameInput = document.getElementById('prof-name').value;
-            const config = document.getElementById('prof-conf').value;
-            const st = document.getElementById('upload-status');
-            if(!config) { if(st) st.textContent="Error: Config content missing"; else alert("Error: Config content missing"); return; }
-            if(st) st.textContent = "Uploading...";
-            try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                const upRes = await fetch(API + "/upload", { 
-                    method:'POST', 
-                    headers: headers,
-                    body:JSON.stringify({name: nameInput, config: config}) 
-                });
-                const upData = await upRes.json();
-                if(upData.error) throw new Error(upData.error);
-                const activeName = upData.name;
-                if(st) st.textContent = "Activating " + activeName + "...";
-                await fetch(API + "/activate", { 
-                    method:'POST', 
-                    headers: headers,
-                    body:JSON.stringify({name: activeName}) 
-                });
-                if(st) st.textContent = "Success! VPN restarting."; else alert("Success! VPN restarting.");
-                fetchProfiles(); document.getElementById('prof-name').value=""; document.getElementById('prof-conf').value="";
-            } catch(e) { if(st) st.textContent = e.message; else alert(e.message); }
-        }
-        
-        async function activateProfile(name) {
-            if(!confirm("Switch to " + name + "?")) return;
-            try { 
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                await fetch(API + "/activate", { 
-                    method:'POST', 
-                    headers: headers,
-                    body:JSON.stringify({name: name}) 
-                }); 
-                alert("Profile switched. VPN restarting."); 
-            } catch(e) { alert("Error"); }
-        }
-        
-        async function deleteProfile(name) {
-            if(!confirm("Delete " + name + "?")) return;
-            try { 
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                await fetch(API + "/delete", { 
-                    method:'POST', 
-                    headers: headers,
-                    body:JSON.stringify({name: name}) 
-                }); 
-                fetchProfiles(); 
-            } catch(e) { alert("Error"); }
-        }
-        
-        function startLogStream() {
-            const el = document.getElementById('log-container');
-            const status = document.getElementById('log-status');
-            const evtSource = new EventSource(API + "/events");
-            
-            function parseLogLine(line) {
-                let logData = null;
-                try {
-                    logData = JSON.parse(line);
-                } catch(e) {
-                    logData = { message: line, level: 'INFO', category: 'SYSTEM', timestamp: '' };
-                }
-
-                // Apply active filters
-                const filterLevel = document.getElementById('log-filter-level').value;
-                const filterCat = document.getElementById('log-filter-cat').value;
-                if (filterLevel !== 'ALL' && logData.level !== filterLevel) return null;
-                if (filterCat !== 'ALL' && logData.category !== filterCat) return null;
-
-                // Filter out common noise
-                const m = logData.message || "";
-                if (m.includes('HTTP/1.1" 200') || m.includes('HTTP/1.1" 304')) {
-                    // Only filter if it doesn't match a known humanization pattern
-                    const knownPatterns = ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /theme', 'POST /theme', 'GET /system-health', 'GET /profiles', 'POST /update-service', 'POST /batch-update', 'POST /restart-stack', 'POST /rotate-api-key', 'POST /activate', 'POST /upload', 'POST /delete', 'GET /check-updates', 'GET /changelog'];
-                    if (!knownPatterns.some(p => m.includes(p))) return null;
-                }
-                
-                const div = document.createElement('div');
-                div.className = 'log-entry';
-                
-                let icon = 'info';
-                let iconColor = 'var(--md-sys-color-primary)';
-                let message = logData.message;
-                let timestamp = logData.timestamp;
-
-                // Humanization logic
-                if (message.includes('GET /system-health')) message = 'System telemetry synchronized';
-                if (message.includes('POST /update-service')) message = 'Service update initiated';
-                if (message.includes('POST /theme')) message = 'UI theme preferences saved';
-                if (message.includes('GET /theme')) message = 'UI theme assets synchronized';
-                if (message.includes('GET /profiles')) message = 'VPN profiles synchronized';
-                if (message.includes('POST /activate')) message = 'VPN profile switch triggered';
-                if (message.includes('POST /upload')) message = 'VPN profile upload completed';
-                if (message.includes('POST /delete')) message = 'VPN profile deletion requested';
-                if (message.includes('Watchtower Notification')) message = 'Container update availability checked';
-                if (message.includes('GET /status')) message = 'Service health status refreshed';
-                if (message.includes('GET /metrics')) message = 'Performance metrics updated';
-                if (message.includes('POST /batch-update')) message = 'Batch update sequence started';
-                if (message.includes('GET /updates')) message = 'Checking repository update status';
-                if (message.includes('GET /services')) message = 'Service catalog synchronized';
-                if (message.includes('GET /check-updates')) message = 'Update availability check requested';
-                if (message.includes('GET /changelog')) message = 'Service changelog retrieved';
-                if (message.includes('POST /config-desec')) message = 'deSEC dynamic DNS updated';
-                if (message.includes('GET /certificate-status')) message = 'SSL certificate validity checked';
-                if (message.includes('GET /containers')) message = 'Container orchestration state audited';
-                if (message.includes('GET /logs')) message = 'System logs retrieved';
-                if (message.includes('GET /events')) message = 'Live log stream connection established';
-                if (message.includes('POST /restart-stack')) message = 'Full system stack restart triggered';
-                if (message.includes('POST /rotate-api-key')) message = 'Dashboard API security key rotated';
-
-                // Category based icons
-                if (logData.category === 'NETWORK') icon = 'lan';
-                if (logData.category === 'AUTH' || logData.category === 'SECURITY') icon = 'lock';
-                if (logData.category === 'MAINTENANCE') icon = 'build';
-                if (logData.category === 'ORCHESTRATION') icon = 'hub';
-
-                // Level based colors
-                if (logData.level === 'WARN') {
-                    icon = 'warning';
-                    iconColor = 'var(--md-sys-color-warning)';
-                } else if (logData.level === 'ERROR') {
-                    icon = 'error';
-                    iconColor = 'var(--md-sys-color-error)';
-                } else if (logData.level === 'ACCESS') {
-                    icon = 'api';
-                    // Simplify common access logs
-                    if (message.includes('GET /status')) message = 'Health check processed';
-                    if (message.includes('GET /events')) message = 'Log stream connection';
-                }
-
-                div.innerHTML = \`
-                    <span class="material-symbols-rounded log-icon" style="color: \${iconColor}">\${icon}</span>
-                    <div class="log-content">\${message}</div>
-                    <span class="log-time">\${timestamp}</span>
-                \`;
-                return div;
-            }
-
-            evtSource.onmessage = function(e) {
-                if (!e.data) return;
-                const entry = parseLogLine(e.data);
-                if (!entry) return;
-                
-                // Clear the loader if it's still there
-                if (el.querySelector('.body-medium')) {
-                    el.innerHTML = '';
-                    el.style.alignItems = 'flex-start';
-                    el.style.justifyContent = 'flex-start';
-                }
-                
-                el.appendChild(entry);
-                if (el.childNodes.length > 500) el.removeChild(el.firstChild);
-                el.scrollTop = el.scrollHeight;
-            };
-            evtSource.onopen = function() { status.textContent = "Live"; status.style.color = "var(--md-sys-color-success)"; };
-            evtSource.onerror = function() { status.textContent = "Reconnecting..."; status.style.color = "var(--md-sys-color-error)"; evtSource.close(); setTimeout(startLogStream, 3000); };
-        }
-        
-        function formatBytes(a,b=2){if(!+a)return"0 B";const c=0>b?0:b,d=Math.floor(Math.log(a)/Math.log(1024));return parseFloat((a/Math.pow(1024,d)).toFixed(c)) + " " + ["B","KiB","MiB","GiB","TiB"][d]}
-        
-        // Snackbar implementation
-        const snackbarContainer = document.createElement('div');
-        snackbarContainer.className = 'snackbar-container';
-        document.body.appendChild(snackbarContainer);
-
-        function showSnackbar(message, actionText = '', actionCallback = null) {
-            const snackbar = document.createElement('div');
-            snackbar.className = 'snackbar';
-            
-            let html = \`<div class="snackbar-content">\${message}</div>\`;
-            if (actionText) {
-                html += \`<button class="snackbar-action">\${actionText}</button>\`;
-            }
-            snackbar.innerHTML = html;
-            
-            if (actionCallback) {
-                snackbar.querySelector('.snackbar-action').onclick = () => {
-                    actionCallback();
-                    snackbar.classList.remove('visible');
-                    setTimeout(() => snackbar.remove(), 500);
-                };
-            }
-
-            snackbarContainer.appendChild(snackbar);
-            // Trigger reflow
-            snackbar.offsetHeight;
-            snackbar.classList.add('visible');
-
-            setTimeout(() => {
-                snackbar.classList.remove('visible');
-                setTimeout(() => snackbar.remove(), 500);
-            }, 1500);
-        }
-
-        // Theme customization logic
-        async function applySeedColor(hex) {
-            const hexEl = document.getElementById('theme-seed-hex');
-            if (hexEl) hexEl.textContent = hex.toUpperCase();
-            const colors = generateM3Palette(hex);
-            applyThemeColors(colors);
-            await syncSettings();
-        }
-
-        function renderThemePreset(seedHex) {
-            const colors = generateM3Palette(seedHex);
-            const container = document.createElement('div');
-            container.style.width = '48px';
-            container.style.height = '48px';
-            container.style.borderRadius = '24px';
-            container.style.backgroundColor = colors.surfaceContainer; // Background of the "folder"
-            container.style.cursor = 'pointer';
-            container.style.border = '1px solid var(--md-sys-color-outline-variant)';
-            container.style.transition = 'transform 0.2s, border-color 0.2s';
-            container.title = "Apply " + seedHex;
-            container.style.display = 'grid';
-            container.style.gridTemplateColumns = '1fr 1fr';
-            container.style.gridTemplateRows = '1fr 1fr';
-            container.style.overflow = 'hidden';
-            container.style.padding = '4px';
-            container.style.gap = '2px';
-
-            const c1 = document.createElement('div'); c1.style.background = colors.primary; c1.style.borderRadius = '50%';
-            const c2 = document.createElement('div'); c2.style.background = colors.secondary; c2.style.borderRadius = '50%';
-            const c3 = document.createElement('div'); c3.style.background = colors.tertiary; c3.style.borderRadius = '50%';
-            const c4 = document.createElement('div'); c4.style.background = colors.primaryContainer; c4.style.borderRadius = '50%';
-
-            container.appendChild(c1); container.appendChild(c2); container.appendChild(c3); container.appendChild(c4);
-
-            container.onmouseover = () => { container.style.transform = 'scale(1.1)'; container.style.borderColor = 'var(--md-sys-color-primary)'; };
-            container.onmouseout = () => { container.style.transform = 'scale(1)'; container.style.borderColor = 'var(--md-sys-color-outline-variant)'; };
-            container.onclick = () => { applySeedColor(seedHex); };
-            
-            return container;
-        }
-
-        function initStaticPresets() {
-            const presets = ['#D0BCFF', '#93000A', '#FFA500', '#006e1c', '#0061a4', '#555555'];
-            const container = document.getElementById('static-presets');
-            if(container) {
-                container.innerHTML = '';
-                presets.forEach(hex => container.appendChild(renderThemePreset(hex)));
-            }
-        }
-
-        async function extractColorsFromImage(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                const img = new Image();
-                img.src = e.target.result;
-                await new Promise(r => img.onload = r);
-
-                // Downscale for performance (max 128x128 is usually enough for color extraction)
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                const scale = Math.min(1, 128 / Math.max(img.width, img.height));
-                canvas.width = img.width * scale;
-                canvas.height = img.height * scale;
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const pixels = imageData.data;
-                const argbPixels = [];
-                
-                for (let i = 0; i < pixels.length; i += 4) {
-                    const r = pixels[i];
-                    const g = pixels[i + 1];
-                    const b = pixels[i + 2];
-                    const a = pixels[i + 3];
-                    if (a < 255) continue; // Skip transparent
-                    // ARGB int format
-                    const argb = (a << 24) | (r << 16) | (g << 8) | b;
-                    argbPixels.push(argb);
-                }
-
-                if (typeof MaterialColorUtilities !== 'undefined' && MaterialColorUtilities.QuantizerCelebi) {
-                    // Use official extraction
-                    const result = MaterialColorUtilities.QuantizerCelebi.quantize(argbPixels, 128);
-                    const ranked = MaterialColorUtilities.Score.score(result);
-                    
-                    // Clear previous
-                    const container = document.getElementById('extracted-palette');
-                    container.innerHTML = '';
-                    
-                    // Take top 4 or all if fewer
-                    const topColors = ranked.slice(0, 4);
-                    if (topColors.length === 0) {
-                        // Fallback to naive average if algo fails
-                        fallbackExtraction(pixels);
-                        return;
-                    }
-
-                    topColors.forEach(argb => {
-                        const hex = hexFromArgb(argb);
-                        container.appendChild(renderThemePreset(hex));
-                    });
-                    
-                    // Auto-select first
-                    applySeedColor(hexFromArgb(topColors[0]));
-                } else {
-                    // Library missing? Fallback
-                    fallbackExtraction(pixels);
-                }
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function fallbackExtraction(data) {
-            let r = 0, g = 0, b = 0;
-            const step = Math.max(1, Math.floor(data.length / 4000));
-            let count = 0;
-            for (let i = 0; i < data.length; i += step * 4) { 
-                r += data[i]; g += data[i+1]; b += data[i+2];
-                count++;
-            }
-            const avgHex = rgbToHex(Math.round(r/count), Math.round(g/count), Math.round(b/count));
-            const container = document.getElementById('extracted-palette');
-            container.innerHTML = '';
-            container.appendChild(renderThemePreset(avgHex));
-            applySeedColor(avgHex);
-        }
-
-        function addManualColor() {
-            const input = document.getElementById('manual-color-input');
-            let val = input.value.trim();
-            if (!val.startsWith('#')) val = '#' + val;
-            if (/^#[0-9A-F]{6}$/i.test(val)) {
-                // Clear placeholder text if it exists
-                const container = document.getElementById('extracted-palette');
-                if (container.querySelector('span')) container.innerHTML = '';
-                
-                container.appendChild(renderThemePreset(val));
-                applySeedColor(val);
-                input.value = '';
-            } else {
-                alert("Invalid Hex Code");
-            }
-        }
-
-        function addColorChip(hex) {
-            // Deprecated, replaced by renderThemePreset but kept if needed for fallback logic not using renderThemePreset
-            // For now we remove it to keep code clean as we replaced calls
-        }
-
-        function rgbToHex(r, g, b) {
-            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
-        }
-
-        function hexFromArgb(argb) {
-            const r = (argb >> 16) & 255;
-            const g = (argb >> 8) & 255;
-            const b = argb & 255;
-            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
-        }
-
-        function getLuminance(hex) {
-            const rgb = hexToRgb(hex);
-            const rs = rgb.r / 255;
-            const gs = rgb.g / 255;
-            const bs = rgb.b / 255;
-            const r = rs <= 0.03928 ? rs / 12.92 : Math.pow((rs + 0.055) / 1.055, 2.4);
-            const g = gs <= 0.03928 ? gs / 12.92 : Math.pow((gs + 0.055) / 1.055, 2.4);
-            const b = bs <= 0.03928 ? bs / 12.92 : Math.pow((bs + 0.055) / 1.055, 2.4);
-            return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        }
-
-        function generateM3Palette(seedHex) {
-            if (typeof MaterialColorUtilities === 'undefined') {
-                // Fallback if library fails to load
-                const rgb = hexToRgb(seedHex);
-                const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
-                const lum = getLuminance(seedHex);
-                const onPrimary = lum > 0.4 ? '#000000' : '#ffffff';
-                return {
-                    primary: seedHex,
-                    onPrimary: onPrimary,
-                    primaryContainer: hslToHex(hsl.h, hsl.s, Math.min(0.9, hsl.l + 0.3)),
-                    onPrimaryContainer: hslToHex(hsl.h, hsl.s, Math.max(0.1, hsl.l - 0.4)),
-                    secondary: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, hsl.l),
-                    onSecondary: onPrimary,
-                    secondaryContainer: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, Math.min(0.9, hsl.l + 0.3)),
-                    onSecondaryContainer: hslToHex((hsl.h + 0.1) % 1, hsl.s * 0.5, Math.max(0.1, hsl.l - 0.4)),
-                    tertiary: hslToHex((hsl.h + 0.5) % 1, hsl.s, hsl.l),
-                    onTertiary: onPrimary,
-                    tertiaryContainer: hslToHex((hsl.h + 0.5) % 1, hsl.s, Math.min(0.9, hsl.l + 0.3)),
-                    onTertiaryContainer: hslToHex((hsl.h + 0.5) % 1, hsl.s, Math.max(0.1, hsl.l - 0.4)),
-                    error: '#ba1a1a',
-                    onError: '#ffffff',
-                    errorContainer: '#ffdad6',
-                    onErrorContainer: '#410002',
-                    outline: '#79747e',
-                    outlineVariant: '#c4c7c5',
-                    surface: '#141218',
-                    onSurface: '#e6e1e5',
-                    surfaceVariant: '#49454f',
-                    onSurfaceVariant: '#cac4d0'
-                };
-            }
-
-            const argb = MaterialColorUtilities.argbFromHex(seedHex);
-            const isDark = !document.documentElement.classList.contains('light-mode');
-            const theme = MaterialColorUtilities.themeFromSourceColor(argb);
-            const scheme = isDark ? theme.schemes.dark : theme.schemes.light;
-
-            return {
-                primary: hexFromArgb(scheme.primary),
-                onPrimary: hexFromArgb(scheme.onPrimary),
-                primaryContainer: hexFromArgb(scheme.primaryContainer),
-                onPrimaryContainer: hexFromArgb(scheme.onPrimaryContainer),
-                secondary: hexFromArgb(scheme.secondary),
-                onSecondary: hexFromArgb(scheme.onSecondary),
-                secondaryContainer: hexFromArgb(scheme.secondaryContainer),
-                onSecondaryContainer: hexFromArgb(scheme.onSecondaryContainer),
-                tertiary: hexFromArgb(scheme.tertiary),
-                onTertiary: hexFromArgb(scheme.onTertiary),
-                tertiaryContainer: hexFromArgb(scheme.tertiaryContainer),
-                onTertiaryContainer: hexFromArgb(scheme.onTertiaryContainer),
-                error: hexFromArgb(scheme.error),
-                onError: hexFromArgb(scheme.onError),
-                errorContainer: hexFromArgb(scheme.errorContainer),
-                onErrorContainer: hexFromArgb(scheme.onErrorContainer),
-                outline: hexFromArgb(scheme.outline),
-                outlineVariant: hexFromArgb(scheme.outlineVariant),
-                surface: hexFromArgb(scheme.surface),
-                onSurface: hexFromArgb(scheme.onSurface),
-                surfaceVariant: hexFromArgb(scheme.surfaceVariant),
-                onSurfaceVariant: hexFromArgb(scheme.onSurfaceVariant)
-            };
-        }
-
-        function applyThemeColors(colors) {
-            const root = document.documentElement;
-            for (const [key, value] of Object.entries(colors)) {
-                root.style.setProperty('--md-sys-color-' + key.replace(/[A-Z]/g, m => "-" + m.toLowerCase()), value);
-            }
-        }
-
-        async function syncSettings() {
-            const seed = document.getElementById('theme-seed-color').value;
-            const isLight = document.documentElement.classList.contains('light-mode');
-            const isPrivacy = document.body.classList.contains('privacy-mode');
-            const activeFilter = localStorage.getItem('dashboard_filter') || 'all';
-            
-            const settings = {
-                seed,
-                theme: isLight ? 'light' : 'dark',
-                privacy_mode: isPrivacy,
-                dashboard_filter: activeFilter,
-                is_admin: isAdmin,
-                timestamp: Date.now()
-            };
-
-            try {
-                await fetch(API + "/theme", {
-                    method: 'POST',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify(settings)
-                });
-            } catch(e) { console.warn("Failed to sync settings to server", e); }
-        }
-
-        async function saveThemeSettings() {
-            await syncSettings();
-            showSnackbar("Settings synchronized to server");
-        }
-
-        async function uninstallStack() {
-            if (!confirm("⚠️ DANGER: This will permanently remove all containers, volumes, and data. This cannot be undone. Are you absolutely sure?")) return;
-            if (!confirm("LAST WARNING: Final confirmation required to proceed with uninstallation.")) return;
-            
-            showSnackbar("Uninstallation sequence initiated...");
-            try {
-                const res = await fetch(API + "/uninstall", { 
-                    method: 'POST', 
-                    headers: getAuthHeaders() 
-                });
-                const result = await res.json();
-                if (result.success) {
-                    showSnackbar("System removed. Redirecting...");
-                    setTimeout(() => window.location.href = "about:blank", 3000);
-                } else {
-                    throw new Error(result.error || "Uninstall failed");
-                }
-            } catch (e) {
-                showSnackbar("Error during uninstall: " + e.message);
-            }
-        }
-
-        async function loadAllSettings() {
-            try {
-                const res = await fetch(API + "/theme", { headers: getAuthHeaders() });
-                const data = await res.json();
-                
-                // 1. Seed & Colors
-                if (data.seed) {
-                    const picker = document.getElementById('theme-seed-color');
-                    if (picker) picker.value = data.seed;
-                    applyThemeColors(data.colors || generateM3Palette(data.seed));
-                }
-                
-                // 2. Theme (Light/Dark)
-                if (data.theme) {
-                    const isLight = data.theme === 'light';
-                    document.documentElement.classList.toggle('light-mode', isLight);
-                    localStorage.setItem('theme', data.theme);
-                    updateThemeIcon();
-                }
-                
-                // 3. Privacy Mode
-                if (data.hasOwnProperty('privacy_mode')) {
-                    const toggle = document.getElementById('privacy-switch');
-                    if (toggle) toggle.classList.toggle('active', data.privacy_mode);
-                    document.body.classList.toggle('privacy-mode', data.privacy_mode);
-                    localStorage.setItem('privacy_mode', data.privacy_mode ? 'true' : 'false');
-                    updateProfileDisplay();
-                }
-                
-                // 4. Dashboard Filter
-                if (data.dashboard_filter) {
-                    localStorage.setItem('dashboard_filter', data.dashboard_filter);
-                    filterCategory(data.dashboard_filter);
-                }
-
-                // 5. Admin Mode
-                if (data.hasOwnProperty('is_admin')) {
-                    isAdmin = data.is_admin;
-                    sessionStorage.setItem('is_admin', isAdmin ? 'true' : 'false');
-                    updateAdminUI();
-                }
-            } catch(e) { console.warn("Failed to load settings from server", e); }
-        }
-
-        function hexToRgb(hex) {
-            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-            return result ? {
-                r: parseInt(result[1], 16),
-                g: parseInt(result[2], 16),
-                b: parseInt(result[3], 16)
-            } : { r:0, g:0, b:0 };
-        }
-
-        function rgbToHsl(r, g, b) {
-            r /= 255, g /= 255, b /= 255;
-            const max = Math.max(r, g, b), min = Math.min(r, g, b);
-            let h, s, l = (max + min) / 2;
-            if (max == min) h = s = 0;
-            else {
-                const d = max - min;
-                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-                switch (max) {
-                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                    case g: h = (b - r) / d + 2; break;
-                    case b: h = (r - g) / d + 4; break;
-                }
-                h /= 6;
-            }
-            return { h, s, l };
-        }
-
-        function hslToHex(h, s, l) {
-            let r, g, b;
-            if (s == 0) r = g = b = l;
-            else {
-                const hue2rgb = (p, q, t) => {
-                    if (t < 0) t += 1;
-                    if (t > 1) t -= 1;
-                    if (t < 1/6) return p + (q - p) * 6 * t;
-                    if (t < 1/2) return q;
-                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-                    return p;
-                };
-                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-                const p = 2 * l - q;
-                r = hue2rgb(p, q, h + 1/3);
-                g = hue2rgb(p, q, h);
-                b = hue2rgb(p, q, h - 1/3);
-            }
-            return rgbToHex(Math.round(r * 255), Math.round(g * 255), Math.round(b * 255));
-        }
-
-        // Theme management
-        function toggleTheme() {
-            const isLight = document.documentElement.classList.toggle('light-mode');
-            localStorage.setItem('theme', isLight ? 'light' : 'dark');
-            updateThemeIcon();
-            
-            // Regenerate palette for new mode if seed exists
-            const picker = document.getElementById('theme-seed-color');
-            if (picker && picker.value) {
-                applySeedColor(picker.value);
-            }
-            
-            syncSettings();
-            showSnackbar(\`Switched to \${isLight ? 'Light' : 'Dark'} mode\`);
-        }
-
-        function updateThemeIcon() {
-            const icon = document.getElementById('theme-icon');
-            const isLight = document.documentElement.classList.contains('light-mode');
-            if (icon) icon.textContent = isLight ? 'dark_mode' : 'light_mode';
-        }
-
-        function initTheme() {
-            const savedTheme = localStorage.getItem('theme');
-            const systemPrefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-            
-            if (savedTheme === 'light' || (!savedTheme && systemPrefersLight)) {
-                document.documentElement.classList.add('light-mode');
-            }
-            updateThemeIcon();
-        }
-
-        // Privacy toggle functionality
-        function togglePrivacy() {
-            const toggle = document.getElementById('privacy-switch');
-            const body = document.body;
-            const isPrivate = toggle.classList.toggle('active');
-            if (isPrivate) {
-                body.classList.add('privacy-mode');
-                localStorage.setItem('privacy_mode', 'true');
-            } else {
-                body.classList.remove('privacy-mode');
-                localStorage.setItem('privacy_mode', 'false');
-            }
-            updateProfileDisplay();
-            syncSettings();
-        }
-        
-        function initPrivacyMode() {
-            const savedMode = localStorage.getItem('privacy_mode');
-            if (savedMode === 'true') {
-                const toggle = document.getElementById('privacy-switch');
-                if (toggle) toggle.classList.add('active');
-                document.body.classList.add('privacy-mode');
-            }
-            updateProfileDisplay();
-        }
-
-        function dismissMacAdvisory() {
-            document.getElementById('mac-advisory').style.display = 'none';
-            localStorage.setItem('mac_advisory_dismissed', 'true');
-        }
-
-        function initMacAdvisory() {
-            if (localStorage.getItem('mac_advisory_dismissed') === 'true') {
-                const el = document.getElementById('mac-advisory');
-                if (el) el.style.display = 'none';
-            }
-        }
-        
-        async function fetchCertStatus() {
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
-                const res = await fetch(API + "/certificate-status", { signal: controller.signal });
-                clearTimeout(timeoutId);
-                
-                if (res.status === 401) throw new Error("401");
-                const data = await res.json();
-                
-                const loadingBox = document.getElementById('cert-loading');
-                if (loadingBox) loadingBox.style.display = 'none';
-
-                document.getElementById('cert-type').textContent = data.type || "--";
-                document.getElementById('cert-subject').textContent = data.subject || "--";
-                document.getElementById('cert-issuer').textContent = data.issuer || "--";
-                
-                // Make the year slightly bolder
-                const expiresEl = document.getElementById('cert-to');
-                if (data.expires && data.expires !== "--") {
-                    const parts = data.expires.split(' ');
-                    if (parts.length > 0) {
-                        const lastPart = parts[parts.length - 1];
-                        const rest = data.expires.substring(0, data.expires.lastIndexOf(lastPart));
-                        expiresEl.innerHTML = rest + '<span style="font-weight: 600;">' + lastPart + '</span>';
-                    } else {
-                        expiresEl.textContent = data.expires;
-                    }
-                } else {
-                    expiresEl.textContent = "--";
-                }
-                
-                const badge = document.getElementById('cert-status-badge');
-                const isTrusted = data.status && data.status.includes("Trusted");
-                const isSelfSigned = data.status && data.status.includes("Self-Signed");
-                const domain = isTrusted ? data.subject : "";
-
-                if (isTrusted) {
-                    badge.className = "chip vpn"; // Use primary-container color
-                    badge.innerHTML = '<span class="material-symbols-rounded" style="font-size:16px;">verified</span> Trusted';
-                    badge.dataset.tooltip = "✓ Globally Trusted: Valid certificate from Let's Encrypt.";
-                } else if (isSelfSigned) {
-                    badge.className = "chip admin"; // Use secondary-container color
-                    badge.innerHTML = '<span class="material-symbols-rounded" style="font-size:16px;">warning</span> Self-Signed';
-                    badge.dataset.tooltip = "⚠ Self-Signed (Local): Devices will show security warnings. deSEC configuration recommended.";
-                } else {
-                    badge.className = "chip tertiary";
-                    badge.textContent = data.status || "Unknown";
-                    badge.dataset.tooltip = "Status unknown or certificate missing.";
-                }
-                
-                const failInfo = document.getElementById('ssl-failure-info');
-                const trustedInfo = document.getElementById('dns-setup-trusted');
-                const untrustedInfo = document.getElementById('dns-setup-untrusted');
-                const retryBtn = document.getElementById('ssl-retry-btn');
-
-                if (data.error) {
-                    failInfo.style.display = 'block';
-                    document.getElementById('ssl-failure-reason').textContent = data.error;
-                    if (trustedInfo) trustedInfo.style.display = 'none';
-                    if (untrustedInfo) untrustedInfo.style.display = 'block';
-                    if (retryBtn) retryBtn.style.display = 'inline-flex';
-                    
-                    // Handle authentication or rate limit errors
-                    if (data.status === "Auth Error") {
-                        showSnackbar("SSL Authentication Error: Please check your deSEC credentials.");
-                    } else if (data.status === "Rate Limited" || data.status === "Issuance Failed") {
-                        showSnackbar("SSL Issue: " + data.error);
-                    }
-                } else {
-                    failInfo.style.display = 'none';
-                    if (isTrusted) {
-                        if (trustedInfo) trustedInfo.style.display = 'block';
-                        if (untrustedInfo) untrustedInfo.style.display = 'none';
-                        if (retryBtn) retryBtn.style.display = 'none';
-                    } else {
-                        if (trustedInfo) trustedInfo.style.display = 'none';
-                        if (untrustedInfo) untrustedInfo.style.display = 'block';
-                        if (retryBtn) retryBtn.style.display = 'inline-flex';
-                    }
-                }
-            } catch(e) { 
-                console.error('Cert status fetch error:', e);
-            } finally {
-                const loadingBox = document.getElementById('cert-loading');
-                if (loadingBox) loadingBox.style.display = 'none';
-            }
-        }
-
-        async function requestSslCheck() {
-            const btn = document.getElementById('ssl-retry-btn');
-            btn.disabled = true;
-            btn.style.opacity = '0.5';
-            try {
-                const res = await fetch(API + "/request-ssl-check", { headers: getAuthHeaders() });
-                const data = await res.json();
-                if (data.success) {
-                    alert("SSL Check triggered in background. This may take 2-3 minutes. Refresh the dashboard later.");
-                } else {
-                    alert("Failed to trigger SSL check: " + (data.error || "Unknown error"));
-                }
-            } catch (e) {
-                alert("Network error while triggering SSL check.");
-            }
-            setTimeout(() => { btn.disabled = false; btn.style.opacity = '1'; }, 10000);
-        }
-
-        async function checkUpdates() {
-            showSnackbar("Update check initiated... checking images and sources.");
-            try {
-                const res = await fetch(API + "/check-updates", { headers: getAuthHeaders() });
-                const data = await res.json();
-                if (data.success) {
-                    showSnackbar("Update check is running in background. Results will appear in logs and banners shortly.");
-                    // Refresh source updates after a short delay
-                    setTimeout(fetchUpdates, 5000);
-                } else {
-                    throw new Error(data.error);
-                }
-            } catch(e) {
-                showSnackbar("Failed to initiate update check: " + e.message);
-            }
-        }
-
-        async function restartStack() {
-            if (!confirm("Are you sure you want to restart the entire stack? The dashboard and all services will be unreachable for approximately 30 seconds.")) return;
-            
-            try {
-                const res = await fetch(API + "/restart-stack", {
-                    method: 'POST',
-                    headers: getAuthHeaders()
-                });
-                
-                const data = await res.json();
-                if (data.success) {
-                    // Show a persistent overlay or alert
-                    document.body.innerHTML = \`
-                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:var(--md-sys-color-surface); color:var(--md-sys-color-on-surface); font-family:sans-serif; text-align:center; padding:24px;">
-                            <span class="material-symbols-rounded" style="font-size:64px; color:var(--md-sys-color-primary); margin-bottom:24px;">restart_alt</span>
-                            <h1>Restarting Stack...</h1>
-                            <p style="margin-top:16px; opacity:0.8;">The management interface is rebooting. This page will automatically refresh when the services are back online.</p>
-                            <div style="margin-top:32px; width:48px; height:48px; border:4px solid var(--md-sys-color-surface-container-highest); border-top:4px solid var(--md-sys-color-primary); border-radius:50%; animation: spin 1s linear infinite;"></div>
-                            <style>
-                                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-                            </style>
-                        </div>
-                    \`;
-                    
-                    // Poll for availability
-                    let attempts = 0;
-                    const checkAvailability = setInterval(async () => {
-                        attempts++;
-                        try {
-                            const ping = await fetch(window.location.href, { mode: 'no-cors' });
-                            clearInterval(checkAvailability);
-                            window.location.reload();
-                        } catch (e) {
-                            if (attempts > 60) {
-                                clearInterval(checkAvailability);
-                                alert("Restart is taking longer than expected. Please refresh the page manually.");
-                            }
-                        }
-                    }, 2000);
-                } else {
-                    throw new Error(data.error || "Unknown error");
-                }
-            } catch (e) {
-                alert("Failed to initiate restart: " + e.message);
-            }
-        }
-        
-        async function fetchSystemHealth() {
-            try {
-                const res = await fetch(API + "/system-health", { headers: getAuthHeaders() });
-                if (res.status === 401) throw new Error("401");
-                const data = await res.json();
-                
-                const cpu = Math.round(data.cpu_percent || 0);
-                const ramUsed = Math.round(data.ram_used || 0);
-                const ramTotal = Math.round(data.ram_total || 0);
-                const ramPct = Math.round((ramUsed / ramTotal) * 100);
-
-                const sysCpu = document.getElementById('sys-cpu');
-                if(sysCpu) sysCpu.textContent = cpu + "%";
-                const sysCpuFill = document.getElementById('sys-cpu-fill');
-                if(sysCpuFill) sysCpuFill.style.width = cpu + "%";
-                
-                const sysRam = document.getElementById('sys-ram');
-                if(sysRam) sysRam.textContent = ramUsed + " MB / " + ramTotal + " MB";
-                const sysRamFill = document.getElementById('sys-ram-fill');
-                if(sysRamFill) sysRamFill.style.width = ramPct + "%";
-                
-                const sysProj = document.getElementById('sys-project-size');
-                if(sysProj) sysProj.textContent = (data.project_size || 0).toFixed(1) + " MB";
-                
-                const uptime = data.uptime || 0;
-                const d = Math.floor(uptime / 86400);
-                const h = Math.floor((uptime % 86400) / 3600);
-                const m = Math.floor((uptime % 3600) / 60);
-                const sysUp = document.getElementById('sys-uptime');
-                if(sysUp) sysUp.textContent = d + "d " + h + "h " + m + "m";
-
-                const driveStatus = document.getElementById('sys-drive-status');
-                const drivePct = document.getElementById('sys-drive-pct');
-                const driveContainer = document.getElementById('drive-health-container');
-                const diskPercent = document.getElementById('sys-disk-percent');
-                
-                if(driveStatus) driveStatus.textContent = data.drive_status || "Unknown";
-                if(drivePct) drivePct.textContent = (data.drive_health_pct || 0) + "% Health";
-                if(diskPercent) diskPercent.textContent = (data.disk_percent || 0).toFixed(1) + "% used";
-
-                if (driveStatus) {
-                    if (data.drive_status === "Action Required") {
-                        driveStatus.style.color = "var(--md-sys-color-error)";
-                    } else if (data.drive_status && data.drive_status.includes("Warning")) {
-                        driveStatus.style.color = "var(--md-sys-color-warning)";
-                    } else {
-                        driveStatus.style.color = "var(--md-sys-color-success)";
-                    }
-                }
-
-                if (driveContainer) {
-                    if (data.smart_alerts && data.smart_alerts.length > 0) {
-                        driveContainer.dataset.tooltip = "SMART Alerts:\n" + data.smart_alerts.join("\n");
-                    } else {
-                        driveContainer.dataset.tooltip = "Drive is reporting healthy SMART status.";
-                    }
-                }
-
-            } catch(e) { console.error("Health fetch error:", e); }
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            // Load deSEC config if available
-            fetch(API + "/status").then(r => r.json()).then(data => {
-                if (data.gluetun && data.gluetun.desec_domain) {
-                    document.getElementById('desec-domain-input').placeholder = data.gluetun.desec_domain;
-                }
-            }).catch(() => {});
-
-            // Tooltip Initialization
-            const tooltipBox = document.createElement('div');
-            tooltipBox.className = 'tooltip-box';
-            document.body.appendChild(tooltipBox);
-            
-            let tooltipTimeout = null;
-
-            document.addEventListener('mouseover', (e) => {
-                const target = e.target.closest('[data-tooltip]');
-                if (!target) return;
-
-                if (tooltipTimeout) clearTimeout(tooltipTimeout);
-                
-                tooltipTimeout = setTimeout(() => {
-                    tooltipBox.textContent = target.dataset.tooltip;
-                    tooltipBox.style.display = 'block';
-                    // Trigger reflow
-                    tooltipBox.offsetHeight;
-                    tooltipBox.classList.add('visible');
-
-                    const rect = target.getBoundingClientRect();
-                    const boxRect = tooltipBox.getBoundingClientRect();
-                    
-                    let top = rect.top - boxRect.height - 12;
-                    let left = rect.left + (rect.width / 2) - (boxRect.width / 2);
-
-                    // Edge collision detection (with 12px safety margin)
-                    if (top < 12) top = rect.bottom + 12;
-                    if (left < 12) left = 12;
-                    if (left + boxRect.width > window.innerWidth - 12) {
-                        left = window.innerWidth - boxRect.width - 12;
-                    }
-                    
-                    // Final safety: ensure it doesn't go off bottom
-                    if (top + boxRect.height > window.innerHeight - 12) {
-                        top = window.innerHeight - boxRect.height - 12;
-                    }
-
-                    tooltipBox.style.top = top + 'px';
-                    tooltipBox.style.left = left + 'px';
-                }, 150); 
-            });
-
-            document.addEventListener('mouseout', (e) => {
-                if (e.target.closest('[data-tooltip]')) {
-                    if (tooltipTimeout) clearTimeout(tooltipTimeout);
-                    tooltipBox.classList.remove('visible');
-                    // Hide after transition
-                    setTimeout(() => {
-                        if (!tooltipBox.classList.contains('visible')) {
-                            tooltipBox.style.display = 'none';
-                        }
-                    }, 150);
-                }
-            });
-
-            // Pre-populate Odido API key from deployment
-            if (DEFAULT_ODIDO_API_KEY && !sessionStorage.getItem('odido_api_key')) {
-                sessionStorage.setItem('odido_api_key', DEFAULT_ODIDO_API_KEY);
-                odidoApiKey = DEFAULT_ODIDO_API_KEY;
-            }
-            // Pre-populate the API key input field so users can see their dashboard API key
-            const apiKeyInput = document.getElementById('odido-api-key');
-            if (apiKeyInput && odidoApiKey) {
-                apiKeyInput.value = odidoApiKey;
-            }
-            
-            // Restore filter and check HTTPS
-            const savedFilter = localStorage.getItem('dashboard_filter') || 'all';
-            filterCategory(savedFilter);
-            if (window.location.protocol === 'https:') {
-                const badge = document.getElementById('https-badge');
-                if (badge) badge.style.display = 'inline-flex';
-            }
-
-            initPrivacyMode();
-            initTheme();
-            initStaticPresets();
-            fetchContainerIds();
-            updateAdminUI();
-            fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates(); fetchMetrics(); loadAllSettings(); fetchSystemHealth();
-            setInterval(fetchStatus, 15000);
-            setInterval(fetchSystemHealth, 15000);
-            setInterval(fetchMetrics, 30000);
-            setInterval(fetchUpdates, 300000); // Check for source updates every 5 mins
-            setInterval(fetchOdidoStatus, 60000);  // Reduced polling frequency to respect Odido API
-            setInterval(fetchContainerIds, 60000);
-        });
-    </script>
-</body>
-</html>
-EOF
 
 # --- SECTION 15: BACKGROUND DAEMONS & PROACTIVE MONITORING ---
 # Initialize automated background tasks for SSL renewal and Dynamic DNS updates.

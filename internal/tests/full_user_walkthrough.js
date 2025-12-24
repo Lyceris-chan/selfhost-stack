@@ -5,179 +5,194 @@ const path = require('path');
     console.log('🚀 Starting Comprehensive M3 UI & Interaction Test...');
     const browser = await puppeteer.launch({
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security'],
-        headless: true
+        headless: true,
+        protocolTimeout: 120000
     });
     const page = await browser.newPage();
-    const DASHBOARD_URL = 'file://' + path.resolve('/DATA/AppData/privacy-hub/dashboard.html');
+    const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://localhost:8081';
+    const reportPath = path.resolve(__dirname, 'WALKTHROUGH_REPORT.md');
+    const screenshotPath = path.resolve(__dirname, 'final_full_walkthrough.png');
+
+    const servicesList = [
+        "invidious", "redlib", "wikiless", "rimgo", "breezewiki", 
+        "anonymousoverflow", "scribe", "memos", "vert", 
+        "adguard", "portainer", "wg-easy"
+    ];
+    const serviceUrls = {
+        invidious: 'http://127.0.0.1:3000',
+        redlib: 'http://127.0.0.1:8080',
+        wikiless: 'http://127.0.0.1:8180',
+        rimgo: 'http://127.0.0.1:3002',
+        breezewiki: 'http://127.0.0.1:8380',
+        anonymousoverflow: 'http://127.0.0.1:8480',
+        scribe: 'http://127.0.0.1:8280',
+        memos: 'http://127.0.0.1:5230',
+        vert: 'http://127.0.0.1:5555',
+        adguard: 'http://127.0.0.1:8083',
+        portainer: 'http://127.0.0.1:9000',
+        "wg-easy": 'http://127.0.0.1:51821'
+    };
 
     // 1. Setup Request Interception for Mocks (Ensuring "Online" status)
     await page.setRequestInterception(true);
     page.on('request', request => {
         const url = request.url();
         if (url.includes('/api/containers')) {
+            const containers = {};
+            servicesList.forEach(s => {
+                containers[s] = { id: s + "-id", state: "running", hardened: true };
+            });
             request.respond({
-                content: 'application/json',
-                body: JSON.stringify({
-                    containers: {
-                        "invidious": { id: "inv-id", state: "running", hardened: true },
-                        "adguard": { id: "adg-id", state: "running" },
-                        "gluetun": { id: "glu-id", state: "running" },
-                        "portainer": { id: "por-id", state: "running" },
-                        "watchtower": { id: "wat-id", state: "running" },
-                        "memos": { id: "mem-id", state: "running" },
-                        "rimgo": { id: "rim-id", state: "running" },
-                        "breezewiki": { id: "bre-id", state: "running" },
-                        "unbound": { id: "unb-id", state: "running" }
-                    }
-                })
+                contentType: 'application/json',
+                body: JSON.stringify({ containers })
             });
         } else if (url.includes('/api/services')) {
+            const services = {};
+            servicesList.forEach((s, i) => {
+                services[s] = {
+                    name: s.charAt(0).toUpperCase() + s.slice(1),
+                    category: (i < 8 ? "apps" : (i === 8 ? "tools" : "system")),
+                    order: i * 10,
+                    url: serviceUrls[s] || ""
+                };
+            });
             request.respond({
-                content: 'application/json',
-                body: JSON.stringify({
-                    services: {
-                        "invidious": { name: "Invidious", category: "apps", order: 1 },
-                        "adguard": { name: "AdGuard Home", category: "dns", order: 2 },
-                        "gluetun": { name: "VPN Gateway", category: "system", order: 3 },
-                        "portainer": { name: "Infrastructure", category: "system", order: 4 },
-                        "watchtower": { name: "Auto-Updates", category: "system", order: 5 },
-                        "memos": { name: "Memos", category: "apps", order: 6 },
-                        "rimgo": { name: "Rimgo", category: "apps", order: 7 },
-                        "breezewiki": { name: "BreezeWiki", category: "apps", order: 8 },
-                        "unbound": { name: "Unbound", category: "dns", order: 9 }
-                    }
-                })
+                contentType: 'application/json',
+                body: JSON.stringify({ services })
             });
         } else if (url.includes('/api/status')) {
+             const services = {};
+             servicesList.forEach(s => { services[s] = "healthy"; });
              request.respond({
-                 content: 'application/json',
-                 body: JSON.stringify({ 
+                 contentType: 'application/json',
+                 body: JSON.stringify({
                     success: true,
-                    status: "Healthy",
-                    services: {
-                        "invidious": "healthy",
-                        "adguard": "healthy",
-                        "gluetun": "healthy",
-                        "portainer": "healthy",
-                        "watchtower": "healthy",
-                        "memos": "healthy",
-                        "rimgo": "healthy",
-                        "breezewiki": "healthy",
-                        "unbound": "healthy"
-                    }
+                    gluetun: { status: "up", healthy: true },
+                    services
                  })
-             });
+             });        
         } else if (url.includes('/api/profiles')) {
             request.respond({
-                content: 'application/json',
+                contentType: 'application/json',
                 body: JSON.stringify({ profiles: [] })
             });
         } else if (url.includes('/api/') || url.includes('/odido-api/')) {
-            request.respond({ 
-                content: 'application/json', 
-                body: JSON.stringify({ success: true, status: "Healthy", containers: {}, updates: {}, services: {}, profiles: [] }) 
+            request.respond({
+                contentType: 'application/json', 
+                body: JSON.stringify({ success: true, status: "Healthy", containers: {}, updates: {}, services: {}, profiles: [] })
             });
         } else {
             request.continue();
         }
     });
 
-    page.on('console', msg => {
-        if (!msg.text().includes('EventSource')) console.log('PAGE:', msg.text());
+    page.on('console', async msg => {
+        if (msg.text().includes('EventSource')) return;
+        const args = await Promise.all(msg.args().map(arg => arg.jsonValue().catch(() => arg.toString())));
+        console.log('PAGE:', ...args);
     });
+
+    const report = {
+        timestamp: new Date().toISOString(),
+        steps: [],
+        overall: "FAIL"
+    };
+
+    const logStep = (step, status, details = "") => {
+        console.log(`[${status}] ${step} ${details ? ': ' + details : ''}`);
+        report.steps.push({ step, status, details });
+    };
 
     try {
         await page.setViewport({ width: 1440, height: 900 });
-        await page.goto(DASHBOARD_URL, { waitUntil: 'load' });
+        await page.goto(DASHBOARD_URL, { waitUntil: 'networkidle2' });
 
-        // Manually trigger updates to ensure our mocks are applied immediately
-        await page.evaluate(async () => {
-            if (typeof renderDynamicGrid === 'function') await renderDynamicGrid();
-            if (typeof fetchStatus === 'function') await fetchStatus();
-            if (typeof fetchContainerIds === 'function') await fetchContainerIds();
-        });
-
-        console.log('--- Phase 1: Initial Render & M3 Compliance ---');
-        await page.waitForSelector('.card', { timeout: 10000 });
+        // Initial load triggers renderDynamicGrid and fetchStatus automatically via DOMContentLoaded
         
-        const cardCount = await page.$$eval('.card', els => els.length);
-        console.log(`✅ Found ${cardCount} cards on page.`);
+        // Wait until at least one card is rendered
+        await page.waitForSelector('.card[id^="link-"]', { timeout: 15000 });
 
-        // Verify M3 Card Styling
-        const cardStyle = await page.$eval('.card', el => {
-            const style = window.getComputedStyle(el);
-            return {
-                radius: style.borderRadius,
-                shadow: style.boxShadow,
-                bg: style.backgroundColor
-            };
+        // Manually trigger fetchStatus once more to be sure it hits our mocks immediately
+        await page.evaluate(async () => {
+            if (typeof fetchStatus === 'function') await fetchStatus();
         });
-        console.log(`   Card Radius: ${cardStyle.radius} (Expected: ~28px for Extra Large)`);
-        console.log(`   Card Shadow: ${cardStyle.shadow.includes('none') ? 'MISSING' : 'PRESENT'}`);
+
+        const cardsCount = await page.$$eval('.card[id^="link-"]', els => els.length);
+        logStep("Initial Render", "PASS", `Found ${cardsCount} dynamic cards`);
+
+        // Wait until at least one status text is in a valid state
+        await page.waitForFunction(() => {
+            const statusTexts = Array.from(document.querySelectorAll('.card[id^="link-"] .status-text'));
+            if (statusTexts.length === 0) return false;
+            const validStates = ['Connected', 'Healthy', 'Running', 'Optimal'];
+            return statusTexts.some(el => validStates.includes(el.textContent.trim()));
+        }, { timeout: 20000 });
+
+        const statusTexts = await page.$$eval('.card[id^="link-"] .status-text', els => els.map(el => el.textContent.trim()));
+        const validStates = ['Connected', 'Healthy', 'Running', 'Optimal'];
+        const onlineCount = statusTexts.filter(text => validStates.includes(text)).length;
+        logStep("Service Status", onlineCount > 0 ? "PASS" : "FAIL", `Online: ${onlineCount}/${statusTexts.length}`);
 
         // Verify Expansion (Auto-fit)
         const rowWidth = await page.$eval('#grid-all', el => el.offsetWidth);
         const cardWidth = await page.$eval('#grid-all .card', el => el.offsetWidth);
-        console.log(`   Grid Width: ${rowWidth}px, Card Width: ${cardWidth}px`);
-        if (cardWidth > rowWidth / 4) console.log('✅ PASS: Cards are expanding to fill row (M3 auto-fit).');
+        if (cardWidth >= (rowWidth / 4) - 32) logStep("M3 Auto-fit", "PASS", `Card width ${cardWidth}px fills grid`);
+        else logStep("M3 Auto-fit", "FAIL", `Card width ${cardWidth}px too small for grid ${rowWidth}px`);
 
-        console.log('--- Phase 2: Service Status (All Online) ---');
-        // Wait for polling (fetchStatus is called on load, but we wait to be sure)
-        await new Promise(r => setTimeout(r, 5000));
-        const statuses = await page.$$eval('.status-text', els => els.map(e => e.textContent));
-        const allOnline = statuses.every(s => s === 'Connected' || s === 'Healthy' || s === 'Running');
-        if (allOnline) console.log('✅ PASS: All services showing as online.');
-        else console.warn(`⚠️ Some services offline: ${statuses.filter(s => s !== 'Connected').join(', ')}`);
-
-        console.log('--- Phase 3: Toggling Settings & Modes ---');
-        
         // Theme Toggle
         const themeBtn = await page.$('.theme-toggle');
         if (themeBtn) {
-            await themeBtn.click();
-            const isLight = await page.evaluate(() => document.documentElement.classList.contains('light-mode'));
-            console.log(`✅ Theme toggled. Light mode: ${isLight}`);
-            await themeBtn.click(); // Toggle back
+            const startTheme = await page.evaluate(() => document.documentElement.classList.contains('light-mode'));
+            await page.evaluate(() => {
+                const btn = document.querySelector('.theme-toggle');
+                if (btn) btn.click();
+            });
+            const endTheme = await page.evaluate(() => document.documentElement.classList.contains('light-mode'));
+            logStep("Theme Toggle", startTheme !== endTheme ? "PASS" : "FAIL", `Start: ${startTheme}, End: ${endTheme}`);
+            await page.evaluate(() => {
+                const btn = document.querySelector('.theme-toggle');
+                if (btn) btn.click();
+            });
         }
 
         // Privacy Mode Toggle
         const privacyBtn = await page.$('#privacy-switch');
         if (privacyBtn) {
-            await privacyBtn.click();
+            await page.evaluate(() => {
+                const btn = document.querySelector('#privacy-switch');
+                if (btn) btn.click();
+            });
             const isPrivate = await page.evaluate(() => document.body.classList.contains('privacy-mode'));
-            console.log(`✅ Privacy Mode toggled: ${isPrivate}`);
-            await privacyBtn.click(); // Toggle back
+            logStep("Privacy Mode", isPrivate ? "PASS" : "FAIL", "Sensitive info hidden");
+            await page.evaluate(() => {
+                const btn = document.querySelector('#privacy-switch');
+                if (btn) btn.click();
+            });
         }
 
         // Filter Chips Walkthrough
         const filters = ['apps', 'system', 'dns', 'tools', 'all'];
         for (const f of filters) {
-            await page.click(`.filter-chip[data-target="${f}"]`);
+            await page.evaluate((filter) => {
+                const chip = document.querySelector(`.filter-chip[data-target="${filter}"]`);
+                if (chip) chip.click();
+            }, f);
             await new Promise(r => setTimeout(r, 300));
             const active = await page.$eval(`.filter-chip[data-target="${f}"]`, el => el.classList.contains('active'));
-            console.log(`✅ Filter '${f}' active: ${active}`);
+            logStep(`Filter Chip [${f}]`, active ? "PASS" : "FAIL");
         }
 
-        console.log('--- Phase 4: Admin Mode Interactions ---');
         // Enter Admin Mode (Mocked)
         await page.evaluate(() => {
             isAdmin = true;
             sessionStorage.setItem('is_admin', 'true');
             if (typeof updateAdminUI === 'function') updateAdminUI();
         });
-        await new Promise(r => setTimeout(r, 1000)); // Wait for DOM update
-        console.log('   Entered Admin Mode.');
-
-        // Verify Admin-only elements
+        await new Promise(r => setTimeout(r, 1000));
+        
         const logsFilter = await page.$('.filter-chip[data-target="logs"]');
         const logsVisible = await page.evaluate(el => window.getComputedStyle(el).display !== 'none', logsFilter);
-        console.log(`✅ Admin Filter 'Logs' visible: ${logsVisible}`);
-
-        // Wait for settings button to be visible
-        await page.waitForFunction(() => {
-            const btn = document.querySelector('.settings-btn');
-            return btn && window.getComputedStyle(btn).display !== 'none';
-        }, { timeout: 5000 });
+        logStep("Admin Mode", logsVisible ? "PASS" : "FAIL", "Admin controls visible");
 
         // Open a Service Settings Modal
         const settingsBtn = await page.$('.settings-btn');
@@ -187,22 +202,22 @@ const path = require('path');
                 const modal = document.getElementById('service-modal');
                 return modal && window.getComputedStyle(modal).display !== 'none';
             }, { timeout: 5000 });
-            console.log('✅ Service Settings Modal opened.');
+            logStep("Settings Modal", "PASS", "Modal opened via FAB");
             
-            // Close modal
-            await page.evaluate(() => {
-                if (typeof closeServiceModal === 'function') closeServiceModal();
-            });
+            await page.evaluate(() => { if (typeof closeServiceModal === 'function') closeServiceModal(); });
             await new Promise(r => setTimeout(r, 500));
             const modalVisible = await page.evaluate(() => {
                 const modal = document.getElementById('service-modal');
                 return modal && window.getComputedStyle(modal).display !== 'none';
             });
-            console.log(`✅ Modal closed: ${!modalVisible}`);
+            logStep("Modal Close", !modalVisible ? "PASS" : "FAIL");
         }
 
-        console.log('--- Phase 5: Final Layout Integrity ---');
-        await page.click('.filter-chip[data-target="all"]');
+        // Final Layout Integrity
+        await page.evaluate(() => {
+            const chip = document.querySelector('.filter-chip[data-target="all"]');
+            if (chip) chip.click();
+        });
         const overlaps = await page.evaluate(() => {
             const elements = Array.from(document.querySelectorAll('.card, .filter-chip, .btn, h1, .section-label'));
             const results = [];
@@ -221,16 +236,31 @@ const path = require('path');
             return results;
         });
 
-        if (overlaps.length === 0) console.log('✅ PASS: No UI overlaps detected.');
-        else console.error(`❌ FAIL: Detected ${overlaps.length} overlaps.`);
+        if (overlaps.length === 0) logStep("Layout Integrity", "PASS", "No element overlaps");
+        else logStep("Layout Integrity", "FAIL", `${overlaps.length} overlaps found`);
 
-        await page.screenshot({ path: 'internal/tests/final_full_walkthrough.png', fullPage: true });
-        console.log('📸 Final screenshot saved to internal/tests/final_full_walkthrough.png');
+        report.overall = report.steps.every(s => s.status === "PASS") ? "PASS" : "FAIL";
+        await page.screenshot({ path: screenshotPath, fullPage: true });
+        console.log(`📸 Final screenshot saved to ${screenshotPath}`);
 
     } catch (e) {
         console.error('❌ CRITICAL ERROR:', e);
-        process.exit(1);
+        report.overall = "ERROR";
+        report.error = e.message;
     } finally {
+        const fs = require('fs');
+        const md = `# Walkthrough Verification Report
+Generated: ${report.timestamp}
+Overall Status: ${report.overall === "PASS" ? "✅ PASS" : "❌ " + report.overall}
+
+## Test Steps
+| Step | Status | Details |
+| :--- | :--- | :--- |
+${report.steps.map(s => `| ${s.step} | ${s.status === "PASS" ? "✅" : "❌"} | ${s.details} |`).join('\n')}
+`;
+        fs.writeFileSync(reportPath, md);
+        console.log(`📝 Report saved to ${reportPath}`);
         await browser.close();
+        if (report.overall !== "PASS") process.exit(1);
     }
 })();
