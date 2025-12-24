@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-
+if [ -z "${WG_CONF:-}" ]; then
+    if [ -f "internal/tests/creds.env" ]; then
+        source internal/tests/creds.env
+    fi
+fi
 
 export WG_CONF_B64=$(echo "$WG_CONF" | base64 -w 0)
 
