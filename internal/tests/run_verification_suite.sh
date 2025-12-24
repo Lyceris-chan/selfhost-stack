@@ -19,6 +19,8 @@ cd "$ROOT_DIR"
 
 python3 generate_dashboard.py > /tmp/dashboard_gen.log 2>&1
 
+bash "$ROOT_DIR/setup_assets.sh"
+
 python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$ROOT_DIR" >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 sleep 1

@@ -293,6 +293,10 @@ cat > "$DASHBOARD_FILE" <<EOF
             cursor: pointer;
             user-select: none;
             transition: all 200ms ease;
+            flex: 1 1 160px;
+            min-width: 140px;
+            justify-content: center;
+            max-width: none;
         }
         .filter-chip.active {
             background: var(--md-sys-color-primary-container) !important;
@@ -307,6 +311,7 @@ cat > "$DASHBOARD_FILE" <<EOF
             }
             .filter-chip {
                 flex: 0 0 auto;
+                min-width: max-content;
             }
         }
         
@@ -509,6 +514,26 @@ cat > "$DASHBOARD_FILE" <<EOF
 
         .header-row > div:first-child {
             flex: 1 1 auto;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            row-gap: 8px;
+        }
+
+        .header-actions > * {
+            flex: 0 0 auto;
+        }
+
+        @media (max-width: 900px) {
+            .header-actions {
+                width: 100%;
+                justify-content: flex-start;
+            }
         }
         
         h1 {
@@ -1257,7 +1282,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                     <h1>Privacy Hub</h1>
                     <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 16px;">
+                <div class="header-actions">
                     <div id="https-badge" class="chip vpn" style="gap:4px; display:none; height: 32px; padding: 0 12px; border-radius: 16px;" data-tooltip="Connection is secured with end-to-end encryption.">
                         <span class="material-symbols-rounded" style="font-size:18px;">lock</span>
                         <span style="font-size: 12px; font-weight: 600;">Secure HTTPS</span>
