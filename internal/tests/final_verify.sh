@@ -2,8 +2,9 @@
 set -euo pipefail
 
 # Credentials
-export REG_USER="laciachan"
-export REG_TOKEN="${REG_TOKEN:-}" # DO NOT HARDCODE SECRETS
+export REG_USER=""
+export REG_TOKEN=""
+export LAN_IP_OVERRIDE=""
 export AUTO_CONFIRM=true
 
 

@@ -19,6 +19,11 @@ set -euo pipefail
 # ==============================================================================
 
 # --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
+REG_USER=""
+REG_TOKEN=""
+LAN_IP_OVERRIDE=""
+WG_CONF_B64=""
+
 usage() {
     echo "Usage: $0 [-c (reset environment)] [-x (cleanup and exit)] [-p (auto-passwords)] [-y (auto-confirm)] [-a (allow Proton VPN)] [-s services)] [-D (dashboard only)] [-h]"
 }
@@ -4395,7 +4400,6 @@ clean_environment() {
                 sudo rm -f "$BASE_DIR/wg-api.sh" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/wg-ip-monitor.log" 2>/dev/null || true
-generate_dashboard
                 sudo rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
                 sudo rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
