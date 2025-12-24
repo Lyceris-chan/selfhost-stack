@@ -79,14 +79,8 @@ fi
 APP_NAME="privacy-hub"
 BASE_DIR="/DATA/AppData/$APP_NAME"
 
-# Docker Auth Config (stored in /tmp to survive -c cleanup)
-DOCKER_AUTH_DIR="/tmp/$APP_NAME-docker-auth"
-# Ensure clean state for auth
-if [ -d "$DOCKER_AUTH_DIR" ]; then
-    sudo rm -rf "$DOCKER_AUTH_DIR"
-fi
-mkdir -p "$DOCKER_AUTH_DIR"
-sudo chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
+# Docker Auth Config (kept inside BASE_DIR for a single-root layout)
+DOCKER_AUTH_DIR="$BASE_DIR/docker-auth"
 
 # Detect Python interpreter
 if command -v python3 >/dev/null 2>&1; then
@@ -100,6 +94,10 @@ fi
 
 # Define consistent docker command using custom config for auth
 DOCKER_CMD="sudo env DOCKER_CONFIG=$DOCKER_AUTH_DIR docker"
+
+# Prepare root directories early so all assets live under a single hierarchy
+mkdir -p "$BASE_DIR" "$DOCKER_AUTH_DIR"
+sudo chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
 
 # Paths
 SRC_DIR="$BASE_DIR/sources"
@@ -147,9 +145,12 @@ WG_API_SCRIPT="$BASE_DIR/wg-api.py"
 CERT_MONITOR_SCRIPT="$BASE_DIR/cert-monitor.sh"
 MIGRATE_SCRIPT="$BASE_DIR/migrate.sh"
 
-# Memos storage
-MEMOS_HOST_DIR="/DATA/AppData/memos"
-mkdir -p "$MEMOS_HOST_DIR"
+# Service storage locations (consistent naming)
+ADGUARD_DATA_DIR="$DATA_DIR/adguard"
+ADGUARD_WORK_DIR="$ADGUARD_DATA_DIR/work"
+PORTAINER_DATA_DIR="$DATA_DIR/portainer"
+ODIDO_DATA_DIR="$DATA_DIR/odido-booster"
+MEMOS_DATA_DIR="$DATA_DIR/memos"
 
 # Logging Functions
 log_info() { 
@@ -4371,7 +4372,7 @@ clean_environment() {
         fi
     fi
 
-    CONFLICT_NETS=$($DOCKER_CMD network ls --format '{{.Name}}' | grep -E '(privacy-hub_frontnet|privacyhub_frontnet|privacy-hub_default|privacyhub_default)' || true)
+    CONFLICT_NETS=$($DOCKER_CMD network ls --format '{{.Name}}' | grep -E '(privacy-hub_frontnet|privacyhub_frontnet|privacy-hub-frontnet|privacyhub-frontnet|privacy-hub_default|privacyhub_default)' || true)
     if [ -n "$CONFLICT_NETS" ]; then
         if ask_confirm "Conflicting networks detected. Should they be cleared?"; then
             for net in $CONFLICT_NETS; do
@@ -4404,7 +4405,7 @@ clean_environment() {
                 sudo rm -rf "$BASE_DIR" 2>/dev/null || true
             fi
             # Remove volumes - try both unprefixed and prefixed names (docker compose uses project prefix)
-            for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
+            for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-booster-data memos-data; do
                 $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
                 $DOCKER_CMD volume rm -f "${APP_NAME}_${vol}" 2>/dev/null || true
             done
@@ -4450,7 +4451,7 @@ clean_environment() {
         for vol in $ALL_VOLUMES; do
             case "$vol" in
                 # Match exact names
-                portainer-data|adguard-work|redis-data|postgresdata|wg-config|companioncache|odido-data)
+                portainer-data|adguard-work|redis-data|postgresdata|wg-config|companioncache|odido-booster-data|memos-data)
                     log_info "  Removing volume: $vol"
                     $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
                     REMOVED_VOLUMES="${REMOVED_VOLUMES}$vol "
@@ -4462,7 +4463,7 @@ clean_environment() {
                     REMOVED_VOLUMES="${REMOVED_VOLUMES}$vol "
                     ;;
                 # Match any volume containing our identifiers
-                *portainer*|*adguard*|*redis*|*postgres*|*wg-config*|*companion*|*odido*)
+                *portainer*|*adguard*|*redis*|*postgres*|*wg-config*|*companion*|*odido*|*memos*)
                     log_info "  Removing volume: $vol"
                     $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
                     REMOVED_VOLUMES="${REMOVED_VOLUMES}$vol "
@@ -4627,8 +4628,9 @@ for img in $CRITICAL_IMAGES; do
     fi
 done
 
-mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR/unbound" "$AGH_CONF_DIR" "$NGINX_CONF_DIR" "$WG_PROFILES_DIR" "$ASSETS_DIR"
-mkdir -p "$DATA_DIR/postgres" "$DATA_DIR/redis" "$DATA_DIR/wireguard" "$DATA_DIR/adguard-work" "$DATA_DIR/portainer" "$DATA_DIR/odido" "$DATA_DIR/companion"
+mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR/unbound" "$AGH_CONF_DIR" "$NGINX_CONF_DIR" "$WG_PROFILES_DIR" "$ASSETS_DIR" "$DOCKER_AUTH_DIR"
+sudo chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
+mkdir -p "$DATA_DIR/postgres" "$DATA_DIR/redis" "$DATA_DIR/wireguard" "$ADGUARD_WORK_DIR" "$PORTAINER_DATA_DIR" "$ODIDO_DATA_DIR" "$DATA_DIR/companion" "$MEMOS_DATA_DIR"
 
 # Dashboard assets are cached locally to prevent external fetches at runtime
 
@@ -5833,7 +5835,7 @@ mkdir -p "$BACKUP_DIR"
     elif [ "$SERVICE" = "adguard" ]; then
         if [ "$ACTION" = "clear-logs" ]; then
             log "Clearing AdGuard Home query logs..."
-            find "$DATA_DIR/adguard-work" -name "querylog.json" -exec truncate -s 0 {} +
+            find "$ADGUARD_WORK_DIR" -name "querylog.json" -exec truncate -s 0 {} +
             log "AdGuard logs cleared."
         fi
     elif [ "$SERVICE" = "memos" ]; then
@@ -7723,6 +7725,7 @@ chmod 666 "$SERVICES_JSON"
 cat > "$COMPOSE_FILE" <<EOF
 networks:
   frontnet:
+    name: ${APP_NAME}-frontnet
     driver: bridge
     ipam:
       config:
@@ -7793,6 +7796,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       dockerfile: $ODIDO_DOCKERFILE
     container_name: odido-booster
     labels:
+      - "casaos.skip=true"
       - "com.centurylinklabs.watchtower.enable=false"
       - "io.dhi.hardened=true"
     networks: [frontnet]
@@ -7803,7 +7807,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - ODIDO_TOKEN=$ODIDO_TOKEN
       - PORT=8080
     volumes:
-      - $DATA_DIR/odido:/data
+      - $ODIDO_DATA_DIR:/data
     restart: unless-stopped
     deploy:
       resources:
@@ -7840,10 +7844,11 @@ cat >> "$COMPOSE_FILE" <<EOF
     image: neosmemo/memos:stable
     container_name: memos
     labels:
+      - "casaos.skip=true"
       - "io.dhi.hardened=true"
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_MEMOS:5230"]
-    volumes: ["$MEMOS_HOST_DIR:/var/opt/memos"]
+    volumes: ["$MEMOS_DATA_DIR:/var/opt/memos"]
     restart: unless-stopped
     deploy:
       resources:
@@ -7929,9 +7934,11 @@ cat >> "$COMPOSE_FILE" <<EOF
     image: portainer/portainer-ce:latest
     container_name: portainer
     command: ["-H", "unix:///var/run/docker.sock", "--admin-password", "$PORTAINER_HASH_COMPOSE", "--no-analytics"]
+    labels:
+      - "casaos.skip=true"
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
-    volumes: ["/var/run/docker.sock:/var/run/docker.sock", "$DATA_DIR/portainer:/data"]
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock", "$PORTAINER_DATA_DIR:/data"]
     # Admin password is saved in protonpass_import.csv for initial setup
     restart: unless-stopped
     deploy:
@@ -7946,6 +7953,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     image: adguard/adguardhome:latest
     container_name: adguard
     labels:
+      - "casaos.skip=true"
       - "io.dhi.hardened=true"
     networks: [frontnet]
     ports:
@@ -7956,7 +7964,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$LAN_IP:443:443/udp"
       - "$LAN_IP:853:853/tcp"
       - "$LAN_IP:853:853/udp"
-    volumes: ["$DATA_DIR/adguard-work:/opt/adguardhome/work", "$AGH_CONF_DIR:/opt/adguardhome/conf"]
+    volumes: ["$ADGUARD_WORK_DIR:/opt/adguardhome/work", "$AGH_CONF_DIR:/opt/adguardhome/conf"]
     depends_on:
       - unbound
     restart: unless-stopped
@@ -7972,6 +7980,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     image: klutchell/unbound:latest
     container_name: unbound
     labels:
+      - "casaos.skip=true"
       - "io.dhi.hardened=true"
     networks:
       frontnet:
@@ -7991,6 +8000,8 @@ cat >> "$COMPOSE_FILE" <<EOF
   wg-easy:
     image: ghcr.io/wg-easy/wg-easy:latest
     container_name: wg-easy
+    labels:
+      - "casaos.skip=true"
     network_mode: "host"
     environment:
       - WG_HOST=$PUBLIC_IP
@@ -8017,6 +8028,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     image: quay.io/redlib/redlib:latest
     container_name: redlib
     labels:
+      - "casaos.skip=true"
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment: {REDLIB_DEFAULT_WIDE: "on", REDLIB_DEFAULT_USE_HLS: "on", REDLIB_DEFAULT_SHOW_NSFW: "on"}
@@ -8045,6 +8057,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       dockerfile: $WIKILESS_DOCKERFILE
     container_name: wikiless
     labels:
+      - "casaos.skip=true"
       - "com.centurylinklabs.watchtower.enable=false"
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
@@ -8080,6 +8093,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       dockerfile: $INVIDIOUS_DOCKERFILE
     container_name: invidious
     labels:
+      - "casaos.skip=true"
       - "com.centurylinklabs.watchtower.enable=false"
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
@@ -8158,6 +8172,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     pull_policy: if_not_present
     container_name: rimgo
     labels:
+      - "casaos.skip=true"
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment: {IMGUR_CLIENT_ID: "546c25a59c58ad7", ADDRESS: "0.0.0.0", PORT: "$PORT_INT_RIMGO"}
@@ -8177,6 +8192,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       dockerfile: Dockerfile.alpine
     container_name: breezewiki
     labels:
+      - "casaos.skip=true"
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment:
@@ -8205,6 +8221,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     image: ghcr.io/httpjamesm/anonymousoverflow:release
     container_name: anonymousoverflow
     labels:
+      - "casaos.skip=true"
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     env_file: ["./env/anonymousoverflow.env"]
@@ -8224,6 +8241,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       context: "$SRC_DIR/scribe"
       dockerfile: $SCRIBE_DOCKERFILE
     labels:
+      - "casaos.skip=true"
       - "com.centurylinklabs.watchtower.enable=false"
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
