@@ -4627,10 +4627,10 @@ for img in $CRITICAL_IMAGES; do
     fi
 done
 
-mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR/unbound" "$AGH_CONF_DIR" "$NGINX_CONF_DIR" "$WG_PROFILES_DIR"
+mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR/unbound" "$AGH_CONF_DIR" "$NGINX_CONF_DIR" "$WG_PROFILES_DIR" "$ASSETS_DIR"
 mkdir -p "$DATA_DIR/postgres" "$DATA_DIR/redis" "$DATA_DIR/wireguard" "$DATA_DIR/adguard-work" "$DATA_DIR/portainer" "$DATA_DIR/odido" "$DATA_DIR/companion"
 
-# setup_assets (Moved to hub-api container for privacy)
+# Dashboard assets are cached locally to prevent external fetches at runtime
 
 # Initialize log files and data files
 touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
@@ -8321,6 +8321,11 @@ x-casaos:
 EOF
 
 # --- SECTION 14: DASHBOARD & UI GENERATION ---
+
+log_info "Preparing dashboard assets and HTML..."
+mkdir -p "$ASSETS_DIR"
+setup_assets
+generate_dashboard
 
 # --- SECTION 15: BACKGROUND DAEMONS & PROACTIVE MONITORING ---
 # Initialize automated background tasks for SSL renewal and Dynamic DNS updates.
