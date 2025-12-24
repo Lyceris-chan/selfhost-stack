@@ -5623,7 +5623,7 @@ fi
 
 mkdir -p "$SRC_DIR/hub-api"
 cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
-FROM python:3.11-alpine
+FROM dhi.io/python:3.11-alpine3.22-dev
 RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git
 RUN pip install --no-cache-dir psutil
 WORKDIR /app
