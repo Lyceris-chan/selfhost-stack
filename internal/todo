@@ -662,7 +662,7 @@ markdown### 🔄 Service Update Strategy
 | Standard Image | DHI Replacement | Key Changes |
 |----------------|-----------------|-------------|
 | `nginx:alpine` | `dhi.io/nginx:1.28-alpine3.21` | • Removed server version headers<br>• Minimal modules only<br>• No default welcome page |
-| `python:alpine` | `dhi.io/python:3.11-alpine3.22-dev` | • Build tools removed post-install<br>• No pip cache<br>• Minimal stdlib |
+| `python:alpine` | `dhi/python:3.11-alpine3.22-dev` | • Build tools removed post-install<br>• No pip cache<br>• Minimal stdlib |
 | `postgres:14` | `dhi.io/postgres:14-alpine3.22` | • Logging to stdout only<br>• No `pg_stat_statements`<br>• Minimal extensions |
 
 **Performance Benefits:**

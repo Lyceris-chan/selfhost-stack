@@ -5598,7 +5598,7 @@ if [ -z "$ODIDO_DOCKERFILE" ]; then
 fi
 if [ -f "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" ]; then
     cat > "$SRC_DIR/odido-bundle-booster/$ODIDO_DOCKERFILE" <<'ODIDOEOF'
-FROM dhi.io/python:3.11-alpine3.22-dev
+FROM dhi/python:3.11-alpine3.22-dev
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -5625,7 +5625,7 @@ fi
 
 mkdir -p "$SRC_DIR/hub-api"
 cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
-FROM dhi.io/python:3.11-alpine3.22-dev
+FROM dhi/python:3.11-alpine3.22-dev
 RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git
 RUN pip install --no-cache-dir psutil
 WORKDIR /app
@@ -6237,7 +6237,7 @@ if [ "$SERVICE" = "odido-booster" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/odido-bundle-booster")
     if [ -n "$D_FILE" ]; then
         cat > "$SRC_ROOT/odido-bundle-booster/$D_FILE" <<'ODIDOEOF'
-FROM dhi.io/python:3.11-alpine3.22-dev
+FROM dhi/python:3.11-alpine3.22-dev
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

@@ -478,7 +478,7 @@ This stack utilizes **Digital Independence (DHI)** images (`dhi.io`) to ensure m
 *   **Performance Optimized**: Pre-configured for low-resource environments.
 *   **Replacement Mapping**:
     *   `dhi.io/nginx` replaces standard `nginx:alpine` (Hardened config, no server headers).
-    *   `dhi.io/python` replaces standard `python:alpine` (Stripped of build-time dependencies).
+    *   `dhi/python` replaces standard `python:alpine` (Stripped of build-time dependencies).
     *   `dhi.io/node` & `dhi.io/bun` (Optimized for JS-heavy frontends).
     *   `dhi.io/redis` & `dhi.io/postgres` (Hardened database engines).
 
