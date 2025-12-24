@@ -477,10 +477,10 @@ This stack utilizes **Digital Independence (DHI)** images (`dhi.io`) to ensure m
 *   **Security Hardened**: Attack surfaces minimized by stripping unnecessary binaries.
 *   **Performance Optimized**: Pre-configured for low-resource environments.
 *   **Replacement Mapping**:
-    *   `dhi.io/nginx` replaces standard `nginx:alpine` (Hardened config, no server headers).
-    *   `dhi/python` replaces standard `python:alpine` (Stripped of build-time dependencies).
-    *   `dhi.io/node` & `dhi.io/bun` (Optimized for JS-heavy frontends).
-    *   `dhi.io/redis` & `dhi.io/postgres` (Hardened database engines).
+    *   [`dhi.io/nginx:1.28-alpine3.21`](https://github.com/docker-hardened-images/catalog/pkgs/container/nginx) replaces standard `nginx:alpine` (Hardened config, no server headers).
+    *   [`dhi.io/python:3.11-alpine3.22-dev`](https://github.com/docker-hardened-images/catalog/pkgs/container/python) replaces standard `python:alpine` (Stripped of build-time dependencies).
+    *   [`dhi.io/node:20-alpine3.22-dev`](https://github.com/docker-hardened-images/catalog/pkgs/container/node) & [`dhi.io/bun:1-alpine3.22-dev`](https://github.com/docker-hardened-images/catalog/pkgs/container/bun) (Optimized for JS-heavy frontends).
+    *   [`dhi.io/redis:7.2-debian13`](https://github.com/docker-hardened-images/catalog/pkgs/container/redis) & [`dhi.io/postgres:14-alpine3.22`](https://github.com/docker-hardened-images/catalog/pkgs/container/postgres) (Hardened database engines).
 
 ### 🛡️ Self-Healing & High Availability
 *   **VPN Monitoring**: Gluetun is continuously monitored. Docker restarts the gateway if the tunnel stalls.
