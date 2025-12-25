@@ -118,6 +118,7 @@ ASSETS_DIR="$BASE_DIR/assets"
 HISTORY_LOG="$BASE_DIR/deployment.log"
 CERT_BACKUP_DIR="/tmp/${APP_NAME}-cert-backup"
 CERT_RESTORE=false
+CERT_PROTECT=false
 
 # Initialize deSEC variables to prevent unbound variable errors
 DESEC_DOMAIN=""
@@ -4401,6 +4402,7 @@ clean_environment() {
     echo "=========================================================="
 
     check_cert_risk() {
+        CERT_PROTECT=false
         if [ -f "$BASE_DIR/config/adguard/ssl.crt" ]; then
             # Check for standard ACME issuers (Let's Encrypt, ZeroSSL, etc)
             if grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL" "$BASE_DIR/config/adguard/ssl.crt"; then
@@ -4421,6 +4423,7 @@ clean_environment() {
                     [yY][eE][sS]|[yY]) return 0 ;;
                     *)
                         CERT_RESTORE=true
+                        CERT_PROTECT=true
                         rm -rf "$CERT_BACKUP_DIR"
                         mkdir -p "$CERT_BACKUP_DIR"
                         for cert_file in "$BASE_DIR/config/adguard/ssl.crt" "$BASE_DIR/config/adguard/ssl.key"; do
@@ -4510,6 +4513,7 @@ clean_environment() {
                 done
                 rm -rf "$CERT_BACKUP_DIR"
                 CERT_RESTORE=false
+                CERT_PROTECT=false
                 log_info "SSL certificate restored."
             fi
         fi
@@ -4629,14 +4633,18 @@ clean_environment() {
         # PHASE 6: Remove ALL data directories and files
         # ============================================================
         log_info "Phase 6: Removing data directories..."
-        
+
         # Main data directory
         if [ -d "$BASE_DIR" ]; then
-            if check_cert_risk; then
+            check_cert_risk
+            if [ "$CERT_PROTECT" = true ]; then
+                log_info "  Preserving: $BASE_DIR (Certificate Protection)"
+                rm -rf "$CERT_BACKUP_DIR"
+                CERT_RESTORE=false
+                CERT_PROTECT=false
+            else
                 log_info "  Removing: $BASE_DIR"
                 sudo rm -rf "$BASE_DIR"
-            else
-                log_info "  Preserving: $BASE_DIR (Certificate Protection)"
             fi
         fi
         
