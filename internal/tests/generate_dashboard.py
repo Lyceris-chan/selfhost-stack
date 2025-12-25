@@ -23,7 +23,7 @@ if not ZIMA_PATH.exists():
 lines = ZIMA_PATH.read_text(encoding="utf-8").splitlines()
 blocks = []
 
-pattern = re.compile(r'cat\s+>>?\s+"\$DASHBOARD_FILE"\s+<<EOF')
+pattern = re.compile(r'cat\s+>>?\s+"\$DASHBOARD_FILE"\s+<<\'?EOF\'?')
 for idx, line in enumerate(lines):
     if pattern.search(line):
         chunk = []

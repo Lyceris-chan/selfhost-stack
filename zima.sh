@@ -2139,36 +2139,77 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         const ODIDO_API = "/odido-api/api";
         
         function filterCategory(cat) {
-            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-            const targetChip = document.querySelector(`.filter-chip[data-target="${cat}"]`);
-            if (targetChip) targetChip.classList.add('active');
+            const chip = document.querySelector(`.filter-chip[data-target="${cat}"]`);
+            if (!chip) return;
+
+            if (cat === 'all') {
+                // "All" selected: Clear others, select All
+                document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+            } else {
+                // Specific category: Toggle
+                chip.classList.toggle('active');
+                
+                // If we just activated a specific cat, deselect "All"
+                if (chip.classList.contains('active')) {
+                    const allChip = document.querySelector('.filter-chip[data-target="all"]');
+                    if (allChip) allChip.classList.remove('active');
+                }
+                
+                // If nothing is active, revert to "All"
+                const anyActive = document.querySelector('.filter-chip.active');
+                if (!anyActive) {
+                    const allChip = document.querySelector('.filter-chip[data-target="all"]');
+                    if (allChip) allChip.classList.add('active');
+                }
+            }
+            
+            updateGridVisibility();
+        }
+
+        function updateGridVisibility() {
+            const activeChips = Array.from(document.querySelectorAll('.filter-chip.active'));
+            const activeTargets = activeChips.map(c => c.dataset.target);
             
             const allSection = document.getElementById('section-all');
-            const otherSections = document.querySelectorAll('section[data-category]:not(#section-all)');
+            const sections = document.querySelectorAll('section[data-category]');
             
-            if (cat === 'all' || cat === 'legacy') {
-                // Legacy View (Default): Show all categorized sections, hide flat list
-                if (allSection) allSection.style.display = 'none';
-                otherSections.forEach(s => {
-                    s.style.display = 'block';
-                    s.classList.remove('hidden');
-                });
-            } else {
-                // Specific Category
-                if (allSection) allSection.style.display = 'none';
-                otherSections.forEach(s => {
-                    if (s.dataset.category === cat) {
-                        s.style.display = 'block';
-                        s.classList.remove('hidden');
-                    } else {
+            // 1. If "all" is active, show ONLY the flat list (section-all)
+            if (activeTargets.includes('all')) {
+                if (allSection) {
+                    allSection.style.display = 'block';
+                    allSection.classList.remove('hidden');
+                }
+                sections.forEach(s => {
+                    if (s.id !== 'section-all') {
                         s.style.display = 'none';
+                        s.classList.add('hidden');
                     }
                 });
+                localStorage.setItem('dashboard_filter', 'all');
+                return;
             }
 
-            localStorage.setItem('dashboard_filter', cat);
-            syncSettings();
-            showSnackbar(`View: ${cat === 'all' ? 'All Services' : cat.charAt(0).toUpperCase() + cat.slice(1)}`, "Dismiss");
+            // 2. Otherwise, hide "section-all" and show specific selected sections
+            if (allSection) {
+                allSection.style.display = 'none';
+                allSection.classList.add('hidden');
+            }
+
+            sections.forEach(s => {
+                const cat = s.dataset.category;
+                if (cat === 'all') return; // handled above
+                
+                if (activeTargets.includes(cat)) {
+                    s.style.display = 'block';
+                    s.classList.remove('hidden');
+                } else {
+                    s.style.display = 'none';
+                    s.classList.add('hidden');
+                }
+            });
+            
+            localStorage.setItem('dashboard_filter', activeTargets.join(','));
         }
 
         // Global State & Data
@@ -3723,9 +3764,21 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
 
         async function loadAllSettings() {
             try {
-                const res = await fetch(API + "/theme", { headers: getAuthHeaders() });
+                const res = await fetch(API + "/theme?_=" + Date.now(), { headers: getAuthHeaders() });
                 const data = await res.json();
                 
+                // Check if server is reset (empty config) but local has data
+                if (Object.keys(data).length === 0 && localStorage.getItem('theme_seed')) {
+                    console.log("Server config is empty/reset. Clearing local storage to match.");
+                    localStorage.removeItem('theme_seed');
+                    localStorage.removeItem('theme');
+                    localStorage.removeItem('privacy_mode');
+                    localStorage.removeItem('dashboard_filter');
+                    // Reload to apply defaults
+                    location.reload();
+                    return;
+                }
+
                 // 1. Seed & Colors
                 if (data.seed) {
                     const picker = document.getElementById('theme-seed-color');
@@ -3753,7 +3806,13 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 // 4. Dashboard Filter
                 if (data.dashboard_filter) {
                     localStorage.setItem('dashboard_filter', data.dashboard_filter);
-                    filterCategory(data.dashboard_filter);
+                    // Handle multi-select string from server
+                    const cats = data.dashboard_filter.split(',');
+                    document.querySelectorAll('.filter-chip').forEach(c => {
+                        if (cats.includes(c.dataset.target)) c.classList.add('active');
+                        else c.classList.remove('active');
+                    });
+                    updateGridVisibility();
                 }
 
                 // 5. Admin Mode
@@ -4882,6 +4941,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         VPN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
         AGH_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
         ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+        PORTAINER_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
         log_info "Credentials generated and will be displayed upon completion."
         echo ""
     else
@@ -4891,8 +4951,11 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo -n "2. Enter password for AdGuard Home: "
         read -rs AGH_PASS_RAW
         echo ""
-        echo -n "3. Enter administrative password (for Portainer/Services): "
+        echo -n "3. Enter administrative password (for Dashboard): "
         read -rs ADMIN_PASS_RAW
+        echo ""
+        echo -n "4. Enter password for Portainer: "
+        read -rs PORTAINER_PASS_RAW
         echo ""
     fi
     
@@ -5015,7 +5078,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     fi
 
     # Safely generate Portainer hash (bcrypt)
-    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:latest sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:latest sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
     if [[ "$PORTAINER_PASS_HASH" == "FAILED" ]]; then
         log_crit "Failed to generate Portainer password hash. Check Docker status."
         exit 1
@@ -5025,6 +5088,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
 VPN_PASS_RAW=$VPN_PASS_RAW
 AGH_PASS_RAW=$AGH_PASS_RAW
 ADMIN_PASS_RAW=$ADMIN_PASS_RAW
+PORTAINER_PASS_RAW=$PORTAINER_PASS_RAW
 WG_HASH_CLEAN='$WG_HASH_CLEAN'
 AGH_PASS_HASH='$AGH_PASS_HASH'
 PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'
@@ -5041,6 +5105,10 @@ else
     if [ -z "${ADMIN_PASS_RAW:-}" ]; then
         ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
         echo "ADMIN_PASS_RAW=$ADMIN_PASS_RAW" >> "$BASE_DIR/.secrets"
+    fi
+    if [ -z "${PORTAINER_PASS_RAW:-}" ]; then
+        PORTAINER_PASS_RAW="$ADMIN_PASS_RAW"
+        echo "PORTAINER_PASS_RAW=$PORTAINER_PASS_RAW" >> "$BASE_DIR/.secrets"
     fi
     # Generate Portainer hash if missing from existing .secrets
     if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
@@ -7144,19 +7212,19 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 if domain or token:
                     # Update .secrets or similar file
                     secrets_file = "/app/.secrets"
-                    secrets = {}
+                    file_secrets = {}
                     if os.path.exists(secrets_file):
                         with open(secrets_file, 'r') as f:
                             for line in f:
                                 if '=' in line:
                                     k, v = line.strip().split('=', 1)
-                                    secrets[k] = v
+                                    file_secrets[k] = v
                     
-                    if domain: secrets['DESEC_DOMAIN'] = domain
-                    if token: secrets['DESEC_TOKEN'] = token
+                    if domain: file_secrets['DESEC_DOMAIN'] = domain
+                    if token: file_secrets['DESEC_TOKEN'] = token
                     
                     with open(secrets_file, 'w') as f:
-                        for k, v in secrets.items():
+                        for k, v in file_secrets.items():
                             f.write(f"{k}={v}\n")
                     
                     self._send_json({"success": True})
@@ -7227,28 +7295,32 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             return
 
         if self.path == '/verify-admin':
-            password = data.get('password')
-            expected_admin = os.environ.get('ADMIN_PASS_RAW')
-            if expected_admin and password == expected_admin:
-                # Generate a new session token for this browser session
-                token = secrets.token_hex(24)
-                
-                # Determine timeout
-                timeout_seconds = 1800
-                theme_file = os.path.join(CONFIG_DIR, "theme.json")
-                if os.path.exists(theme_file):
-                    try:
-                        with open(theme_file, 'r') as f:
-                            t = json.load(f)
-                            # Timeout in minutes
-                            if 'session_timeout' in t:
-                                timeout_seconds = int(t['session_timeout']) * 60
-                    except: pass
-                
-                valid_sessions[token] = time.time() + timeout_seconds
-                self._send_json({"success": True, "token": token, "cleanup": session_cleanup_enabled})
-            else:
-                self._send_json({"error": "Invalid admin password"}, 401)
+            try:
+                password = data.get('password')
+                expected_admin = os.environ.get('ADMIN_PASS_RAW')
+                if expected_admin and password == expected_admin:
+                    # Generate a new session token for this browser session
+                    token = secrets.token_hex(24)
+                    
+                    # Determine timeout
+                    timeout_seconds = 1800
+                    theme_file = os.path.join(CONFIG_DIR, "theme.json")
+                    if os.path.exists(theme_file):
+                        try:
+                            with open(theme_file, 'r') as f:
+                                t = json.load(f)
+                                # Timeout in minutes
+                                if 'session_timeout' in t:
+                                    timeout_seconds = int(t['session_timeout']) * 60
+                        except: pass
+                    
+                    valid_sessions[token] = time.time() + timeout_seconds
+                    self._send_json({"success": True, "token": token, "cleanup": session_cleanup_enabled})
+                else:
+                    self._send_json({"error": "Invalid admin password"}, 401)
+            except Exception as e:
+                log_structured("ERROR", f"Verify admin failed: {e}", "AUTH")
+                self._send_json({"error": "Internal Server Error"}, 500)
             return
 
         if not self._check_auth():
@@ -7429,16 +7501,16 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 new_key = post_data.get('new_key')
                 if new_key:
                     secrets_file = "/app/.secrets"
-                    secrets = {}
+                    file_secrets = {}
                     if os.path.exists(secrets_file):
                         with open(secrets_file, 'r') as f:
                             for line in f:
                                 if '=' in line:
                                     k, v = line.strip().split('=', 1)
-                                    secrets[k] = v
-                    secrets['HUB_API_KEY'] = new_key
+                                    file_secrets[k] = v
+                    file_secrets['HUB_API_KEY'] = new_key
                     with open(secrets_file, 'w') as f:
-                        for k, v in secrets.items():
+                        for k, v in file_secrets.items():
                             f.write(f"{k}={v}\n")
                     
                     log_structured("SECURITY", "Dashboard API key rotated", "AUTH")
@@ -7550,25 +7622,29 @@ if __name__ == "__main__":
     print(f"Starting API server on port {PORT}...")
     init_db()
 
-    # Wait for Gluetun proxy to be ready
-    print("Waiting for proxy...", flush=True)
-    proxy_ready = False
-    for _ in range(60):
-        try:
-            with socket.create_connection(("gluetun", 8888), timeout=2):
-                proxy_ready = True
-                break
-        except (OSError, ConnectionRefusedError):
-            time.sleep(2)
-    
-    if proxy_ready:
-        print("Proxy available. Syncing assets...", flush=True)
-        try:
-            ensure_assets()
-        except Exception as e:
-            log_structured("WARN", f"Asset sync failed: {e}", "FONTS")
-    else:
-        log_structured("WARN", "Proxy unavailable after 60s. Asset sync skipped.", "FONTS")
+    def background_init():
+        # Wait for Gluetun proxy to be ready
+        print("Waiting for proxy...", flush=True)
+        proxy_ready = False
+        for _ in range(60):
+            try:
+                with socket.create_connection(("gluetun", 8888), timeout=2):
+                    proxy_ready = True
+                    break
+            except (OSError, ConnectionRefusedError):
+                time.sleep(2)
+        
+        if proxy_ready:
+            print("Proxy available. Syncing assets...", flush=True)
+            try:
+                ensure_assets()
+            except Exception as e:
+                log_structured("WARN", f"Asset sync failed: {e}", "FONTS")
+        else:
+            log_structured("WARN", "Proxy unavailable after 60s. Asset sync skipped.", "FONTS")
+
+    # Start initialization in background so API is immediately available
+    threading.Thread(target=background_init, daemon=True).start()
     
     # Start metrics collector thread
     t = threading.Thread(target=metrics_collector, daemon=True)
@@ -7697,8 +7773,8 @@ cat > "$SERVICES_JSON" <<EOF
     "vert": {
       "name": "VERT",
       "description": "Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.",
-      "category": "tools",
-      "order": 10,
+      "category": "apps",
+      "order": 90,
       "url": "http://$LAN_IP:$PORT_VERT",
       "chips": [
         "Utility",

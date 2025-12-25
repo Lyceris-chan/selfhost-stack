@@ -1,34 +1,47 @@
 #!/usr/bin/env bash
-BASE_DIR="/DATA/AppData/privacy-hub"
+# Define base path - override for testing if needed
+if [ -z "$BASE_DIR" ]; then
+    # Use a temp dir if /DATA is not available/writable
+    if [ ! -w "/DATA" ]; then
+        BASE_DIR="/tmp/privacy-hub-test"
+    else
+        BASE_DIR="/DATA/AppData/privacy-hub"
+    fi
+fi
+
 DASHBOARD_FILE="$BASE_DIR/dashboard.html"
 LAN_IP="10.0.1.183"
 PUBLIC_IP="1.2.3.4"
 ODIDO_API_KEY="mock_key"
-FOUND_OCTET="1" # Dummy value for shell variable, not used in dashboard JS directly
+FOUND_OCTET="1"
+DESEC_DOMAIN="example.dedyn.io"
+PORT_PORTAINER="9000"
 
 mkdir -p "$BASE_DIR"
 
-# Temporarily redirect stdout of zima.sh to a file to capture the dashboard generation block
-# and then execute that block in a subshell.
+# Extract dashboard HTML generation from zima.sh dynamically
+# Find function definition and extract body
+sed -n '/^generate_dashboard() {/,/^}/p' ../../zima.sh > /tmp/dashboard_gen_func.sh
+# Remove first line (func decl) and last line (closing brace)
+sed '1d;$d' /tmp/dashboard_gen_func.sh > /tmp/dashboard_gen_block.sh
 
-# Extract dashboard HTML generation from zima.sh
-# Lines 4342 to 8261 contain all the cat commands for DASHBOARD_FILE
-sed -n '4342,8261p' zima.sh > /tmp/dashboard_gen_block.sh
-
-# Now, execute this block with the necessary environment variables set
-# The 'eval' is crucial here because the extracted block uses HEREDOCs with unquoted EOF,
-# meaning shell variables will be expanded at eval time.
 (
     export BASE_DIR
     export DASHBOARD_FILE
     export LAN_IP
     export PUBLIC_IP
     export ODIDO_API_KEY
-    export FOUND_OCTET # Used in zima.sh but not directly for dashboard HTML itself.
+    export FOUND_OCTET
+    export DESEC_DOMAIN
+    export PORT_PORTAINER
+    
+    # Mock logging
+    log_info() { echo "[INFO] $1"; }
+    export -f log_info
     
     # Run the extracted script
     bash /tmp/dashboard_gen_block.sh
 )
 
-rm /tmp/dashboard_gen_block.sh
+rm /tmp/dashboard_gen_func.sh /tmp/dashboard_gen_block.sh
 echo "Dashboard regenerated at $DASHBOARD_FILE"
