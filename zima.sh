@@ -268,7 +268,8 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             display: inline-flex !important;
         }
         body.admin-mode .admin-only.section-label, 
-        body.admin-mode .admin-only.section-hint {
+        body.admin-mode .admin-only.section-hint,
+        body.admin-mode .admin-only.full-bleed {
             display: block !important;
         }
         
@@ -1706,6 +1707,13 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                             <span class="body-medium" style="opacity: 0.8; white-space: normal;">Session auto-cleanup is disabled. Administrative access will remain active indefinitely on this browser until manually exited.</span>
                         </div>
                     </div>
+                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+                        <div style="flex: 1;">
+                            <span class="label-large">Session Timeout (Minutes)</span>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Duration of inactivity before auto-logout (Default: 30).</p>
+                        </div>
+                        <input type="number" id="session-timeout-input" class="text-field" style="width: 80px;" value="30" onchange="syncSettings()">
+                    </div>
                 </div>
             </div>
             <div class="card">
@@ -1742,9 +1750,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 <div class="card-header">
                     <h3>System Health</h3>
                     <div class="card-header-actions">
-                        <div class="chip" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 0 16px; height: 32px; font-weight: 600; gap: 8px;">
-                            <span class="material-symbols-rounded" id="health-icon" style="font-size: 18px;">check_circle</span>
-                            <span id="health-text">Optimal</span>
+                        <div class="chip" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 0 12px; height: 28px; font-weight: 500; gap: 6px; box-shadow: var(--md-sys-elevation-1);">
+                            <span class="material-symbols-rounded" id="health-icon" style="font-size: 16px;">check_circle</span>
+                            <span id="health-text" style="font-size: 13px; letter-spacing: 0.3px;">Optimal</span>
                         </div>
                     </div>
                 </div>
@@ -2139,20 +2147,14 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const otherSections = document.querySelectorAll('section[data-category]:not(#section-all)');
             
             if (cat === 'all' || cat === 'legacy') {
-                if (allSection) {
-                    allSection.style.display = 'block';
-                    if (cat === 'legacy') {
-                        allSection.classList.add('legacy-view');
-                        const label = allSection.querySelector('.section-label');
-                        if (label) label.textContent = 'Service Directory';
-                    } else {
-                        allSection.classList.remove('legacy-view');
-                        const label = allSection.querySelector('.section-label');
-                        if (label) label.textContent = 'All Services';
-                    }
-                }
-                otherSections.forEach(s => s.style.display = 'none');
+                // Legacy View (Default): Show all categorized sections, hide flat list
+                if (allSection) allSection.style.display = 'none';
+                otherSections.forEach(s => {
+                    s.style.display = 'block';
+                    s.classList.remove('hidden');
+                });
             } else {
+                // Specific Category
                 if (allSection) allSection.style.display = 'none';
                 otherSections.forEach(s => {
                     if (s.dataset.category === cat) {
@@ -2166,7 +2168,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
 
             localStorage.setItem('dashboard_filter', cat);
             syncSettings();
-            showSnackbar(`View: ${cat === 'legacy' ? 'List All' : cat.charAt(0).toUpperCase() + cat.slice(1)}`, "Dismiss");
+            showSnackbar(`View: ${cat === 'all' ? 'All Services' : cat.charAt(0).toUpperCase() + cat.slice(1)}`, "Dismiss");
         }
 
         // Global State & Data
@@ -3671,6 +3673,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const isLight = document.documentElement.classList.contains('light-mode');
             const isPrivacy = document.body.classList.contains('privacy-mode');
             const activeFilter = localStorage.getItem('dashboard_filter') || 'legacy';
+            const sessionTimeout = document.getElementById('session-timeout-input') ? document.getElementById('session-timeout-input').value : 30;
             
             const settings = {
                 seed,
@@ -3678,6 +3681,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 privacy_mode: isPrivacy,
                 dashboard_filter: activeFilter,
                 is_admin: isAdmin,
+                session_timeout: parseInt(sessionTimeout),
                 timestamp: Date.now()
             };
 
@@ -3757,6 +3761,12 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     isAdmin = data.is_admin;
                     sessionStorage.setItem('is_admin', isAdmin ? 'true' : 'false');
                     updateAdminUI();
+                }
+
+                // 6. Session Timeout
+                if (data.session_timeout) {
+                    const timeoutInput = document.getElementById('session-timeout-input');
+                    if (timeoutInput) timeoutInput.value = data.session_timeout;
                 }
             } catch(e) { console.warn("Failed to load settings from server", e); }
         }
@@ -5854,7 +5864,7 @@ fi
 mkdir -p "$SRC_DIR/hub-api"
 cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
 FROM dhi.io/python:3.11-alpine3.22-dev
-RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git
+RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git sqlite grep
 RUN pip install --no-cache-dir psutil
 WORKDIR /app
 CMD ["python", "server.py"]
@@ -7222,8 +7232,20 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             if expected_admin and password == expected_admin:
                 # Generate a new session token for this browser session
                 token = secrets.token_hex(24)
-                # Session expires in 30 minutes
-                valid_sessions[token] = time.time() + 1800 
+                
+                # Determine timeout
+                timeout_seconds = 1800
+                theme_file = os.path.join(CONFIG_DIR, "theme.json")
+                if os.path.exists(theme_file):
+                    try:
+                        with open(theme_file, 'r') as f:
+                            t = json.load(f)
+                            # Timeout in minutes
+                            if 'session_timeout' in t:
+                                timeout_seconds = int(t['session_timeout']) * 60
+                    except: pass
+                
+                valid_sessions[token] = time.time() + timeout_seconds
                 self._send_json({"success": True, "token": token, "cleanup": session_cleanup_enabled})
             else:
                 self._send_json({"error": "Invalid admin password"}, 401)
@@ -8725,27 +8747,26 @@ if [ -f "$AGH_CONF_DIR/ssl.crt" ]; then
         fi
     fi
 fi
-if [ "$AUTO_PASSWORD" = true ]; then
-    echo "=========================================================="
-    echo "GENERATED CREDENTIALS"
-    echo "=========================================================="
-    echo "Portainer Password: $ADMIN_PASS_RAW"
-    echo "VPN Web UI Password: $VPN_PASS_RAW"
-        echo "AdGuard Home Password: $AGH_PASS_RAW"
-            echo "AdGuard Home Username: $AGH_USER"
-            echo "Portainer Username: portainer (Fallback: admin)"
-                        echo "Odido Booster API Key: $ODIDO_API_KEY"
-                        echo ""
-                        echo "IMPORT TO PROTON PASS:"
-            echo "A CSV file has been generated for easy import into Proton Pass:"
-    echo "$BASE_DIR/protonpass_import.csv"
-    echo ""
-    echo "Please save these credentials. They are also stored in: $BASE_DIR/.secrets"
-    echo ""
-    echo "--- SECURITY ---"
-    read -n 1 -s -r -p "Press any key to clear these credentials from the terminal screen..."
-    clear
-fi
+echo "=========================================================="
+echo "DEPLOYMENT CREDENTIALS"
+echo "=========================================================="
+echo "Portainer / Admin Password: $ADMIN_PASS_RAW"
+if [ -n "$VPN_PASS_RAW" ]; then echo "VPN Web UI Password:      $VPN_PASS_RAW"; fi
+if [ -n "$AGH_PASS_RAW" ]; then echo "AdGuard Home Password:    $AGH_PASS_RAW"; fi
+if [ -n "$ODIDO_API_KEY" ]; then echo "Odido Booster API Key:    $ODIDO_API_KEY"; fi
+echo ""
+echo "CREDENTIALS SAVED TO: $BASE_DIR/.secrets"
+echo "=========================================================="
+echo ""
+echo "IMPORT TO PROTON PASS:"
+echo "A CSV file has been generated for easy import into Proton Pass:"
+echo "$BASE_DIR/protonpass_import.csv"
+echo ""
+echo "--- SECURITY ---"
+echo "Please save these credentials securely."
+echo "Press any key to clear these credentials from the terminal screen (or Ctrl+C to keep them)..."
+read -n 1 -s -r
+clear
 echo "=========================================================="
 
 echo ""
