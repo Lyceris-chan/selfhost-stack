@@ -116,6 +116,8 @@ DASHBOARD_FILE="$BASE_DIR/dashboard.html"
 GLUETUN_ENV_FILE="$BASE_DIR/gluetun.env"
 ASSETS_DIR="$BASE_DIR/assets"
 HISTORY_LOG="$BASE_DIR/deployment.log"
+CERT_BACKUP_DIR="/tmp/${APP_NAME}-cert-backup"
+CERT_RESTORE=false
 
 # Initialize deSEC variables to prevent unbound variable errors
 DESEC_DOMAIN=""
@@ -4417,7 +4419,17 @@ clean_environment() {
                 read -r -p "   Are you sure you want to DELETE this certificate? [y/N]: " cert_response
                 case "$cert_response" in
                     [yY][eE][sS]|[yY]) return 0 ;;
-                    *) return 1 ;;
+                    *)
+                        CERT_RESTORE=true
+                        rm -rf "$CERT_BACKUP_DIR"
+                        mkdir -p "$CERT_BACKUP_DIR"
+                        for cert_file in "$BASE_DIR/config/adguard/ssl.crt" "$BASE_DIR/config/adguard/ssl.key"; do
+                            if [ -f "$cert_file" ]; then
+                                cp "$cert_file" "$CERT_BACKUP_DIR"/
+                            fi
+                        done
+                        log_info "Certificate will be preserved and restored after cleanup."
+                        return 0 ;;
                 esac
             fi
         fi
@@ -4487,6 +4499,19 @@ clean_environment() {
                 $DOCKER_CMD volume rm -f "${APP_NAME}_${vol}" 2>/dev/null || true
             done
             log_info "Application data and volumes have been cleared."
+
+            if [ "$CERT_RESTORE" = true ]; then
+                log_info "Restoring preserved SSL certificate..."
+                mkdir -p "$BASE_DIR/config/adguard"
+                for cert_file in ssl.crt ssl.key; do
+                    if [ -f "$CERT_BACKUP_DIR/$cert_file" ]; then
+                        cp "$CERT_BACKUP_DIR/$cert_file" "$BASE_DIR/config/adguard/$cert_file"
+                    fi
+                done
+                rm -rf "$CERT_BACKUP_DIR"
+                CERT_RESTORE=false
+                log_info "SSL certificate restored."
+            fi
         fi
     fi
     
