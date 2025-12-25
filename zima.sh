@@ -489,9 +489,11 @@ cat > "$DASHBOARD_FILE" <<'EOF'
 
         .full-bleed {
             width: 100vw;
-            max-width: 100vw;
-            margin-left: calc(50% - 50vw);
-            margin-right: calc(50% - 50vw);
+            position: relative;
+            left: 50%;
+            right: 50%;
+            margin-left: -50vw;
+            margin-right: -50vw;
         }
         
         /* Header */
@@ -1327,7 +1329,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             </div>
         </div>
 
-        <div id="mac-advisory" class="full-bleed" style="margin-bottom: 32px; width: 100%;">
+        <div id="mac-advisory" class="full-bleed" style="margin-bottom: 32px;">
             <div class="card" style="min-height: auto; padding: 16px 24px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 24px;">
                     <div style="display: flex; gap: 16px; align-items: flex-start;">
@@ -1737,9 +1739,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 <div class="card-header">
                     <h3>System Health</h3>
                     <div class="card-header-actions">
-                        <div class="status-indicator" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 4px 12px; min-width: auto; margin-right: -8px;">
-                            <span class="status-dot up" id="health-dot" style="background: var(--md-sys-color-on-success-container); box-shadow: none;"></span>
-                            <span class="status-text" id="health-text" style="color: inherit; font-weight: 600;">Optimal</span>
+                        <div class="chip" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 0 16px; height: 32px; font-weight: 600; gap: 8px;">
+                            <span class="material-symbols-rounded" id="health-icon" style="font-size: 18px;">check_circle</span>
+                            <span id="health-text">Optimal</span>
                         </div>
                     </div>
                 </div>
@@ -1866,6 +1868,24 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         </div>
     </div>
 
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2>Admin Authentication</h2>
+                <button onclick="closeLoginModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+            </div>
+            <p class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant);">Enter your administrator password to unlock management features.</p>
+            <form onsubmit="submitLogin(); return false;">
+                <input type="password" id="admin-password-input" class="text-field" placeholder="Password" style="margin-bottom: 24px; border-radius: 4px;" autocomplete="current-password">
+                <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                    <button type="button" onclick="closeLoginModal()" class="btn btn-outlined">Cancel</button>
+                    <button type="submit" class="btn btn-filled">Unlock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         // Dynamic Service Rendering
         let serviceCatalog = {};
@@ -1976,16 +1996,6 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 const activeContainers = data.containers || {};
                 containerIds = activeContainers;
 
-                const appsGrid = document.getElementById('grid-apps');
-                const systemGrid = document.getElementById('grid-system');
-                const toolsGrid = document.getElementById('grid-tools');
-                const allGrid = document.getElementById('grid-all');
-                
-                if (appsGrid) appsGrid.innerHTML = '';
-                if (systemGrid) systemGrid.innerHTML = '';
-                if (toolsGrid) toolsGrid.innerHTML = '';
-                if (allGrid) allGrid.innerHTML = '';
-
                 const entries = Object.entries(catalog)
                     .filter(([id]) => activeContainers[id])
                     .map(([id, meta]) => [id, normalizeServiceMeta(id, meta)]);
@@ -2003,29 +2013,31 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     return a[1].name.localeCompare(b[1].name);
                 };
 
-                // Render categorized grids
-                ['apps', 'system', 'tools'].forEach((category) => {
-                    if (!buckets[category]) return;
-                    const grid = document.getElementById(\`grid-\${category}\`);
+                const syncGrid = (gridId, items) => {
+                    const grid = document.getElementById(gridId);
                     if (!grid) return;
+                    const sorted = items ? items.sort(sortByOrder) : [];
+                    const currentIds = new Set(sorted.map(x => x[0]));
                     
-                    buckets[category].sort(sortByOrder).forEach(([id, meta]) => {
-                        const hardened = activeContainers[id] && activeContainers[id].hardened;
-                        const card = createServiceCard(id, meta, hardened);
-                        grid.appendChild(card);
+                    Array.from(grid.children).forEach(card => {
+                        if (!currentIds.has(card.dataset.container)) grid.removeChild(card);
                     });
-                });
-
-                // Render All Services grid
-                if (allGrid && buckets.all) {
-                    buckets.all.sort(sortByOrder).forEach(([id, meta]) => {
-                        const hardened = activeContainers[id] && activeContainers[id].hardened;
-                        const card = createServiceCard(id, meta, hardened);
-                        allGrid.appendChild(card);
+                    
+                    sorted.forEach(([id, meta]) => {
+                        let card = grid.querySelector(`[data-container="${id}"]`);
+                        if (!card) {
+                            const hardened = activeContainers[id] && activeContainers[id].hardened;
+                            card = createServiceCard(id, meta, hardened);
+                            grid.appendChild(card);
+                        } else {
+                            grid.appendChild(card); // Reorder
+                        }
                     });
-                }
+                };
 
-                // Update metrics after rendering
+                ['apps', 'system', 'tools'].forEach(cat => syncGrid(`grid-${cat}`, buckets[cat]));
+                syncGrid('grid-all', buckets.all);
+
                 fetchMetrics();
             } catch (e) {
                 console.error("Failed to render dynamic grid:", e);
@@ -2034,7 +2046,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
 
         function createServiceCard(id, meta, hardened = false) {
             const card = document.createElement('div');
-            card.id = \`link-\${id}\`;
+            // ID removed to avoid duplicates
             card.className = 'card';
             card.dataset.url = meta.url || '';
             card.dataset.container = id;
@@ -2086,18 +2098,6 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
 
             const chipBox = document.createElement('div');
             chipBox.className = 'chip-box';
-
-            if (hardened) {
-                const hardenedBadge = document.createElement('span');
-                hardenedBadge.className = 'chip tertiary';
-                hardenedBadge.style.gap = '4px';
-                hardenedBadge.style.padding = '0 8px';
-                hardenedBadge.style.height = '24px';
-                hardenedBadge.style.fontSize = '11px';
-                hardenedBadge.setAttribute('data-tooltip', 'This container uses a Digital Independence (DHI) hardened image.');
-                hardenedBadge.innerHTML = '<span class="material-symbols-rounded" style="font-size:14px;">verified_user</span> Hardened';
-                chipBox.appendChild(hardenedBadge);
-            }
 
             if (Array.isArray(meta.actions)) {
                 meta.actions.forEach((action) => {
@@ -2223,31 +2223,59 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     showSnackbar("Admin Mode disabled");
                 }
             } else {
-                const pass = prompt("Enter Admin Password to enable management features:");
-                if (!pass) return;
-                
-                try {
-                    const res = await fetch(API + "/verify-admin", {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ password: pass })
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        isAdmin = true;
-                        sessionToken = data.token || '';
-                        sessionCleanupEnabled = data.cleanup !== false;
-                        sessionStorage.setItem('is_admin', 'true');
-                        if (sessionToken) sessionStorage.setItem('session_token', sessionToken);
-                        updateAdminUI();
-                        syncSettings();
-                        showSnackbar("Admin Mode enabled. Management tools unlocked.", "Dismiss");
-                    } else {
-                        showSnackbar("Authentication failed: Invalid password", "Retry");
-                    }
-                } catch(e) {
-                    showSnackbar("Error connecting to auth service");
+                openLoginModal();
+            }
+        }
+
+        function openLoginModal() {
+            const modal = document.getElementById('login-modal');
+            const input = document.getElementById('admin-password-input');
+            if (modal) {
+                modal.style.display = 'flex';
+                if (input) {
+                    input.value = '';
+                    setTimeout(() => input.focus(), 100);
                 }
+            }
+        }
+
+        function closeLoginModal() {
+            const modal = document.getElementById('login-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function submitLogin() {
+            const input = document.getElementById('admin-password-input');
+            const pass = input.value;
+            if (!pass) return;
+
+            try {
+                const res = await fetch(API + "/verify-admin", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pass })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    isAdmin = true;
+                    sessionToken = data.token || '';
+                    sessionCleanupEnabled = data.cleanup !== false;
+                    sessionStorage.setItem('is_admin', 'true');
+                    if (sessionToken) sessionStorage.setItem('session_token', sessionToken);
+                    updateAdminUI();
+                    syncSettings();
+                    showSnackbar("Admin Mode enabled. Management tools unlocked.", "Dismiss");
+                    closeLoginModal();
+                } else {
+                    showSnackbar("Authentication failed: Invalid password", "Retry", () => {
+                        input.focus();
+                        input.select();
+                    });
+                    input.classList.add('error'); // Assuming you might add error styling later
+                    setTimeout(() => input.classList.remove('error'), 500);
+                }
+            } catch(e) {
+                showSnackbar("Error connecting to auth service");
             }
         }
         let realProfileName = '';
@@ -2379,7 +2407,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 PORTAINER_URL + "/#!/1/docker/containers/" + cid :
                 PORTAINER_URL + "/#!/1/docker/containers";
             
-            actions.innerHTML = \`<button onclick="updateService('\${name}')" class="btn btn-tonal" style="width:100%"><span class="material-symbols-rounded">update</span> Update Service</button><p class="body-small" style="margin: 4px 0 12px 0; color: var(--md-sys-color-on-surface-variant);">Note: Updates may cause temporary high CPU/RAM usage during build.</p><button onclick="window.open('\${portainerLink}', '_blank')" class="btn btn-outlined" style="width:100%"><span class="material-symbols-rounded">dock</span> View in Portainer</button>\`;
+            actions.innerHTML = `<button onclick="updateService('${name}')" class="btn btn-tonal" style="width:100%"><span class="material-symbols-rounded">update</span> Update Service</button><p class="body-small" style="margin: 4px 0 12px 0; color: var(--md-sys-color-on-surface-variant);">Note: Updates may cause temporary high CPU/RAM usage during build.</p><button onclick="window.open('${portainerLink}', '_blank')" class="btn btn-outlined" style="width:100%"><span class="material-symbols-rounded">dock</span> View in Portainer</button>`;
 
             // Specialized actions
             if (name === 'invidious') {
@@ -2468,20 +2496,20 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 row.style.margin = '4px 0';
                 row.style.background = 'transparent';
                 row.style.border = 'none';
-                row.innerHTML = \`
+                row.innerHTML = `
                     <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
                         <label style="display:flex; align-items:center; gap:12px; cursor:pointer; flex-grow:1;">
-                            <input type="checkbox" class="update-checkbox" value="\${svc}" checked style="width:18px; height:18px; accent-color:var(--md-sys-color-primary);">
-                            <span class="list-item-text">\${svc}</span>
+                            <input type="checkbox" class="update-checkbox" value="${svc}" checked style="width:18px; height:18px; accent-color:var(--md-sys-color-primary);">
+                            <span class="list-item-text">${svc}</span>
                         </label>
                         <div style="display:flex; gap:8px; align-items:center;">
-                            <button onclick="viewChangelog('\${svc}')" class="btn btn-icon" style="width:32px; height:32px;" data-tooltip="View Changes">
+                            <button onclick="viewChangelog('${svc}')" class="btn btn-icon" style="width:32px; height:32px;" data-tooltip="View Changes">
                                 <span class="material-symbols-rounded" style="font-size:18px;">description</span>
                             </button>
                             <span class="chip tertiary" style="height:24px; font-size:11px;">Update Available</span>
                         </div>
                     </div>
-                \`;
+                `;
                 el.appendChild(row);
             });
         }
@@ -2528,7 +2556,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             if (!confirm("Update " + selected.length + " services? This will trigger backups, updates, and rebuilds (Expect high CPU usage).")) return;
             
             closeUpdateModal();
-            showSnackbar(\`Batch update initiated for \${selected.length} services. Rebuilding in background...\`, "Dismiss");
+            showSnackbar(`Batch update initiated for ${selected.length} services. Rebuilding in background...`, "Dismiss");
             
             try {
                 const res = await fetch(API + "/batch-update", {
@@ -2549,9 +2577,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const originalHtml = btn ? btn.innerHTML : '';
             if (btn) {
                 btn.disabled = true;
-                btn.innerHTML = \`<span class="material-symbols-rounded" style="animation: spin 2s linear infinite;">sync</span> Updating...\`;
+                btn.innerHTML = `<span class="material-symbols-rounded" style="animation: spin 2s linear infinite;">sync</span> Updating...`;
             }
-            showSnackbar(\`Initiating update for \${name}...\`, "Dismiss");
+            showSnackbar(`Initiating update for ${name}...`, "Dismiss");
 
             try {
                 const res = await fetch(API + "/update-service", {
@@ -2562,10 +2590,10 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
                 
-                showSnackbar(\`\${name} update complete.\`, "Success");
+                showSnackbar(`${name} update complete.`, "Success");
                 return true;
             } catch(e) {
-                showSnackbar(\`Update failed: \${e.message}\`, "Error");
+                showSnackbar(`Update failed: ${e.message}`, "Error");
                 return false;
             } finally {
                 if (btn) {
@@ -2849,8 +2877,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 // Update service statuses from server-side checks
                 if (data.services) {
                     for (const [name, status] of Object.entries(data.services)) {
-                        const card = document.getElementById('link-' + name);
-                        if (card) {
+                        const cards = document.querySelectorAll(`[data-container="${name}"]`);
+                        cards.forEach(card => {
                             const dot = card.querySelector('.status-dot');
                             const txt = card.querySelector('.status-text');
                             const indicator = card.querySelector('.status-indicator');
@@ -2874,8 +2902,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                                     indicator.title = 'Service is unreachable';
                                 }
                             }
-
-                        }
+                        });
                     }
                 }
                 
@@ -3327,11 +3354,11 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     if (message.includes('GET /events')) message = 'Log stream connection';
                 }
 
-                div.innerHTML = \`
-                    <span class="material-symbols-rounded log-icon" style="color: \${iconColor}">\${icon}</span>
-                    <div class="log-content">\${message}</div>
-                    <span class="log-time">\${timestamp}</span>
-                \`;
+                div.innerHTML = `
+                    <span class="material-symbols-rounded log-icon" style="color: ${iconColor}">${icon}</span>
+                    <div class="log-content">${message}</div>
+                    <span class="log-time">${timestamp}</span>
+                `;
                 return div;
             }
 
@@ -3366,9 +3393,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const snackbar = document.createElement('div');
             snackbar.className = 'snackbar';
             
-            let html = \`<div class="snackbar-content">\${message}</div>\`;
+            let html = `<div class="snackbar-content">${message}</div>`;
             if (actionText) {
-                html += \`<button class="snackbar-action">\${actionText}</button>\`;
+                html += `<button class="snackbar-action">${actionText}</button>`;
             }
             snackbar.innerHTML = html;
             
@@ -3792,7 +3819,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             }
             
             syncSettings();
-            showSnackbar(\`Switched to \${isLight ? 'Light' : 'Dark'} mode\`);
+            showSnackbar(`Switched to ${isLight ? 'Light' : 'Dark'} mode`);
         }
 
         function updateThemeIcon() {
@@ -3985,7 +4012,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 const data = await res.json();
                 if (data.success) {
                     // Show a persistent overlay or alert
-                    document.body.innerHTML = \`
+                    document.body.innerHTML = `
                         <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:var(--md-sys-color-surface); color:var(--md-sys-color-on-surface); font-family:sans-serif; text-align:center; padding:24px;">
                             <span class="material-symbols-rounded" style="font-size:64px; color:var(--md-sys-color-primary); margin-bottom:24px;">restart_alt</span>
                             <h1>Restarting Stack...</h1>
@@ -3995,7 +4022,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                                 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
                             </style>
                         </div>
-                    \`;
+                    `;
                     
                     // Poll for availability
                     let attempts = 0;

@@ -164,7 +164,7 @@ const path = require('path');
     }, process.env.HUB_API_KEY || 'J9zfiLY9h21tr1POK81acZS3zSu3id9x');
 
     await page.waitForSelector('.card[data-url]', { timeout: 30000 });
-    await page.waitForSelector('#link-invidious .settings-btn', { timeout: 30000 });
+    await page.waitForSelector('.card[data-container="invidious"] .settings-btn', { timeout: 30000 });
     await page.waitForFunction(() => typeof window.toggleTheme === 'function');
     await page.evaluate(() => {
       window.open = () => null;
@@ -251,7 +251,7 @@ const path = require('path');
     const seedHex = await page.$eval('#theme-seed-hex', el => el.textContent.trim());
     recordStep('Theme Seed Color', seedHex.toLowerCase().includes('#00ff00'), `Seed hex: ${seedHex}`);
 
-    console.log('6. Testing Admin Mode Authentication...');
+    console.log('6. Testing Admin Mode Authentication (M3 Modal)...');
     // Verify admin mode is initially locked (settings-btn should be hidden)
     const settingsBtnHidden = await page.evaluate(() => {
         const btn = document.querySelector('.settings-btn');
@@ -259,36 +259,43 @@ const path = require('path');
     });
     recordStep('Admin Locked', settingsBtnHidden, `Admin features locked: ${settingsBtnHidden}`);
 
-    // In Puppeteer, window.prompt is tricky. We'll mock it before clicking.
-    await page.evaluate((pass) => {
-        window.prompt = () => pass;
-    }, process.env.ADMIN_PASS || '9UDwVeCIWV6PQcdSfAKtfvsJ');
-    
-    await new Promise(r => setTimeout(r, 500));
+    // Open login modal
     await page.evaluate(() => {
         const btn = document.querySelector('#admin-lock-btn');
         if (btn) btn.click();
     });
-    await new Promise(r => setTimeout(r, 2000));
-    await new Promise(r => setTimeout(r, 1000));
+    await page.waitForSelector('#login-modal', { visible: true, timeout: 5000 });
+    
+    // Type password and submit
+    const adminPass = process.env.ADMIN_PASS || '9UDwVeCIWV6PQcdSfAKtfvsJ';
+    await page.type('#admin-password-input', adminPass);
+    await page.click('#login-modal .btn-filled');
+    
+    await new Promise(r => setTimeout(r, 1500));
     
     let isAdminMode = await page.evaluate(() => document.body.classList.contains('admin-mode'));
-    if (!isAdminMode) {
-      await page.evaluate(() => {
-        if (typeof updateAdminUI === 'function') {
-          window.isAdmin = true;
-          sessionStorage.setItem('is_admin', 'true');
-          updateAdminUI();
-        }
-      });
-      await new Promise(r => setTimeout(r, 500));
-      isAdminMode = await page.evaluate(() => document.body.classList.contains('admin-mode'));
-    }
     const settingsBtnVisible = await page.evaluate(() => {
       const btn = document.querySelector('.settings-btn');
       return btn && getComputedStyle(btn).display !== 'none';
     });
     recordStep('Admin Mode', isAdminMode && settingsBtnVisible, `Admin mode: ${isAdminMode}, settings visible: ${settingsBtnVisible}`);
+
+    console.log('6.5 Verifying Full-Width Banners...');
+    const bannerWidthInfo = await page.evaluate(() => {
+        const banner = document.getElementById('mac-advisory');
+        if (!banner) return { found: false };
+        const rect = banner.getBoundingClientRect();
+        return { 
+            found: true, 
+            width: rect.width, 
+            windowWidth: window.innerWidth,
+            // Allow 5px tolerance for scrollbars or subpixel rendering
+            isFullWidth: Math.abs(rect.width - window.innerWidth) <= 5
+        };
+    });
+    recordStep('MAC Banner Full-Width', bannerWidthInfo.found && bannerWidthInfo.isFullWidth, 
+        `Banner width: ${bannerWidthInfo.width}, Window: ${bannerWidthInfo.windowWidth}`);
+
 
     console.log('7. Applying Theme Preset...');
     await page.evaluate(() => {
@@ -325,11 +332,11 @@ const path = require('path');
     recordStep('Service Card Click', cardClicked, `Card clicked: ${cardClicked}`);
 
     console.log('8. Opening Service Management Modal (Invidious)...');
-    const invidiousCard = await page.$('#link-invidious');
+    const invidiousCard = await page.$('.card[data-container="invidious"]');
     
     // Audit: Navigation Arrow
     const hasNavArrow = await page.evaluate(() => {
-        const arrow = document.querySelector('#link-invidious .nav-arrow');
+        const arrow = document.querySelector('.card[data-container="invidious"] .nav-arrow');
         return !!arrow && window.getComputedStyle(arrow).fontFamily.includes('Material Symbols Rounded');
     });
     recordStep('Service Navigation Arrow', hasNavArrow, `Nav arrow present: ${hasNavArrow}`);
@@ -343,8 +350,8 @@ const path = require('path');
     if (invidiousCard) {
       await invidiousCard.hover();
     }
-    await page.waitForSelector('#link-invidious .settings-btn', { visible: true, timeout: 30000 });
-    await page.click('#link-invidious .settings-btn');
+    await page.waitForSelector('.card[data-container="invidious"] .settings-btn', { visible: true, timeout: 30000 });
+    await page.click('.card[data-container="invidious"] .settings-btn');
     await new Promise(r => setTimeout(r, 1000));
     
     // Audit: Presence of Metrics in Modal
@@ -361,7 +368,7 @@ const path = require('path');
     });
     if (!isModalVisible) {
       await page.evaluate(() => {
-        const btn = document.querySelector('#link-invidious .settings-btn');
+        const btn = document.querySelector('.card[data-container="invidious"] .settings-btn');
         if (btn) btn.click();
       });
       await new Promise(r => setTimeout(r, 800));
