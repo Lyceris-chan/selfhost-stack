@@ -418,6 +418,26 @@ const path = require('path');
       }
     }
     if (updateBtn) {
+      // Manually force the banner visible for width check (it might be hidden if no updates)
+      await page.evaluate(() => {
+          const banner = document.getElementById('update-banner');
+          if (banner) banner.style.display = 'block';
+      });
+      
+      const updateBannerWidth = await page.evaluate(() => {
+          const banner = document.getElementById('update-banner');
+          if (!banner) return { found: false };
+          const rect = banner.getBoundingClientRect();
+          return { 
+              found: true, 
+              width: rect.width, 
+              windowWidth: window.innerWidth,
+              isFullWidth: Math.abs(rect.width - window.innerWidth) <= 5
+          };
+      });
+      recordStep('Update Banner Full-Width', updateBannerWidth.found && updateBannerWidth.isFullWidth, 
+          `Banner width: ${updateBannerWidth.width}, Window: ${updateBannerWidth.windowWidth}`);
+
       await updateBtn.click();
       await page.waitForFunction(() => {
         const modal = document.getElementById('update-selection-modal');

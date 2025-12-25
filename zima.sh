@@ -1314,7 +1314,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             <div class="chip filter-chip admin-only" data-target="logs" onclick="filterCategory('logs')">System Logs</div>
         </div>
 
-        <div id="update-banner" class="admin-only full-bleed" style="display:none; margin-bottom: 32px; width: 100%;">
+        <div id="update-banner" class="admin-only full-bleed" style="display:none; margin-bottom: 32px;">
             <div class="card" style="min-height: auto; padding: 24px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;">
                     <div>
