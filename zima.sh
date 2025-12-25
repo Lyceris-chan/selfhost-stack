@@ -200,78 +200,13 @@ safe_remove_network() {
     $DOCKER_CMD network rm "$net" 2>/dev/null || true
 }
 
-authenticate_registries() {
-    # Export DOCKER_CONFIG globally
-    export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
-    
-    if [ "$AUTO_CONFIRM" = true ] || [ -n "$REG_TOKEN" ]; then
-        if [ -n "$REG_TOKEN" ]; then
-             log_info "Using provided credentials from environment."
-        else
-             log_info "Auto-confirm enabled: Using default/placeholder credentials."
-             REG_USER="laciachan"
-             REG_TOKEN="DOCKER_TOKEN_PLACEHOLDER"
-        fi
-        
-        # DHI Login
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-            log_info "dhi.io: Authentication successful."
-        else
-            log_warn "dhi.io: Authentication failed."
-        fi
-
-        # Docker Hub Login
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-             log_info "Docker Hub: Authentication successful."
-        else
-             log_warn "Docker Hub: Authentication failed."
-        fi
-        return 0
-    fi
-
-    echo ""
-    echo "--- REGISTRY AUTHENTICATION ---"
-    echo "Please provide your credentials for dhi.io and Docker Hub."
-    echo ""
-
-    while true; do
-        read -r -p "Username: " REG_USER
-        read -rs -p "Token: " REG_TOKEN
-        echo ""
-        
-        # DHI Login
-        DHI_LOGIN_OK=false
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
-            log_info "dhi.io: Authentication successful."
-            DHI_LOGIN_OK=true
-        else
-            log_crit "dhi.io: Authentication failed."
-        fi
-
-        # Docker Hub Login
-        HUB_LOGIN_OK=false
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-             log_info "Docker Hub: Authentication successful."
-             HUB_LOGIN_OK=true
-        else
-             log_warn "Docker Hub: Authentication failed."
-        fi
-
-        if [ "$DHI_LOGIN_OK" = true ]; then
-            return 0
-        fi
-
-        if ! ask_confirm "Authentication failed. Want to try again?"; then return 1; fi
-    done
-}
-
 generate_dashboard() {
 # Generate the Material Design 3 management dashboard.
 log_info "Compiling Management Dashboard UI..."
 if [ -d "$DASHBOARD_FILE" ]; then
     rm -rf "$DASHBOARD_FILE"
 fi
-cat > "$DASHBOARD_FILE" <<EOF
+cat > "$DASHBOARD_FILE" <<'EOF'
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1497,7 +1432,7 @@ cat > "$DASHBOARD_FILE" <<EOF
                 <div class="code-block sensitive">quic://$LAN_IP</div>
 EOF
 if [ -n "$DESEC_DOMAIN" ]; then
-    cat >> "$DASHBOARD_FILE" <<EOF
+    cat >> "$DASHBOARD_FILE" <<'EOF'
                 <div class="code-label" data-tooltip="DNS-over-HTTPS (DOH) - RFC 8484. Standard for web browsers. Queries are indistinguishable from HTTPS traffic.">Secure DOH (Browsers)</div>
                 <div class="code-block sensitive">https://$DESEC_DOMAIN/dns-query</div>
                 <div class="code-label" data-tooltip="DNS-over-TLS (DOT) - RFC 7858. Port 853. The industry standard for Android 'Private DNS' and system resolvers.">Secure DOT (Android / System)</div>
@@ -1544,7 +1479,7 @@ if [ -n "$DESEC_DOMAIN" ]; then
             </div>
 EOF
 else
-    cat >> "$DASHBOARD_FILE" <<EOF
+    cat >> "$DASHBOARD_FILE" <<'EOF'
                 <div class="code-label" data-tooltip="Secured DNS via HTTPS">DNS-over-HTTPS</div>
                 <div class="code-block sensitive">https://$LAN_IP/dns-query</div>
                 <div class="code-label" data-tooltip="Secured DNS via TLS">DNS-over-TLS</div>
@@ -1571,7 +1506,7 @@ else
             </div>
 EOF
 fi
-cat >> "$DASHBOARD_FILE" <<EOF
+cat >> "$DASHBOARD_FILE" <<'EOF'
         </div>
         </section>
 
@@ -2194,14 +2129,25 @@ cat >> "$DASHBOARD_FILE" <<EOF
         
         function filterCategory(cat) {
             document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-            const targetChip = document.querySelector(\`.filter-chip[data-target="\${cat}"]\`);
+            const targetChip = document.querySelector(`.filter-chip[data-target="${cat}"]`);
             if (targetChip) targetChip.classList.add('active');
             
             const allSection = document.getElementById('section-all');
             const otherSections = document.querySelectorAll('section[data-category]:not(#section-all)');
             
-            if (cat === 'all') {
-                if (allSection) allSection.style.display = 'block';
+            if (cat === 'all' || cat === 'legacy') {
+                if (allSection) {
+                    allSection.style.display = 'block';
+                    if (cat === 'legacy') {
+                        allSection.classList.add('legacy-view');
+                        const label = allSection.querySelector('.section-label');
+                        if (label) label.textContent = 'Service Directory';
+                    } else {
+                        allSection.classList.remove('legacy-view');
+                        const label = allSection.querySelector('.section-label');
+                        if (label) label.textContent = 'All Services';
+                    }
+                }
                 otherSections.forEach(s => s.style.display = 'none');
             } else {
                 if (allSection) allSection.style.display = 'none';
@@ -2217,7 +2163,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
 
             localStorage.setItem('dashboard_filter', cat);
             syncSettings();
-            showSnackbar(\`Filtering by: \${cat.charAt(0).toUpperCase() + cat.slice(1)}\`, "Dismiss");
+            showSnackbar(`View: ${cat === 'legacy' ? 'List All' : cat.charAt(0).toUpperCase() + cat.slice(1)}`, "Dismiss");
         }
 
         // Global State & Data
@@ -3694,7 +3640,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             const seed = document.getElementById('theme-seed-color').value;
             const isLight = document.documentElement.classList.contains('light-mode');
             const isPrivacy = document.body.classList.contains('privacy-mode');
-            const activeFilter = localStorage.getItem('dashboard_filter') || 'all';
+            const activeFilter = localStorage.getItem('dashboard_filter') || 'legacy';
             
             const settings = {
                 seed,
@@ -4211,7 +4157,7 @@ cat >> "$DASHBOARD_FILE" <<EOF
             }
             
             // Restore filter and check HTTPS
-            const savedFilter = localStorage.getItem('dashboard_filter') || 'all';
+            const savedFilter = localStorage.getItem('dashboard_filter') || 'legacy';
             filterCategory(savedFilter);
             if (window.location.protocol === 'https:') {
                 const badge = document.getElementById('https-badge');
@@ -4235,6 +4181,75 @@ cat >> "$DASHBOARD_FILE" <<EOF
 </body>
 </html>
 EOF
+    sed -i "s|\$LAN_IP|$LAN_IP|g" "$DASHBOARD_FILE"
+    sed -i "s|\$DESEC_DOMAIN|$DESEC_DOMAIN|g" "$DASHBOARD_FILE"
+    sed -i "s|\$PORT_PORTAINER|$PORT_PORTAINER|g" "$DASHBOARD_FILE"
+    sed -i "s|\$ODIDO_API_KEY|$ODIDO_API_KEY|g" "$DASHBOARD_FILE"
+}
+
+authenticate_registries() {
+    # Export DOCKER_CONFIG globally
+    export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
+    
+    if [ "$AUTO_CONFIRM" = true ] || [ -n "$REG_TOKEN" ]; then
+        if [ -n "$REG_TOKEN" ]; then
+             log_info "Using provided credentials from environment."
+        else
+             log_info "Auto-confirm enabled: Using default/placeholder credentials."
+             REG_USER="laciachan"
+             REG_TOKEN="DOCKER_TOKEN_PLACEHOLDER"
+        fi
+        
+        # DHI Login
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+            log_info "dhi.io: Authentication successful."
+        else
+            log_warn "dhi.io: Authentication failed."
+        fi
+
+        # Docker Hub Login
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+             log_info "Docker Hub: Authentication successful."
+        else
+             log_warn "Docker Hub: Authentication failed."
+        fi
+        return 0
+    fi
+
+    echo ""
+    echo "--- REGISTRY AUTHENTICATION ---"
+    echo "Please provide your credentials for dhi.io and Docker Hub."
+    echo ""
+
+    while true; do
+        read -r -p "Username: " REG_USER
+        read -rs -p "Token: " REG_TOKEN
+        echo ""
+        
+        # DHI Login
+        DHI_LOGIN_OK=false
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
+            log_info "dhi.io: Authentication successful."
+            DHI_LOGIN_OK=true
+        else
+            log_crit "dhi.io: Authentication failed."
+        fi
+
+        # Docker Hub Login
+        HUB_LOGIN_OK=false
+        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+             log_info "Docker Hub: Authentication successful."
+             HUB_LOGIN_OK=true
+        else
+             log_warn "Docker Hub: Authentication failed."
+        fi
+
+        if [ "$DHI_LOGIN_OK" = true ]; then
+            return 0
+        fi
+
+        if ! ask_confirm "Authentication failed. Want to try again?"; then return 1; fi
+    done
 }
 
 setup_assets() {
@@ -4636,16 +4651,33 @@ if [ "$CLEAN_ONLY" = true ]; then
 fi
 
 # Authenticate to registries (DHI & Docker Hub)
+if [ "${DASHBOARD_ONLY:-false}" = true ]; then
+    log_info "Dashboard-only mode active. Generating UI and exiting."
+    LAN_IP="${LAN_IP_OVERRIDE:-10.0.1.183}"
+    PUBLIC_IP="${PUBLIC_IP:-1.2.3.4}"
+    ODIDO_API_KEY="${ODIDO_API_KEY:-mock_key}"
+    PORT_DASHBOARD_WEB="8081"
+    PORT_ADGUARD_WEB="8083"
+    PORT_WG_WEB="51821"
+    PORT_PORTAINER="9443"
+    DESEC_DOMAIN="example.dedyn.io"
+    DESEC_TOKEN="mock_token"
+    mkdir -p "$BASE_DIR"
+    mkdir -p "$ASSETS_DIR"
+    generate_dashboard
+    log_info "Dashboard generation complete: $DASHBOARD_FILE"
+    exit 0
+fi
+
 authenticate_registries
 
 # Run cleanup
 clean_environment
 
 # Ensure authentication works by pulling critical utility images now
-log_info "Pre-pulling ALL deployment images to avoid rate limits..."
-# Explicitly pull images used by 'docker run' commands or as base images later in the script
+log_info "Pre-pulling core infrastructure images to avoid rate limits..."
 # We only pull core infrastructure and base images. App images built from source are skipped.
-CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21-dev dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/node:20-alpine3.22 dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
+CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
 
 for img in $CRITICAL_IMAGES; do
     MAX_RETRIES=3
@@ -6975,7 +7007,12 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             status["error"] = "deSEC verification failed. Check your token and domain."
                             status["status"] = "Issuance Failed"
                         elif "Rate limit" in log_content or "too many certificates" in log_content:
-                            status["error"] = "Let's Encrypt rate limit reached. Retrying later."
+                            # Attempt to extract "retry after" timestamp if present
+                            retry_match = re.search(r"retry after ([0-9:\- ]+ UTC)", log_content)
+                            if retry_match:
+                                status["error"] = f"Let's Encrypt rate limit reached. Next attempt after: {retry_match.group(1)}"
+                            else:
+                                status["error"] = "Let's Encrypt rate limit reached. Retrying automatically in 24h."
                             status["status"] = "Rate Limited"
                         elif "Invalid token" in log_content:
                             status["error"] = "Invalid deSEC token."
@@ -8432,12 +8469,14 @@ generate_protonpass_export() {
     # We use this generic format for maximum compatibility.
     cat > "$export_file" <<EOF
 Name,URL,Username,Password,Note
+Privacy Hub Admin,http://$LAN_IP:$PORT_DASHBOARD_WEB,admin,$ADMIN_PASS_RAW,Primary management portal for the privacy stack.
 AdGuard Home,http://$LAN_IP:$PORT_ADGUARD_WEB,adguard,$AGH_PASS_RAW,Network-wide advertisement and tracker filtration.
 WireGuard VPN UI,http://$LAN_IP:$PORT_WG_WEB,admin,$VPN_PASS_RAW,WireGuard remote access management interface.
 Portainer UI,http://$LAN_IP:$PORT_PORTAINER,portainer,$ADMIN_PASS_RAW,Docker container management interface.
+Odido Booster API,http://$LAN_IP:8085,admin,$ODIDO_API_KEY,API key for dashboard and Odido automation.
 Gluetun Control Server,http://$LAN_IP:8000,gluetun,$ADMIN_PASS_RAW,Internal VPN gateway control API.
-deSEC DNS API,,$DESEC_DOMAIN,$DESEC_TOKEN,API token for deSEC dynamic DNS management.
-GitHub Scribe Token,,$SCRIBE_GH_USER,$SCRIBE_GH_TOKEN,GitHub Personal Access Token for Scribe Medium frontend.
+deSEC DNS API,https://desec.io,$DESEC_DOMAIN,$DESEC_TOKEN,API token for deSEC dynamic DNS management.
+GitHub Scribe Token,https://github.com/settings/tokens,$SCRIBE_GH_USER,$SCRIBE_GH_TOKEN,GitHub Personal Access Token (Gist Key) for Scribe Medium frontend.
 EOF
     chmod 600 "$export_file"
     log_info "Credential export file created: $export_file"
@@ -8642,6 +8681,10 @@ if [ "$AUTO_PASSWORD" = true ]; then
     echo "$BASE_DIR/protonpass_import.csv"
     echo ""
     echo "Please save these credentials. They are also stored in: $BASE_DIR/.secrets"
+    echo ""
+    echo "--- SECURITY ---"
+    read -n 1 -s -r -p "Press any key to clear these credentials from the terminal screen..."
+    clear
 fi
 echo "=========================================================="
 
