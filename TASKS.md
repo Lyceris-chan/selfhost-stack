@@ -6,8 +6,8 @@
 - [x] ensure chips properly scale to take up the remaining space on their row without looking weird e.g Endpoint Provisioning has a ton of empty space next to it as its the only chip on that row
 - [x] the adguard allowlist doesnt get setup properly and has no entries in it
 - [x] ensure the adguard rewrite for our certificate thing is setup properly
-- [ ] test all user interactions click and toggle and login and do everything and check everything to see if everthing works update the verification suite as you go
-- [ ] ensure that all services mentioned in the readme properly work and show up 
+- [x] test all user interactions click and toggle and login and do everything and check everything to see if everthing works update the verification suite as you go
+- [x] ensure that all services mentioned in the readme properly work and show up 
 - [x] write a report about your findings
 - [x] clean up the repo
 - [x] push and commit
