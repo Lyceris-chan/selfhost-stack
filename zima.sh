@@ -4877,37 +4877,79 @@ clean_environment() {
     check_cert_risk() {
         CERT_PROTECT=false
         if [ -f "$BASE_DIR/config/adguard/ssl.crt" ]; then
+            echo "----------------------------------------------------------"
+            echo "   🔍 EXISTING SSL CERTIFICATE DETECTED"
+            echo "----------------------------------------------------------"
+
+            # Try to load existing domain configuration
+            EXISTING_DOMAIN=""
+            if [ -f "$BASE_DIR/.secrets" ]; then
+                EXISTING_DOMAIN=$(grep "DESEC_DOMAIN=" "$BASE_DIR/.secrets" | cut -d'=' -f2)
+            fi
+
+            # Extract Certificate Details
+            CERT_SUBJECT=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -subject 2>/dev/null | sed 's/subject=//')
+            CERT_ISSUER=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -issuer 2>/dev/null | sed 's/issuer=//')
+            CERT_DATES=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -dates 2>/dev/null)
+            CERT_NOT_AFTER=$(echo "$CERT_DATES" | grep "notAfter=" | cut -d= -f2)
+
+            echo "   • Subject: $CERT_SUBJECT"
+            echo "   • Issuer:  $CERT_ISSUER"
+            echo "   • Expires: $CERT_NOT_AFTER"
+
+            if [ -n "$EXISTING_DOMAIN" ]; then
+                echo "   • Setup Domain: $EXISTING_DOMAIN"
+                if echo "$CERT_SUBJECT" | grep -q "$EXISTING_DOMAIN"; then
+                    echo "   ✅ Certificate MATCHES the configured domain."
+                else
+                    echo "   ⚠️  Certificate DOES NOT MATCH the configured domain ($EXISTING_DOMAIN)."
+                fi
+            fi
+
+            echo ""
+
             # Check for standard ACME issuers (Let's Encrypt, ZeroSSL, etc)
-            if grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL" "$BASE_DIR/config/adguard/ssl.crt"; then
-                log_warn "⚠️  VALID SSL CERTIFICATE DETECTED"
-                echo "   A valid CA-signed certificate exists in configuration."
+            IS_ACME=false
+            # Use the extracted issuer string for detection rather than grepping the raw file
+            if echo "$CERT_ISSUER" | grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL"; then
+                IS_ACME=true
+                log_warn "This appears to be a valid ACME-signed certificate."
                 echo "   Deleting this file may trigger rate limits (e.g. Let's Encrypt 5/week)."
-                echo "   Location: $BASE_DIR/config/adguard/ssl.crt"
-                echo ""
-                
-                if [ "$AUTO_CONFIRM" = true ]; then
-                    log_warn "Auto-confirm is active. Proceeding with deletion in 3 seconds..."
-                    sleep 3
+            else
+                echo "   This appears to be a self-signed or custom certificate."
+            fi
+
+            echo "   Location: $BASE_DIR/config/adguard/ssl.crt"
+            echo "----------------------------------------------------------"
+
+            if [ "$AUTO_CONFIRM" = true ]; then
+                if [ "$IS_ACME" = true ]; then
+                    log_warn "Auto-confirm is active. Preserving potentially valid certificate..."
+                    # Default action for valid certs with -y is PRESERVE (via N logic below)
+                    cert_response="n"
+                else
+                    log_warn "Auto-confirm is active. Deleting self-signed certificate..."
                     return 0
                 fi
-
-                read -r -p "   Are you sure you want to DELETE this certificate? [y/N]: " cert_response
-                case "$cert_response" in
-                    [yY][eE][sS]|[yY]) return 0 ;;
-                    *)
-                        CERT_RESTORE=true
-                        CERT_PROTECT=true
-                        rm -rf "$CERT_BACKUP_DIR"
-                        mkdir -p "$CERT_BACKUP_DIR"
-                        for cert_file in "$BASE_DIR/config/adguard/ssl.crt" "$BASE_DIR/config/adguard/ssl.key"; do
-                            if [ -f "$cert_file" ]; then
-                                cp "$cert_file" "$CERT_BACKUP_DIR"/
-                            fi
-                        done
-                        log_info "Certificate will be preserved and restored after cleanup."
-                        return 0 ;;
-                esac
+            else
+                read -r -p "   Do you want to DELETE this certificate? (Default: No) [y/N]: " cert_response
             fi
+
+            case "$cert_response" in
+                [yY][eE][sS]|[yY]) return 0 ;;
+                *)
+                    CERT_RESTORE=true
+                    CERT_PROTECT=true
+                    rm -rf "$CERT_BACKUP_DIR"
+                    mkdir -p "$CERT_BACKUP_DIR"
+                    for cert_file in "$BASE_DIR/config/adguard/ssl.crt" "$BASE_DIR/config/adguard/ssl.key"; do
+                        if [ -f "$cert_file" ]; then
+                            cp "$cert_file" "$CERT_BACKUP_DIR"/
+                        fi
+                    done
+                    log_info "Certificate will be preserved and restored after cleanup."
+                    return 0 ;;
+            esac
         fi
         return 0
     }
