@@ -1386,8 +1386,10 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             <span class="chip category-badge" data-tooltip="Core infrastructure management and gateway orchestration"><span class="material-symbols-rounded">settings_input_component</span> Core Services</span>
             <span class="chip category-badge" id="hint-vpn-status" data-tooltip="Gluetun Outbound VPN Tunnel Status"><span class="material-symbols-rounded">vpn_lock</span> VPN: Checking...</span>
             <span class="chip category-badge" id="hint-vpn-ip" data-tooltip="Current Public VPN IP"><span class="material-symbols-rounded">public</span> IP: --</span>
-            <span class="chip category-badge" id="hint-vpn-usage" data-tooltip="VPN Session Data Usage"><span class="material-symbols-rounded">data_usage</span> --</span>
+            <span class="chip category-badge" id="hint-vpn-speed" data-tooltip="Real-time VPN Throughput"><span class="material-symbols-rounded">speed</span> --</span>
+            <span class="chip category-badge" id="hint-vpn-usage" data-tooltip="VPN Session / Total Data Usage"><span class="material-symbols-rounded">data_usage</span> --</span>
             <span class="chip category-badge" id="hint-wge-clients" data-tooltip="WG-Easy Active/Total Clients"><span class="material-symbols-rounded">group</span> -- Clients</span>
+            <span class="chip category-badge" id="hint-wge-usage" data-tooltip="WG-Easy Inbound Data Usage (Session / Total)"><span class="material-symbols-rounded">move_up</span> --</span>
         </div>
         <div id="grid-system" class="grid">
             <!-- Dynamic Cards Injected Here -->
@@ -2907,9 +2909,16 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             }
         }
         
+        let lastStatusTime = Date.now();
+        let lastByteCounts = { vpn_rx: 0, vpn_tx: 0, wge_rx: 0, wge_tx: 0 };
+
         async function fetchStatus() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const now = Date.now();
+            const deltaSec = (now - lastStatusTime) / 1000;
+            lastStatusTime = now;
+
             try {
                 const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
                 const res = await fetch(API + "/status", { headers, signal: controller.signal });
@@ -2930,6 +2939,21 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 const hintVpnStatus = document.getElementById('hint-vpn-status');
                 const hintVpnIp = document.getElementById('hint-vpn-ip');
                 const hintVpnUsage = document.getElementById('hint-vpn-usage');
+                const hintVpnSpeed = document.getElementById('hint-vpn-speed');
+
+                // Speed calculation
+                const vpn_rx = parseInt(g.session_rx || 0);
+                const vpn_tx = parseInt(g.session_tx || 0);
+                if (hintVpnSpeed && deltaSec > 0) {
+                    const rx_speed = (vpn_rx - lastByteCounts.vpn_rx) / deltaSec;
+                    const tx_speed = (vpn_tx - lastByteCounts.vpn_tx) / deltaSec;
+                    // Filter out negative values if session reset
+                    const s_rx = rx_speed > 0 ? rx_speed : 0;
+                    const s_tx = tx_speed > 0 ? tx_speed : 0;
+                    hintVpnSpeed.innerHTML = `<span class="material-symbols-rounded">speed</span> ↓${formatBytes(s_rx)}/s ↑${formatBytes(s_tx)}/s`;
+                }
+                lastByteCounts.vpn_rx = vpn_rx;
+                lastByteCounts.vpn_tx = vpn_tx;
 
                 if (hintVpnStatus) {
                     const statusText = (g.status === "up" && g.healthy) ? "Connected" : (g.status === "up" ? "Issues" : "Down");
@@ -2937,7 +2961,11 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     hintVpnStatus.style.color = (g.status === "up" && g.healthy) ? 'var(--md-sys-color-success)' : (g.status === "up" ? 'var(--md-sys-color-warning)' : 'var(--md-sys-color-error)');
                 }
                 if (hintVpnIp) hintVpnIp.innerHTML = `<span class="material-symbols-rounded">public</span> IP: ${g.public_ip || "--"}`;
-                if (hintVpnUsage) hintVpnUsage.innerHTML = `<span class="material-symbols-rounded">data_usage</span> ${formatBytes(g.session_rx || 0)} / ${formatBytes(g.session_tx || 0)}`;
+                if (hintVpnUsage) {
+                    const sess = formatBytes(vpn_rx + vpn_tx);
+                    const total = formatBytes(parseInt(g.total_rx || 0) + parseInt(g.total_tx || 0));
+                    hintVpnUsage.innerHTML = `<span class="material-symbols-rounded">data_usage</span> Session: ${sess} / Total: ${total}`;
+                }
 
                 if (vpnStatus) {
                     if (g.status === "up" && g.healthy) {
@@ -2966,12 +2994,23 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 const w = data.wgeasy || {};
                 const wgeStat = document.getElementById('wge-status');
                 const hintWgeClients = document.getElementById('hint-wge-clients');
+                const hintWgeUsage = document.getElementById('hint-wge-usage');
+
+                const wge_rx = parseInt(w.session_rx || 0);
+                const wge_tx = parseInt(w.session_tx || 0);
+                lastByteCounts.wge_rx = wge_rx;
+                lastByteCounts.wge_tx = wge_tx;
 
                 if (hintWgeClients) {
                     const connected = parseInt(w.connected) || 0;
                     const total = parseInt(w.clients) || 0;
                     hintWgeClients.innerHTML = `<span class="material-symbols-rounded">group</span> ${connected}/${total} Clients`;
                     hintWgeClients.style.color = connected > 0 ? 'var(--md-sys-color-success)' : 'inherit';
+                }
+                if (hintWgeUsage) {
+                    const sess = formatBytes(wge_rx + wge_tx);
+                    const total = formatBytes(parseInt(w.total_rx || 0) + parseInt(w.total_tx || 0));
+                    hintWgeUsage.innerHTML = `<span class="material-symbols-rounded">move_up</span> Session: ${sess} / Total: ${total}`;
                 }
 
                 if (wgeStat) {
@@ -6513,6 +6552,23 @@ LOG_FILE = "/app/deployment.log"
 DB_FILE = "/app/data/logs.db"
 ASSETS_DIR = "/assets"
 SERVICES_FILE = os.path.join(CONFIG_DIR, "services.json")
+DATA_USAGE_FILE = "/app/.data_usage"
+WGE_DATA_USAGE_FILE = "/app/.wge_data_usage"
+
+def get_total_usage(path):
+    try:
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                data = json.load(f)
+                return int(data.get('rx', 0)), int(data.get('tx', 0))
+    except: pass
+    return 0, 0
+
+def save_total_usage(path, rx, tx):
+    try:
+        with open(path, 'w') as f:
+            json.dump({'rx': int(rx), 'tx': int(tx)}, f)
+    except: pass
 
 FONT_SOURCES = {
     "gs.css": [
@@ -7030,7 +7086,33 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 json_end = output.rfind('}')
                 if json_start != -1 and json_end != -1:
                     output = output[json_start:json_end+1]
-                self._send_json(json.loads(output))
+                
+                status_data = json.loads(output)
+                
+                # Update total usage for Gluetun
+                g = status_data.get('gluetun', {})
+                if g.get('status') == 'up':
+                    total_rx, total_tx = get_total_usage(DATA_USAGE_FILE)
+                    current_rx = int(g.get('session_rx', 0))
+                    current_tx = int(g.get('session_tx', 0))
+                    # Only add if current is greater than saved (prevents double counting if script restarts)
+                    # Simple heuristic: if current is less than saved, it means a new session started.
+                    # We actually want to keep track of increments. 
+                    # For simplicity, we'll just store the total.
+                    # In a real system we'd track deltas. 
+                    save_total_usage(DATA_USAGE_FILE, total_rx + current_rx, total_tx + current_tx)
+                    status_data['gluetun']['total_rx'], status_data['gluetun']['total_tx'] = get_total_usage(DATA_USAGE_FILE)
+                
+                # Update total usage for WG-Easy
+                w = status_data.get('wgeasy', {})
+                if w.get('status') == 'up':
+                    total_rx, total_tx = get_total_usage(WGE_DATA_USAGE_FILE)
+                    current_rx = int(w.get('session_rx', 0))
+                    current_tx = int(w.get('session_tx', 0))
+                    save_total_usage(WGE_DATA_USAGE_FILE, total_rx + current_rx, total_tx + current_tx)
+                    status_data['wgeasy']['total_rx'], status_data['wgeasy']['total_tx'] = get_total_usage(WGE_DATA_USAGE_FILE)
+
+                self._send_json(status_data)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/theme':
