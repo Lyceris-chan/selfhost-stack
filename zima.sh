@@ -328,7 +328,10 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             max-width: none;
             border-radius: var(--md-sys-shape-corner-full);
             border: 1px solid var(--md-sys-color-outline-variant);
+            outline: none !important;
+            background-color: transparent; /* Ensure no square background bleeds */
         }
+        .filter-chip:focus { outline: none !important; }
         .filter-chip.active {
             background: var(--md-sys-color-primary-container) !important;
             color: var(--md-sys-color-on-primary-container) !important;
@@ -2203,7 +2206,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             chipBox.className = 'chip-box';
 
             // Add standard Portainer link for admin
-            const pChip = createChipElement(id, { label: 'Console', icon: 'terminal', variant: 'admin tonal', tooltip: 'Direct Container Management', portainer: true });
+            const pChip = createChipElement(id, { label: 'Manage', icon: 'terminal', variant: 'admin tonal', tooltip: 'Direct Container Management', portainer: true });
             chipBox.appendChild(pChip);
 
             // Add 'Local' badge for services that process data locally
@@ -2376,10 +2379,13 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             
             if (isAdmin) {
                 // Ensure logs are toggled on when entering admin mode
+                // Removed auto-toggle as per user request to default to all services or preserve state
+                /*
                 const logsChip = document.querySelector('.filter-chip[data-target="logs"]');
                 if (logsChip && !logsChip.classList.contains('active')) {
                     filterCategory('logs');
                 }
+                */
             }
 
             if (warningEl && isAdmin) {
@@ -2585,7 +2591,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         function dismissUpdateBanner() {
             const banner = document.getElementById('update-banner');
             if (banner) banner.classList.add('hidden-banner');
-            localStorage.setItem('update_banner_dismissed', pendingUpdates.join(','));
+            localStorage.setItem('update_banner_dismissed', pendingUpdates.sort().join(','));
         }
 
         function dismissMacAdvisory() {
@@ -2596,8 +2602,12 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
 
         function initMacAdvisory() {
             const banner = document.getElementById('mac-advisory');
-            if (banner && localStorage.getItem('mac_advisory_dismissed') === 'true') {
-                banner.classList.add('hidden-banner');
+            if (banner) {
+                if (localStorage.getItem('mac_advisory_dismissed') === 'true') {
+                    banner.classList.add('hidden-banner');
+                } else {
+                    banner.classList.remove('hidden-banner');
+                }
             }
         }
 
@@ -2607,7 +2617,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 if (!res.ok) return;
                 const data = await res.json();
                 const updates = data.updates || {};
-                pendingUpdates = Object.keys(updates);
+                pendingUpdates = Object.keys(updates).sort();
                 
                 const banner = document.getElementById('update-banner');
                 const list = document.getElementById('update-list');
@@ -2921,14 +2931,14 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         async function filterLogs() {
             const level = document.getElementById('log-filter-level').value;
             const category = document.getElementById('log-filter-cat').value;
-            let url = API + "/logs";
-            const params = [];
-            if (level !== 'ALL') params.push("level=" + level);
-            if (category !== 'ALL') params.push("category=" + category);
-            if (params.length) url += "?" + params.join("&");
+            // Modern API call construction
+            const query = new URLSearchParams();
+            if (level && level !== 'ALL') query.append('level', level);
+            if (category && category !== 'ALL') query.append('category', category);
+            const url = API + "/logs?" + query.toString();
             
             try {
-                const res = await fetch(url);
+                const res = await fetch(url, { headers: getAuthHeaders() });
                 const data = await res.json();
                 const el = document.getElementById('log-container');
                 el.innerHTML = '';
@@ -4421,9 +4431,14 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 const res = await fetch(API + "/check-updates", { headers: getAuthHeaders() });
                 const data = await res.json();
                 if (data.success) {
-                    showSnackbar("Update check is running in background. Results will appear in logs and banners shortly.");
-                    // Refresh source updates after a short delay
-                    setTimeout(fetchUpdates, 5000);
+                    showSnackbar("Update check running... Please wait.", "OK");
+                    // Poll for updates a few times
+                    let checks = 0;
+                    const interval = setInterval(async () => {
+                        await fetchUpdates();
+                        checks++;
+                        if (checks >= 6) clearInterval(interval); // Stop after 30s
+                    }, 5000);
                 } else {
                     throw new Error(data.error);
                 }
@@ -4555,6 +4570,16 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             
             let tooltipTimeout = null;
 
+            const hideTooltip = () => {
+                if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                tooltipBox.classList.remove('visible');
+                setTimeout(() => {
+                    if (!tooltipBox.classList.contains('visible')) {
+                        tooltipBox.style.display = 'none';
+                    }
+                }, 150);
+            };
+
             document.addEventListener('mouseover', (e) => {
                 const target = e.target.closest('[data-tooltip]');
                 if (!target) return;
@@ -4564,7 +4589,6 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 tooltipTimeout = setTimeout(() => {
                     tooltipBox.textContent = target.dataset.tooltip;
                     tooltipBox.style.display = 'block';
-                    // Trigger reflow
                     tooltipBox.offsetHeight;
                     tooltipBox.classList.add('visible');
 
@@ -4574,14 +4598,11 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     let top = rect.top - boxRect.height - 12;
                     let left = rect.left + (rect.width / 2) - (boxRect.width / 2);
 
-                    // Edge collision detection (with 12px safety margin)
                     if (top < 12) top = rect.bottom + 12;
                     if (left < 12) left = 12;
                     if (left + boxRect.width > window.innerWidth - 12) {
                         left = window.innerWidth - boxRect.width - 12;
                     }
-                    
-                    // Final safety: ensure it doesn't go off bottom
                     if (top + boxRect.height > window.innerHeight - 12) {
                         top = window.innerHeight - boxRect.height - 12;
                     }
@@ -4593,16 +4614,12 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
 
             document.addEventListener('mouseout', (e) => {
                 if (e.target.closest('[data-tooltip]')) {
-                    if (tooltipTimeout) clearTimeout(tooltipTimeout);
-                    tooltipBox.classList.remove('visible');
-                    // Hide after transition
-                    setTimeout(() => {
-                        if (!tooltipBox.classList.contains('visible')) {
-                            tooltipBox.style.display = 'none';
-                        }
-                    }, 150);
+                    hideTooltip();
                 }
             });
+
+            // Hide tooltip on scroll to prevent persistence
+            window.addEventListener('scroll', hideTooltip, true);
 
             // Pre-populate Odido API key from deployment
             if (DEFAULT_ODIDO_API_KEY && !sessionStorage.getItem('odido_api_key')) {
@@ -4641,9 +4658,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
     </script>
     <!-- Project Size Details Modal -->
     <div id="project-size-modal" class="modal-overlay">
-        <div class="modal">
+        <div class="modal-card">
             <div class="modal-header">
-                <h3 id="modal-project-title">Storage Breakdown</h3>
+                <h2 id="modal-project-title">Storage Breakdown</h2>
                 <button onclick="closeProjectSizeModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
             </div>
             <div id="project-size-details" style="display: flex; flex-direction: column; gap: 16px;">
@@ -7285,7 +7302,9 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"error": "Unauthorized"}, 401)
             return
 
-        elif self.path == '/project-details':
+        path_clean = self.path.split('?')[0]
+
+        if path_clean == '/project-details':
             try:
                 # Source Size
                 source_size = 0
@@ -7364,7 +7383,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 })
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/system-health':
+        elif path_clean == '/system-health':
             try:
                 # System Uptime
                 uptime_seconds = time.time() - psutil.boot_time()
@@ -7433,7 +7452,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json(health_data)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/purge-images':
+        elif path_clean == '/purge-images':
             try:
                 # Purge dangling images
                 res = subprocess.run(['docker', 'image', 'prune', '-f'], capture_output=True, text=True, timeout=60)
@@ -7447,10 +7466,10 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True, "message": reclaimed_msg})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/uninstall':
+        elif path_clean == '/uninstall':
             try:
                 def run_uninstall():
-                    time.sleep(2)
+                    time.sleep(5) # Give enough time for response to flush
                     subprocess.run(["bash", "/app/zima.sh", "-x"], cwd="/app")
                 
                 import threading
@@ -7458,7 +7477,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True, "message": "Uninstall sequence started"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/status':
+        elif path_clean == '/status':
             try:
                 result = subprocess.run([CONTROL_SCRIPT, "status"], capture_output=True, text=True, timeout=30)
                 output = result.stdout.strip()
@@ -7496,7 +7515,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json(status_data)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/theme':
+        elif path_clean == '/theme':
             theme_file = os.path.join(CONFIG_DIR, "theme.json")
             if os.path.exists(theme_file):
                 try:
@@ -7506,7 +7525,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({})
             else:
                 self._send_json({})
-        elif self.path == '/master-update':
+        elif path_clean == '/master-update':
             try:
                 def run_master_update():
                     try:
@@ -7539,7 +7558,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True, "message": "Master update process started in background"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/check-updates':
+        elif path_clean == '/check-updates':
             try:
                 log_structured("INFO", "Checking for system-wide container and source updates...", "MAINTENANCE")
                 # Trigger Watchtower run-once to check for image updates
@@ -7555,7 +7574,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True, "message": "Update check initiated in background"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/updates':
+        elif path_clean == '/updates':
             try:
                 # Check for updates in source repositories
                 src_root = "/app/sources"
@@ -7628,7 +7647,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({"error": "Service parameter missing"}, 400)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/containers':
+        elif path_clean == '/containers':
             try:
                 # Get container IDs and labels
                 result = subprocess.run(
@@ -7646,12 +7665,12 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"containers": containers})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/services':
+        elif path_clean == '/services':
             try:
                 self._send_json({"services": load_services()})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/certificate-status':
+        elif path_clean == '/certificate-status':
             try:
                 cert_file = "/etc/adguard/conf/ssl.crt"
                 status = {"type": "None", "subject": "--", "issuer": "--", "expires": "--", "status": "No Certificate"}
@@ -7702,6 +7721,10 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 level = params.get('level', [None])[0]
                 category = params.get('category', [None])[0]
                 
+                # Filter out "ALL" if it sneaks in
+                if level == "ALL": level = None
+                if category == "ALL": category = None
+
                 conn = sqlite3.connect(DB_FILE)
                 c = conn.cursor()
                 sql = "SELECT timestamp, level, category, message FROM logs"
@@ -7724,7 +7747,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"logs": logs})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/metrics':
+        elif path_clean == '/metrics':
             try:
                 conn = sqlite3.connect(DB_FILE)
                 c = conn.cursor()
@@ -7767,13 +7790,13 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({"error": "Missing domain or token"}, 400)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/profiles':
+        elif path_clean == '/profiles':
             try:
                 files = [f.replace('.conf', '') for f in os.listdir(PROFILES_DIR) if f.endswith('.conf')]
                 self._send_json({"profiles": files})
             except:
                 self._send_json({"error": "Failed to list profiles"}, 500)
-        elif self.path == '/events':
+        elif path_clean == '/events':
             self.send_response(200)
             self.send_header('Content-type', 'text/event-stream')
             self.send_header('Cache-Control', 'no-cache')
@@ -8121,7 +8144,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({"changelog": "Changelog not available for this service."})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/odido-userid':
+        elif path_clean == '/odido-userid':
             try:
                 l = int(self.headers['Content-Length'])
                 data = json.loads(self.rfile.read(l).decode('utf-8'))
