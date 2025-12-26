@@ -4045,14 +4045,18 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 
                 items.forEach(item => {
                     const row = document.createElement('div');
-                    row.className = 'stat-row';
-                    row.style.padding = '8px 0';
+                    // Use list-item for consistent spacing and hover effects, manually adjusted for this modal
+                    row.className = 'list-item';
+                    row.style.margin = '0';
+                    row.style.borderBottom = '1px solid var(--md-sys-color-outline-variant)';
+                    row.style.borderRadius = '0';
+
                     row.innerHTML = `
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <span class="material-symbols-rounded" style="color: ${item.color || 'var(--md-sys-color-primary)'};">${item.icon}</span>
-                            <span class="body-medium">${item.label}</span>
+                        <div style="display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0;">
+                            <span class="material-symbols-rounded" style="color: ${item.color || 'var(--md-sys-color-primary)'}; font-size: 24px;">${item.icon}</span>
+                            <span class="body-medium" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.label}</span>
                         </div>
-                        <span class="label-large">${formatBytes(item.size * 1024 * 1024)}</span>
+                        <span class="label-large" style="white-space: nowrap; margin-left: 12px;">${formatBytes(item.size * 1024 * 1024)}</span>
                     `;
                     list.appendChild(row);
                 });
@@ -4670,7 +4674,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                         <!-- Dynamic content -->
                     </div>
                     <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; flex-direction: column; gap: 12px;">
-                        <button onclick="purgeUnusedImages(event)" class="btn" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: none; font-weight: 500; height: 40px; border-radius: 20px;">
+                        <button onclick="purgeUnusedImages(event)" class="btn btn-filled" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
                             <span class="material-symbols-rounded">broom</span>
                             Purge Unused Images
                         </button>
