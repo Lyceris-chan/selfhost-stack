@@ -4012,13 +4012,6 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     if (trustedInfo) trustedInfo.style.display = 'none';
                     if (untrustedInfo) untrustedInfo.style.display = 'block';
                     if (retryBtn) retryBtn.style.display = 'inline-flex';
-                    
-                    // Handle authentication or rate limit errors
-                    if (data.status === "Auth Error") {
-                        showSnackbar("SSL Authentication Error: Please check your deSEC credentials.");
-                    } else if (data.status === "Rate Limited" || data.status === "Issuance Failed") {
-                        showSnackbar("SSL Issue: " + data.error);
-                    }
                 } else {
                     failInfo.style.display = 'none';
                     if (isTrusted) {
@@ -8419,7 +8412,7 @@ x-casaos:
       instead of renting a false sense of security. Includes WireGuard VPN access,
       recursive DNS with AdGuard filtering, and VPN-isolated privacy frontends
       \(Invidious, Redlib, etc.\) that reduce tracking and prevent home IP exposure.
-  icon: http://$LAN_IP:8081/assets/privacy-hub.svg
+  icon: assets/privacy-hub.svg
 EOF
 
 # --- SECTION 14: DASHBOARD & UI GENERATION ---
