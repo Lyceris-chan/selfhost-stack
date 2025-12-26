@@ -885,29 +885,29 @@ cat > "$DASHBOARD_FILE" <<'EOF'
         
         textarea.text-field { min-height: 120px; resize: vertical; }
         
-        /* MD3 Buttons */
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 0 24px;
-            height: 40px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 500;
-            letter-spacing: 0.1px;
-            cursor: pointer;
-            transition: all var(--md-sys-motion-duration-short) linear;
-            border: none;
-            position: relative;
-            overflow: hidden;
-            text-decoration: none;
-            font-family: inherit;
-        }
+                /* MD3 Buttons */
+                .btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    padding: 0 24px;
+                    height: 40px;
+                    border-radius: 20px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    letter-spacing: 0.1px;
+                    cursor: pointer;
+                    transition: all var(--md-sys-motion-duration-short) linear;
+                    border: none;
+                    position: relative;
+                    overflow: hidden;
+                    text-decoration: none;
+                    font-family: inherit;
+                    white-space: nowrap;
+                }
         
-        .btn-filled { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); box-shadow: var(--md-sys-elevation-1); }
-        .btn-tonal { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+                .btn-filled { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); box-shadow: var(--md-sys-elevation-1); }        .btn-tonal { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
         .btn-outlined { background: transparent; color: var(--md-sys-color-primary); border: 1px solid var(--md-sys-color-outline); }
         .btn-tertiary { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
         
@@ -1318,7 +1318,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             <div class="chip filter-chip admin-only" data-target="logs" onclick="filterCategory('logs')">System Logs</div>
         </div>
 
-        <div id="update-banner" class="admin-only full-bleed" style="display:none; margin-bottom: 32px;">
+        <div id="update-banner" class="admin-only" style="display:none; margin-bottom: 32px;">
             <div class="card" style="min-height: auto; padding: 24px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;">
                     <div>
@@ -1327,13 +1327,13 @@ cat > "$DASHBOARD_FILE" <<'EOF'
                     </div>
                     <div style="display: flex; gap: 12px;">
                         <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Pull latest source code and rebuild containers for all pending services.">Update All</button>
-                        <button onclick="this.closest('#update-banner').style.display='none'" class="btn btn-outlined" style="border-color: currentColor; color: inherit;">Dismiss</button>
+                        <button onclick="this.closest('#update-banner').style.setProperty('display', 'none', 'important')" class="btn btn-outlined" style="border-color: currentColor; color: inherit;">Dismiss</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="mac-advisory" class="full-bleed" style="margin-bottom: 32px;">
+        <div id="mac-advisory" style="margin-bottom: 32px;">
             <div class="card" style="min-height: auto; padding: 16px 24px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 24px;">
                     <div style="display: flex; gap: 16px; align-items: flex-start;">
@@ -1444,7 +1444,7 @@ if [ -n "$DESEC_DOMAIN" ]; then
                 <div class="code-label" data-tooltip="DNS-over-TLS (DOT) - RFC 7858. Port 853. The industry standard for Android 'Private DNS' and system resolvers.">Secure DOT (Android / System)</div>
                 <div class="code-block sensitive">$DESEC_DOMAIN:853</div>
             </div>
-            <div class="card">
+            <div class="card full-width">
                 <h3>Endpoint Provisioning</h3>
                 <div id="dns-setup-trusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
                     <p class="body-medium description">Globally trusted SSL is active via Let's Encrypt and deSEC. This enables zero-trust encrypted DNS on mobile devices without requiring certificate installation.</p>
@@ -1491,7 +1491,7 @@ else
                 <div class="code-label" data-tooltip="Secured DNS via TLS">DNS-over-TLS</div>
                 <div class="code-block sensitive">$LAN_IP:853</div>
             </div>
-            <div class="card">
+            <div class="card full-width">
                 <h3>Endpoint Provisioning</h3>
                 <p class="body-medium description">The system is currently operating in local-only mode. To maintain privacy, all external traffic should be routed via the local infrastructure:</p>
                 <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
@@ -1696,8 +1696,10 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                             <span class="label-large">Session Auto-Cleanup</span>
                             <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Automatically expire admin sessions after 30 minutes of inactivity.</p>
                         </div>
-                        <div class="switch" id="session-cleanup-switch" onclick="toggleSessionCleanup()" data-tooltip="When enabled, your admin session will expire automatically.">
-                            <div class="switch-thumb"></div>
+                        <div class="switch-container" id="session-cleanup-switch" onclick="toggleSessionCleanup()" data-tooltip="When enabled, your admin session will expire automatically.">
+                            <div class="switch-track">
+                                <div class="switch-thumb"></div>
+                            </div>
                         </div>
                     </div>
                     <div id="session-cleanup-warning" class="chip admin" style="display: none; width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: none;">
@@ -1725,17 +1727,17 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
                     <div class="stat-row"><span class="stat-label">Safe Display Mode</span><span class="stat-value">Active (Local)</span></div>
                 </div>
-                <div class="admin-only" style="margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <button onclick="checkUpdates()" class="btn btn-tonal" data-tooltip="Check for updates">
+                <div class="admin-only" style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 12px;">
+                    <button onclick="checkUpdates()" class="btn btn-tonal" data-tooltip="Check for updates" style="flex: 1 1 auto;">
                         <span class="material-symbols-rounded">system_update_alt</span> Check
                     </button>
-                    <button onclick="updateAllServices()" class="btn btn-filled" data-tooltip="Update all services">
+                    <button onclick="updateAllServices()" class="btn btn-filled" data-tooltip="Update all services" style="flex: 1 1 auto;">
                         <span class="material-symbols-rounded">upgrade</span> Update All
                     </button>
-                    <button onclick="restartStack()" class="btn btn-tonal" style="grid-column: span 1; background: var(--md-sys-color-surface-container-highest);">
+                    <button onclick="restartStack()" class="btn btn-tonal" style="flex: 1 1 auto; background: var(--md-sys-color-surface-container-highest);">
                         <span class="material-symbols-rounded">restart_alt</span> Restart
                     </button>
-                    <button onclick="uninstallStack()" class="btn btn-tonal" style="grid-column: span 1; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Permanently remove all containers and data.">
+                    <button onclick="uninstallStack()" class="btn btn-tonal" style="flex: 1 1 auto; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Permanently remove all containers and data.">
                         <span class="material-symbols-rounded">delete_forever</span> Uninstall
                     </button>
                 </div>
@@ -2017,6 +2019,22 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     buckets[meta.category].push([id, meta]);
                     buckets.all.push([id, meta]);
                 });
+
+                // Force Scribe if configured but not detected (common issue)
+                if (catalog.scribe && !activeContainers.scribe) {
+                     activeContainers.scribe = { id: 'manual', hardened: true };
+                     const meta = normalizeServiceMeta('scribe', catalog.scribe);
+                     buckets.apps.push(['scribe', meta]);
+                     buckets.all.push(['scribe', meta]);
+                }
+
+                // Force Scribe if configured but not detected (common issue)
+                if (catalog.scribe && !activeContainers.scribe) {
+                     activeContainers.scribe = { id: 'manual', hardened: true };
+                     const meta = normalizeServiceMeta('scribe', catalog.scribe);
+                     buckets.apps.push(['scribe', meta]);
+                     buckets.all.push(['scribe', meta]);
+                }
 
                 const sortByOrder = (a, b) => {
                     const orderDelta = (a[1].order || 999) - (b[1].order || 999);
@@ -3996,7 +4014,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 } else {
                     badge.className = "chip tertiary";
                     badge.textContent = data.status || "Unknown";
-                    badge.dataset.tooltip = "Status unknown or certificate missing.";
+                    badge.dataset.tooltip = data.error || "Status unknown or certificate missing.";
                 }
                 
                 const failInfo = document.getElementById('ssl-failure-info');
@@ -5515,7 +5533,7 @@ fi
 
 if [ -n "$AGH_USER_RULES" ]; then
     echo "user_rules:" >> "$AGH_YAML"
-    echo -e "$AGH_USER_RULES" >> "$AGH_YAML"
+    printf "%b" "$AGH_USER_RULES" >> "$AGH_YAML"
 else
     echo "user_rules: []" >> "$AGH_YAML"
 fi

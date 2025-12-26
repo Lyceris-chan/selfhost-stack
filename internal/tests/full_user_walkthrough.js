@@ -110,25 +110,25 @@ const path = require('path');
         // Initial load triggers renderDynamicGrid and fetchStatus automatically via DOMContentLoaded
         
         // Wait until at least one card is rendered
-        await page.waitForSelector('.card[id^="link-"]', { timeout: 15000 });
+        await page.waitForSelector('.card[data-container]', { timeout: 15000 });
 
         // Manually trigger fetchStatus once more to be sure it hits our mocks immediately
         await page.evaluate(async () => {
             if (typeof fetchStatus === 'function') await fetchStatus();
         });
 
-        const cardsCount = await page.$$eval('.card[id^="link-"]', els => els.length);
+        const cardsCount = await page.$$eval('.card[data-container]', els => els.length);
         logStep("Initial Render", "PASS", `Found ${cardsCount} dynamic cards`);
 
         // Wait until at least one status text is in a valid state
         await page.waitForFunction(() => {
-            const statusTexts = Array.from(document.querySelectorAll('.card[id^="link-"] .status-text'));
+            const statusTexts = Array.from(document.querySelectorAll('.card[data-container] .status-text'));
             if (statusTexts.length === 0) return false;
             const validStates = ['Connected', 'Healthy', 'Running', 'Optimal'];
             return statusTexts.some(el => validStates.includes(el.textContent.trim()));
         }, { timeout: 20000 });
 
-        const statusTexts = await page.$$eval('.card[id^="link-"] .status-text', els => els.map(el => el.textContent.trim()));
+        const statusTexts = await page.$$eval('.card[data-container] .status-text', els => els.map(el => el.textContent.trim()));
         const validStates = ['Connected', 'Healthy', 'Running', 'Optimal'];
         const onlineCount = statusTexts.filter(text => validStates.includes(text)).length;
         logStep("Service Status", onlineCount > 0 ? "PASS" : "FAIL", `Online: ${onlineCount}/${statusTexts.length}`);

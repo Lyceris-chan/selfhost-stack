@@ -110,7 +110,7 @@ const serviceUrls = {
     // Clear localStorage to reset state (advisory, theme, filters)
     await page.evaluate(() => localStorage.clear());
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => document.querySelectorAll('.card[id^="link-"]').length > 0, { timeout: 10000 }).catch(() => {
+    await page.waitForFunction(() => document.querySelectorAll('.card[data-container]').length > 0, { timeout: 10000 }).catch(() => {
       console.warn("  - WARN: Dynamic cards not found after reload.");
     });
   } catch (e) {

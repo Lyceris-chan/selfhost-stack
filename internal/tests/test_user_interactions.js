@@ -290,11 +290,11 @@ const path = require('path');
             width: rect.width, 
             windowWidth: window.innerWidth,
             // Allow 5px tolerance for scrollbars or subpixel rendering
-            isFullWidth: Math.abs(rect.width - window.innerWidth) <= 5
+            isFullWidth: Math.abs(rect.width - (window.innerWidth - 48)) <= 5
         };
     });
     recordStep('MAC Banner Full-Width', bannerWidthInfo.found && bannerWidthInfo.isFullWidth, 
-        `Banner width: ${bannerWidthInfo.width}, Window: ${bannerWidthInfo.windowWidth}`);
+        `Banner width: ${bannerWidthInfo.width}, Window: ${bannerWidthInfo.windowWidth} (Expected ~${bannerWidthInfo.windowWidth - 48})`);
 
 
     console.log('7. Applying Theme Preset...');
@@ -432,11 +432,11 @@ const path = require('path');
               found: true, 
               width: rect.width, 
               windowWidth: window.innerWidth,
-              isFullWidth: Math.abs(rect.width - window.innerWidth) <= 5
+              isFullWidth: Math.abs(rect.width - (window.innerWidth - 48)) <= 5
           };
       });
       recordStep('Update Banner Full-Width', updateBannerWidth.found && updateBannerWidth.isFullWidth, 
-          `Banner width: ${updateBannerWidth.width}, Window: ${updateBannerWidth.windowWidth}`);
+          `Banner width: ${updateBannerWidth.width}, Window: ${updateBannerWidth.windowWidth} (Expected ~${updateBannerWidth.windowWidth - 48})`);
 
       await updateBtn.click();
       await page.waitForFunction(() => {
