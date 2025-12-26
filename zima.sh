@@ -4884,7 +4884,7 @@ clean_environment() {
             # Try to load existing domain configuration
             EXISTING_DOMAIN=""
             if [ -f "$BASE_DIR/.secrets" ]; then
-                EXISTING_DOMAIN=$(grep "DESEC_DOMAIN=" "$BASE_DIR/.secrets" | cut -d'=' -f2)
+                EXISTING_DOMAIN=$(grep "DESEC_DOMAIN=" "$BASE_DIR/.secrets" | cut -d'=' -f2 | tr -d '"' | tr -d "'")
             fi
 
             # Extract Certificate Details
@@ -4893,9 +4893,17 @@ clean_environment() {
             CERT_DATES=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -dates 2>/dev/null)
             CERT_NOT_AFTER=$(echo "$CERT_DATES" | grep "notAfter=" | cut -d= -f2)
 
-            echo "   • Subject: $CERT_SUBJECT"
-            echo "   • Issuer:  $CERT_ISSUER"
-            echo "   • Expires: $CERT_NOT_AFTER"
+            # Check validity (expiration)
+            if openssl x509 -checkend 0 -noout -in "$BASE_DIR/config/adguard/ssl.crt" >/dev/null 2>&1; then
+                CERT_VALIDITY="✅ Valid (Active)"
+            else
+                CERT_VALIDITY="❌ EXPIRED"
+            fi
+
+            echo "   • Subject:  $CERT_SUBJECT"
+            echo "   • Issuer:   $CERT_ISSUER"
+            echo "   • Expires:  $CERT_NOT_AFTER"
+            echo "   • Status:   $CERT_VALIDITY"
 
             if [ -n "$EXISTING_DOMAIN" ]; then
                 echo "   • Setup Domain: $EXISTING_DOMAIN"
@@ -4904,6 +4912,12 @@ clean_environment() {
                 else
                     echo "   ⚠️  Certificate DOES NOT MATCH the configured domain ($EXISTING_DOMAIN)."
                 fi
+            fi
+
+            if [ ! -f "$BASE_DIR/config/adguard/ssl.key" ]; then
+                echo ""
+                log_warn "⚠️  PRIVATE KEY MISSING: $BASE_DIR/config/adguard/ssl.key not found."
+                echo "   This certificate cannot be used without its private key."
             fi
 
             echo ""
