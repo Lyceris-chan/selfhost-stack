@@ -640,26 +640,29 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             flex-wrap: wrap;
         }
         
-        /* Grid Layouts - M3 Responsive (3x3, 4x4) */
+        /* Grid Layouts - M3 Responsive Scaling */
         .grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
+            display: flex;
+            flex-wrap: wrap;
             gap: 24px; 
             margin-bottom: 32px; 
             width: 100%;
             align-items: stretch;
         }
         
-        @media (min-width: 1200px) {
-            .grid { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
+        .grid > * {
+            flex: 1 1 350px; /* Base width, grows to fill row */
+            min-width: min(100%, 350px);
         }
 
-        @media (min-width: 1600px) {
-            .grid { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
+        @media (max-width: 720px) {
+            .grid > * {
+                flex: 1 1 100%;
+            }
         }
         
-        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 450px), 1fr)); gap: 24px; margin-bottom: 32px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: 24px; margin-bottom: 32px; align-items: stretch; }
+        .grid-2 > * { flex: 1 1 450px; }
+        .grid-3 > * { flex: 1 1 350px; }
         
         /* MD3 Component Refinements - Elevated Cards */
         .card {
@@ -676,8 +679,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             overflow: visible; 
             box-sizing: border-box;
             box-shadow: var(--md-sys-elevation-1);
-            height: 100%;
-            width: 100%;
+            height: auto; /* Allow flex stretch to take over */
             cursor: pointer;
             contain: content;
             will-change: transform, box-shadow;
@@ -718,8 +720,6 @@ cat > "$DASHBOARD_FILE" <<'EOF'
         .btn:hover::before, .chip:hover::before { opacity: 0.08; }
         .btn:active::before, .chip:active::before { opacity: 0.12; }
         .btn:focus::before, .chip:focus::before { opacity: 0.12; }
-
-        .card.full-width { grid-column: 1 / -1; }
         
         .card-header {
             display: flex;
@@ -1396,7 +1396,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
 
         <section data-category="dns">
         <div class="section-label">DNS Configuration</div>
-        <div class="grid grid-3">
+        <div class="grid">
             <div class="card">
                 <h3>Certificate Status</h3>
                 <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
@@ -1455,7 +1455,7 @@ if [ -n "$DESEC_DOMAIN" ]; then
                 <div class="code-label" data-tooltip="DNS-over-TLS (DOT) - RFC 7858. Port 853. The industry standard for Android 'Private DNS' and system resolvers.">Secure DOT (Android / System)</div>
                 <div class="code-block sensitive">$DESEC_DOMAIN:853</div>
             </div>
-            <div class="card full-width">
+            <div class="card">
                 <h3>Endpoint Provisioning</h3>
                 <div id="dns-setup-trusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
                     <p class="body-medium description">Globally trusted SSL is active via Let's Encrypt and deSEC. This enables zero-trust encrypted DNS on mobile devices without requiring certificate installation.</p>
@@ -1502,7 +1502,7 @@ else
                 <div class="code-label" data-tooltip="Secured DNS via TLS">DNS-over-TLS</div>
                 <div class="code-block sensitive">$LAN_IP:853</div>
             </div>
-            <div class="card full-width">
+            <div class="card">
                 <h3>Endpoint Provisioning</h3>
                 <p class="body-medium description">The system is currently operating in local-only mode. To maintain privacy, all external traffic should be routed via the local infrastructure:</p>
                 <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
