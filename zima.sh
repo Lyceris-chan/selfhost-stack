@@ -643,22 +643,23 @@ cat > "$DASHBOARD_FILE" <<'EOF'
         /* Grid Layouts - M3 Responsive (3x3, 4x4) */
         .grid { 
             display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
             gap: 24px; 
             margin-bottom: 32px; 
             width: 100%;
+            align-items: stretch;
         }
         
         @media (min-width: 1200px) {
-            .grid { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+            .grid { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
         }
 
         @media (min-width: 1600px) {
-            .grid { grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); }
+            .grid { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
         }
         
         .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 450px), 1fr)); gap: 24px; margin-bottom: 32px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: 24px; margin-bottom: 32px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: 24px; margin-bottom: 32px; align-items: stretch; }
         
         /* MD3 Component Refinements - Elevated Cards */
         .card {
@@ -676,6 +677,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             box-sizing: border-box;
             box-shadow: var(--md-sys-elevation-1);
             height: 100%;
+            width: 100%;
             cursor: pointer;
             contain: content;
             will-change: transform, box-shadow;
@@ -807,7 +809,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             white-space: nowrap;
             text-overflow: ellipsis;
             max-width: 100%;
-            flex: 1 1 auto; /* Allow chips to grow and fill space */
+            flex: 1 1 auto;
         }
 
         .chip .material-symbols-rounded {
@@ -1382,6 +1384,10 @@ cat > "$DASHBOARD_FILE" <<'EOF'
         <div class="section-label">System Management</div>
         <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
             <span class="chip category-badge" data-tooltip="Core infrastructure management and gateway orchestration"><span class="material-symbols-rounded">settings_input_component</span> Core Services</span>
+            <span class="chip category-badge" id="hint-vpn-status" data-tooltip="Gluetun Outbound VPN Tunnel Status"><span class="material-symbols-rounded">vpn_lock</span> VPN: Checking...</span>
+            <span class="chip category-badge" id="hint-vpn-ip" data-tooltip="Current Public VPN IP"><span class="material-symbols-rounded">public</span> IP: --</span>
+            <span class="chip category-badge" id="hint-vpn-usage" data-tooltip="VPN Session Data Usage"><span class="material-symbols-rounded">data_usage</span> --</span>
+            <span class="chip category-badge" id="hint-wge-clients" data-tooltip="WG-Easy Active/Total Clients"><span class="material-symbols-rounded">group</span> -- Clients</span>
         </div>
         <div id="grid-system" class="grid">
             <!-- Dynamic Cards Injected Here -->
@@ -1390,7 +1396,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
 
         <section data-category="dns">
         <div class="section-label">DNS Configuration</div>
-        <div class="grid">
+        <div class="grid grid-3">
             <div class="card">
                 <h3>Certificate Status</h3>
                 <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
@@ -2921,6 +2927,18 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 };
                 const g = data.gluetun || {};
                 const vpnStatus = document.getElementById('vpn-status');
+                const hintVpnStatus = document.getElementById('hint-vpn-status');
+                const hintVpnIp = document.getElementById('hint-vpn-ip');
+                const hintVpnUsage = document.getElementById('hint-vpn-usage');
+
+                if (hintVpnStatus) {
+                    const statusText = (g.status === "up" && g.healthy) ? "Connected" : (g.status === "up" ? "Issues" : "Down");
+                    hintVpnStatus.innerHTML = `<span class="material-symbols-rounded">vpn_lock</span> VPN: ${statusText}`;
+                    hintVpnStatus.style.color = (g.status === "up" && g.healthy) ? 'var(--md-sys-color-success)' : (g.status === "up" ? 'var(--md-sys-color-warning)' : 'var(--md-sys-color-error)');
+                }
+                if (hintVpnIp) hintVpnIp.innerHTML = `<span class="material-symbols-rounded">public</span> IP: ${g.public_ip || "--"}`;
+                if (hintVpnUsage) hintVpnUsage.innerHTML = `<span class="material-symbols-rounded">data_usage</span> ${formatBytes(g.session_rx || 0)} / ${formatBytes(g.session_tx || 0)}`;
+
                 if (vpnStatus) {
                     if (g.status === "up" && g.healthy) {
                         vpnStatus.textContent = "Connected (Healthy)";
@@ -2947,6 +2965,15 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 setText('vpn-total-tx', formatBytes(g.total_tx || 0));
                 const w = data.wgeasy || {};
                 const wgeStat = document.getElementById('wge-status');
+                const hintWgeClients = document.getElementById('hint-wge-clients');
+
+                if (hintWgeClients) {
+                    const connected = parseInt(w.connected) || 0;
+                    const total = parseInt(w.clients) || 0;
+                    hintWgeClients.innerHTML = `<span class="material-symbols-rounded">group</span> ${connected}/${total} Clients`;
+                    hintWgeClients.style.color = connected > 0 ? 'var(--md-sys-color-success)' : 'inherit';
+                }
+
                 if (wgeStat) {
                     if (w.status === "up") {
                         wgeStat.textContent = "Running";
