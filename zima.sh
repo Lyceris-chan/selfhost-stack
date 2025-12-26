@@ -225,6 +225,15 @@ cat > "$DASHBOARD_FILE" <<'EOF'
         // HTTPS Auto-Switch & Default Logic
         const isLocalHost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
         const isIpHost = window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/);
+        
+        // Storage reset logic for -c cleanup
+        if (window.location.search.includes('reset=true')) {
+            localStorage.clear();
+            sessionStorage.clear();
+            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
+        }
+
         if (window.location.protocol === 'http:' && !isLocalHost && !isIpHost) {
             const httpsPort = '8443';
             const httpsUrl = 'https://' + window.location.hostname + ':' + httpsPort + window.location.pathname + window.location.search;
@@ -282,6 +291,9 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             min-height: auto;
             border-radius: var(--md-sys-shape-corner-large);
             padding: 16px 24px;
+            width: 100%;
+            box-shadow: none;
+            border: 1px solid var(--md-sys-color-outline-variant);
         }
 
         .filter-bar {
@@ -289,15 +301,17 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             gap: 8px;
             margin-bottom: 24px;
             overflow-x: auto;
-            padding: 4px;
+            padding: 8px 4px;
             scrollbar-width: none;
             position: sticky;
             top: 0;
             z-index: 100;
             background: var(--md-sys-color-surface);
-            border-bottom: 1px solid var(--md-sys-color-outline-variant);
+            border-bottom: none !important;
             flex-wrap: wrap;
             width: 100%;
+            outline: none !important;
+            box-shadow: none !important;
         }
         .filter-bar::-webkit-scrollbar { display: none; }
         
@@ -1382,14 +1396,28 @@ cat > "$DASHBOARD_FILE" <<'EOF'
 
         <section data-category="system">
         <div class="section-label">System Management</div>
-        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span class="chip category-badge" data-tooltip="Core infrastructure management and gateway orchestration"><span class="material-symbols-rounded">settings_input_component</span> Core Services</span>
-            <span class="chip category-badge" id="hint-vpn-status" data-tooltip="Gluetun Outbound VPN Tunnel Status"><span class="material-symbols-rounded">vpn_lock</span> VPN: Checking...</span>
-            <span class="chip category-badge" id="hint-vpn-ip" data-tooltip="Current Public VPN IP"><span class="material-symbols-rounded">public</span> IP: --</span>
-            <span class="chip category-badge" id="hint-vpn-speed" data-tooltip="Real-time VPN Throughput"><span class="material-symbols-rounded">speed</span> --</span>
-            <span class="chip category-badge" id="hint-vpn-usage" data-tooltip="VPN Session / Total Data Usage"><span class="material-symbols-rounded">data_usage</span> --</span>
-            <span class="chip category-badge" id="hint-wge-clients" data-tooltip="WG-Easy Active/Total Clients"><span class="material-symbols-rounded">group</span> -- Clients</span>
-            <span class="chip category-badge" id="hint-wge-usage" data-tooltip="WG-Easy Inbound Data Usage (Session / Total)"><span class="material-symbols-rounded">move_up</span> --</span>
+        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+            <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);"><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
+        </div>
+        
+        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; border: 1px solid var(--md-sys-color-outline-variant); padding: 16px; border-radius: 16px;">
+            <div style="width: 100%; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--md-sys-color-primary);">
+                <span class="material-symbols-rounded" style="font-size: 20px;">vpn_lock</span>
+                <span class="label-large" style="font-weight: 600;">Outbound VPN Gateway (Gluetun)</span>
+            </div>
+            <span class="chip category-badge" id="hint-vpn-status" data-tooltip="Gluetun Outbound VPN Tunnel Status">VPN: Checking...</span>
+            <span class="chip category-badge" id="hint-vpn-ip" data-tooltip="Current Public VPN IP"><span class="material-symbols-rounded" style="font-size:14px;">public</span> IP: --</span>
+            <span class="chip category-badge" id="hint-vpn-speed" data-tooltip="Real-time VPN Throughput"><span class="material-symbols-rounded" style="font-size:14px;">speed</span> --</span>
+            <span class="chip category-badge" id="hint-vpn-usage" data-tooltip="VPN Session / Total Data Usage"><span class="material-symbols-rounded" style="font-size:14px;">data_usage</span> --</span>
+        </div>
+
+        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap; border: 1px solid var(--md-sys-color-outline-variant); padding: 16px; border-radius: 16px;">
+            <div style="width: 100%; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--md-sys-color-primary);">
+                <span class="material-symbols-rounded" style="font-size: 20px;">settings_input_antenna</span>
+                <span class="label-large" style="font-weight: 600;">Inbound Access Gateway (WireGuard)</span>
+            </div>
+            <span class="chip category-badge" id="hint-wge-clients" data-tooltip="WG-Easy Active/Total Clients"><span class="material-symbols-rounded" style="font-size:14px;">group</span> -- Clients</span>
+            <span class="chip category-badge" id="hint-wge-usage" data-tooltip="WG-Easy Inbound Data Usage (Session / Total)"><span class="material-symbols-rounded" style="font-size:14px;">move_up</span> --</span>
         </div>
         <div id="grid-system" class="grid">
             <!-- Dynamic Cards Injected Here -->
@@ -1618,8 +1646,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             </div>
         </div>
 
-        <div class="section-label">WireGuard Profiles</div>
-        <div class="grid">
+        <div class="section-label admin-only">WireGuard Profiles</div>
+        <div class="grid admin-only">
             <div class="card admin-only">
                 <h3>Upload Profile</h3>
                 <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;" data-tooltip="Give your profile a recognizable name.">
@@ -2069,6 +2097,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 ['apps', 'system', 'tools'].forEach(cat => syncGrid(`grid-${cat}`, buckets[cat]));
 
                 fetchMetrics();
+                setTimeout(autoScaleChips, 100);
             } catch (e) {
                 console.error("Failed to render dynamic grid:", e);
             }
@@ -2150,6 +2179,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         document.addEventListener('DOMContentLoaded', () => {
             renderDynamicGrid();
             initMacAdvisory();
+            window.addEventListener('resize', autoScaleChips);
             // Refresh grid occasionally to catch new services
             setInterval(renderDynamicGrid, 30000);
         });
@@ -2157,6 +2187,43 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         const API = "/api"; 
         const ODIDO_API = "/odido-api/api";
         
+        function autoScaleChips() {
+            const chipBoxes = document.querySelectorAll('.chip-box');
+            chipBoxes.forEach(box => {
+                const chips = Array.from(box.querySelectorAll('.chip'));
+                if (chips.length === 0) return;
+                
+                chips.forEach(c => {
+                    c.style.fontSize = '';
+                    c.style.padding = '';
+                    c.style.flex = '1 1 auto';
+                });
+                
+                const boxWidth = box.clientWidth;
+                let rowWidth = 0;
+                let maxRowWidth = 0;
+                
+                chips.forEach(c => {
+                    const w = c.offsetWidth + 8;
+                    if (rowWidth + w > boxWidth) {
+                        maxRowWidth = Math.max(maxRowWidth, rowWidth);
+                        rowWidth = w;
+                    } else {
+                        rowWidth += w;
+                    }
+                });
+                maxRowWidth = Math.max(maxRowWidth, rowWidth);
+
+                if (maxRowWidth > boxWidth && boxWidth > 0) {
+                    const factor = Math.max(0.75, boxWidth / (maxRowWidth * 1.05));
+                    chips.forEach(c => {
+                        c.style.fontSize = Math.floor(14 * factor) + 'px';
+                        c.style.padding = '0 ' + Math.floor(12 * factor) + 'px';
+                    });
+                }
+            });
+        }
+
         function filterCategory(cat) {
             const chip = document.querySelector(`.filter-chip[data-target="${cat}"]`);
             if (!chip) return;
@@ -2191,6 +2258,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             
             updateGridVisibility();
             syncSettings(); // Persist to server if admin
+            setTimeout(autoScaleChips, 50);
         }
 
         function updateGridVisibility() {
@@ -3999,13 +4067,14 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         // Theme management
         function toggleTheme() {
             const isLight = document.documentElement.classList.toggle('light-mode');
-            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            const newTheme = isLight ? 'light' : 'dark';
+            localStorage.setItem('theme', newTheme);
             updateThemeIcon();
             
-            // Regenerate palette for new mode if seed exists
+            // Apply immediate color updates if a seed exists
             const picker = document.getElementById('theme-seed-color');
             if (picker && picker.value) {
-                applySeedColor(picker.value);
+                applyThemeColors(generateM3Palette(picker.value));
             }
             
             syncSettings();
@@ -4629,6 +4698,7 @@ clean_environment() {
 
     if [ "$FORCE_CLEAN" = true ]; then
         log_warn "FORCE CLEAN ENABLED (-c): All existing data, configurations, and volumes will be permanently removed."
+        AUTO_CONFIRM=true
     fi
 
     TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd"
@@ -5222,13 +5292,13 @@ else
         echo "ADMIN_PASS_RAW=$ADMIN_PASS_RAW" >> "$BASE_DIR/.secrets"
     fi
     if [ -z "${PORTAINER_PASS_RAW:-}" ]; then
-        PORTAINER_PASS_RAW="$ADMIN_PASS_RAW"
+        PORTAINER_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
         echo "PORTAINER_PASS_RAW=$PORTAINER_PASS_RAW" >> "$BASE_DIR/.secrets"
     fi
     # Generate Portainer hash if missing from existing .secrets
     if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
         log_info "Generating missing Portainer hash..."
-        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:latest sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$ADMIN_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:latest sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
         echo "PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'" >> "$BASE_DIR/.secrets"
     fi
     if [ -z "${ODIDO_API_KEY:-}" ]; then
@@ -8976,7 +9046,8 @@ fi
 echo "=========================================================="
 echo "DEPLOYMENT CREDENTIALS"
 echo "=========================================================="
-echo "Portainer / Admin Password: $ADMIN_PASS_RAW"
+echo "Admin Dashboard Password: $ADMIN_PASS_RAW"
+echo "Portainer UI Password:    $PORTAINER_PASS_RAW"
 if [ -n "$VPN_PASS_RAW" ]; then echo "VPN Web UI Password:      $VPN_PASS_RAW"; fi
 if [ -n "$AGH_PASS_RAW" ]; then echo "AdGuard Home Password:    $AGH_PASS_RAW"; fi
 if [ -n "$ODIDO_API_KEY" ]; then echo "Odido Booster API Key:    $ODIDO_API_KEY"; fi
