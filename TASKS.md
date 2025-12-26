@@ -1,11 +1,36 @@
-- the theme resets after I toggle light and dark mode ensure that once -c is used everything is removed and set back to defaults so that once the user runs the script its like the first time
-- when togging the theme you can see a box around the categories section
-- the VPN information looks awesome! but its not clear which VPN its linked to figure out a better way to show the gluetun / wg-easy information without needing users to hover over the icons to know as there isnt even a hover tooltip explaining it now 
-- portainer and admin password appears to still be same same everything should have its own unique password 
-- the Update banner doesnt stretch across the width of the categories bar like its supposed to
-- auto scaling chips only applies after a reload 
-- the category info bar saying things like VPN protected Direct access and Infrastructure and the ones for the other groups should also be used to split them in all services view it should look like the user has all options toggled on
-- ensure empty headers which wouldnt be populated for non admins dont display for regular users e.g WireGuard Profiles
+- anonoverflow name is cut off in admin mode due to the cog 
+- when i go into admin mode system logs isnt toggled on by default its because it shows up after login fix this
+- all services doesnt properly toggle all categories and should also be a category on its own as well representing the state of all categories enables at the same time
+- dedyn cert status is no longer being tracked
+- include better ways to go portainer instantly from the admin service chips without cluttering up the chip
+- ensure the service status chip stays where the arrow would be till hover as the arrow itself isnt visible till hover anyways 
+- updates available banner still persists after dismissal 
+- these logs need to be humanized too ensure everything else is covered as well 
+lan
+"POST /verify-admin HTTP/1.0" 200 -
+2025-12-26 02:14:03
+lan
+UI theme preferences updated
+2025-12-26 02:14:04
+lan
+System health telemetry synchronized
+2025-12-26 02:14:16
+lan
+System health telemetry synchronized
+2025-12-26 02:14:31
+lan
+"POST /toggle-session-cleanup HTTP/1.0" 200 -
+2025-12-26 02:14:33
+lan
+"POST /toggle-session-cleanup HTTP/1.0" 200 -
+2025-12-26 02:14:34
+
+- adress these console logs
+:8081/api/theme?_=1766715134842:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+(index):3739 Failed to load settings from server Error: Server responded with 502
+    at loadAllSettings ((index):3688:36)
+loadAllSettings @ (index):3739
+:8081/odido-api/api/config:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
 
 
 

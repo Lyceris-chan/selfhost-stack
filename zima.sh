@@ -286,6 +286,10 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             width: 100%;
             margin-bottom: 24px;
         }
+
+        .hidden-banner {
+            display: none !important;
+        }
         
         #update-banner .card, #mac-advisory .card {
             min-height: auto;
@@ -753,7 +757,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             flex: 1;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: normal;
+            white-space: nowrap;
         }
 
         .card-header-actions {
@@ -964,6 +968,9 @@ cat > "$DASHBOARD_FILE" <<'EOF'
 
         .nav-arrow {
             opacity: 0;
+            width: 0;
+            margin: 0;
+            overflow: hidden;
             transform: translateX(-8px);
             transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
             color: var(--md-sys-color-primary);
@@ -974,6 +981,8 @@ cat > "$DASHBOARD_FILE" <<'EOF'
 
         .card:hover .nav-arrow {
             opacity: 1;
+            width: 24px;
+            margin-left: 12px;
             transform: translateX(0);
         }
         
@@ -2032,6 +2041,16 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             if (!isObject || chip.portainer) {
                 classes.push('portainer-link');
                 chipEl.dataset.container = id;
+                chipEl.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const info = containerIds[id];
+                    const cid = info ? info.id : null;
+                    const url = cid ? 
+                        PORTAINER_URL + "/#!/1/docker/containers/" + cid :
+                        PORTAINER_URL + "/#!/1/docker/containers";
+                    window.open(url, '_blank');
+                };
             }
             chipEl.className = classes.join(' ');
             if (isObject && chip.tooltip) chipEl.setAttribute('data-tooltip', chip.tooltip);
@@ -2158,6 +2177,10 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const chipBox = document.createElement('div');
             chipBox.className = 'chip-box';
 
+            // Add standard Portainer link for admin
+            const pChip = createChipElement(id, { label: 'Portainer', icon: 'hub', variant: 'admin tonal', tooltip: 'Direct Container Management', portainer: true });
+            chipBox.appendChild(pChip);
+
             if (Array.isArray(meta.actions)) {
                 meta.actions.forEach((action) => {
                     chipBox.appendChild(createActionButton(id, action));
@@ -2228,24 +2251,28 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const chip = document.querySelector(`.filter-chip[data-target="${cat}"]`);
             if (!chip) return;
 
+            const mainChips = Array.from(document.querySelectorAll('.filter-chip:not([data-target="all"]):not([data-target="logs"])'));
+            const allChip = document.querySelector('.filter-chip[data-target="all"]');
+
             if (cat === 'all') {
                 const isActive = chip.classList.contains('active');
-                document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
                 if (!isActive) {
-                    // Activate 'All' and also all other main categories
+                    // Turn everything ON
                     chip.classList.add('active');
-                    document.querySelectorAll('.filter-chip:not([data-target="all"]):not([data-target="logs"])').forEach(c => c.classList.add('active'));
+                    mainChips.forEach(c => c.classList.add('active'));
                 } else {
-                    // Just deactivate all? No, Material 3 should have at least one.
-                    // Let's default to all active except 'all' chip if 'all' is toggled off
-                    document.querySelectorAll('.filter-chip:not([data-target="all"]):not([data-target="logs"])').forEach(c => c.classList.add('active'));
+                    // Material 3: If everything is on, we don't just turn everything off. 
+                    // But if 'All' is clicked while active, we can treat it as a reset to 'All ON' or do nothing.
+                    // The user says "should also be a category on its own as well representing the state of all categories enables at the same time"
+                    // So if it's already on and we click it, maybe we keep it on? 
+                    // Let's make it so clicking 'All' always ensures all main categories are ON.
+                    mainChips.forEach(c => c.classList.add('active'));
+                    chip.classList.add('active');
                 }
             } else {
                 chip.classList.toggle('active');
                 
-                // If a category is toggled, update the 'All' chip state
-                const allChip = document.querySelector('.filter-chip[data-target="all"]');
-                const mainChips = Array.from(document.querySelectorAll('.filter-chip:not([data-target="all"]):not([data-target="logs"])'));
+                // Update 'All' chip state based on main categories
                 const allActive = mainChips.every(c => c.classList.contains('active'));
                 if (allChip) allChip.classList.toggle('active', allActive);
                 
@@ -2257,7 +2284,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             }
             
             updateGridVisibility();
-            syncSettings(); // Persist to server if admin
+            syncSettings(); 
             setTimeout(autoScaleChips, 50);
         }
 
@@ -2269,8 +2296,6 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             sections.forEach(s => {
                 const cat = s.dataset.category;
                 if (cat === 'all') {
-                    // Show 'all' section ONLY if specifically 'all' is the ONLY thing active or if we want a flat list
-                    // But user wants headers. So we show the specific sections.
                     s.style.display = 'none';
                     s.classList.add('hidden');
                     return;
@@ -2312,6 +2337,14 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const warningEl = document.getElementById('session-cleanup-warning');
             if (switchEl) switchEl.classList.toggle('active', sessionCleanupEnabled);
             
+            if (isAdmin) {
+                // Ensure logs are toggled on when entering admin mode
+                const logsChip = document.querySelector('.filter-chip[data-target="logs"]');
+                if (logsChip && !logsChip.classList.contains('active')) {
+                    filterCategory('logs');
+                }
+            }
+
             if (warningEl && isAdmin) {
                 warningEl.style.display = 'flex';
                 const wIcon = document.getElementById('session-warning-icon');
@@ -2508,28 +2541,26 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         function getAuthHeaders() {
             const headers = { 'Content-Type': 'application/json' };
             if (sessionToken) headers['X-Session-Token'] = sessionToken;
-            else if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
+            if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
             return headers;
         }
 
         function dismissUpdateBanner() {
             const banner = document.getElementById('update-banner');
-            if (banner) banner.style.setProperty('display', 'none', 'important');
-            // Store the timestamp of dismissal. If new updates are found later, we might show it again.
-            // But for now, we just persist the dismissal for the current set of updates.
+            if (banner) banner.classList.add('hidden-banner');
             localStorage.setItem('update_banner_dismissed', pendingUpdates.join(','));
         }
 
         function dismissMacAdvisory() {
             const banner = document.getElementById('mac-advisory');
-            if (banner) banner.style.setProperty('display', 'none', 'important');
+            if (banner) banner.classList.add('hidden-banner');
             localStorage.setItem('mac_advisory_dismissed', 'true');
         }
 
         function initMacAdvisory() {
             const banner = document.getElementById('mac-advisory');
             if (banner && localStorage.getItem('mac_advisory_dismissed') === 'true') {
-                banner.style.setProperty('display', 'none', 'important');
+                banner.classList.add('hidden-banner');
             }
         }
 
@@ -2547,13 +2578,16 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 if (pendingUpdates.length > 0) {
                     const dismissed = localStorage.getItem('update_banner_dismissed');
                     if (dismissed === pendingUpdates.join(',')) {
-                        if (banner) banner.style.display = 'none';
+                        if (banner) banner.classList.add('hidden-banner');
                     } else {
-                        if (banner) banner.style.display = 'block';
+                        if (banner) {
+                            banner.classList.remove('hidden-banner');
+                            banner.style.display = ''; // Reset inline style
+                        }
                         if (list) list.textContent = "Updates available for: " + pendingUpdates.join(", ");
                     }
                 } else {
-                    if (banner) banner.style.display = 'none';
+                    if (banner) banner.classList.add('hidden-banner');
                     localStorage.removeItem('update_banner_dismissed');
                 }
             } catch(e) {}
@@ -3541,10 +3575,12 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 let timestamp = logData.timestamp;
 
                 // Humanization logic
-                if (message.includes('GET /system-health')) message = 'System telemetry synchronized';
+                if (message.includes('GET /system-health')) message = 'System health telemetry synchronized';
                 if (message.includes('POST /update-service')) message = 'Service update initiated';
-                if (message.includes('POST /theme')) message = 'UI theme preferences saved';
+                if (message.includes('POST /theme')) message = 'UI theme preferences updated';
                 if (message.includes('GET /theme')) message = 'UI theme assets synchronized';
+                if (message.includes('POST /verify-admin')) message = 'Administrative session authorized';
+                if (message.includes('POST /toggle-session-cleanup')) message = 'Session security policy updated';
                 if (message.includes('GET /profiles')) message = 'VPN profiles synchronized';
                 if (message.includes('POST /activate')) message = 'VPN profile switch triggered';
                 if (message.includes('POST /upload')) message = 'VPN profile upload completed';
@@ -3950,7 +3986,10 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         async function loadAllSettings() {
             try {
                 const res = await fetch(API + "/theme?_=" + Date.now(), { headers: getAuthHeaders() });
-                if (!res.ok) throw new Error("Server responded with " + res.status);
+                if (!res.ok) {
+                    if (res.status >= 500) return; // Silent skip if backend not ready
+                    throw new Error("Server responded with " + res.status);
+                }
                 const data = await res.json();
                 
                 // 1. Seed & Colors
@@ -4453,10 +4492,12 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             fetchContainerIds();
             updateAdminUI();
             fetchStatus(); fetchProfiles(); fetchOdidoStatus(); fetchCertStatus(); startLogStream(); fetchUpdates(); fetchMetrics(); loadAllSettings(); fetchSystemHealth();
-            setInterval(fetchStatus, 15000);
-            setInterval(fetchSystemHealth, 15000);
-            setInterval(fetchMetrics, 30000);
-            setInterval(fetchUpdates, 300000); // Check for source updates every 5 mins
+                    setInterval(fetchStatus, 15000);
+                    setInterval(fetchSystemHealth, 15000);
+                    setInterval(fetchMetrics, 30000);
+                    setInterval(fetchCertStatus, 300000); // Check cert status every 5 mins
+                    setInterval(fetchUpdates, 300000); // Check for source updates every 5 mins
+            
             setInterval(fetchOdidoStatus, 60000);  // Reduced polling frequency to respect Odido API
             setInterval(fetchContainerIds, 60000);
         });
@@ -6969,6 +7010,12 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             return
         elif "POST /update-service" in msg:
             log_structured("INFO", "Service update sequence initiated", "NETWORK")
+            return
+        elif "POST /verify-admin" in msg:
+            log_structured("SECURITY", "Administrative session authorized", "AUTH")
+            return
+        elif "POST /toggle-session-cleanup" in msg:
+            log_structured("SECURITY", "Session security policy updated", "AUTH")
             return
         elif "POST /theme" in msg:
             log_structured("INFO", "UI theme preferences updated", "NETWORK")
