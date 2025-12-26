@@ -282,9 +282,8 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             display: block !important;
         }
         
-        #update-banner, #mac-advisory {
-            width: 100%;
-            margin-bottom: 24px;
+        #update-banner.hidden-banner, #mac-advisory.hidden-banner {
+            display: none !important;
         }
 
         .hidden-banner {
@@ -327,6 +326,8 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             min-width: 140px;
             justify-content: center;
             max-width: none;
+            border-radius: var(--md-sys-shape-corner-full);
+            border: 1px solid var(--md-sys-color-outline-variant);
         }
         .filter-chip.active {
             background: var(--md-sys-color-primary-container) !important;
@@ -355,7 +356,14 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             opacity: 0;
         }
         
-        /* Ensure chips don't flicker during hover */
+        .clickable-stat:hover {
+            background: var(--md-sys-color-surface-container-high) !important;
+        }
+        .clickable-stat:active {
+            background: var(--md-sys-color-surface-container) !important;
+            transform: scale(0.98);
+        }
+        
         .chip:hover {
             transform: translateY(-1px);
             box-shadow: var(--md-sys-elevation-1);
@@ -733,6 +741,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             opacity: 0;
             transition: opacity var(--md-sys-motion-duration-short) linear;
             pointer-events: none;
+            border-radius: inherit;
         }
 
         .btn:hover::before, .chip:hover::before { opacity: 0.08; }
@@ -836,7 +845,8 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             transition: transform var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
         }
 
-        .chip:hover .material-symbols-rounded.move-on-hover {
+        .chip:hover .material-symbols-rounded.move-on-hover,
+        .clickable-stat:hover .move-on-hover {
             transform: translateX(4px);
         }
         
@@ -1816,8 +1826,11 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     <div class="metric-bar"><div id="sys-ram-fill" class="metric-fill" style="width: 0%"></div></div>
 
                     <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                        <div style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 4px;">
-                            <span class="body-small" style="opacity: 0.7;">Project Size</span>
+                        <div onclick="openProjectSizeModal()" class="clickable-stat" style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; position: relative; transition: all 200ms ease; border: 1px solid transparent;" onmouseover="this.style.background='var(--md-sys-color-surface-container-high)'; this.style.borderColor='var(--md-sys-color-outline-variant)'" onmouseout="this.style.background='var(--md-sys-color-surface-container-highest)'; this.style.borderColor='transparent'">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <span class="body-small" style="opacity: 0.7;">Project Size</span>
+                                <span class="material-symbols-rounded move-on-hover" style="font-size: 16px; opacity: 0.5; transition: transform 200ms ease;">arrow_forward</span>
+                            </div>
                             <span class="label-large" id="sys-project-size">-- MB</span>
                         </div>
                         <div style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 4px;">
@@ -2038,7 +2051,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 variant.split(' ').forEach((c) => c && classes.push(c));
                 if (variant.includes('admin')) classes.push('admin-only');
             }
-            if (!isObject || chip.portainer) {
+            if (isObject && chip.portainer) {
                 classes.push('portainer-link');
                 chipEl.dataset.container = id;
                 chipEl.onclick = (e) => {
@@ -2059,6 +2072,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 icon.className = 'material-symbols-rounded';
                 icon.textContent = chip.icon;
                 chipEl.appendChild(icon);
+                chipEl.appendChild(document.createTextNode('\u00A0')); // Non-breaking space
             }
             chipEl.appendChild(document.createTextNode(label));
             return chipEl;
@@ -2180,6 +2194,18 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             // Add standard Portainer link for admin
             const pChip = createChipElement(id, { label: 'Portainer', icon: 'hub', variant: 'admin tonal', tooltip: 'Direct Container Management', portainer: true });
             chipBox.appendChild(pChip);
+
+            // Add 'Local' badge for services that process data locally
+            if (meta.local || id === 'vert') {
+                const localChip = createChipElement(id, { 
+                    label: 'Local', 
+                    icon: 'shield', 
+                    variant: 'tertiary', 
+                    tooltip: 'This service is not connected to the internet and all data processing happens locally.',
+                    portainer: false 
+                });
+                chipBox.appendChild(localChip);
+            }
 
             if (Array.isArray(meta.actions)) {
                 meta.actions.forEach((action) => {
@@ -3014,9 +3040,12 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         let lastStatusTime = Date.now();
         let lastByteCounts = { vpn_rx: 0, vpn_tx: 0, wge_rx: 0, wge_tx: 0 };
 
+        let isFetchingStatus = false;
         async function fetchStatus() {
+            if (isFetchingStatus) return;
+            isFetchingStatus = true;
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
             const now = Date.now();
             const deltaSec = (now - lastStatusTime) / 1000;
             lastStatusTime = now;
@@ -3030,6 +3059,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     throw new Error("401 Unauthorized");
                 }
                 
+                if (!res.ok) return;
+
                 const data = await res.json();
                 const setText = (id, value) => {
                     const el = document.getElementById(id);
@@ -3178,23 +3209,27 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     txt.textContent = 'Connected';
                 }
             } catch(e) {
-                console.error("Status fetch error:", e);
-                const dot = document.getElementById('api-dot');
-                const txt = document.getElementById('api-text');
-                if (dot && txt) {
-                    dot.className = 'status-dot down';
-                    txt.textContent = 'Offline';
-                }
-                // Force indicators out of "Connecting..." state on API failure
-                document.querySelectorAll('.status-indicator').forEach(indicator => {
-                    const dot = indicator.querySelector('.status-dot');
-                    const text = indicator.querySelector('.status-text');
-                    if (dot && text && !dot.id.includes('api')) {
+                if (e.name !== 'AbortError') {
+                    console.error("Status fetch error:", e);
+                    const dot = document.getElementById('api-dot');
+                    const txt = document.getElementById('api-text');
+                    if (dot && txt) {
                         dot.className = 'status-dot down';
-                        text.textContent = 'API Offline';
-                        indicator.title = 'The Management Hub is unreachable. Real-time metrics, VPN switching, and service update controls are unavailable until connection is restored.';
+                        txt.textContent = 'Offline';
                     }
-                });
+                    // Force indicators out of "Connecting..." state on API failure
+                    document.querySelectorAll('.status-indicator').forEach(indicator => {
+                        const dot = indicator.querySelector('.status-dot');
+                        const text = indicator.querySelector('.status-text');
+                        if (dot && text && !dot.id.includes('api')) {
+                            dot.className = 'status-dot down';
+                            text.textContent = 'API Offline';
+                            indicator.title = 'The Management Hub is unreachable. Real-time metrics, VPN switching, and service update controls are unavailable until connection is restored.';
+                        }
+                    });
+                }
+            } finally {
+                isFetchingStatus = false;
             }
         }
         
@@ -3562,7 +3597,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 const m = logData.message || "";
                 if (m.includes('HTTP/1.1" 200') || m.includes('HTTP/1.1" 304')) {
                     // Only filter if it doesn't match a known humanization pattern
-                    const knownPatterns = ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /theme', 'POST /theme', 'GET /system-health', 'GET /profiles', 'POST /update-service', 'POST /batch-update', 'POST /restart-stack', 'POST /rotate-api-key', 'POST /activate', 'POST /upload', 'POST /delete', 'GET /check-updates', 'GET /changelog'];
+                    const knownPatterns = ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /theme', 'POST /theme', 'GET /system-health', 'GET /profiles', 'POST /update-service', 'POST /batch-update', 'POST /restart-stack', 'POST /rotate-api-key', 'POST /activate', 'POST /upload', 'POST /delete', 'GET /check-updates', 'GET /changelog', 'GET /project-details', 'POST /purge-images'];
                     if (!knownPatterns.some(p => m.includes(p))) return null;
                 }
                 
@@ -3575,7 +3610,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 let timestamp = logData.timestamp;
 
                 // Humanization logic
-                if (message.includes('GET /system-health')) message = 'System health telemetry synchronized';
+                if (message.includes('GET /project-details')) message = 'Storage utilization breakdown fetched';
+            if (message.includes('POST /purge-images')) message = 'Unused Docker assets purged';
+            if (message.includes('GET /system-health')) message = 'System health telemetry synchronized';
                 if (message.includes('POST /update-service')) message = 'Service update initiated';
                 if (message.includes('POST /theme')) message = 'UI theme preferences updated';
                 if (message.includes('GET /theme')) message = 'UI theme assets synchronized';
@@ -3961,6 +3998,77 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             showSnackbar("Settings synchronized to server");
         }
 
+        async function openProjectSizeModal() {
+            const modal = document.getElementById('project-size-modal');
+            const content = document.getElementById('project-size-content');
+            const loading = document.getElementById('project-size-loading');
+            const list = document.getElementById('project-size-list');
+            
+            modal.style.display = 'flex';
+            content.style.display = 'none';
+            loading.style.display = 'block';
+            
+            try {
+                const res = await fetch(API + "/project-details", { headers: getAuthHeaders() });
+                const data = await res.json();
+                
+                list.innerHTML = '';
+                const items = [
+                    { label: 'Source Code & Config', size: data.source_size, icon: 'folder_zip' },
+                    { label: 'Application Data', size: data.data_size, icon: 'database' },
+                    { label: 'Docker Images', size: data.images_size, icon: 'album' },
+                    { label: 'Docker Volumes', size: data.volumes_size, icon: 'storage' },
+                    { label: 'Container Layers', size: data.containers_size, icon: 'layers' }
+                ];
+                
+                items.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = 'stat-row';
+                    row.style.padding = '8px 0';
+                    row.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-primary);">${item.icon}</span>
+                            <span class="body-medium">${item.label}</span>
+                        </div>
+                        <span class="label-large">${formatBytes(item.size * 1024 * 1024)}</span>
+                    `;
+                    list.appendChild(row);
+                });
+                
+                loading.style.display = 'none';
+                content.style.display = 'block';
+            } catch (e) {
+                showSnackbar("Failed to load storage details: " + e.message);
+                closeProjectSizeModal();
+            }
+        }
+
+        function closeProjectSizeModal() {
+            document.getElementById('project-size-modal').style.display = 'none';
+        }
+
+        async function purgeUnusedImages() {
+            if (!confirm("This will permanently delete all dangling Docker images and unused build cache. Images currently in use by containers will NOT be affected. Proceed?")) return;
+            
+            showSnackbar("Purging unused images...");
+            try {
+                const res = await fetch(API + "/purge-images", { 
+                    method: 'POST', 
+                    headers: getAuthHeaders() 
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showSnackbar("Storage optimized: " + result.message);
+                    closeProjectSizeModal();
+                    fetchSystemHealth(); // Refresh main dashboard size
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (e) {
+                showSnackbar("Optimization failed: " + e.message);
+            }
+        }
+
         async function uninstallStack() {
             if (!confirm("⚠️ DANGER: This will permanently remove all containers, volumes, and data. This cannot be undone. Are you absolutely sure?")) return;
             if (!confirm("LAST WARNING: Final confirmation required to proceed with uninstallation.")) return;
@@ -4128,11 +4236,26 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
 
         function initTheme() {
             const savedTheme = localStorage.getItem('theme');
+            const savedSeed = localStorage.getItem('theme_seed') || '#D0BCFF';
             const systemPrefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
             
-            if (savedTheme === 'light' || (!savedTheme && systemPrefersLight)) {
+            const isLight = savedTheme === 'light' || (!savedTheme && systemPrefersLight);
+            if (isLight) {
                 document.documentElement.classList.add('light-mode');
+            } else {
+                document.documentElement.classList.remove('light-mode');
             }
+            
+            // Apply saved seed or default
+            const picker = document.getElementById('theme-seed-color');
+            if (picker) picker.value = savedSeed;
+            const hexEl = document.getElementById('theme-seed-hex');
+            if (hexEl) hexEl.textContent = savedSeed.toUpperCase();
+            
+            if (typeof generateM3Palette === 'function') {
+                applyThemeColors(generateM3Palette(savedSeed));
+            }
+            
             updateThemeIcon();
         }
 
@@ -4167,13 +4290,6 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             localStorage.setItem('mac_advisory_dismissed', 'true');
         }
 
-        function initMacAdvisory() {
-            if (localStorage.getItem('mac_advisory_dismissed') === 'true') {
-                const el = document.getElementById('mac-advisory');
-                if (el) el.style.display = 'none';
-            }
-        }
-        
         async function fetchCertStatus() {
             try {
                 const controller = new AbortController();
@@ -4502,6 +4618,31 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             setInterval(fetchContainerIds, 60000);
         });
     </script>
+    <!-- Project Size Details Modal -->
+    <div id="project-size-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-project-title">Storage Breakdown</h3>
+                <button onclick="closeProjectSizeModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+            </div>
+            <div id="project-size-details" style="display: flex; flex-direction: column; gap: 16px;">
+                <div class="loading-spinner" id="project-size-loading" style="margin: 20px auto;"></div>
+                <div id="project-size-content" style="display: none;">
+                    <div style="display: flex; flex-direction: column; gap: 12px;" id="project-size-list">
+                        <!-- Dynamic content -->
+                    </div>
+                    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; flex-direction: column; gap: 12px;">
+                        <button onclick="purgeUnusedImages()" class="btn" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: none; font-weight: 500; height: 40px; border-radius: 20px;">
+                            <span class="material-symbols-rounded">broom</span>
+                            Purge Unused Images
+                        </button>
+                        <p class="body-small" style="opacity: 0.7; text-align: center;">Safe removal of dangling images and unused build cache.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
 EOF
@@ -5163,6 +5304,9 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     
     if [ "$AUTO_PASSWORD" = true ]; then
         log_info "Automated password generation initialized."
+        if [ -d "$DATA_DIR/portainer" ]; then
+            log_warn "Portainer data directory already exists. Portainer's security policy only allows setting the admin password on the FIRST deployment. The newly generated password displayed at the end will NOT work unless you manually reset it or delete the Portainer volume."
+        fi
         VPN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
         AGH_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
         ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
@@ -5179,6 +5323,9 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo -n "3. Enter administrative password (for Dashboard): "
         read -rs ADMIN_PASS_RAW
         echo ""
+        if [ -d "$DATA_DIR/portainer" ]; then
+             echo "   [!] NOTICE: Portainer already initialized. Entering a new password here will NOT update Portainer's internal admin credentials."
+        fi
         echo -n "4. Enter password for Portainer: "
         read -rs PORTAINER_PASS_RAW
         echo ""
@@ -6774,6 +6921,10 @@ def log_structured(level, message, category="SYSTEM"):
     # Humanize common logs
     if "GET /system-health" in message:
         message = "System health telemetry synchronized"
+    elif "GET /project-details" in message:
+        message = "Storage utilization breakdown fetched"
+    elif "POST /purge-images" in message:
+        message = "Unused Docker assets purged"
     elif "POST /update-service" in message:
         message = "Service update sequence initiated"
     elif "POST /theme" in message:
@@ -6987,7 +7138,9 @@ def ensure_assets():
     svg_path = os.path.join(ASSETS_DIR, "privacy-hub.svg")
     if not os.path.exists(svg_path):
         try:
-            svg = """<svg xmlns=\\"http://www.w3.org/2000/svg\\" height=\\"128\\" viewBox=\\"0 -960 960 960\\" width=\\"128\\" fill=\\"#D0BCFF\\">\\n    <path d=\\"M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z\\"/>\\n</svg>\\n"""
+            svg = """<svg xmlns=\\"http://www.w3.org/2000/svg\\" height=\\"128\\" viewBox=\\"0 -960 960 960\\" width=\\"128\\" fill=\\"#D0BCFF\\">
+    <path d=\\"M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z\\"/>
+</svg>"""
             with open(svg_path, "w", encoding="utf-8") as f:
                 f.write(svg)
             log_fonts("Generated privacy-hub.svg")
@@ -7004,9 +7157,12 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
         msg = format % args
         
         # Humanize common logs
-        if "GET /system-health" in msg:
-            log_structured("INFO", "System health telemetry synchronized", "NETWORK")
-            return
+            elif "GET /system-health" in msg:
+                log_structured("INFO", "UI health telemetry synchronized", "NETWORK")
+            elif "GET /project-details" in msg:
+                log_structured("INFO", "Storage utilization breakdown fetched", "NETWORK")
+            elif "POST /purge-images" in msg:
+                log_structured("INFO", "Unused Docker assets purged", "NETWORK")
         elif "POST /update-service" in msg:
             log_structured("INFO", "Service update sequence initiated", "NETWORK")
             return
@@ -7078,7 +7234,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
     def _check_auth(self):
         # Allow certain GET endpoints without auth for the dashboard
         base_path = self.path.split('?')[0]
-        if self.command == 'GET' and base_path in ['/', '/status', '/profiles', '/containers', '/services', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates', '/master-update', '/logs', '/system-health', '/theme']:
+        if self.command == 'GET' and base_path in ['/', '/status', '/profiles', '/containers', '/services', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates', '/master-update', '/logs', '/system-health', '/theme', '/project-details']:
             return True
         
         # Watchtower notification (comes from docker network, simple path check)
@@ -7108,6 +7264,69 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"error": "Unauthorized"}, 401)
             return
 
+        elif self.path == '/project-details':
+            try:
+                # Source Size
+                source_size = 0
+                res = subprocess.run(['du', '-sb', '/app/sources'], capture_output=True, text=True, timeout=10)
+                if res.returncode == 0: source_size = int(res.stdout.split()[0])
+                
+                # Config Size
+                config_size = 0
+                res = subprocess.run(['du', '-sb', '/app/config'], capture_output=True, text=True, timeout=10)
+                if res.returncode == 0: config_size = int(res.stdout.split()[0])
+
+                # Data Size
+                data_size = 0
+                res = subprocess.run(['du', '-sb', '/app/data'], capture_output=True, text=True, timeout=10)
+                if res.returncode == 0: data_size = int(res.stdout.split()[0])
+
+                # Images Size
+                images_size = 0
+                img_res = subprocess.run(['docker', 'images', '--format', '{{.Size}}\t{{.Repository}}'], capture_output=True, text=True, timeout=10)
+                if img_res.returncode == 0:
+                    for line in img_res.stdout.strip().split('\n'):
+                        if not line: continue
+                        parts = line.split('\t')
+                        if len(parts) < 2: continue
+                        size_str, repo = parts[0], parts[1]
+                        if any(x in repo for x in ['privacy-hub', 'gluetun', 'adguard', 'unbound', 'redlib', 'wikiless', 'invidious', 'rimgo', 'breezewiki', 'memos', 'vert', 'scribe', 'anonymousoverflow', 'odido-booster', 'watchtower', 'portainer', 'wg-easy']):
+                            mult = 1
+                            if 'GB' in size_str.upper(): mult = 1024*1024*1024
+                            elif 'MB' in size_str.upper(): mult = 1024*1024
+                            elif 'KB' in size_str.upper(): mult = 1024
+                            sz_val = float(re.sub(r'[^0-9.]', '', size_str))
+                            images_size += int(sz_val * mult)
+
+                # Volumes & Containers Size
+                volumes_size = 0
+                containers_size = 0
+                vol_res = subprocess.run(['docker', 'system', 'df', '--format', '{{.Type}}\t{{.Size}}'], capture_output=True, text=True, timeout=10)
+                if vol_res.returncode == 0:
+                    for line in vol_res.stdout.strip().split('\n'):
+                        if '\t' not in line: continue
+                        dtype, dsize = line.split('\t')[0], line.split('\t')[1]
+                        
+                        mult = 1
+                        if 'GB' in dsize.upper(): mult = 1024*1024*1024
+                        elif 'MB' in dsize.upper(): mult = 1024*1024
+                        elif 'KB' in dsize.upper(): mult = 1024
+                        try:
+                            sz_val = float(re.sub(r'[^0-9.]', '', dsize))
+                            val_bytes = int(sz_val * mult)
+                            if dtype == 'Local Volumes': volumes_size = val_bytes
+                            elif dtype == 'Containers': containers_size = val_bytes
+                        except: continue
+
+                self._send_json({
+                    "source_size": (source_size + config_size) / (1024 * 1024),
+                    "data_size": data_size / (1024 * 1024),
+                    "images_size": images_size / (1024 * 1024),
+                    "volumes_size": volumes_size / (1024 * 1024),
+                    "containers_size": containers_size / (1024 * 1024)
+                })
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         elif self.path == '/system-health':
             try:
                 # System Uptime
@@ -7175,6 +7394,15 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     "smart_alerts": smart_alerts
                 }
                 self._send_json(health_data)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/purge-images':
+            try:
+                # Purge dangling images
+                res = subprocess.run(['docker', 'image', 'prune', '-f'], capture_output=True, text=True, timeout=60)
+                # Purge build cache
+                subprocess.run(['docker', 'builder', 'prune', '-f'], capture_output=True, text=True, timeout=60)
+                self._send_json({"success": True, "message": "Unused images and build cache cleared."})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/uninstall':
@@ -7944,6 +8172,9 @@ should_deploy() {
 }
 
 VERTD_DEVICES=""
+GPU_LABEL="GPU Accelerated"
+GPU_TOOLTIP="Utilizes local GPU (/dev/dri) for high-performance conversion"
+
 # Hardware acceleration detection (Independent checks for Intel/AMD and NVIDIA)
 if [ -d "/dev/dri" ]; then
     VERTD_DEVICES="    devices:
@@ -7951,6 +8182,15 @@ if [ -d "/dev/dri" ]; then
     if [ -d "/dev/vulkan" ]; then
         VERTD_DEVICES="${VERTD_DEVICES}
       - /dev/vulkan"
+    fi
+    
+    # Vendor detection for better UI labeling
+    if grep -iq "intel" /sys/class/drm/card*/device/vendor 2>/dev/null || (command -v lspci >/dev/null 2>&1 && lspci 2>/dev/null | grep -iq "intel.*graphics"); then
+        GPU_LABEL="Intel Quick Sync"
+        GPU_TOOLTIP="Utilizes Intel Quick Sync Video (QSV) for high-performance hardware conversion."
+    elif grep -iq "1002" /sys/class/drm/card*/device/vendor 2>/dev/null || (command -v lspci >/dev/null 2>&1 && lspci 2>/dev/null | grep -iq "amd.*graphics"); then
+        GPU_LABEL="AMD VA-API"
+        GPU_TOOLTIP="Utilizes AMD VA-API hardware acceleration for high-performance conversion."
     fi
 fi
 
@@ -7963,6 +8203,8 @@ if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
             - driver: nvidia
               count: all
               capabilities: [gpu]"
+    GPU_LABEL="NVIDIA NVENC"
+    GPU_TOOLTIP="Utilizes NVIDIA NVENC/NVDEC hardware acceleration for high-performance conversion."
 fi
 
 if [ ! -f "$CONFIG_DIR/theme.json" ]; then echo "{}" > "$CONFIG_DIR/theme.json"; fi
@@ -8041,13 +8283,14 @@ cat > "$SERVICES_JSON" <<EOF
       "category": "apps",
       "order": 90,
       "url": "http://$LAN_IP:$PORT_VERT",
+      "local": true,
       "chips": [
         "Utility",
         {
-          "label": "GPU Accelerated",
+          "label": "$GPU_LABEL",
           "icon": "memory",
           "variant": "tertiary",
-          "tooltip": "Utilizes local GPU (/dev/dri) for high-performance conversion",
+          "tooltip": "$GPU_TOOLTIP",
           "portainer": false
         }
       ]
