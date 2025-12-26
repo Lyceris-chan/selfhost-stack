@@ -82,16 +82,16 @@ else
 fi
 
 APP_NAME="privacy-hub"
-BASE_DIR="/DATA/AppData/$APP_NAME"
+BASE_DIR="./DATA/AppData/$APP_NAME"
 
 # Docker Auth Config (stored in /tmp to survive -c cleanup)
 DOCKER_AUTH_DIR="/tmp/$APP_NAME-docker-auth"
 # Ensure clean state for auth
 if [ -d "$DOCKER_AUTH_DIR" ]; then
-    sudo rm -rf "$DOCKER_AUTH_DIR"
+    rm -rf "$DOCKER_AUTH_DIR"
 fi
 mkdir -p "$DOCKER_AUTH_DIR"
-sudo chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
+chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
 
 # Detect Python interpreter
 if command -v python3 >/dev/null 2>&1; then
@@ -156,7 +156,7 @@ CERT_MONITOR_SCRIPT="$BASE_DIR/cert-monitor.sh"
 MIGRATE_SCRIPT="$BASE_DIR/migrate.sh"
 
 # Memos storage
-MEMOS_HOST_DIR="/DATA/AppData/memos"
+MEMOS_HOST_DIR="./DATA/AppData/memos"
 mkdir -p "$MEMOS_HOST_DIR"
 
 # Logging Functions
@@ -515,7 +515,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
         }
         
         .material-symbols-rounded {
-            font-family: 'Material Symbols Rounded';
+            font-family: 'Material Symbols Rounded' !important;
             font-display: block;
             font-weight: normal;
             font-style: normal;
@@ -1111,7 +1111,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             border-radius: var(--md-sys-shape-corner-large);
             padding: 16px;
             flex-grow: 1;
-            max-height: 400px;
+            height: 350px;
             overflow-y: auto;
             font-size: 13px;
             color: var(--md-sys-color-on-surface-variant);
@@ -1358,7 +1358,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
                     </div>
                     <div class="status-indicator" style="background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant);">
                         <span class="status-dot" id="api-dot"></span>
-                        <span class="status-text" id="api-text">API: ...</span>
+                        <span class="status-text" id="api-text">Connecting to API...</span>
                     </div>
                     <div class="theme-toggle" onclick="toggleTheme()" data-tooltip="Switch between Light and Dark mode">
                         <span class="material-symbols-rounded" id="theme-icon">light_mode</span>
@@ -1670,7 +1670,16 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     </p>
                     <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="OAuth token for Odido API authentication.">
                     <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
-                        Obtain your OAuth token using the <a href="https://github.com/GuusBackup/Odido.Authenticator" target="_blank" style="color: var(--md-sys-color-primary);">Odido Authenticator</a>.
+                        Download and extract the latest <a href="https://github.com/GuusBackup/Odido.Authenticator/releases/latest" target="_blank" style="color: var(--md-sys-color-primary);">Odido.Authenticator</a>.
+                        <br><br>
+                        <strong>How to use:</strong><br>
+                        1. Run <code>Odido.Authenticator.exe</code><br>
+                        2. Go to the URL provided in the tool: <code class="sensitive">https://www.odido.nl/login?...</code><br>
+                        3. Login into Odido<br>
+                        4. Grab the result URL: <code class="sensitive">https://www.odido.nl/loginappresult?token=...</code><br>
+                        5. Paste it into the tool and press enter<br>
+                        6. It will show the Refresh token now (Decrypted the response)<br>
+                        7. Press enter or Y to get an Authentication token from it (This will destroy the refresh token)
                     </p>
                     <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;" data-tooltip="The product code for your data bundle.">
                     <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;" data-tooltip="Automatic renewal triggers when data falls below this level.">
@@ -1800,8 +1809,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 <h3>System Information</h3>
                 <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
                 <div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1;">
-                    <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace" style="font-size: 12px;">/DATA/AppData/privacy-hub/.secrets</span></div>
-                    <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace" style="font-size: 12px;">/DATA/AppData/privacy-hub/config</span></div>
+                    <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace" style="font-size: 12px;">./DATA/AppData/privacy-hub/.secrets</span></div>
+                    <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace" style="font-size: 12px;">./DATA/AppData/privacy-hub/config</span></div>
                     <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
                     <div class="stat-row"><span class="stat-label">Safe Display Mode</span><span class="stat-value">Active (Local)</span></div>
                 </div>
@@ -2597,19 +2606,19 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         function dismissUpdateBanner() {
             const banner = document.getElementById('update-banner');
             if (banner) banner.classList.add('hidden-banner');
-            localStorage.setItem('update_banner_dismissed', pendingUpdates.sort().join(','));
+            sessionStorage.setItem('update_banner_dismissed', pendingUpdates.sort().join(','));
         }
 
         function dismissMacAdvisory() {
             const banner = document.getElementById('mac-advisory');
             if (banner) banner.classList.add('hidden-banner');
-            localStorage.setItem('mac_advisory_dismissed', 'true');
+            localStorage.setItem('mac_advisory_dismissed_v2', 'true');
         }
 
         function initMacAdvisory() {
             const banner = document.getElementById('mac-advisory');
             if (banner) {
-                if (localStorage.getItem('mac_advisory_dismissed') === 'true') {
+                if (localStorage.getItem('mac_advisory_dismissed_v2') === 'true') {
                     banner.classList.add('hidden-banner');
                 } else {
                     banner.classList.remove('hidden-banner');
@@ -2629,7 +2638,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 const list = document.getElementById('update-list');
                 
                 if (pendingUpdates.length > 0) {
-                    const dismissed = localStorage.getItem('update_banner_dismissed');
+                    const dismissed = sessionStorage.getItem('update_banner_dismissed');
                     if (dismissed === pendingUpdates.join(',')) {
                         if (banner) banner.classList.add('hidden-banner');
                     } else {
@@ -3605,52 +3614,72 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const status = document.getElementById('log-status');
             const evtSource = new EventSource(API + "/events");
             
-            function parseLogLine(line) {
-                let logData = null;
-                try {
-                    logData = JSON.parse(line);
-                } catch(e) {
-                    logData = { message: line, level: 'INFO', category: 'SYSTEM', timestamp: '' };
+            evtSource.onmessage = function(e) {
+                if (!e.data) return;
+                const entry = parseLogLine(e.data);
+                if (!entry) return;
+
+                // Clear the loader if it's still there
+                if (el.querySelector('.body-medium')) {
+                    el.innerHTML = '';
+                    el.style.alignItems = 'flex-start';
+                    el.style.justifyContent = 'flex-start';
                 }
 
-                // Apply active filters
-                const filterLevel = document.getElementById('log-filter-level').value;
-                const filterCat = document.getElementById('log-filter-cat').value;
-                if (filterLevel !== 'ALL' && logData.level !== filterLevel) return null;
-                if (filterCat !== 'ALL' && logData.category !== filterCat) return null;
+                el.appendChild(entry);
+                if (el.childNodes.length > 500) el.removeChild(el.firstChild);
+                el.scrollTop = el.scrollHeight;
+            };
+            evtSource.onopen = function() { status.textContent = "Live"; status.style.color = "var(--md-sys-color-success)"; };
+            evtSource.onerror = function() { status.textContent = "Reconnecting..."; status.style.color = "var(--md-sys-color-error)"; evtSource.close(); setTimeout(startLogStream, 3000); };
+        }
 
-                // Filter out common noise
-                const m = logData.message || "";
-                if (m.includes('HTTP/1.1" 200') || m.includes('HTTP/1.1" 304')) {
-                    // Only filter if it doesn't match a known humanization pattern
-                    const knownPatterns = ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /theme', 'POST /theme', 'GET /system-health', 'GET /profiles', 'POST /update-service', 'POST /batch-update', 'POST /restart-stack', 'POST /rotate-api-key', 'POST /activate', 'POST /upload', 'POST /delete', 'GET /check-updates', 'GET /changelog', 'GET /project-details', 'POST /purge-images'];
-                    if (!knownPatterns.some(p => m.includes(p))) return null;
-                }
-                
-                const div = document.createElement('div');
-                div.className = 'log-entry';
-                
-                let icon = 'info';
-                let iconColor = 'var(--md-sys-color-primary)';
-                let message = logData.message;
-                let timestamp = logData.timestamp;
+        function parseLogLine(line) {
+            let logData = null;
+            try {
+                logData = JSON.parse(line);
+            } catch(e) {
+                logData = { message: line, level: 'INFO', category: 'SYSTEM', timestamp: '' };
+            }
 
-                // Humanization logic
-                if (message.includes('GET /project-details')) message = 'Storage utilization breakdown fetched';
+            // Apply active filters
+            const filterLevel = document.getElementById('log-filter-level').value;
+            const filterCat = document.getElementById('log-filter-cat').value;
+            if (filterLevel !== 'ALL' && logData.level !== filterLevel) return null;
+            if (filterCat !== 'ALL' && logData.category !== filterCat) return null;
+
+            // Filter out common noise
+            const m = logData.message || "";
+            if (m.includes('HTTP/1.1" 200') || m.includes('HTTP/1.1" 304')) {
+                // Only filter if it doesn't match a known humanization pattern
+                const knownPatterns = ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /theme', 'POST /theme', 'GET /system-health', 'GET /profiles', 'POST /update-service', 'POST /batch-update', 'POST /restart-stack', 'POST /rotate-api-key', 'POST /activate', 'POST /upload', 'POST /delete', 'GET /check-updates', 'GET /changelog', 'GET /project-details', 'POST /purge-images'];
+                if (!knownPatterns.some(p => m.includes(p))) return null;
+            }
+
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+
+            let icon = 'info';
+            let iconColor = 'var(--md-sys-color-primary)';
+            let message = logData.message;
+            let timestamp = logData.timestamp;
+
+            // Humanization logic
+            if (message.includes('GET /project-details')) message = 'Storage utilization breakdown fetched';
             if (message.includes('POST /purge-images')) message = 'Unused Docker assets purged';
             if (message.includes('GET /system-health')) message = 'System health telemetry synchronized';
-                if (message.includes('POST /update-service')) message = 'Service update initiated';
-                if (message.includes('POST /theme')) message = 'UI theme preferences updated';
-                if (message.includes('GET /theme')) message = 'UI theme assets synchronized';
-                if (message.includes('POST /verify-admin')) message = 'Administrative session authorized';
-                if (message.includes('POST /toggle-session-cleanup')) message = 'Session security policy updated';
-                if (message.includes('GET /profiles')) message = 'VPN profiles synchronized';
-                if (message.includes('POST /activate')) message = 'VPN profile switch triggered';
-                if (message.includes('POST /upload')) message = 'VPN profile upload completed';
-                if (message.includes('POST /delete')) message = 'VPN profile deletion requested';
-                if (message.includes('Watchtower Notification')) message = 'Container update availability checked';
-                if (message.includes('GET /status')) message = 'Service health status refreshed';
-                if (message.includes('GET /metrics')) message = 'Performance metrics updated';
+            if (message.includes('POST /update-service')) message = 'Service update initiated';
+            if (message.includes('POST /theme')) message = 'UI theme preferences updated';
+            if (message.includes('GET /theme')) message = 'UI theme assets synchronized';
+            if (message.includes('POST /verify-admin')) message = 'Administrative session authorized';
+            if (message.includes('POST /toggle-session-cleanup')) message = 'Session security policy updated';
+            if (message.includes('GET /profiles')) message = 'VPN profiles synchronized';
+            if (message.includes('POST /activate')) message = 'VPN profile switch triggered';
+            if (message.includes('POST /upload')) message = 'VPN profile upload completed';
+            if (message.includes('POST /delete')) message = 'VPN profile deletion requested';
+            if (message.includes('Watchtower Notification')) message = 'Container update availability checked';
+            if (message.includes('GET /status')) message = 'Service health status refreshed';
+            if (message.includes('GET /metrics')) message = 'Performance metrics updated';
                 if (message.includes('POST /batch-update')) message = 'Batch update sequence started';
                 if (message.includes('GET /updates')) message = 'Checking repository update status';
                 if (message.includes('GET /services')) message = 'Service catalog synchronized';
@@ -4681,7 +4710,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; flex-direction: column; gap: 12px;">
                         <button onclick="purgeUnusedImages(event)" class="btn btn-filled" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
                             <span class="material-symbols-rounded">broom</span>
-                            Purge Unused Images
+                            <span>Purge Unused Images</span>
                         </button>
                         <p class="body-small" style="opacity: 0.7; text-align: center;">Safe removal of dangling images and unused build cache.</p>
                     </div>
@@ -4713,14 +4742,14 @@ authenticate_registries() {
         fi
         
         # DHI Login
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+        if echo "$REG_TOKEN" | env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
             log_info "dhi.io: Authentication successful."
         else
             log_warn "dhi.io: Authentication failed."
         fi
 
         # Docker Hub Login
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+        if echo "$REG_TOKEN" | env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
              log_info "Docker Hub: Authentication successful."
         else
              log_warn "Docker Hub: Authentication failed."
@@ -4740,7 +4769,7 @@ authenticate_registries() {
         
         # DHI Login
         DHI_LOGIN_OK=false
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
+        if echo "$REG_TOKEN" | env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
             log_info "dhi.io: Authentication successful."
             DHI_LOGIN_OK=true
         else
@@ -4749,7 +4778,7 @@ authenticate_registries() {
 
         # Docker Hub Login
         HUB_LOGIN_OK=false
-        if echo "$REG_TOKEN" | sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+        if echo "$REG_TOKEN" | env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
              log_info "Docker Hub: Authentication successful."
              HUB_LOGIN_OK=true
         else
@@ -4862,7 +4891,7 @@ check_docker_rate_limit() {
     # Export DOCKER_CONFIG globally
     export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
     
-    if ! output=$(sudo env DOCKER_CONFIG="$DOCKER_CONFIG" docker pull hello-world 2>&1); then
+    if ! output=$(env DOCKER_CONFIG="$DOCKER_CONFIG" docker pull hello-world 2>&1); then
         if echo "$output" | grep -iaE "toomanyrequests|rate.*limit|pull.*limit|reached.*limit" >/dev/null; then
             log_crit "Docker Hub Rate Limit Reached! They want you to log in."
             # We already tried to auth at start, but maybe it failed or they skipped?
@@ -5016,23 +5045,23 @@ clean_environment() {
             if ! check_cert_risk; then log_info "Data wipe aborted by user (Certificate Protection)."; return 1; fi
             log_info "Clearing BASE_DIR data..."
             if [ -d "$BASE_DIR" ]; then
-                sudo rm -f "$BASE_DIR/.secrets" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/.current_public_ip" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/.active_profile_name" 2>/dev/null || true
-                sudo rm -rf "$BASE_DIR/config" 2>/dev/null || true
-                sudo rm -rf "$BASE_DIR/env" 2>/dev/null || true
-                sudo rm -rf "$BASE_DIR/sources" 2>/dev/null || true
-                sudo rm -rf "$BASE_DIR/wg-profiles" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/active-wg.conf" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/wg-ip-monitor.sh" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/wg-control.sh" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/wg-api.sh" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/wg-ip-monitor.log" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
-                sudo rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
-                sudo rm -rf "$BASE_DIR" 2>/dev/null || true
+                rm -f "$BASE_DIR/.secrets" 2>/dev/null || true
+                rm -f "$BASE_DIR/.current_public_ip" 2>/dev/null || true
+                rm -f "$BASE_DIR/.active_profile_name" 2>/dev/null || true
+                rm -rf "$BASE_DIR/config" 2>/dev/null || true
+                rm -rf "$BASE_DIR/env" 2>/dev/null || true
+                rm -rf "$BASE_DIR/sources" 2>/dev/null || true
+                rm -rf "$BASE_DIR/wg-profiles" 2>/dev/null || true
+                rm -f "$BASE_DIR/active-wg.conf" 2>/dev/null || true
+                rm -f "$BASE_DIR/wg-ip-monitor.sh" 2>/dev/null || true
+                rm -f "$BASE_DIR/wg-control.sh" 2>/dev/null || true
+                rm -f "$BASE_DIR/wg-api.sh" 2>/dev/null || true
+                rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
+                rm -f "$BASE_DIR/wg-ip-monitor.log" 2>/dev/null || true
+                rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
+                rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
+                rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
+                rm -rf "$BASE_DIR" 2>/dev/null || true
             fi
             # Remove volumes - try both unprefixed and prefixed names (docker compose uses project prefix)
             for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
@@ -5182,14 +5211,14 @@ clean_environment() {
                 CERT_PROTECT=false
             else
                 log_info "  Removing: $BASE_DIR"
-                sudo rm -rf "$BASE_DIR"
+                rm -rf "$BASE_DIR"
             fi
         fi
         
         # Alternative locations that might have been created
-        if [ -d "/DATA/AppData/privacy-hub" ]; then
-            log_info "  Removing directory: /DATA/AppData/privacy-hub"
-            sudo rm -rf "/DATA/AppData/privacy-hub"
+        if [ -d "./DATA/AppData/privacy-hub" ]; then
+            log_info "  Removing directory: ./DATA/AppData/privacy-hub"
+            rm -rf "./DATA/AppData/privacy-hub"
         fi
         
         # ============================================================
@@ -5222,14 +5251,14 @@ clean_environment() {
         # ============================================================
         log_info "Phase 9: Cleaning up specific networking rules (existing host rules will be preserved)..."
         # Only remove rules if they exist to avoid affecting other system configurations
-        if sudo iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null; then
-            sudo iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
+        if iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null; then
+            iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
         fi
-        if sudo iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null; then
-            sudo iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
+        if iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null; then
+            iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
         fi
-        if sudo iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
-            sudo iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
+        if iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
+            iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
         fi
         
         echo ""
@@ -6425,7 +6454,7 @@ else
     log_warn "BreezeWiki Dockerfile.alpine missing - build may fail."
 fi
 
-sudo chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$SRC_DIR/breezewiki" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
+chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$SRC_DIR/breezewiki" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
 
 # --- SECTION 12: ADMINISTRATIVE CONTROL ARTIFACTS ---
 
@@ -7910,6 +7939,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
         if self.path == '/uninstall':
             try:
                 def run_uninstall():
+                    log_structured("INFO", "Uninstall sequence started", "MAINTENANCE")
                     time.sleep(10) # Give enough time for response to flush
                     subprocess.run(["bash", "/app/zima.sh", "-x"], cwd="/app")
 
@@ -8407,8 +8437,7 @@ cat > "$SERVICES_JSON" <<EOF
       "url": "http://$LAN_IP:$PORT_MEMOS",
       "actions": [
         {"type": "vacuum", "label": "Optimize DB", "icon": "compress"}
-      ],
-      "chips": ["Direct Access"]
+      ]
     },
     "vert": {
       "name": "VERT",
@@ -8436,7 +8465,7 @@ cat > "$SERVICES_JSON" <<EOF
       "actions": [
         {"type": "clear-logs", "label": "Clear Logs", "icon": "auto_delete"}
       ],
-      "chips": ["Local Access", "Encrypted DNS"]
+      "chips": [{"label": "Local Access", "icon": "lan", "variant": "tertiary"}, "Encrypted DNS"]
     },
     "portainer": {
       "name": "Portainer",
@@ -8444,7 +8473,7 @@ cat > "$SERVICES_JSON" <<EOF
       "category": "system",
       "order": 20,
       "url": "http://$LAN_IP:$PORT_PORTAINER",
-      "chips": ["Local Access"]
+      "chips": [{"label": "Local Access", "icon": "lan", "variant": "tertiary"}]
     },
     "wg-easy": {
       "name": "WireGuard",
@@ -8452,7 +8481,7 @@ cat > "$SERVICES_JSON" <<EOF
       "category": "system",
       "order": 30,
       "url": "http://$LAN_IP:$PORT_WG_WEB",
-      "chips": ["Local Access"]
+      "chips": [{"label": "Local Access", "icon": "lan", "variant": "tertiary"}]
     }
   }
 }
@@ -8648,8 +8677,8 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "dev.casaos.app.ui.protocol=http"
       - "dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB"
       - "dev.casaos.app.ui.hostname=$LAN_IP"
-      - "dev.casaos.app.ui.icon=assets/privacy-hub.svg"
-      - "dev.casaos.app.icon=assets/privacy-hub.svg"
+      - "dev.casaos.app.ui.icon=/assets/privacy-hub.svg"
+      - "dev.casaos.app.icon=/assets/privacy-hub.svg"
     depends_on:
       hub-api: {condition: service_healthy}
     healthcheck:
@@ -9085,7 +9114,7 @@ COMPOSE_FILE="$COMPOSE_FILE"
 LAN_IP="$LAN_IP"
 PORT_DASHBOARD_WEB="$PORT_DASHBOARD_WEB"
 DOCKER_AUTH_DIR="$DOCKER_AUTH_DIR"
-DOCKER_CMD="sudo env DOCKER_CONFIG=\$DOCKER_AUTH_DIR docker"
+DOCKER_CMD="env DOCKER_CONFIG=\$DOCKER_AUTH_DIR docker"
 LOG_FILE="\$AGH_CONF_DIR/certbot/monitor.log"
 LOCK_FILE="\$AGH_CONF_DIR/certbot/monitor.lock"
 EOF
@@ -9287,9 +9316,9 @@ EOF
 # Execute system deployment and verify global infrastructure integrity.
 check_iptables() {
     log_info "Verifying iptables rules..."
-    if sudo iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null && \
-       sudo iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null && \
-       sudo iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
+    if iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null && \
+       iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null && \
+       iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
         log_info "Network routing rules verified (WireGuard traffic allowed)."
     else
         log_warn "Network routing rules incomplete. External VPN access may be limited."
@@ -9297,17 +9326,17 @@ check_iptables() {
     fi
 }
 
-sudo modprobe tun || true
+modprobe tun || true
 
 # Explicitly remove portainer and hub-api if they exist to ensure clean state
 log_info "Launching core infrastructure services..."
-sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build hub-api adguard unbound gluetun
+env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build hub-api adguard unbound gluetun
 
 # Wait for critical backends to be healthy before starting Nginx (dashboard)
 log_info "Waiting for backend services to stabilize (this may take up to 60s)..."
 for i in $(seq 1 60); do
-    HUB_HEALTH=$(sudo docker inspect --format='{{.State.Health.Status}}' hub-api 2>/dev/null || echo "unknown")
-    GLU_HEALTH=$(sudo docker inspect --format='{{.State.Status}}' gluetun 2>/dev/null || echo "unknown")
+    HUB_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' hub-api 2>/dev/null || echo "unknown")
+    GLU_HEALTH=$(docker inspect --format='{{.State.Status}}' gluetun 2>/dev/null || echo "unknown")
     
     if [ "$HUB_HEALTH" = "healthy" ] && [ "$GLU_HEALTH" = "running" ]; then
         log_info "Backends are stable. Finalizing stack launch..."
@@ -9318,7 +9347,7 @@ for i in $(seq 1 60); do
 done
 
 # Launch the rest of the stack
-sudo env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
 log_info "Verifying control plane connectivity..."
 sleep 5
