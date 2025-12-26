@@ -5592,6 +5592,11 @@ dns:
   protection_enabled: true
   filtering_enabled: true
   blocking_mode: default
+  rewrites:
+$(if [ -n "$DESEC_DOMAIN" ]; then
+    printf "    - domain: %s\n      answer: %s\n" "$DESEC_DOMAIN" "$LAN_IP"
+    printf "    - domain: '*.%s'\n      answer: %s\n" "$DESEC_DOMAIN" "$LAN_IP"
+fi)
 querylog:
   enabled: true
   file_enabled: true
@@ -5633,16 +5638,6 @@ if [ -n "$AGH_USER_RULES" ]; then
     printf "%b" "$AGH_USER_RULES" >> "$AGH_YAML"
 else
     echo "user_rules: []" >> "$AGH_YAML"
-fi
-
-if [ -n "$DESEC_DOMAIN" ]; then
-    cat >> "$AGH_YAML" <<EOF
-rewrites:
-  - domain: $DESEC_DOMAIN
-    answer: $LAN_IP
-  - domain: "*.$DESEC_DOMAIN"
-    answer: $LAN_IP
-EOF
 fi
 
 cat >> "$AGH_YAML" <<EOF
