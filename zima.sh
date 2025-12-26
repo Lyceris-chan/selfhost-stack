@@ -4739,7 +4739,6 @@ clean_environment() {
 
     if [ "$FORCE_CLEAN" = true ]; then
         log_warn "FORCE CLEAN ENABLED (-c): All existing data, configurations, and volumes will be permanently removed."
-        AUTO_CONFIRM=true
     fi
 
     TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd"
