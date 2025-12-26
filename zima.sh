@@ -7586,28 +7586,28 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 def run_master_update():
                     try:
                         # 1. Start Logging
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Starting Master Update process."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", "[Update Engine] Starting Master Update process.", "MAINTENANCE")
                         
                         # 2. Perform Full Backup
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Creating pre-update backup..."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", "[Update Engine] Creating pre-update backup...", "MAINTENANCE")
                         subprocess.run(["/usr/local/bin/migrate.sh", "all", "backup-all"], timeout=300)
                         
                         # 3. Trigger Watchtower for all images
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Pulling latest container images..."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", "[Update Engine] Pulling latest container images...", "MAINTENANCE")
                         subprocess.run(['docker', 'run', '--rm', '-v', '/var/run/docker.sock:/var/run/docker.sock', 'containrrr/watchtower', '--run-once', '--cleanup'])
                         
                         # 4. Trigger source updates for all
                         src_root = "/app/sources"
                         if os.path.exists(src_root):
-                            subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Refreshing service source code..."}}\' >> {HISTORY_LOG}'])
+                            log_structured("INFO", "[Update Engine] Refreshing service source code...", "MAINTENANCE")
                             for repo in os.listdir(src_root):
                                 repo_path = os.path.join(src_root, repo)
                                 if os.path.isdir(os.path.join(repo_path, ".git")):
                                     subprocess.run(["git", "fetch", "--all"], cwd=repo_path)
                         
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Master Update successfully completed."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", "[Update Engine] Master Update successfully completed.", "MAINTENANCE")
                     except Exception as e:
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"ERROR","category":"MAINTENANCE","message":"[Update Engine] Master Update failed: {str(e)}"}}\' >> {HISTORY_LOG}'])
+                        log_structured("ERROR", f"[Update Engine] Master Update failed: {str(e)}", "MAINTENANCE")
 
                 import threading
                 threading.Thread(target=run_master_update).start()
@@ -8083,9 +8083,9 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 
                 def run_service_update(name):
                     try:
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Starting update for {name}..."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", f"[Update Engine] Starting update for {name}...", "MAINTENANCE")
                         # 1. Pre-update Backup
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Creating safety backup for {name}..."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", f"[Update Engine] Creating safety backup for {name}...", "MAINTENANCE")
                         subprocess.run(["/usr/local/bin/migrate.sh", name, "backup"], timeout=120)
                         
                         # 2. Refresh source
@@ -8097,11 +8097,11 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                 subprocess.run(["/app/patches.sh", name], check=True, timeout=30)
                         
                         # 3. Rebuild and restart
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Build process for {name} initiated (Expect increased resource usage)."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", f"[Update Engine] Build process for {name} initiated (Expect increased resource usage).", "MAINTENANCE")
                         subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', name], timeout=600)
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] {name} update completed successfully."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", f"[Update Engine] {name} update completed successfully.", "MAINTENANCE")
                     except Exception as ex:
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"ERROR","category":"MAINTENANCE","message":"[Update Engine] {name} update failed: {str(ex)}"}}\' >> {HISTORY_LOG}'])
+                        log_structured("ERROR", f"[Update Engine] {name} update failed: {str(ex)}", "MAINTENANCE")
 
                 import threading
                 threading.Thread(target=run_service_update, args=(service,)).start()
@@ -9094,7 +9094,7 @@ if [ -z "$DESEC_DOMAIN" ]; then exit 0; fi
 NEEDS_ACTION=false
 if [ ! -f "$AGH_CONF_DIR/ssl.crt" ]; then
     NEEDS_ACTION=true
-elif ! grep -qE "Let's Encrypt|R3|ISRG" "$AGH_CONF_DIR/ssl.crt"; then
+elif ! openssl x509 -in "$AGH_CONF_DIR/ssl.crt" -noout -issuer 2>/dev/null | grep -qE "Let's Encrypt|R3|ISRG"; then
     NEEDS_ACTION=true
 elif ! $DOCKER_CMD run --rm \
     -v "$AGH_CONF_DIR:/certs" \
@@ -9445,7 +9445,7 @@ echo "  ✓ Frontend services are isolated via Gluetun VPN to hide your home IP.
 echo ""
 if [ -f "$AGH_CONF_DIR/ssl.crt" ]; then
     if grep -q "BEGIN CERTIFICATE" "$AGH_CONF_DIR/ssl.crt"; then
-        if ! grep -q "Let's Encrypt" "$AGH_CONF_DIR/ssl.crt" && ! grep -q "R3" "$AGH_CONF_DIR/ssl.crt"; then
+        if ! openssl x509 -in "$AGH_CONF_DIR/ssl.crt" -noout -issuer 2>/dev/null | grep -qE "Let's Encrypt|R3|ISRG"; then
             echo -e "\e[33m[IMPORTANT]\e[0m CURRENTLY UTILIZING A SELF-SIGNED CERTIFICATE"
             echo "  - Mobile devices require a trusted CA for Encrypted DNS (DoH/DoT/DoQ)."
             echo "  - An automated background process is managing Let's Encrypt issuance."
