@@ -12,29 +12,22 @@
 - [x] clean up the repo
 - [x] push and commit
 
-content.js:2 Uncaught TypeError: Cannot read properties of null (reading 'skipKeybind')
-    at HTMLDocument.Ot (content.js:2:303862)
-content.js:2 Uncaught TypeError: Cannot read properties of null (reading 'skipKeybind')
-    at HTMLDocument.Ot (content.js:2:303862)
-content.js:2 Uncaught TypeError: Cannot read properties of null (reading 'skipKeybind')
-    at HTMLDocument.Ot (content.js:2:303862)
-content.js:2 Uncaught TypeError: Cannot read properties of null (reading 'skipKeybind')
-    at HTMLDocument.Ot (content.js:2:303862)
+- [x] I dont see the DNS rewrite setup for our certificate stuff in adguard to allow us to use the cert without a VPN
+- [x] the updates available message doesnt stay dismissed 
+- [x] the default view should be as if all categories are toggled on by default not the all services category and when the all services category is toggled it should still show the headers like this above said services and list them in a proper 3x3 4x4 grid vpn_lock VPN Protected lan Direct Access hub Infrastructure same for the rest
+- [x] the updates available message doesnt stretch across the category bar like it and the mac address message should
+- [x] dont have the Session Auto-Cleanup toggle move upon toggle have the warning be displayed prior to toggling it as well in a different way so the user is aware of the risk and so the button doesnt keep changing position
+- [x] Change the update all button to be shaped like the Save Theme button and have all buttons be listed under each other for this card
+- [x] address these console logs
+- [x] add more spacing to Drive Health: Healthy 91.9% Health
+- [x] ensure images and all other things we do are also tracked under Project Size 116.8 MB 
 (index):1 [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl.qjz9zk/9p2vKq) <form onsubmit=​"submitLogin()​;​ return false;​">​…​</form>​
-Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
-Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
-Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
-Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
-Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
-Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
-Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
-Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
-Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
-Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
-:8081/api/theme?_=1766705659193:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-(index):3585 Failed to load settings from server SyntaxError: Unexpected token '<', "<html>
+:8081/api/theme?_=1766708523987:1  Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+(index):3587 Failed to load settings from server SyntaxError: Unexpected token '<', "<html>
 <h"... is not valid JSON
-loadAllSettings @ (index):3585
+loadAllSettings @ (index):3587
+
+
  
 
  │   user input username laciachan                                                                                                                                                                                                                 │

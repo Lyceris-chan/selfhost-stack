@@ -273,6 +273,17 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             display: block !important;
         }
         
+        #update-banner, #mac-advisory {
+            width: 100%;
+            margin-bottom: 24px;
+        }
+        
+        #update-banner .card, #mac-advisory .card {
+            min-height: auto;
+            border-radius: var(--md-sys-shape-corner-large);
+            padding: 16px 24px;
+        }
+
         .filter-bar {
             display: flex;
             gap: 8px;
@@ -286,6 +297,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             background: var(--md-sys-color-surface);
             border-bottom: 1px solid var(--md-sys-color-outline-variant);
             flex-wrap: wrap;
+            width: 100%;
         }
         .filter-bar::-webkit-scrollbar { display: none; }
         
@@ -1327,7 +1339,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
                     </div>
                     <div style="display: flex; gap: 12px;">
                         <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Pull latest source code and rebuild containers for all pending services.">Update All</button>
-                        <button onclick="this.closest('#update-banner').style.setProperty('display', 'none', 'important')" class="btn btn-outlined" style="border-color: currentColor; color: inherit;">Dismiss</button>
+                        <button onclick="dismissUpdateBanner()" class="btn btn-outlined" style="border-color: currentColor; color: inherit;">Dismiss</button>
                     </div>
                 </div>
             </div>
@@ -1353,13 +1365,6 @@ cat > "$DASHBOARD_FILE" <<'EOF'
         </div>
 
 
-
-        <section data-category="all" id="section-all">
-        <div class="section-label">All Services</div>
-        <div id="grid-all" class="grid">
-            <!-- Dynamic Cards Injected Here -->
-        </div>
-        </section>
 
         <section data-category="apps">
         <div class="section-label">Applications</div>
@@ -1691,22 +1696,22 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 <h3>Security & Privacy</h3>
                 <p class="body-medium description">Manage administrative session behavior and authentication security.</p>
                 <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+                    <div id="session-cleanup-warning" class="chip admin" style="display: flex; width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-highest); color: var(--md-sys-color-on-surface-variant); border: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 4px; transition: all 0.3s ease;">
+                        <span class="material-symbols-rounded" id="session-warning-icon">info</span>
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span style="font-weight: 600;" id="session-warning-title">Security Recommendation</span>
+                            <span class="body-medium" id="session-warning-text" style="opacity: 0.8; white-space: normal;">Session auto-cleanup is currently active. Your admin session will expire automatically for safety.</span>
+                        </div>
+                    </div>
                     <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
                         <div style="flex: 1;">
                             <span class="label-large">Session Auto-Cleanup</span>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Automatically expire admin sessions after 30 minutes of inactivity.</p>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Automatically expire admin sessions after inactivity.</p>
                         </div>
-                        <div class="switch-container" id="session-cleanup-switch" onclick="toggleSessionCleanup()" data-tooltip="When enabled, your admin session will expire automatically.">
+                        <div class="switch-container" id="session-cleanup-switch" onclick="toggleSessionCleanup()" data-tooltip="Toggle automatic session expiration">
                             <div class="switch-track">
                                 <div class="switch-thumb"></div>
                             </div>
-                        </div>
-                    </div>
-                    <div id="session-cleanup-warning" class="chip admin" style="display: none; width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: none;">
-                        <span class="material-symbols-rounded">warning</span>
-                        <div style="display: flex; flex-direction: column; gap: 2px;">
-                            <span style="font-weight: 600;">Security Warning</span>
-                            <span class="body-medium" style="opacity: 0.8; white-space: normal;">Session auto-cleanup is disabled. Administrative access will remain active indefinitely on this browser until manually exited.</span>
                         </div>
                     </div>
                     <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
@@ -1727,18 +1732,18 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
                     <div class="stat-row"><span class="stat-label">Safe Display Mode</span><span class="stat-value">Active (Local)</span></div>
                 </div>
-                <div class="admin-only" style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 12px;">
-                    <button onclick="checkUpdates()" class="btn btn-tonal" data-tooltip="Check for updates" style="flex: 1 1 auto;">
-                        <span class="material-symbols-rounded">system_update_alt</span> Check
+                <div class="admin-only" style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
+                    <button onclick="checkUpdates()" class="btn btn-tonal" data-tooltip="Check for updates" style="width: 100%; justify-content: flex-start;">
+                        <span class="material-symbols-rounded">system_update_alt</span> Check for Updates
                     </button>
-                    <button onclick="updateAllServices()" class="btn btn-filled" data-tooltip="Update all services" style="flex: 1 1 auto;">
-                        <span class="material-symbols-rounded">upgrade</span> Update All
+                    <button onclick="updateAllServices()" class="btn btn-tonal" data-tooltip="Update all services" style="width: 100%; justify-content: flex-start; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);">
+                        <span class="material-symbols-rounded">upgrade</span> Update All Services
                     </button>
-                    <button onclick="restartStack()" class="btn btn-tonal" style="flex: 1 1 auto; background: var(--md-sys-color-surface-container-highest);">
-                        <span class="material-symbols-rounded">restart_alt</span> Restart
+                    <button onclick="restartStack()" class="btn btn-tonal" style="width: 100%; justify-content: flex-start; background: var(--md-sys-color-surface-container-highest);">
+                        <span class="material-symbols-rounded">restart_alt</span> Restart Stack
                     </button>
-                    <button onclick="uninstallStack()" class="btn btn-tonal" style="flex: 1 1 auto; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Permanently remove all containers and data.">
-                        <span class="material-symbols-rounded">delete_forever</span> Uninstall
+                    <button onclick="uninstallStack()" class="btn btn-tonal" style="width: 100%; justify-content: flex-start; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Permanently remove all containers and data.">
+                        <span class="material-symbols-rounded">delete_forever</span> Uninstall System
                     </button>
                 </div>
             </div>
@@ -1776,12 +1781,15 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                         </div>
                     </div>
 
-                    <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; justify-content: space-between; align-items: center;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-grow: 1;">
                             <span class="material-symbols-rounded" style="font-size: 20px; color: var(--md-sys-color-primary);">hard_drive</span>
-                            <span class="body-medium" data-tooltip="SMART Health Status" id="drive-health-container">Drive Health: <strong id="sys-drive-status">Checking...</strong> <span id="sys-drive-pct"></span></span>
+                            <span class="body-medium" data-tooltip="SMART Health Status" id="drive-health-container" style="display: flex; gap: 8px; align-items: center;">
+                                Drive Health: <strong id="sys-drive-status">Checking...</strong>
+                                <span id="sys-drive-pct" style="margin-left: 8px; opacity: 0.8;"></span>
+                            </span>
                         </div>
-                        <span class="body-small" id="sys-disk-percent">--% used</span>
+                        <span class="body-small" id="sys-disk-percent" style="white-space: nowrap;">--% used</span>
                     </div>
                 </div>
             </div>
@@ -1890,6 +1898,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             </div>
             <p class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant);">Enter your administrator password to unlock management features.</p>
             <form onsubmit="submitLogin(); return false;">
+                <!-- Hidden username field for accessibility/autofill -->
+                <input type="text" name="username" value="admin" style="display:none" autocomplete="username">
                 <input type="password" id="admin-password-input" class="text-field" placeholder="Password" style="margin-bottom: 24px; border-radius: 4px;" autocomplete="current-password">
                 <div style="display: flex; justify-content: flex-end; gap: 12px;">
                     <button type="button" onclick="closeLoginModal()" class="btn btn-outlined">Cancel</button>
@@ -2049,7 +2059,6 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 };
 
                 ['apps', 'system', 'tools'].forEach(cat => syncGrid(`grid-${cat}`, buckets[cat]));
-                syncGrid('grid-all', buckets.all);
 
                 fetchMetrics();
             } catch (e) {
@@ -2145,62 +2154,51 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             if (!chip) return;
 
             if (cat === 'all') {
-                // "All" selected: Clear others, select All
+                const isActive = chip.classList.contains('active');
                 document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-                chip.classList.add('active');
+                if (!isActive) {
+                    // Activate 'All' and also all other main categories
+                    chip.classList.add('active');
+                    document.querySelectorAll('.filter-chip:not([data-target="all"]):not([data-target="logs"])').forEach(c => c.classList.add('active'));
+                } else {
+                    // Just deactivate all? No, Material 3 should have at least one.
+                    // Let's default to all active except 'all' chip if 'all' is toggled off
+                    document.querySelectorAll('.filter-chip:not([data-target="all"]):not([data-target="logs"])').forEach(c => c.classList.add('active'));
+                }
             } else {
-                // Specific category: Toggle
                 chip.classList.toggle('active');
                 
-                // If we just activated a specific cat, deselect "All"
-                if (chip.classList.contains('active')) {
-                    const allChip = document.querySelector('.filter-chip[data-target="all"]');
-                    if (allChip) allChip.classList.remove('active');
-                }
+                // If a category is toggled, update the 'All' chip state
+                const allChip = document.querySelector('.filter-chip[data-target="all"]');
+                const mainChips = Array.from(document.querySelectorAll('.filter-chip:not([data-target="all"]):not([data-target="logs"])'));
+                const allActive = mainChips.every(c => c.classList.contains('active'));
+                if (allChip) allChip.classList.toggle('active', allActive);
                 
-                // If nothing is active, revert to "All"
-                const anyActive = document.querySelector('.filter-chip.active');
+                // Ensure at least one chip is active (except logs)
+                const anyActive = document.querySelector('.filter-chip.active:not([data-target="logs"])');
                 if (!anyActive) {
-                    const allChip = document.querySelector('.filter-chip[data-target="all"]');
-                    if (allChip) allChip.classList.add('active');
+                    chip.classList.add('active');
                 }
             }
             
             updateGridVisibility();
+            syncSettings(); // Persist to server if admin
         }
 
         function updateGridVisibility() {
             const activeChips = Array.from(document.querySelectorAll('.filter-chip.active'));
             const activeTargets = activeChips.map(c => c.dataset.target);
             
-            const allSection = document.getElementById('section-all');
             const sections = document.querySelectorAll('section[data-category]');
-            
-            // 1. If "all" is active, show ONLY the flat list (section-all)
-            if (activeTargets.includes('all')) {
-                if (allSection) {
-                    allSection.style.display = 'block';
-                    allSection.classList.remove('hidden');
-                }
-                sections.forEach(s => {
-                    if (s.id !== 'section-all') {
-                        s.style.display = 'none';
-                        s.classList.add('hidden');
-                    }
-                });
-                localStorage.setItem('dashboard_filter', 'all');
-                return;
-            }
-
-            // 2. Otherwise, hide "section-all" and show specific selected sections
-            if (allSection) {
-                allSection.style.display = 'none';
-                allSection.classList.add('hidden');
-            }
-
             sections.forEach(s => {
                 const cat = s.dataset.category;
-                if (cat === 'all') return; // handled above
+                if (cat === 'all') {
+                    // Show 'all' section ONLY if specifically 'all' is the ONLY thing active or if we want a flat list
+                    // But user wants headers. So we show the specific sections.
+                    s.style.display = 'none';
+                    s.classList.add('hidden');
+                    return;
+                }
                 
                 if (activeTargets.includes(cat)) {
                     s.style.display = 'block';
@@ -2211,7 +2209,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 }
             });
             
-            localStorage.setItem('dashboard_filter', activeTargets.join(','));
+            localStorage.setItem('dashboard_filter', activeTargets.filter(t => t !== 'all').join(','));
         }
 
         // Global State & Data
@@ -2237,7 +2235,31 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const switchEl = document.getElementById('session-cleanup-switch');
             const warningEl = document.getElementById('session-cleanup-warning');
             if (switchEl) switchEl.classList.toggle('active', sessionCleanupEnabled);
-            if (warningEl) warningEl.style.display = (isAdmin && !sessionCleanupEnabled) ? 'flex' : 'none';
+            
+            if (warningEl && isAdmin) {
+                warningEl.style.display = 'flex';
+                const wIcon = document.getElementById('session-warning-icon');
+                const wTitle = document.getElementById('session-warning-title');
+                const wText = document.getElementById('session-warning-text');
+                
+                if (sessionCleanupEnabled) {
+                    warningEl.style.background = 'var(--md-sys-color-surface-container-highest)';
+                    warningEl.style.color = 'var(--md-sys-color-on-surface-variant)';
+                    warningEl.style.borderColor = 'var(--md-sys-color-outline-variant)';
+                    if (wIcon) wIcon.textContent = 'info';
+                    if (wTitle) wTitle.textContent = 'Security Recommendation';
+                    if (wText) wText.textContent = 'Session auto-cleanup is currently active. Your admin session will expire automatically for safety.';
+                } else {
+                    warningEl.style.background = 'var(--md-sys-color-error-container)';
+                    warningEl.style.color = 'var(--md-sys-color-on-error-container)';
+                    warningEl.style.borderColor = 'var(--md-sys-color-error)';
+                    if (wIcon) wIcon.textContent = 'warning';
+                    if (wTitle) wTitle.textContent = 'Security Warning';
+                    if (wText) wText.textContent = 'Session auto-cleanup is disabled. Administrative access will remain active indefinitely until manually exited.';
+                }
+            } else if (warningEl) {
+                warningEl.style.display = 'none';
+            }
         }
 
         async function toggleSessionCleanup() {
@@ -2414,6 +2436,27 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             return headers;
         }
 
+        function dismissUpdateBanner() {
+            const banner = document.getElementById('update-banner');
+            if (banner) banner.style.setProperty('display', 'none', 'important');
+            // Store the timestamp of dismissal. If new updates are found later, we might show it again.
+            // But for now, we just persist the dismissal for the current set of updates.
+            localStorage.setItem('update_banner_dismissed', pendingUpdates.join(','));
+        }
+
+        function dismissMacAdvisory() {
+            const banner = document.getElementById('mac-advisory');
+            if (banner) banner.style.setProperty('display', 'none', 'important');
+            localStorage.setItem('mac_advisory_dismissed', 'true');
+        }
+
+        function initMacAdvisory() {
+            const banner = document.getElementById('mac-advisory');
+            if (banner && localStorage.getItem('mac_advisory_dismissed') === 'true') {
+                banner.style.setProperty('display', 'none', 'important');
+            }
+        }
+
         async function fetchUpdates() {
             try {
                 const res = await fetch(API + "/updates", { headers: getAuthHeaders() });
@@ -2426,10 +2469,16 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 const list = document.getElementById('update-list');
                 
                 if (pendingUpdates.length > 0) {
-                    if (banner) banner.style.display = 'block';
-                    if (list) list.textContent = "Updates available for: " + pendingUpdates.join(", ");
+                    const dismissed = localStorage.getItem('update_banner_dismissed');
+                    if (dismissed === pendingUpdates.join(',')) {
+                        if (banner) banner.style.display = 'none';
+                    } else {
+                        if (banner) banner.style.display = 'block';
+                        if (list) list.textContent = "Updates available for: " + pendingUpdates.join(", ");
+                    }
                 } else {
                     if (banner) banner.style.display = 'none';
+                    localStorage.removeItem('update_banner_dismissed');
                 }
             } catch(e) {}
         }
@@ -3767,20 +3816,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         async function loadAllSettings() {
             try {
                 const res = await fetch(API + "/theme?_=" + Date.now(), { headers: getAuthHeaders() });
+                if (!res.ok) throw new Error("Server responded with " + res.status);
                 const data = await res.json();
                 
-                // Check if server is reset (empty config) but local has data
-                if (Object.keys(data).length === 0 && localStorage.getItem('theme_seed')) {
-                    console.log("Server config is empty/reset. Clearing local storage to match.");
-                    localStorage.removeItem('theme_seed');
-                    localStorage.removeItem('theme');
-                    localStorage.removeItem('privacy_mode');
-                    localStorage.removeItem('dashboard_filter');
-                    // Reload to apply defaults
-                    location.reload();
-                    return;
-                }
-
                 // 1. Seed & Colors
                 if (data.seed) {
                     const picker = document.getElementById('theme-seed-color');
@@ -3805,17 +3843,16 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     updateProfileDisplay();
                 }
                 
-                // 4. Dashboard Filter
-                if (data.dashboard_filter) {
-                    localStorage.setItem('dashboard_filter', data.dashboard_filter);
-                    // Handle multi-select string from server
-                    const cats = data.dashboard_filter.split(',');
-                    document.querySelectorAll('.filter-chip').forEach(c => {
-                        if (cats.includes(c.dataset.target)) c.classList.add('active');
-                        else c.classList.remove('active');
-                    });
-                    updateGridVisibility();
-                }
+                // 4. Dashboard Filter - Default to all categories active (excluding 'all' chip)
+                const filter = data.dashboard_filter || localStorage.getItem('dashboard_filter') || 'apps,system,tools';
+                localStorage.setItem('dashboard_filter', filter);
+                const cats = filter.split(',');
+                document.querySelectorAll('.filter-chip').forEach(c => {
+                    if (cats.includes(c.dataset.target)) c.classList.add('active');
+                    else if (cats.length === 1 && cats[0] === 'all' && c.dataset.target === 'all') c.classList.add('active');
+                    else c.classList.remove('active');
+                });
+                updateGridVisibility();
 
                 // 5. Admin Mode
                 if (data.hasOwnProperty('is_admin')) {
@@ -3829,7 +3866,20 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     const timeoutInput = document.getElementById('session-timeout-input');
                     if (timeoutInput) timeoutInput.value = data.session_timeout;
                 }
-            } catch(e) { console.warn("Failed to load settings from server", e); }
+            } catch(e) { 
+                console.warn("Failed to load settings from server", e);
+                // Fallback to local defaults if server fails
+                if (!localStorage.getItem('dashboard_filter')) {
+                    localStorage.setItem('dashboard_filter', 'apps,system,tools');
+                }
+                const filter = localStorage.getItem('dashboard_filter');
+                const cats = filter.split(',');
+                document.querySelectorAll('.filter-chip').forEach(c => {
+                    if (cats.includes(c.dataset.target)) c.classList.add('active');
+                    else c.classList.remove('active');
+                });
+                updateGridVisibility();
+            }
         }
 
         function hexToRgb(hex) {
@@ -3995,6 +4045,10 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     badge.className = "chip admin"; // Use secondary-container color
                     badge.innerHTML = '<span class="material-symbols-rounded" style="font-size:16px;">warning</span> Self-Signed';
                     badge.dataset.tooltip = "⚠ Self-Signed (Local): Devices will show security warnings. deSEC configuration recommended.";
+                } else if (data.status === "Rate Limited") {
+                    badge.className = "chip tertiary";
+                    badge.innerHTML = '<span class="material-symbols-rounded" style="font-size:16px;">timer</span> Rate Limited';
+                    badge.dataset.tooltip = data.error || "Let's Encrypt rate limit reached. Re-attempting automatically.";
                 } else {
                     badge.className = "chip tertiary";
                     badge.textContent = data.status || "Unknown";
@@ -5515,16 +5569,6 @@ else
     echo "user_rules: []" >> "$AGH_YAML"
 fi
 
-cat >> "$AGH_YAML" <<EOF
-  # Default DNS blocklist powered by sleepy list ([Lyceris-chan/dns-blocklist-generator](https://github.com/Lyceris-chan/dns-blocklist-generator))
-filters:
-  - enabled: true
-    url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/refs/heads/main/blocklist.txt
-    name: "sleepy list"
-    id: 1
-filters_update_interval: 1
-EOF
-
 if [ -n "$DESEC_DOMAIN" ]; then
     cat >> "$AGH_YAML" <<EOF
 rewrites:
@@ -5534,6 +5578,15 @@ rewrites:
     answer: $LAN_IP
 EOF
 fi
+
+cat >> "$AGH_YAML" <<EOF
+filters:
+  - enabled: true
+    url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/refs/heads/main/blocklist.txt
+    name: "sleepy list"
+    id: 1
+filters_update_interval: 1
+EOF
 
 # Prepare escaped hash for docker-compose (v2 requires $$ for literal $)
 WG_HASH_COMPOSE="${WG_HASH_CLEAN//\$/\$\$}"
@@ -6831,7 +6884,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
     def _check_auth(self):
         # Allow certain GET endpoints without auth for the dashboard
         base_path = self.path.split('?')[0]
-        if self.command == 'GET' and base_path in ['/', '/status', '/profiles', '/containers', '/services', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates', '/master-update', '/logs', '/system-health']:
+        if self.command == 'GET' and base_path in ['/', '/status', '/profiles', '/containers', '/services', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates', '/master-update', '/logs', '/system-health', '/theme']:
             return True
         
         # Watchtower notification (comes from docker network, simple path check)
@@ -6881,22 +6934,19 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     if res.returncode == 0:
                         project_size_bytes += int(res.stdout.split()[0])
                     
-                    # Also include Docker volumes if possible
-                    vol_res = subprocess.run(['docker', 'system', 'df', '-v', '--format', 'json'], capture_output=True, text=True, timeout=10)
-                    if vol_res.returncode == 0:
-                        try:
-                            vdata = json.loads(vol_res.stdout)
-                            for vol in vdata.get('Volumes', []):
-                                if 'privacy-hub' in vol.get('Name', '') or 'privacyhub' in vol.get('Name', ''):
-                                    # size is string like "1.2MB", "45.1kB"
-                                    sz_str = vol.get('Size', '0B').upper()
-                                    mult = 1
-                                    if 'GB' in sz_str: mult = 1024*1024*1024
-                                    elif 'MB' in sz_str: mult = 1024*1024
-                                    elif 'KB' in sz_str: mult = 1024
-                                    sz_val = float(re.sub(r'[^0-9.]', '', sz_str))
-                                    project_size_bytes += int(sz_val * mult)
-                        except: pass
+                    # Also include ALL Docker images related to this stack
+                    img_res = subprocess.run(['docker', 'images', '--format', '{{.Size}}\t{{.Repository}}'], capture_output=True, text=True, timeout=10)
+                    if img_res.returncode == 0:
+                        for line in img_res.stdout.strip().split('\n'):
+                            size_str, repo = line.split('\t')
+                            # Check if it belongs to our stack
+                            if any(x in repo for x in ['privacy-hub', 'gluetun', 'adguard', 'unbound', 'redlib', 'wikiless', 'invidious', 'rimgo', 'breezewiki', 'memos', 'vert', 'scribe', 'anonymousoverflow', 'odido-booster', 'watchtower', 'portainer', 'wg-easy']):
+                                mult = 1
+                                if 'GB' in size_str.upper(): mult = 1024*1024*1024
+                                elif 'MB' in size_str.upper(): mult = 1024*1024
+                                elif 'KB' in size_str.upper(): mult = 1024
+                                sz_val = float(re.sub(r'[^0-9.]', '', size_str))
+                                project_size_bytes += int(sz_val * mult)
                 except: pass
 
                 # Drive Health Logic (SMART-lite)

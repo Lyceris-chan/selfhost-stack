@@ -169,36 +169,51 @@ const serviceUrls = {
   // 3. User Interactions
   console.log("[TEST] Simulating User Interactions...");
   
-  // Filter Chips
-  const filters = ['apps', 'system', 'dns', 'tools', 'all'];
+  // Filter Chips - Test multi-select and 'all' toggle
+  const filters = ['apps', 'system', 'dns', 'tools'];
   for (const filter of filters) {
     const chip = await page.$(`.filter-chip[data-target="${filter}"]`);
     if (chip) {
+      const wasActive = await page.$eval(`.filter-chip[data-target="${filter}"]`, el => el.classList.contains('active'));
+      console.log(`  - Filter ${filter} initial state: ${wasActive ? 'ON' : 'OFF'}`);
+      
       await chip.click();
-      console.log(`  - Clicked filter: ${filter}`);
-      await new Promise(r => setTimeout(r, 500)); // Wait for transition/render
-
-      if (filter === 'all') {
-        const gridAll = await page.$('#grid-all');
-        const gridApps = await page.$('#grid-apps');
-        if (gridAll && gridApps) {
-          const gridAllVisible = await page.$eval('#grid-all', el => el.offsetParent !== null);
-          const gridAppsHidden = await page.$eval('#grid-apps', el => el.offsetParent === null); // Should be hidden
-          if (gridAllVisible && gridAppsHidden) console.log("  - PASS: 'All Services' view active.");
-          else console.error("  - FAIL: 'All Services' view check failed.");
+      await new Promise(r => setTimeout(r, 200)); 
+      const isNowActive = await page.$eval(`.filter-chip[data-target="${filter}"]`, el => el.classList.contains('active'));
+      
+      if (isNowActive === wasActive) {
+        // Only fail if it wasn't the last active chip (safety logic)
+        const activeCount = await page.$$eval('.filter-chip.active:not([data-target="logs"])', els => els.length);
+        if (activeCount > 1 || wasActive === false) {
+           console.error(`  - FAIL: Filter ${filter} did not toggle.`);
         } else {
-          console.error("  - FAIL: Grid containers not found for 'All Services'.");
+           console.log(`  - INFO: Filter ${filter} stayed active (last chip safety).`);
         }
+      } else {
+        console.log(`  - PASS: Filter ${filter} toggled to ${isNowActive ? 'ON' : 'OFF'}.`);
       }
-
-      // Verify active class
-      const isActive = await page.$eval(`.filter-chip[data-target="${filter}"]`, el => el.classList.contains('active'));
-      if (!isActive) console.error(`  - FAIL: Filter ${filter} did not become active.`);
-    } else {
-      // Admin only chips might be hidden initially
-      if (filter === 'logs') console.log(`  - Log filter hidden (expected if not admin).`);
-      else console.error(`  - FAIL: Filter chip ${filter} not found.`);
+      
+      // If we turned it OFF, turn it back ON for subsequent tests
+      if (!isNowActive) {
+        await chip.click();
+        await new Promise(r => setTimeout(r, 200));
+      }
     }
+  }
+
+  // Test 'All' toggle
+  const allChip = await page.$('.filter-chip[data-target="all"]');
+  if (allChip) {
+    await allChip.click();
+    console.log("  - Clicked 'All' filter.");
+    await new Promise(r => setTimeout(r, 500));
+    
+    // Check if sections are visible (new behavior: all sections shown with headers)
+    const sections = await page.$$eval('section[data-category]:not(#section-all)', els => 
+      els.filter(el => window.getComputedStyle(el).display !== 'none').length
+    );
+    if (sections > 0) console.log(`  - PASS: ${sections} sections visible in 'All' view.`);
+    else console.error("  - FAIL: No sections visible in 'All' view.");
   }
 
   // Toggles
