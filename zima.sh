@@ -1403,6 +1403,8 @@ cat > "$DASHBOARD_FILE" <<'EOF'
                             <h3 style="margin:0; color: inherit; font-size: 16px;">Critical Network Advisory</h3>
                             <p class="body-medium" style="margin: 4px 0 0 0; color: inherit; opacity: 0.9;">
                                 To ensure firewall persistence and static IP reliability, you <strong>must disable Dynamic/Random MAC addresses</strong> in your host device's network settings.
+                                <br><br>
+                                Once a valid SSL certificate is acquired, the configured deSEC domain will automatically be used as the FQDN for this dashboard.
                             </p>
                         </div>
                     </div>
@@ -1786,7 +1788,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
                         <div style="flex: 1;">
                             <span class="label-large">Session Timeout (Minutes)</span>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Duration of inactivity before auto-logout (Default: 30).</p>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Duration of inactivity before auto-logout (Default: 30 Minutes).</p>
                         </div>
                         <input type="number" id="session-timeout-input" class="text-field" style="width: 80px;" value="30" onchange="syncSettings()">
                     </div>
@@ -2206,7 +2208,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             chipBox.className = 'chip-box';
 
             // Add standard Portainer link for admin
-            const pChip = createChipElement(id, { label: 'Manage', icon: 'terminal', variant: 'admin tonal', tooltip: 'Direct Container Management', portainer: true });
+            const pChip = createChipElement(id, { label: 'Manage', icon: 'settings', variant: 'admin tonal', tooltip: 'Direct Container Management', portainer: true });
             chipBox.appendChild(pChip);
 
             // Add 'Local' badge for services that process data locally
@@ -2242,9 +2244,11 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         document.addEventListener('DOMContentLoaded', () => {
             renderDynamicGrid();
             initMacAdvisory();
+            fetchUpdates();
             window.addEventListener('resize', autoScaleChips);
             // Refresh grid occasionally to catch new services
             setInterval(renderDynamicGrid, 30000);
+            setInterval(fetchUpdates, 60000);
         });
 
         const API = "/api"; 
@@ -2635,7 +2639,6 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     }
                 } else {
                     if (banner) banner.classList.add('hidden-banner');
-                    localStorage.removeItem('update_banner_dismissed');
                 }
             } catch(e) {}
         }
@@ -7526,17 +7529,6 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True, "message": reclaimed_msg})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif path_clean == '/uninstall':
-            try:
-                def run_uninstall():
-                    time.sleep(5) # Give enough time for response to flush
-                    subprocess.run(["bash", "/app/zima.sh", "-x"], cwd="/app")
-                
-                import threading
-                threading.Thread(target=run_uninstall).start()
-                self._send_json({"success": True, "message": "Uninstall sequence started"})
-            except Exception as e:
-                self._send_json({"error": str(e)}, 500)
         elif path_clean == '/status':
             try:
                 result = subprocess.run([CONTROL_SCRIPT, "status"], capture_output=True, text=True, timeout=30)
@@ -7910,6 +7902,19 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             global session_cleanup_enabled
             session_cleanup_enabled = data.get('enabled', True)
             self._send_json({"success": True, "enabled": session_cleanup_enabled})
+            return
+
+        if self.path == '/uninstall':
+            try:
+                def run_uninstall():
+                    time.sleep(10) # Give enough time for response to flush
+                    subprocess.run(["bash", "/app/zima.sh", "-x"], cwd="/app")
+
+                import threading
+                threading.Thread(target=run_uninstall).start()
+                self._send_json({"success": True, "message": "Uninstall sequence started"})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
             return
 
         if self.path == '/verify-admin':
