@@ -216,7 +216,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZimaOS Privacy Hub</title>
-    <link rel="icon" type="image/svg+xml" href="assets/privacy-hub.svg">
+    <link rel="icon" type="image/svg+xml" href="/assets/privacy-hub.svg">
     <!-- Local privacy friendly assets (Hosted Locally) -->
     <link href="assets/gs.css" rel="stylesheet">
     <link href="assets/cc.css" rel="stylesheet">
@@ -874,8 +874,19 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             color: var(--md-sys-color-on-surface-variant);
             padding: 0 12px 0 8px;
             pointer-events: none;
+            border-radius: var(--md-sys-shape-corner-full) !important;
         }
         
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--md-sys-color-surface-container-highest);
+            border-top-color: var(--md-sys-color-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
         /* Status Indicator */
         .status-indicator {
             display: inline-flex;
@@ -1142,7 +1153,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             bottom: 24px;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 20000;
+            z-index: 30000;
             display: flex;
             flex-direction: column;
             gap: 8px;
@@ -2192,7 +2203,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             chipBox.className = 'chip-box';
 
             // Add standard Portainer link for admin
-            const pChip = createChipElement(id, { label: 'Portainer', icon: 'hub', variant: 'admin tonal', tooltip: 'Direct Container Management', portainer: true });
+            const pChip = createChipElement(id, { label: 'Console', icon: 'terminal', variant: 'admin tonal', tooltip: 'Direct Container Management', portainer: true });
             chipBox.appendChild(pChip);
 
             // Add 'Local' badge for services that process data locally
@@ -4018,7 +4029,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     { label: 'Application Data', size: data.data_size, icon: 'database' },
                     { label: 'Docker Images', size: data.images_size, icon: 'album' },
                     { label: 'Docker Volumes', size: data.volumes_size, icon: 'storage' },
-                    { label: 'Container Layers', size: data.containers_size, icon: 'layers' }
+                    { label: 'Container Layers', size: data.containers_size, icon: 'layers' },
+                    { label: 'Reclaimable Assets', size: data.dangling_size, icon: 'delete_sweep', color: 'var(--md-sys-color-error)' }
                 ];
                 
                 items.forEach(item => {
@@ -4027,7 +4039,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     row.style.padding = '8px 0';
                     row.innerHTML = `
                         <div style="display: flex; align-items: center; gap: 12px;">
-                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-primary);">${item.icon}</span>
+                            <span class="material-symbols-rounded" style="color: ${item.color || 'var(--md-sys-color-primary)'};">${item.icon}</span>
                             <span class="body-medium">${item.label}</span>
                         </div>
                         <span class="label-large">${formatBytes(item.size * 1024 * 1024)}</span>
@@ -4047,10 +4059,16 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             document.getElementById('project-size-modal').style.display = 'none';
         }
 
-        async function purgeUnusedImages() {
+        async function purgeUnusedImages(e) {
             if (!confirm("This will permanently delete all dangling Docker images and unused build cache. Images currently in use by containers will NOT be affected. Proceed?")) return;
             
-            showSnackbar("Purging unused images...");
+            const btn = e ? e.target.closest('button') : document.querySelector('#project-size-content button');
+            const originalHtml = btn ? btn.innerHTML : 'Purge Unused Images';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<div class="loading-spinner" style="width:20px; height:20px; border-width:2px;"></div> Purging...';
+            }
+
             try {
                 const res = await fetch(API + "/purge-images", { 
                     method: 'POST', 
@@ -4058,7 +4076,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 });
                 const result = await res.json();
                 if (result.success) {
-                    showSnackbar("Storage optimized: " + result.message);
+                    showSnackbar("Storage optimized: " + result.message, "OK");
                     closeProjectSizeModal();
                     fetchSystemHealth(); // Refresh main dashboard size
                 } else {
@@ -4066,6 +4084,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 }
             } catch (e) {
                 showSnackbar("Optimization failed: " + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
             }
         }
 
@@ -4632,7 +4653,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                         <!-- Dynamic content -->
                     </div>
                     <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; flex-direction: column; gap: 12px;">
-                        <button onclick="purgeUnusedImages()" class="btn" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: none; font-weight: 500; height: 40px; border-radius: 20px;">
+                        <button onclick="purgeUnusedImages(event)" class="btn" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: none; font-weight: 500; height: 40px; border-radius: 20px;">
                             <span class="material-symbols-rounded">broom</span>
                             Purge Unused Images
                         </button>
@@ -7318,12 +7339,28 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             elif dtype == 'Containers': containers_size = val_bytes
                         except: continue
 
+                # Dangling Images (Reclaimable)
+                dangling_size = 0
+                dang_res = subprocess.run(['docker', 'images', '-f', 'dangling=true', '--format', '{{.Size}}'], capture_output=True, text=True, timeout=10)
+                if dang_res.returncode == 0:
+                    for s_line in dang_res.stdout.strip().split('\n'):
+                        if not s_line: continue
+                        mult = 1
+                        if 'GB' in s_line.upper(): mult = 1024*1024*1024
+                        elif 'MB' in s_line.upper(): mult = 1024*1024
+                        elif 'KB' in s_line.upper(): mult = 1024
+                        try:
+                            v = float(re.sub(r'[^0-9.]', '', s_line))
+                            dangling_size += int(v * mult)
+                        except: continue
+
                 self._send_json({
                     "source_size": (source_size + config_size) / (1024 * 1024),
                     "data_size": data_size / (1024 * 1024),
                     "images_size": images_size / (1024 * 1024),
                     "volumes_size": volumes_size / (1024 * 1024),
-                    "containers_size": containers_size / (1024 * 1024)
+                    "containers_size": containers_size / (1024 * 1024),
+                    "dangling_size": dangling_size / (1024 * 1024)
                 })
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -7400,9 +7437,14 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             try:
                 # Purge dangling images
                 res = subprocess.run(['docker', 'image', 'prune', '-f'], capture_output=True, text=True, timeout=60)
+                reclaimed_msg = "Unused images and build cache cleared."
+                if "Total reclaimed space:" in res.stdout:
+                    reclaimed = res.stdout.split("Total reclaimed space:")[1].strip().split('\n')[0]
+                    reclaimed_msg = f"Successfully reclaimed {reclaimed} of storage space."
+                
                 # Purge build cache
                 subprocess.run(['docker', 'builder', 'prune', '-f'], capture_output=True, text=True, timeout=60)
-                self._send_json({"success": True, "message": "Unused images and build cache cleared."})
+                self._send_json({"success": True, "message": reclaimed_msg})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/uninstall':
@@ -8285,7 +8327,6 @@ cat > "$SERVICES_JSON" <<EOF
       "url": "http://$LAN_IP:$PORT_VERT",
       "local": true,
       "chips": [
-        "Utility",
         {
           "label": "$GPU_LABEL",
           "icon": "memory",
@@ -8516,6 +8557,8 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "dev.casaos.app.ui.protocol=http"
       - "dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB"
       - "dev.casaos.app.ui.hostname=$LAN_IP"
+      - "dev.casaos.app.ui.icon=assets/privacy-hub.svg"
+      - "dev.casaos.app.icon=assets/privacy-hub.svg"
     depends_on:
       hub-api: {condition: service_healthy}
     healthcheck:
@@ -9139,7 +9182,7 @@ Name,URL,Username,Password,Note
 Privacy Hub Admin,http://$LAN_IP:$PORT_DASHBOARD_WEB,admin,$ADMIN_PASS_RAW,Primary management portal for the privacy stack.
 AdGuard Home,http://$LAN_IP:$PORT_ADGUARD_WEB,adguard,$AGH_PASS_RAW,Network-wide advertisement and tracker filtration.
 WireGuard VPN UI,http://$LAN_IP:$PORT_WG_WEB,admin,$VPN_PASS_RAW,WireGuard remote access management interface.
-Portainer UI,http://$LAN_IP:$PORT_PORTAINER,portainer,$ADMIN_PASS_RAW,Docker container management interface.
+Portainer UI,http://$LAN_IP:$PORT_PORTAINER,portainer,$PORTAINER_PASS_RAW,Docker container management interface.
 Odido Booster API,http://$LAN_IP:8085,admin,$ODIDO_API_KEY,API key for dashboard and Odido automation.
 Gluetun Control Server,http://$LAN_IP:8000,gluetun,$ADMIN_PASS_RAW,Internal VPN gateway control API.
 deSEC DNS API,https://desec.io,$DESEC_DOMAIN,$DESEC_TOKEN,API token for deSEC dynamic DNS management.
@@ -9214,12 +9257,12 @@ if [ "$AUTO_PASSWORD" = true ]; then
         # Try 'admin' first, then 'portainer' (in case it was already renamed in a previous run)
         AUTH_RESPONSE=$(curl -s -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
             -H "Content-Type: application/json" \
-            -d "{\"Username\":\"admin\",\"Password\":\"$ADMIN_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
+            -d "{\"Username\":\"admin\",\"Password\":\"$PORTAINER_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
         
         if ! echo "$AUTH_RESPONSE" | grep -q "jwt"; then
             AUTH_RESPONSE=$(curl -s -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
                 -H "Content-Type: application/json" \
-                -d "{\"Username\":\"portainer\",\"Password\":\"$ADMIN_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
+                -d "{\"Username\":\"portainer\",\"Password\":\"$PORTAINER_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
         fi
         
         if echo "$AUTH_RESPONSE" | grep -q "jwt"; then
