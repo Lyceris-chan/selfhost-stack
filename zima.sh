@@ -5402,7 +5402,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     
     if [ "$AUTO_PASSWORD" = true ]; then
         log_info "Automated password generation initialized."
-        if [ -d "$DATA_DIR/portainer" ]; then
+        if [ -d "$DATA_DIR/portainer" ] && [ "$(ls -A "$DATA_DIR/portainer")" ]; then
             log_warn "Portainer data directory already exists. Portainer's security policy only allows setting the admin password on the FIRST deployment. The newly generated password displayed at the end will NOT work unless you manually reset it or delete the Portainer volume."
         fi
         VPN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
