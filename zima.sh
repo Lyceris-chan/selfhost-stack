@@ -7155,14 +7155,14 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         # Filter out common health check and static asset logs to reduce noise
         msg = format % args
-        
+
         # Humanize common logs
-            elif "GET /system-health" in msg:
-                log_structured("INFO", "UI health telemetry synchronized", "NETWORK")
-            elif "GET /project-details" in msg:
-                log_structured("INFO", "Storage utilization breakdown fetched", "NETWORK")
-            elif "POST /purge-images" in msg:
-                log_structured("INFO", "Unused Docker assets purged", "NETWORK")
+        if "GET /system-health" in msg:
+            log_structured("INFO", "UI health telemetry synchronized", "NETWORK")
+        elif "GET /project-details" in msg:
+            log_structured("INFO", "Storage utilization breakdown fetched", "NETWORK")
+        elif "POST /purge-images" in msg:
+            log_structured("INFO", "Unused Docker assets purged", "NETWORK")
         elif "POST /update-service" in msg:
             log_structured("INFO", "Service update sequence initiated", "NETWORK")
             return
@@ -7205,7 +7205,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
         elif "GET /services" in msg:
             log_structured("INFO", "Service catalog synchronized", "NETWORK")
             return
-            
+
         if any(x in msg for x in ['GET /status', 'GET /metrics', 'GET /containers', 'GET /services', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /odido-api/api/status', 'HTTP/1.1" 200', 'HTTP/1.1" 304']):
             return
         log_structured("INFO", msg, "NETWORK")
