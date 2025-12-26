@@ -4045,14 +4045,18 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 
                 items.forEach(item => {
                     const row = document.createElement('div');
-                    row.className = 'stat-row';
-                    row.style.padding = '8px 0';
+                    // Use list-item for consistent spacing and hover effects, manually adjusted for this modal
+                    row.className = 'list-item';
+                    row.style.margin = '0';
+                    row.style.borderBottom = '1px solid var(--md-sys-color-outline-variant)';
+                    row.style.borderRadius = '0';
+
                     row.innerHTML = `
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <span class="material-symbols-rounded" style="color: ${item.color || 'var(--md-sys-color-primary)'};">${item.icon}</span>
-                            <span class="body-medium">${item.label}</span>
+                        <div style="display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0;">
+                            <span class="material-symbols-rounded" style="color: ${item.color || 'var(--md-sys-color-primary)'}; font-size: 24px;">${item.icon}</span>
+                            <span class="body-medium" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.label}</span>
                         </div>
-                        <span class="label-large">${formatBytes(item.size * 1024 * 1024)}</span>
+                        <span class="label-large" style="white-space: nowrap; margin-left: 12px;">${formatBytes(item.size * 1024 * 1024)}</span>
                     `;
                     list.appendChild(row);
                 });
@@ -4670,7 +4674,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                         <!-- Dynamic content -->
                     </div>
                     <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; flex-direction: column; gap: 12px;">
-                        <button onclick="purgeUnusedImages(event)" class="btn" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: none; font-weight: 500; height: 40px; border-radius: 20px;">
+                        <button onclick="purgeUnusedImages(event)" class="btn btn-filled" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
                             <span class="material-symbols-rounded">broom</span>
                             Purge Unused Images
                         </button>
@@ -4877,37 +4881,93 @@ clean_environment() {
     check_cert_risk() {
         CERT_PROTECT=false
         if [ -f "$BASE_DIR/config/adguard/ssl.crt" ]; then
-            # Check for standard ACME issuers (Let's Encrypt, ZeroSSL, etc)
-            if grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL" "$BASE_DIR/config/adguard/ssl.crt"; then
-                log_warn "⚠️  VALID SSL CERTIFICATE DETECTED"
-                echo "   A valid CA-signed certificate exists in configuration."
-                echo "   Deleting this file may trigger rate limits (e.g. Let's Encrypt 5/week)."
-                echo "   Location: $BASE_DIR/config/adguard/ssl.crt"
+            echo "----------------------------------------------------------"
+            echo "   🔍 EXISTING SSL CERTIFICATE DETECTED"
+            echo "----------------------------------------------------------"
+
+            # Try to load existing domain configuration
+            EXISTING_DOMAIN=""
+            if [ -f "$BASE_DIR/.secrets" ]; then
+                EXISTING_DOMAIN=$(grep "DESEC_DOMAIN=" "$BASE_DIR/.secrets" | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+            fi
+
+            # Extract Certificate Details
+            CERT_SUBJECT=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -subject 2>/dev/null | sed 's/subject=//')
+            CERT_ISSUER=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -issuer 2>/dev/null | sed 's/issuer=//')
+            CERT_DATES=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -dates 2>/dev/null)
+            CERT_NOT_AFTER=$(echo "$CERT_DATES" | grep "notAfter=" | cut -d= -f2)
+
+            # Check validity (expiration)
+            if openssl x509 -checkend 0 -noout -in "$BASE_DIR/config/adguard/ssl.crt" >/dev/null 2>&1; then
+                CERT_VALIDITY="✅ Valid (Active)"
+            else
+                CERT_VALIDITY="❌ EXPIRED"
+            fi
+
+            echo "   • Subject:  $CERT_SUBJECT"
+            echo "   • Issuer:   $CERT_ISSUER"
+            echo "   • Expires:  $CERT_NOT_AFTER"
+            echo "   • Status:   $CERT_VALIDITY"
+
+            if [ -n "$EXISTING_DOMAIN" ]; then
+                echo "   • Setup Domain: $EXISTING_DOMAIN"
+                if echo "$CERT_SUBJECT" | grep -q "$EXISTING_DOMAIN"; then
+                    echo "   ✅ Certificate MATCHES the configured domain."
+                else
+                    echo "   ⚠️  Certificate DOES NOT MATCH the configured domain ($EXISTING_DOMAIN)."
+                fi
+            fi
+
+            if [ ! -f "$BASE_DIR/config/adguard/ssl.key" ]; then
                 echo ""
-                
-                if [ "$AUTO_CONFIRM" = true ]; then
-                    log_warn "Auto-confirm is active. Proceeding with deletion in 3 seconds..."
-                    sleep 3
+                log_warn "⚠️  PRIVATE KEY MISSING: $BASE_DIR/config/adguard/ssl.key not found."
+                echo "   This certificate cannot be used without its private key."
+            fi
+
+            echo ""
+
+            # Check for standard ACME issuers (Let's Encrypt, ZeroSSL, etc)
+            IS_ACME=false
+            # Use the extracted issuer string for detection rather than grepping the raw file
+            if echo "$CERT_ISSUER" | grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL"; then
+                IS_ACME=true
+                log_warn "This appears to be a valid ACME-signed certificate."
+                echo "   Deleting this file may trigger rate limits (e.g. Let's Encrypt 5/week)."
+            else
+                echo "   This appears to be a self-signed or custom certificate."
+            fi
+
+            echo "   Location: $BASE_DIR/config/adguard/ssl.crt"
+            echo "----------------------------------------------------------"
+
+            if [ "$AUTO_CONFIRM" = true ]; then
+                if [ "$IS_ACME" = true ]; then
+                    log_warn "Auto-confirm is active. Preserving potentially valid certificate..."
+                    # Default action for valid certs with -y is PRESERVE (via N logic below)
+                    cert_response="n"
+                else
+                    log_warn "Auto-confirm is active. Deleting self-signed certificate..."
                     return 0
                 fi
-
-                read -r -p "   Are you sure you want to DELETE this certificate? [y/N]: " cert_response
-                case "$cert_response" in
-                    [yY][eE][sS]|[yY]) return 0 ;;
-                    *)
-                        CERT_RESTORE=true
-                        CERT_PROTECT=true
-                        rm -rf "$CERT_BACKUP_DIR"
-                        mkdir -p "$CERT_BACKUP_DIR"
-                        for cert_file in "$BASE_DIR/config/adguard/ssl.crt" "$BASE_DIR/config/adguard/ssl.key"; do
-                            if [ -f "$cert_file" ]; then
-                                cp "$cert_file" "$CERT_BACKUP_DIR"/
-                            fi
-                        done
-                        log_info "Certificate will be preserved and restored after cleanup."
-                        return 0 ;;
-                esac
+            else
+                read -r -p "   Do you want to DELETE this certificate? (Default: No) [y/N]: " cert_response
             fi
+
+            case "$cert_response" in
+                [yY][eE][sS]|[yY]) return 0 ;;
+                *)
+                    CERT_RESTORE=true
+                    CERT_PROTECT=true
+                    rm -rf "$CERT_BACKUP_DIR"
+                    mkdir -p "$CERT_BACKUP_DIR"
+                    for cert_file in "$BASE_DIR/config/adguard/ssl.crt" "$BASE_DIR/config/adguard/ssl.key"; do
+                        if [ -f "$cert_file" ]; then
+                            cp "$cert_file" "$CERT_BACKUP_DIR"/
+                        fi
+                    done
+                    log_info "Certificate will be preserved and restored after cleanup."
+                    return 0 ;;
+            esac
         fi
         return 0
     }
@@ -7530,28 +7590,28 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 def run_master_update():
                     try:
                         # 1. Start Logging
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Starting Master Update process."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", "[Update Engine] Starting Master Update process.", "MAINTENANCE")
                         
                         # 2. Perform Full Backup
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Creating pre-update backup..."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", "[Update Engine] Creating pre-update backup...", "MAINTENANCE")
                         subprocess.run(["/usr/local/bin/migrate.sh", "all", "backup-all"], timeout=300)
                         
                         # 3. Trigger Watchtower for all images
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Pulling latest container images..."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", "[Update Engine] Pulling latest container images...", "MAINTENANCE")
                         subprocess.run(['docker', 'run', '--rm', '-v', '/var/run/docker.sock:/var/run/docker.sock', 'containrrr/watchtower', '--run-once', '--cleanup'])
                         
                         # 4. Trigger source updates for all
                         src_root = "/app/sources"
                         if os.path.exists(src_root):
-                            subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Refreshing service source code..."}}\' >> {HISTORY_LOG}'])
+                            log_structured("INFO", "[Update Engine] Refreshing service source code...", "MAINTENANCE")
                             for repo in os.listdir(src_root):
                                 repo_path = os.path.join(src_root, repo)
                                 if os.path.isdir(os.path.join(repo_path, ".git")):
                                     subprocess.run(["git", "fetch", "--all"], cwd=repo_path)
                         
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Master Update successfully completed."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", "[Update Engine] Master Update successfully completed.", "MAINTENANCE")
                     except Exception as e:
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"ERROR","category":"MAINTENANCE","message":"[Update Engine] Master Update failed: {str(e)}"}}\' >> {HISTORY_LOG}'])
+                        log_structured("ERROR", f"[Update Engine] Master Update failed: {str(e)}", "MAINTENANCE")
 
                 import threading
                 threading.Thread(target=run_master_update).start()
@@ -8027,9 +8087,9 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 
                 def run_service_update(name):
                     try:
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Starting update for {name}..."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", f"[Update Engine] Starting update for {name}...", "MAINTENANCE")
                         # 1. Pre-update Backup
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Creating safety backup for {name}..."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", f"[Update Engine] Creating safety backup for {name}...", "MAINTENANCE")
                         subprocess.run(["/usr/local/bin/migrate.sh", name, "backup"], timeout=120)
                         
                         # 2. Refresh source
@@ -8041,11 +8101,11 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                 subprocess.run(["/app/patches.sh", name], check=True, timeout=30)
                         
                         # 3. Rebuild and restart
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] Build process for {name} initiated (Expect increased resource usage)."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", f"[Update Engine] Build process for {name} initiated (Expect increased resource usage).", "MAINTENANCE")
                         subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', name], timeout=600)
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"INFO","category":"MAINTENANCE","message":"[Update Engine] {name} update completed successfully."}}\' >> {HISTORY_LOG}'])
+                        log_structured("INFO", f"[Update Engine] {name} update completed successfully.", "MAINTENANCE")
                     except Exception as ex:
-                        subprocess.run(['bash', '-c', f'echo \'{{"timestamp":"$(date +"%Y-%m-%d %H:%M:%S")","level":"ERROR","category":"MAINTENANCE","message":"[Update Engine] {name} update failed: {str(ex)}"}}\' >> {HISTORY_LOG}'])
+                        log_structured("ERROR", f"[Update Engine] {name} update failed: {str(ex)}", "MAINTENANCE")
 
                 import threading
                 threading.Thread(target=run_service_update, args=(service,)).start()
@@ -9038,7 +9098,7 @@ if [ -z "$DESEC_DOMAIN" ]; then exit 0; fi
 NEEDS_ACTION=false
 if [ ! -f "$AGH_CONF_DIR/ssl.crt" ]; then
     NEEDS_ACTION=true
-elif ! grep -qE "Let's Encrypt|R3|ISRG" "$AGH_CONF_DIR/ssl.crt"; then
+elif ! openssl x509 -in "$AGH_CONF_DIR/ssl.crt" -noout -issuer 2>/dev/null | grep -qE "Let's Encrypt|R3|ISRG"; then
     NEEDS_ACTION=true
 elif ! $DOCKER_CMD run --rm \
     -v "$AGH_CONF_DIR:/certs" \
@@ -9389,7 +9449,7 @@ echo "  ✓ Frontend services are isolated via Gluetun VPN to hide your home IP.
 echo ""
 if [ -f "$AGH_CONF_DIR/ssl.crt" ]; then
     if grep -q "BEGIN CERTIFICATE" "$AGH_CONF_DIR/ssl.crt"; then
-        if ! grep -q "Let's Encrypt" "$AGH_CONF_DIR/ssl.crt" && ! grep -q "R3" "$AGH_CONF_DIR/ssl.crt"; then
+        if ! openssl x509 -in "$AGH_CONF_DIR/ssl.crt" -noout -issuer 2>/dev/null | grep -qE "Let's Encrypt|R3|ISRG"; then
             echo -e "\e[33m[IMPORTANT]\e[0m CURRENTLY UTILIZING A SELF-SIGNED CERTIFICATE"
             echo "  - Mobile devices require a trusted CA for Encrypted DNS (DoH/DoT/DoQ)."
             echo "  - An automated background process is managing Let's Encrypt issuance."
