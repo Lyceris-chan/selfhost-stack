@@ -1541,7 +1541,11 @@ if [ -n "$DESEC_DOMAIN" ]; then
                 </div>
                 <div id="dns-setup-untrusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
                     <p class="body-medium description" style="color:var(--md-sys-color-error);">Limited Encrypted DNS Coverage</p>
-                    <p class="body-small description">Android 'Private DNS' requires a FQDN. Since no domain is configured, your mobile devices cannot utilize native encrypted DNS without the VPN.</p>
+                    <p class="body-small description">
+                        Android 'Private DNS' requires a FQDN. Since no domain is configured, your mobile devices cannot utilize native encrypted DNS without the VPN.
+                        <br><br>
+                        Once a valid SSL certificate is acquired, the configured deSEC domain will automatically be used as the FQDN for this dashboard.
+                    </p>
                     <div style="flex-grow: 1;">
                         <div class="code-label" data-tooltip="The local IP address of your privacy hub.">Primary Gateway</div>
                         <div class="code-block sensitive">$LAN_IP</div>
@@ -1786,7 +1790,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
                         <div style="flex: 1;">
                             <span class="label-large">Session Timeout (Minutes)</span>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Duration of inactivity before auto-logout (Default: 30).</p>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Duration of inactivity before auto-logout (Default: 30 Minutes).</p>
                         </div>
                         <input type="number" id="session-timeout-input" class="text-field" style="width: 80px;" value="30" onchange="syncSettings()">
                     </div>
@@ -2206,7 +2210,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             chipBox.className = 'chip-box';
 
             // Add standard Portainer link for admin
-            const pChip = createChipElement(id, { label: 'Manage', icon: 'terminal', variant: 'admin tonal', tooltip: 'Direct Container Management', portainer: true });
+            const pChip = createChipElement(id, { label: 'Manage', icon: 'settings', variant: 'admin tonal', tooltip: 'Direct Container Management', portainer: true });
             chipBox.appendChild(pChip);
 
             // Add 'Local' badge for services that process data locally
@@ -2242,9 +2246,11 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         document.addEventListener('DOMContentLoaded', () => {
             renderDynamicGrid();
             initMacAdvisory();
+            fetchUpdates();
             window.addEventListener('resize', autoScaleChips);
             // Refresh grid occasionally to catch new services
             setInterval(renderDynamicGrid, 30000);
+            setInterval(fetchUpdates, 60000);
         });
 
         const API = "/api"; 
@@ -2635,7 +2641,6 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     }
                 } else {
                     if (banner) banner.classList.add('hidden-banner');
-                    localStorage.removeItem('update_banner_dismissed');
                 }
             } catch(e) {}
         }
@@ -7236,8 +7241,8 @@ def ensure_assets():
     svg_path = os.path.join(ASSETS_DIR, "privacy-hub.svg")
     if not os.path.exists(svg_path):
         try:
-            svg = """<svg xmlns=\\"http://www.w3.org/2000/svg\\" height=\\"128\\" viewBox=\\"0 -960 960 960\\" width=\\"128\\" fill=\\"#D0BCFF\\">
-    <path d=\\"M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z\\"/>
+            svg = """<svg xmlns="http://www.w3.org/2000/svg" height="128" viewBox="0 -960 960 960" width="128" fill="#D0BCFF">
+    <path d="M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z"/>
 </svg>"""
             with open(svg_path, "w", encoding="utf-8") as f:
                 f.write(svg)
@@ -7526,17 +7531,6 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True, "message": reclaimed_msg})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif path_clean == '/uninstall':
-            try:
-                def run_uninstall():
-                    time.sleep(5) # Give enough time for response to flush
-                    subprocess.run(["bash", "/app/zima.sh", "-x"], cwd="/app")
-                
-                import threading
-                threading.Thread(target=run_uninstall).start()
-                self._send_json({"success": True, "message": "Uninstall sequence started"})
-            except Exception as e:
-                self._send_json({"error": str(e)}, 500)
         elif path_clean == '/status':
             try:
                 result = subprocess.run([CONTROL_SCRIPT, "status"], capture_output=True, text=True, timeout=30)
@@ -7804,6 +7798,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 conn.close()
                 
                 logs = [{"timestamp": r[0], "level": r[1], "category": r[2], "message": r[3]} for r in rows]
+                logs.reverse() # Sort chronological (Oldest -> Newest) to match stream behavior
                 self._send_json({"logs": logs})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -7910,6 +7905,19 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             global session_cleanup_enabled
             session_cleanup_enabled = data.get('enabled', True)
             self._send_json({"success": True, "enabled": session_cleanup_enabled})
+            return
+
+        if self.path == '/uninstall':
+            try:
+                def run_uninstall():
+                    time.sleep(10) # Give enough time for response to flush
+                    subprocess.run(["bash", "/app/zima.sh", "-x"], cwd="/app")
+
+                import threading
+                threading.Thread(target=run_uninstall).start()
+                self._send_json({"success": True, "message": "Uninstall sequence started"})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
             return
 
         if self.path == '/verify-admin':
