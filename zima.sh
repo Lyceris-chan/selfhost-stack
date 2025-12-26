@@ -2020,22 +2020,6 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     buckets.all.push([id, meta]);
                 });
 
-                // Force Scribe if configured but not detected (common issue)
-                if (catalog.scribe && !activeContainers.scribe) {
-                     activeContainers.scribe = { id: 'manual', hardened: true };
-                     const meta = normalizeServiceMeta('scribe', catalog.scribe);
-                     buckets.apps.push(['scribe', meta]);
-                     buckets.all.push(['scribe', meta]);
-                }
-
-                // Force Scribe if configured but not detected (common issue)
-                if (catalog.scribe && !activeContainers.scribe) {
-                     activeContainers.scribe = { id: 'manual', hardened: true };
-                     const meta = normalizeServiceMeta('scribe', catalog.scribe);
-                     buckets.apps.push(['scribe', meta]);
-                     buckets.all.push(['scribe', meta]);
-                }
-
                 const sortByOrder = (a, b) => {
                     const orderDelta = (a[1].order || 999) - (b[1].order || 999);
                     if (orderDelta !== 0) return orderDelta;
@@ -8340,6 +8324,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     build:
       context: "$SRC_DIR/scribe"
       dockerfile: $SCRIBE_DOCKERFILE
+    container_name: scribe
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
       - "io.dhi.hardened=true"
