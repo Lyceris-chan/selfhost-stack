@@ -116,8 +116,8 @@ else
 fi
 
 # Define consistent docker command using custom config for auth
-DOCKER_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" docker"
-DOCKER_COMPOSE_FINAL_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" $DOCKER_COMPOSE_CMD"
+DOCKER_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" GOTOOLCHAIN=auto docker"
+DOCKER_COMPOSE_FINAL_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" GOTOOLCHAIN=auto $DOCKER_COMPOSE_CMD"
 
 # Paths
 SRC_DIR="$BASE_DIR/sources"
@@ -5169,7 +5169,7 @@ clean_environment() {
         log_info "Phase 5: Removing images..."
         REMOVED_IMAGES=""
         # Remove images by known names
-        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21-dev dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/node:20-alpine3.22 dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
+        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21-dev dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/node:20-alpine3.22 dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/alpine-base:3.22-dev neilpang/acme.sh"
         for img in $KNOWN_IMAGES; do
             if $DOCKER_CMD images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -q "$img"; then
                 log_info "  Removing: $img"
@@ -5340,7 +5340,7 @@ export DOCKER_CONFIG
 
 log_info "Pre-pulling core infrastructure images in parallel..."
 # We only pull core infrastructure and base images. App images built from source are skipped.
-CRITICAL_IMAGES="dhi.io/nginx:1.28-alpine3.21 dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22 dhi.io/alpine-base:3.22-dev dhi.io/redis:7.2-debian dhi.io/postgres:14-alpine3.22 84codes/crystal:1.16.3-alpine 84codes/crystal:1.8.1-alpine alpine:3.21 alpine:latest neilpang/acme.sh"
+CRITICAL_IMAGES="dhi.io/nginx:1.28-alpine3.21 dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22 dhi.io/alpine-base:3.22-dev dhi.io/redis:7.2-debian dhi.io/postgres:14-alpine3.22 neilpang/acme.sh"
 
 PIDS=""
 for img in $CRITICAL_IMAGES; do
@@ -5609,14 +5609,14 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
 
     AGH_USER="adguard"
     # Safely generate AGH hash
-    AGH_PASS_HASH=$($DOCKER_CMD run --rm alpine:latest sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$AGH_USER" "$AGH_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    AGH_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/alpine-base:3.22-dev sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$AGH_USER" "$AGH_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
     if [[ "$AGH_PASS_HASH" == "FAILED" ]]; then
         log_crit "Failed to generate AdGuard password hash. Check Docker status."
         exit 1
     fi
 
     # Safely generate Portainer hash (bcrypt)
-    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:latest sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+    PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/alpine-base:3.22-dev sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
     if [[ "$PORTAINER_PASS_HASH" == "FAILED" ]]; then
         log_crit "Failed to generate Portainer password hash. Check Docker status."
         exit 1
@@ -5667,7 +5667,7 @@ else
     # Generate Portainer hash if missing from existing .secrets
     if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
         log_info "Generating missing Portainer hash..."
-        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:latest sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/alpine-base:3.22-dev sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
         echo "PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'" >> "$BASE_DIR/.secrets"
     fi
     if [ -z "${ODIDO_API_KEY:-}" ]; then
@@ -6322,7 +6322,7 @@ if [ "$SERVICE" = "invidious" ] || [ "$SERVICE" = "all" ]; then
     if [ -f "$SRC_ROOT/invidious/docker/Dockerfile.arm64" ]; then
         if ! grep -q "dhi.io" "$SRC_ROOT/invidious/docker/Dockerfile.arm64"; then
             sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
-            sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
         fi
     fi
 fi
@@ -6419,51 +6419,135 @@ BWEOF
 fi
 
 if [ "$SERVICE" = "adguard" ] || [ "$SERVICE" = "all" ]; then
+
     log "Recreating AdGuard Home Dockerfile..."
+
     cat > "$SRC_ROOT/adguardhome/Dockerfile.dhi" <<'ADGEOF'
-# Build Stage
+
+# Build Stage - Using DHI Node as the base for the builder
+
 FROM dhi.io/node:20-alpine3.22-dev AS builder
-RUN apk add --no-cache git make go
+
+RUN apk add --no-cache git make go gcc musl-dev
+
 WORKDIR /app
+
 COPY . .
-# AdGuard Home needs a specific build command
-RUN make frontend
+
+# AdGuard Home official build steps
+
+RUN GOTOOLCHAIN=auto make frontend
+
 RUN GOTOOLCHAIN=auto make
-# Move to final location
+
 RUN mv AdGuardHome AdGuardHome_bin
 
-# Runtime Stage
+
+
+# Runtime Stage - Hardened DHI Alpine
+
 FROM dhi.io/alpine-base:3.22-dev
+
 RUN apk --no-cache add ca-certificates libcap tzdata && \
+
     mkdir -p /opt/adguardhome/conf /opt/adguardhome/work && \
+
     chown -R nobody: /opt/adguardhome
+
 COPY --from=builder /app/AdGuardHome_bin /opt/adguardhome/AdGuardHome
+
 RUN chown nobody:nogroup /opt/adguardhome/AdGuardHome && \
+
     chmod +x /opt/adguardhome/AdGuardHome && \
+
     setcap 'cap_net_bind_service=+eip' /opt/adguardhome/AdGuardHome
+
 EXPOSE 53/tcp 53/udp 67/udp 68/udp 80/tcp 443/tcp 443/udp 853/tcp 853/udp 3000/tcp 3000/udp 5443/tcp 5443/udp 6060/tcp
+
 WORKDIR /opt/adguardhome/work
+
 ENTRYPOINT ["/opt/adguardhome/AdGuardHome"]
+
 CMD ["--no-check-update", "-c", "/opt/adguardhome/conf/AdGuardHome.yaml", "-w", "/opt/adguardhome/work"]
+
 ADGEOF
+
 fi
 
+
+
 if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
+
     log "Recreating Gluetun Dockerfile..."
+
     cat > "$SRC_ROOT/gluetun/Dockerfile.dhi" <<'GLUEOF'
-# Build Stage
+
+# Build Stage - Using DHI Python as a generic dev base for Go compilation
+
 FROM dhi.io/python:3.11-alpine3.22-dev AS builder
-RUN apk add --no-cache git go
-    WORKDIR /app
-    COPY . .
-    RUN GOTOOLCHAIN=auto go build -trimpath -ldflags="-s -w" -o entrypoint cmd/gluetun/main.go
-# Runtime Stage
+
+RUN apk add --no-cache git go gcc musl-dev
+
+WORKDIR /app
+
+COPY . .
+
+RUN GOTOOLCHAIN=auto go build -trimpath -ldflags="-s -w" -o entrypoint cmd/gluetun/main.go
+
+
+
+# Runtime Stage - Hardened DHI Alpine
+
 FROM dhi.io/alpine-base:3.22-dev
+
 RUN apk add --no-cache ca-certificates iptables ip6tables iproute2
+
 COPY --from=builder /app/entrypoint /app/entrypoint
-# Gluetun needs some assets and specific setup
+
 ENTRYPOINT ["/app/entrypoint"]
+
 GLUEOF
+
+fi
+
+
+
+if [ "$SERVICE" = "unbound" ] || [ "$SERVICE" = "all" ]; then
+
+    log "Recreating Unbound Dockerfile..."
+
+    cat > "$SRC_ROOT/unbound/Dockerfile.dhi" <<'UNBEOF'
+
+# Build Stage - Using Hardened DHI Alpine
+
+FROM dhi.io/alpine-base:3.22-dev AS builder
+
+RUN apk add --no-cache build-base libtool autoconf automake openssl-dev expat-dev bison flex
+
+WORKDIR /app
+
+COPY . .
+
+RUN ./configure --prefix=/opt/unbound --with-libexpat=/usr --with-ssl=/usr && make -j$(nproc) && make install
+
+
+
+# Runtime Stage - Hardened DHI Alpine
+
+FROM dhi.io/alpine-base:3.22-dev
+
+RUN apk add --no-cache openssl expat
+
+COPY --from=builder /opt/unbound /opt/unbound
+
+ENV PATH="/opt/unbound/sbin:/opt/unbound/bin:$PATH"
+
+EXPOSE 53/tcp 53/udp
+
+CMD ["/opt/unbound/sbin/unbound", "-d", "-c", "/opt/unbound/etc/unbound/unbound.conf"]
+
+UNBEOF
+
 fi
 
 if [ "$SERVICE" = "memos" ] || [ "$SERVICE" = "all" ]; then
