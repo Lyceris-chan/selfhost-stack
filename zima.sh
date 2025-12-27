@@ -6419,135 +6419,77 @@ BWEOF
 fi
 
 if [ "$SERVICE" = "adguard" ] || [ "$SERVICE" = "all" ]; then
-
     log "Recreating AdGuard Home Dockerfile..."
-
+    # AdGuard's .dockerignore is too restrictive for our source build
+    rm -f "$SRC_ROOT/adguardhome/.dockerignore"
     cat > "$SRC_ROOT/adguardhome/Dockerfile.dhi" <<'ADGEOF'
-
-# Build Stage - Using DHI Node as the base for the builder
-
-FROM dhi.io/node:20-alpine3.22-dev AS builder
-
-RUN apk add --no-cache git make go gcc musl-dev
-
+# Build Stage - Frontend
+FROM dhi.io/node:20-alpine3.22-dev AS fe-builder
 WORKDIR /app
-
 COPY . .
+RUN npm install --prefix client && npm run --prefix client build-prod
 
-# AdGuard Home official build steps
-
-RUN GOTOOLCHAIN=auto make frontend
-
-RUN GOTOOLCHAIN=auto make
-
-RUN mv AdGuardHome AdGuardHome_bin
-
-
+# Build Stage - Backend
+FROM golang:1.23-alpine3.21 AS builder
+RUN apk add --no-cache git make gcc musl-dev
+WORKDIR /app
+COPY . .
+COPY --from=fe-builder /app/build /app/build
+# AdGuard Home official build steps for the binary
+RUN GOTOOLCHAIN=auto go build -trimpath -ldflags="-s -w" -o AdGuardHome_bin main.go
 
 # Runtime Stage - Hardened DHI Alpine
-
 FROM dhi.io/alpine-base:3.22-dev
-
 RUN apk --no-cache add ca-certificates libcap tzdata && \
-
     mkdir -p /opt/adguardhome/conf /opt/adguardhome/work && \
-
     chown -R nobody: /opt/adguardhome
-
 COPY --from=builder /app/AdGuardHome_bin /opt/adguardhome/AdGuardHome
-
 RUN chown nobody:nogroup /opt/adguardhome/AdGuardHome && \
-
     chmod +x /opt/adguardhome/AdGuardHome && \
-
     setcap 'cap_net_bind_service=+eip' /opt/adguardhome/AdGuardHome
-
 EXPOSE 53/tcp 53/udp 67/udp 68/udp 80/tcp 443/tcp 443/udp 853/tcp 853/udp 3000/tcp 3000/udp 5443/tcp 5443/udp 6060/tcp
-
 WORKDIR /opt/adguardhome/work
-
 ENTRYPOINT ["/opt/adguardhome/AdGuardHome"]
-
 CMD ["--no-check-update", "-c", "/opt/adguardhome/conf/AdGuardHome.yaml", "-w", "/opt/adguardhome/work"]
-
 ADGEOF
-
 fi
-
-
 
 if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
-
     log "Recreating Gluetun Dockerfile..."
-
     cat > "$SRC_ROOT/gluetun/Dockerfile.dhi" <<'GLUEOF'
-
-# Build Stage - Using DHI Python as a generic dev base for Go compilation
-
-FROM dhi.io/python:3.11-alpine3.22-dev AS builder
-
-RUN apk add --no-cache git go gcc musl-dev
-
+# Build Stage
+FROM golang:1.23-alpine3.21 AS builder
+RUN apk add --no-cache git gcc musl-dev
 WORKDIR /app
-
 COPY . .
-
 RUN GOTOOLCHAIN=auto go build -trimpath -ldflags="-s -w" -o entrypoint cmd/gluetun/main.go
 
-
-
 # Runtime Stage - Hardened DHI Alpine
-
 FROM dhi.io/alpine-base:3.22-dev
-
 RUN apk add --no-cache ca-certificates iptables ip6tables iproute2
-
 COPY --from=builder /app/entrypoint /app/entrypoint
-
 ENTRYPOINT ["/app/entrypoint"]
-
 GLUEOF
-
 fi
 
-
-
 if [ "$SERVICE" = "unbound" ] || [ "$SERVICE" = "all" ]; then
-
-    log "Recreating Unbound Dockerfile..."
-
-    cat > "$SRC_ROOT/unbound/Dockerfile.dhi" <<'UNBEOF'
-
-# Build Stage - Using Hardened DHI Alpine
-
-FROM dhi.io/alpine-base:3.22-dev AS builder
-
-RUN apk add --no-cache build-base libtool autoconf automake openssl-dev expat-dev bison flex
-
-WORKDIR /app
-
-COPY . .
-
-RUN ./configure --prefix=/opt/unbound --with-libexpat=/usr --with-ssl=/usr && make -j$(nproc) && make install
-
-
-
-# Runtime Stage - Hardened DHI Alpine
-
-FROM dhi.io/alpine-base:3.22-dev
-
-RUN apk add --no-cache openssl expat
-
-COPY --from=builder /opt/unbound /opt/unbound
-
-ENV PATH="/opt/unbound/sbin:/opt/unbound/bin:$PATH"
-
-EXPOSE 53/tcp 53/udp
-
-CMD ["/opt/unbound/sbin/unbound", "-d", "-c", "/opt/unbound/etc/unbound/unbound.conf"]
-
-UNBEOF
-
+    log "Patching Unbound (klutchell)..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/unbound")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/unbound/$D_FILE"; then log "Unbound already patched."; else
+            # Replace all Alpine bases with DHI Alpine
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/unbound/$D_FILE"
+            # Replace final scratch stage with hardened DHI Alpine to maintain DHI identity
+            sed -i 's|^FROM scratch AS final|FROM dhi.io/alpine-base:3.22-dev AS final|g' "$SRC_ROOT/unbound/$D_FILE"
+            # Remove redundant copies from build-base that are now in dhi.io base
+            sed -i '/COPY --from=build-base \/lib\/ld-musl/d' "$SRC_ROOT/unbound/$D_FILE"
+            sed -i '/COPY --from=build-base \/usr\/lib\/libgcc_s/d' "$SRC_ROOT/unbound/$D_FILE"
+            sed -i '/COPY --from=build-base \/usr\/lib\/libcrypto.so.3/d' "$SRC_ROOT/unbound/$D_FILE"
+            sed -i '/COPY --from=build-base \/usr\/lib\/libssl.so.3/d' "$SRC_ROOT/unbound/$D_FILE"
+            sed -i '/COPY --from=build-base \/etc\/ssl\//d' "$SRC_ROOT/unbound/$D_FILE"
+            sed -i '/COPY --from=build-base \/etc\/passwd/d' "$SRC_ROOT/unbound/$D_FILE"
+        fi
+    fi
 fi
 
 if [ "$SERVICE" = "memos" ] || [ "$SERVICE" = "all" ]; then
@@ -6556,7 +6498,7 @@ if [ "$SERVICE" = "memos" ] || [ "$SERVICE" = "all" ]; then
     if [ -n "$D_FILE" ]; then
         if grep -q "dhi.io" "$SRC_ROOT/memos/$D_FILE"; then log "Memos already patched."; else
             sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/memos/$D_FILE"
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/memos/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/memos/$D_FILE"
         fi
     fi
 fi
@@ -6566,7 +6508,7 @@ if [ "$SERVICE" = "redlib" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/redlib")
     if [ -n "$D_FILE" ]; then
         if grep -q "dhi.io" "$SRC_ROOT/redlib/$D_FILE"; then log "Redlib already patched."; else
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/redlib/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/redlib/$D_FILE"
         fi
     fi
 fi
@@ -6576,7 +6518,7 @@ if [ "$SERVICE" = "rimgo" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/rimgo")
     if [ -n "$D_FILE" ]; then
         if grep -q "dhi.io" "$SRC_ROOT/rimgo/$D_FILE"; then log "Rimgo already patched."; else
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/rimgo/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/rimgo/$D_FILE"
         fi
     fi
 fi
@@ -6587,7 +6529,7 @@ if [ "$SERVICE" = "anonymousoverflow" ] || [ "$SERVICE" = "all" ]; then
     if [ -n "$D_FILE" ]; then
         if grep -q "dhi.io" "$SRC_ROOT/anonymousoverflow/$D_FILE"; then log "AnonymousOverflow already patched."; else
             sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/anonymousoverflow/$D_FILE"
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/anonymousoverflow/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/anonymousoverflow/$D_FILE"
         fi
     fi
 fi
@@ -6597,7 +6539,7 @@ if [ "$SERVICE" = "vertd" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/vertd")
     if [ -n "$D_FILE" ]; then
         if grep -q "dhi.io" "$SRC_ROOT/vertd/$D_FILE"; then log "VERTd already patched."; else
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/vertd/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/vertd/$D_FILE"
         fi
     fi
 fi
@@ -6608,7 +6550,7 @@ if [ "$SERVICE" = "companion" ] || [ "$SERVICE" = "all" ]; then
     if [ -n "$D_FILE" ]; then
         if grep -q "dhi.io" "$SRC_ROOT/invidious-companion/$D_FILE"; then log "Companion already patched."; else
             sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/invidious-companion/$D_FILE"
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/invidious-companion/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious-companion/$D_FILE"
         fi
     fi
 fi
@@ -6619,7 +6561,7 @@ if [ "$SERVICE" = "wg-easy" ] || [ "$SERVICE" = "all" ]; then
     if [ -n "$D_FILE" ]; then
         if grep -q "dhi.io" "$SRC_ROOT/wg-easy/$D_FILE"; then log "WG-Easy already patched."; else
             sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wg-easy/$D_FILE"
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/wg-easy/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/wg-easy/$D_FILE"
         fi
     fi
 fi
@@ -6629,29 +6571,9 @@ if [ "$SERVICE" = "portainer" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/portainer")
     if [ -n "$D_FILE" ]; then
         if grep -q "dhi.io" "$SRC_ROOT/portainer/$D_FILE"; then log "Portainer already patched."; else
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/portainer/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/portainer/$D_FILE"
         fi
     fi
-fi
-
-if [ "$SERVICE" = "unbound" ] || [ "$SERVICE" = "all" ]; then
-    log "Recreating Unbound Dockerfile..."
-    cat > "$SRC_ROOT/unbound/Dockerfile.dhi" <<'UNBEOF'
-# Build Stage
-FROM dhi.io/alpine-base:3.22-dev AS builder
-RUN apk add --no-cache build-base libtool autoconf automake openssl-dev expat-dev bison flex
-WORKDIR /app
-COPY . .
-RUN ./configure --prefix=/opt/unbound --with-libexpat=/usr --with-ssl=/usr && make -j$(nproc) && make install
-
-# Runtime Stage
-FROM dhi.io/alpine-base:3.22-dev
-RUN apk add --no-cache openssl expat
-COPY --from=builder /opt/unbound /opt/unbound
-ENV PATH="/opt/unbound/sbin:/opt/unbound/bin:$PATH"
-EXPOSE 53/tcp 53/udp
-CMD ["unbound", "-d", "-c", "/opt/unbound/etc/unbound/unbound.conf"]
-UNBEOF
 fi
 
 PATCHEOF
@@ -6678,7 +6600,7 @@ sync_and_patch "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert" "vert" & PI
 sync_and_patch "https://gitdab.com/cadence/breezewiki" "$SRC_DIR/breezewiki" "breezewiki" & PIDS="$PIDS $!"
 sync_and_patch "https://github.com/qdm12/gluetun.git" "$SRC_DIR/gluetun" "gluetun" & PIDS="$PIDS $!"
 sync_and_patch "https://github.com/AdguardTeam/AdGuardHome.git" "$SRC_DIR/adguardhome" "adguard" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/klutchell/unbound.git" "$SRC_DIR/unbound" "unbound" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/klutchell/unbound-docker.git" "$SRC_DIR/unbound" "unbound" & PIDS="$PIDS $!"
 sync_and_patch "https://github.com/wg-easy/wg-easy.git" "$SRC_DIR/wg-easy" "wg-easy" & PIDS="$PIDS $!"
 sync_and_patch "https://github.com/usememos/memos.git" "$SRC_DIR/memos" "memos" & PIDS="$PIDS $!"
 sync_and_patch "https://github.com/redlib-org/redlib.git" "$SRC_DIR/redlib" "redlib" & PIDS="$PIDS $!"
@@ -6794,7 +6716,7 @@ fi
 mkdir -p "$SRC_DIR/hub-api"
 cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
 FROM dhi.io/python:3.11-alpine3.22-dev
-RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git sqlite grep
+RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git sqlite grep kmod
 RUN pip install --no-cache-dir psutil
 WORKDIR /app
 CMD ["python", "server.py"]
@@ -9714,7 +9636,9 @@ check_iptables() {
     fi
 }
 
-$SUDO modprobe tun || true
+if command -v modprobe >/dev/null 2>&1; then
+    $SUDO modprobe tun || true
+fi
 
 # Explicitly remove portainer and hub-api if they exist to ensure clean state
 log_info "Launching core infrastructure services..."
