@@ -6095,6 +6095,16 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        
+        # Long timeout for media processing apps (VERT, Invidious)
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 30s;
+        proxy_send_timeout 300s;
+
+        # Basic Security Headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
 
         if (\$backend != "") {
             proxy_pass \$backend;
