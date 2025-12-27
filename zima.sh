@@ -7403,18 +7403,18 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             try:
                 # Source Size
                 source_size = 0
-                res = subprocess.run(['du', '-sb', '/app/sources'], capture_output=True, text=True, timeout=10)
-                if res.returncode == 0: source_size = int(res.stdout.split()[0])
+                res = subprocess.run(['du', '-sk', '/app/sources'], capture_output=True, text=True, timeout=10)
+                if res.returncode == 0: source_size = int(res.stdout.split()[0]) * 1024
                 
                 # Config Size
                 config_size = 0
-                res = subprocess.run(['du', '-sb', '/app/config'], capture_output=True, text=True, timeout=10)
-                if res.returncode == 0: config_size = int(res.stdout.split()[0])
+                res = subprocess.run(['du', '-sk', '/app/config'], capture_output=True, text=True, timeout=10)
+                if res.returncode == 0: config_size = int(res.stdout.split()[0]) * 1024
 
                 # Data Size
                 data_size = 0
-                res = subprocess.run(['du', '-sb', '/app/data'], capture_output=True, text=True, timeout=10)
-                if res.returncode == 0: data_size = int(res.stdout.split()[0])
+                res = subprocess.run(['du', '-sk', '/app/data'], capture_output=True, text=True, timeout=10)
+                if res.returncode == 0: data_size = int(res.stdout.split()[0]) * 1024
 
                 # Images Size
                 images_size = 0
@@ -7496,9 +7496,9 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 project_size_bytes = 0
                 try:
                     # Sum up BASE_DIR (mounted as /project_root), and check volume sizes via docker
-                    res = subprocess.run(['du', '-sb', '/project_root'], capture_output=True, text=True, timeout=15)
+                    res = subprocess.run(['du', '-sk', '/project_root'], capture_output=True, text=True, timeout=15)
                     if res.returncode == 0:
-                        project_size_bytes += int(res.stdout.split()[0])
+                        project_size_bytes += int(res.stdout.split()[0]) * 1024
                     
                     # Also include ALL Docker images related to this stack
                     img_res = subprocess.run(['docker', 'images', '--format', '{{.Size}}\t{{.Repository}}'], capture_output=True, text=True, timeout=10)
