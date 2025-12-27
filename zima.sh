@@ -69,7 +69,7 @@ done
 # Docker Compose Check (Plugin or Standalone)
 if sudo -E docker compose version >/dev/null 2>&1; then
     DOCKER_COMPOSE_CMD="docker compose"
-elif command -vsudo docker-compose >/dev/null 2>&1; then
+elif command -v docker-compose >/dev/null 2>&1; then
     if sudo -E docker-compose version >/dev/null 2>&1; then
         DOCKER_COMPOSE_CMD="docker-compose"
     else
@@ -88,12 +88,11 @@ BASE_DIR="$(cd "$BASE_DIR" && pwd)"
 
 # Docker Auth Config (stored in /tmp to survive -c cleanup)
 DOCKER_AUTH_DIR="/tmp/$APP_NAME-docker-auth"
-# Ensure clean state for auth
-if [ -d "$DOCKER_AUTH_DIR" ]; then
-    rm -rf "$DOCKER_AUTH_DIR"
+# Ensure clean state for auth only if it doesn't already have a config
+if [ ! -f "$DOCKER_AUTH_DIR/config.json" ]; then
+    mkdir -p "$DOCKER_AUTH_DIR"
+    chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
 fi
-mkdir -p "$DOCKER_AUTH_DIR"
-chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
 
 # Detect Python interpreter
 if command -v python3 >/dev/null 2>&1; then
@@ -1096,22 +1095,12 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             /* Tooltip container safety */
         }
         
-        .card {
-            /* ... existing ... */
-            overflow: visible; /* Changed from hidden to allow tooltips to escape */
-        }
-        
         /* Prevent card content overlapping */
         .card > * {
             position: relative;
             z-index: 2;
         }
         
-        .card::before {
-            /* ... existing ... */
-            z-index: 1;
-        }
-
         .log-container {
             background: var(--md-sys-color-surface-container-highest);
             border-radius: var(--md-sys-shape-corner-large);
@@ -5103,6 +5092,7 @@ clean_environment() {
                 REMOVED_CONTAINERS="${REMOVED_CONTAINERS}$c "
             fi
         done
+        rm -rf "$DOCKER_AUTH_DIR" 2>/dev/null || true
         
         # ============================================================
         # PHASE 3: Remove ALL volumes (list everything, match patterns)
@@ -9569,7 +9559,6 @@ generate_protonpass_export
 echo "[+] Finalizing environment (cleaning up dangling images)..."
 $DOCKER_CMD image prune -f
 $DOCKER_CMD builder prune -f
-rm -rf "$DOCKER_AUTH_DIR"
 
 $DOCKER_CMD restart portainer 2>/dev/null || true
 
