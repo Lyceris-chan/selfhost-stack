@@ -6084,7 +6084,7 @@ server {
     ssl_ciphers HIGH:!aNULL:!MD5;
     
     # Allow large uploads
-    client_max_body_size 500M;
+    client_max_body_size 10G;
 
     # Use Docker DNS resolver
     resolver 127.0.0.11 valid=30s;
@@ -6101,10 +6101,14 @@ server {
         proxy_connect_timeout 30s;
         proxy_send_timeout 300s;
 
-        # Basic Security Headers
+        # Comprehensive Security Headers
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "interest-cohort=()" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:;" always;
 
         if (\$backend != "") {
             proxy_pass \$backend;
@@ -6216,14 +6220,16 @@ detect_dockerfile() {
     log "Patching Wikiless..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/wikiless")
     if [ -n "$D_FILE" ]; then
-        sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
-        sed -i 's|CMD \["src/wikiless.js"\]|CMD ["node", "src/wikiless.js"]|g' "$SRC_ROOT/wikiless/$D_FILE"
+        if grep -q "dhi.io" "$SRC_ROOT/wikiless/$D_FILE"; then log "Wikiless already patched."; else
+            sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/wikiless/$D_FILE"
+            sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/wikiless/$D_FILE"
+            sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
+            sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
+            sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/wikiless/$D_FILE"
+            sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
+            sed -i 's|CMD \["src/wikiless.js"\]|CMD ["node", "src/wikiless.js"]|g' "$SRC_ROOT/wikiless/$D_FILE"
+        fi
     fi
 fi
 
@@ -6231,13 +6237,15 @@ if [ "$SERVICE" = "scribe" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Scribe..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/scribe")
     if [ -n "$D_FILE" ]; then
-        sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i '/FROM dhi.io\/alpine-base:3.22-dev/a USER root' "$SRC_ROOT/scribe/$D_FILE"
-        sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_ROOT/scribe/$D_FILE"
+        if grep -q "dhi.io" "$SRC_ROOT/scribe/$D_FILE"; then log "Scribe already patched."; else
+            sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
+            sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
+            sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/scribe/$D_FILE"
+            sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
+            sed -i '/FROM dhi.io\/alpine-base:3.22-dev/a USER root' "$SRC_ROOT/scribe/$D_FILE"
+            sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_ROOT/scribe/$D_FILE"
+        fi
     fi
 fi
 
@@ -6245,15 +6253,19 @@ if [ "$SERVICE" = "invidious" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Invidious..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/invidious" "docker/Dockerfile")
     if [ -n "$D_FILE" ]; then
-        sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/$D_FILE"
-        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/$D_FILE"
-        sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/invidious/$D_FILE"
-        sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/$D_FILE"
+        if grep -q "dhi.io" "$SRC_ROOT/invidious/$D_FILE"; then log "Invidious already patched."; else
+            sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/$D_FILE"
+            sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/invidious/$D_FILE"
+            sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/$D_FILE"
+        fi
     fi
     # Also patch arm64 if exists
     if [ -f "$SRC_ROOT/invidious/docker/Dockerfile.arm64" ]; then
-        sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
-        sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
+        if ! grep -q "dhi.io" "$SRC_ROOT/invidious/docker/Dockerfile.arm64"; then
+            sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
+            sed -i 's|^FROM alpine:[^ ]*|FROM alpine:latest|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
+        fi
     fi
 fi
 
@@ -6261,6 +6273,7 @@ if [ "$SERVICE" = "odido-booster" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Odido..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/odido-bundle-booster")
     if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/odido-bundle-booster/$D_FILE"; then log "Odido already patched."; else
         cat > "$SRC_ROOT/odido-bundle-booster/$D_FILE" <<'ODIDOEOF'
 FROM dhi.io/python:3.11-alpine3.22-dev
 
@@ -6284,6 +6297,7 @@ EXPOSE 8080
 ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]
 CMD ["python", "-m", "app.main"]
 ODIDOEOF
+        fi
     fi
 fi
 
@@ -6291,23 +6305,25 @@ if [ "$SERVICE" = "vert" ] || [ "$SERVICE" = "all" ]; then
     log "Patching VERT..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/vert")
     if [ -n "$D_FILE" ]; then
-        sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/vert/$D_FILE"
-        sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[^ ]*|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM dhi.io/bun:1-alpine3.22-dev AS|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun$|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM oven/bun[[:space:]]|FROM dhi.io/bun:1-alpine3.22-dev |g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_ROOT/vert/$D_FILE"
-        sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's|^FROM nginx:stable-alpine|FROM dhi.io/nginx:1.28-alpine3.21-dev|g' "$SRC_ROOT/vert/$D_FILE"
-        sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_ROOT/vert/$D_FILE"
-        
-        # Build args patches
-        if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_ROOT/vert/$D_FILE"; then
-            if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_ROOT/vert/$D_FILE"; then
-                sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_FAILURE_BLOCKS' "$SRC_ROOT/vert/$D_FILE"
-                sed -i '/^ENV PUB_STRIPE_KEY=${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_FAILURE_BLOCKS=${PUB_DISABLE_FAILURE_BLOCKS}' "$SRC_ROOT/vert/$D_FILE"
+        if grep -q "dhi.io" "$SRC_ROOT/vert/$D_FILE"; then log "VERT already patched."; else
+            sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/vert/$D_FILE"
+            sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/vert/$D_FILE"
+            sed -i 's|^FROM oven/bun[^ ]*|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
+            sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM dhi.io/bun:1-alpine3.22-dev AS|g' "$SRC_ROOT/vert/$D_FILE"
+            sed -i 's|^FROM oven/bun$|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
+            sed -i 's|^FROM oven/bun[[:space:]]|FROM dhi.io/bun:1-alpine3.22-dev |g' "$SRC_ROOT/vert/$D_FILE"
+            sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_ROOT/vert/$D_FILE"
+            sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_ROOT/vert/$D_FILE"
+            sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_ROOT/vert/$D_FILE"
+            sed -i 's|^FROM nginx:stable-alpine|FROM dhi.io/nginx:1.28-alpine3.21-dev|g' "$SRC_ROOT/vert/$D_FILE"
+            sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_ROOT/vert/$D_FILE"
+            
+            # Build args patches
+            if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_ROOT/vert/$D_FILE"; then
+                if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_ROOT/vert/$D_FILE"; then
+                    sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_FAILURE_BLOCKS' "$SRC_ROOT/vert/$D_FILE"
+                    sed -i '/^ENV PUB_STRIPE_KEY=${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_FAILURE_BLOCKS=${PUB_DISABLE_FAILURE_BLOCKS}' "$SRC_ROOT/vert/$D_FILE"
+                fi
             fi
         fi
         if ! grep -q "ARG PUB_DISABLE_DONATIONS" "$SRC_ROOT/vert/$D_FILE"; then
