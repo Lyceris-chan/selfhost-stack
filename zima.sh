@@ -58,7 +58,7 @@ shift $((OPTIND -1))
 
 # --- SECTION 1: ENVIRONMENT VALIDATION & DIRECTORY SETUP ---
 # Verify core dependencies before proceeding.
-REQUIRED_COMMANDS="docker curl git crontab iptables flock"
+REQUIRED_COMMANDS="sudo docker curl git crontab iptables flock"
 for cmd in $REQUIRED_COMMANDS; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "[CRIT] '$cmd' is required but not installed. Please install it."
@@ -67,11 +67,11 @@ for cmd in $REQUIRED_COMMANDS; do
 done
 
 # Docker Compose Check (Plugin or Standalone)
-if docker compose version >/dev/null 2>&1; then
-    DOCKER_COMPOSE_CMD="docker compose"
-elif command -v docker-compose >/dev/null 2>&1; then
-    if docker-compose version >/dev/null 2>&1; then
-        DOCKER_COMPOSE_CMD="docker-compose"
+if sudo -E docker compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE_CMD="sudo -E docker compose"
+elif command -vsudo docker-compose >/dev/null 2>&1; then
+    if sudo -E docker-compose version >/dev/null 2>&1; then
+        DOCKER_COMPOSE_CMD="sudo -E docker-compose"
     else
         echo "[CRIT] Docker Compose is installed but not executable."
         exit 1
@@ -104,7 +104,7 @@ else
 fi
 
 # Define consistent docker command using custom config for auth
-DOCKER_CMD="sudo env DOCKER_CONFIG=$DOCKER_AUTH_DIR docker"
+DOCKER_CMD="sudo -E env DOCKER_CONFIG=$DOCKER_AUTH_DIR docker"
 
 # Paths
 SRC_DIR="$BASE_DIR/sources"
@@ -4722,14 +4722,15 @@ authenticate_registries() {
         fi
         
         # DHI Login
-        if echo "$REG_TOKEN" | env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+        log_info "Attempting dhi.io login for $REG_USER..."
+        if echo "$REG_TOKEN" | sudo -E env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
             log_info "dhi.io: Authentication successful."
         else
-            log_warn "dhi.io: Authentication failed."
+            log_warn "dhi.io: Authentication failed. This is required to access the free DHI hardened images."
         fi
 
         # Docker Hub Login
-        if echo "$REG_TOKEN" | env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+        if echo "$REG_TOKEN" | sudo -E env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
              log_info "Docker Hub: Authentication successful."
         else
              log_warn "Docker Hub: Authentication failed."
@@ -4749,7 +4750,7 @@ authenticate_registries() {
         
         # DHI Login
         DHI_LOGIN_OK=false
-        if echo "$REG_TOKEN" | env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
+        if echo "$REG_TOKEN" | sudo -E env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
             log_info "dhi.io: Authentication successful."
             DHI_LOGIN_OK=true
         else
@@ -4758,7 +4759,7 @@ authenticate_registries() {
 
         # Docker Hub Login
         HUB_LOGIN_OK=false
-        if echo "$REG_TOKEN" | env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+        if echo "$REG_TOKEN" | sudo -E env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
              log_info "Docker Hub: Authentication successful."
              HUB_LOGIN_OK=true
         else
@@ -4802,9 +4803,14 @@ setup_assets() {
         echo "$1" | sed -E 's#(https?://[^/]+).*#\1#'
     }
 
-    download_css "$ASSETS_DIR/gs.css" "$URL_GS" GS_CSS_URL
-    download_css "$ASSETS_DIR/cc.css" "$URL_CC" CC_CSS_URL
-    download_css "$ASSETS_DIR/ms.css" "$URL_MS" MS_CSS_URL
+    download_css "$ASSETS_DIR/gs.css" "$URL_GS" GS_CSS_URL &
+    download_css "$ASSETS_DIR/cc.css" "$URL_CC" CC_CSS_URL &
+    download_css "$ASSETS_DIR/ms.css" "$URL_MS" MS_CSS_URL &
+    wait
+
+    GS_CSS_URL="$URL_GS"
+    CC_CSS_URL="$URL_CC"
+    MS_CSS_URL="$URL_MS"
 
     # Material Color Utilities (Local for privacy)
     log_info "Downloading Material Color Utilities..."
@@ -4818,40 +4824,38 @@ setup_assets() {
     CSS_ORIGINS[gs.css]="$(css_origin "$GS_CSS_URL")"
     CSS_ORIGINS[cc.css]="$(css_origin "$CC_CSS_URL")"
     CSS_ORIGINS[ms.css]="$(css_origin "$MS_CSS_URL")"
+
+    log_info "Localizing font assets in parallel..."
     for css_file in gs.css cc.css ms.css; do
-        if [ ! -s "$css_file" ]; then
-            log_warn "Skipping $css_file (missing or empty)."
-            continue
-        fi
+        if [ ! -s "$css_file" ]; then continue; fi
         css_origin="${CSS_ORIGINS[$css_file]}"
-        # Extract URLs from url(...) - handle optional quotes
-        grep -o "url([^)]*)" "$css_file" | sed 's/url(//;s/)//' | tr -d "'\"" | sort | uniq | while read -r url; do
-            if [ -z "$url" ]; then continue; fi
-            filename=$(basename "$url")
-            # Strip everything after ?
-            clean_name="${filename%%\?*}"
-            fetch_url="$url"
-            if [[ "$url" == //* ]]; then
-                fetch_url="https:$url"
-            elif [[ "$url" == /* ]]; then
-                fetch_url="${css_origin}${url}"
-            elif [[ "$url" != http* ]]; then
-                fetch_url="${css_origin}/${url}"
-            fi
-            
-            if [ ! -f "$clean_name" ]; then
-                # log_info "Downloading font: $clean_name"
-                if ! curl -sL "$fetch_url" -o "$clean_name"; then
-                    log_warn "Failed to download asset: $clean_name"
-                    continue
+        
+        # Collect all unique URLs
+        urls=$(grep -o "url([^)]*)" "$css_file" | sed 's/url(//;s/)//' | tr -d "'\"" | sort | uniq)
+        
+        for url in $urls; do
+            (
+                if [ -z "$url" ]; then exit 0; fi
+                filename=$(basename "$url")
+                clean_name="${filename%%\?*}"
+                fetch_url="$url"
+                if [[ "$url" == //* ]]; then
+                    fetch_url="https:$url"
+                elif [[ "$url" == /* ]]; then
+                    fetch_url="${css_origin}${url}"
+                elif [[ "$url" != http* ]]; then
+                    fetch_url="${css_origin}/${url}"
                 fi
-            fi
-            
-            # Escape URL for sed: escape / and & and |
-            escaped_url=$(echo "$url" | sed 's/[\/&|]/\\&/g')
-            # Replace the URL in the CSS file
-            sed -i "s|url(['\"]\{0,1\}${escaped_url}['\"]\{0,1\})|url($clean_name)|g" "$css_file"
-        done || true
+                
+                if [ ! -f "$clean_name" ]; then
+                    curl -sL "$fetch_url" -o "$clean_name"
+                fi
+                
+                escaped_url=$(echo "$url" | sed 's/[\/&|]/\\&/g')
+                sed -i "s|url(['\"]\{0,1\}${escaped_url}['\"]\{0,1\})|url($clean_name)|g" "$css_file"
+            ) &
+        done
+        wait
     done
     cd - >/dev/null
     
@@ -4871,7 +4875,7 @@ check_docker_rate_limit() {
     # Export DOCKER_CONFIG globally
     export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
     
-    if ! output=$(env DOCKER_CONFIG="$DOCKER_CONFIG" docker pull hello-world 2>&1); then
+    if ! output=$(env DOCKER_CONFIG="$DOCKER_CONFIG" sudo docker pull hello-world 2>&1); then
         if echo "$output" | grep -iaE "toomanyrequests|rate.*limit|pull.*limit|reached.*limit" >/dev/null; then
             log_crit "Docker Hub Rate Limit Reached! They want you to log in."
             # We already tried to auth at start, but maybe it failed or they skipped?
@@ -5043,7 +5047,7 @@ clean_environment() {
                 rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
                 rm -rf "$BASE_DIR" 2>/dev/null || true
             fi
-            # Remove volumes - try both unprefixed and prefixed names (docker compose uses project prefix)
+            # Remove volumes - try both unprefixed and prefixed names (sudo docker compose uses project prefix)
             for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
                 $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
                 $DOCKER_CMD volume rm -f "${APP_NAME}_${vol}" 2>/dev/null || true
@@ -5109,7 +5113,7 @@ clean_environment() {
                     $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
                     REMOVED_VOLUMES="${REMOVED_VOLUMES}$vol "
                     ;;
-                # Match prefixed names (docker compose project prefix)
+                # Match prefixed names (sudo docker compose project prefix)
                 privacy-hub_*|privacyhub_*)
                     log_info "  Removing volume: $vol"
                     $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
@@ -5203,11 +5207,6 @@ clean_environment() {
             fi
         fi
         
-        # Remove temporary directories
-        if [ -d "$DOCKER_AUTH_DIR" ]; then
-            log_info "  Removing temporary auth: $DOCKER_AUTH_DIR"
-            rm -rf "$DOCKER_AUTH_DIR"
-        fi
         if [ -d "$CERT_BACKUP_DIR" ]; then
             rm -rf "$CERT_BACKUP_DIR"
         fi
@@ -5293,35 +5292,54 @@ if [ "${DASHBOARD_ONLY:-false}" = true ]; then
     exit 0
 fi
 
-authenticate_registries
-
 # Run cleanup
 clean_environment
 
-# Ensure authentication works by pulling critical utility images now
-log_info "Pre-pulling core infrastructure images to avoid rate limits..."
+authenticate_registries
+
+# Helper function for parallel pulling with retries
+pull_with_retry() {
+    local img=$1
+    local max_retries=3
+    local count=0
+    while [ $count -lt $max_retries ]; do
+        if sudo -E env DOCKER_CONFIG="$DOCKER_CONFIG" docker pull "$img" >/dev/null 2>&1; then
+            echo "[INFO] Successfully pulled $img"
+            return 0
+        fi
+        count=$((count + 1))
+        echo "[WARN] Failed to pull $img. Retrying ($count/$max_retries)..."
+        sleep 1
+    done
+    echo "[CRIT] Failed to pull critical image $img after $max_retries attempts."
+    return 1
+}
+export -f pull_with_retry
+export DOCKER_CONFIG
+
+log_info "Pre-pulling core infrastructure images in parallel..."
 # We only pull core infrastructure and base images. App images built from source are skipped.
 CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
 
+PIDS=""
 for img in $CRITICAL_IMAGES; do
-    MAX_RETRIES=3
-    count=0
-    success=false
-    while [ $count -lt $MAX_RETRIES ]; do
-        if $DOCKER_CMD pull "$img"; then
-            success=true
-            break
-        fi
-        count=$((count + 1))
-        log_warn "Failed to pull $img. Retrying ($count/$MAX_RETRIES)..."
-        sleep 2
-    done
-    
-    if [ "$success" = false ]; then
-        log_crit "Failed to pull critical image $img after $MAX_RETRIES attempts. Aborting."
-        exit 1
+    pull_with_retry "$img" &
+    PIDS="$PIDS $!"
+done
+
+SUCCESS=true
+for pid in $PIDS; do
+    if ! wait "$pid"; then
+        SUCCESS=false
     fi
 done
+
+if [ "$SUCCESS" = false ]; then
+    log_crit "One or more critical images failed to pull. Aborting."
+    exit 1
+fi
+log_info "All critical images pulled successfully."
+
 
 mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR/unbound" "$AGH_CONF_DIR" "$NGINX_CONF_DIR" "$WG_PROFILES_DIR"
 mkdir -p "$DATA_DIR/postgres" "$DATA_DIR/redis" "$DATA_DIR/wireguard" "$DATA_DIR/adguard-work" "$DATA_DIR/portainer" "$DATA_DIR/odido" "$DATA_DIR/companion"
@@ -6035,7 +6053,7 @@ filters:
 filters_update_interval: 1
 EOF
 
-# Prepare escaped hash for docker-compose (v2 requires $$ for literal $)
+# Prepare escaped hash for sudo docker-compose (v2 requires $$ for literal $)
 WG_HASH_COMPOSE="${WG_HASH_CLEAN//\$/\$\$}"
 PORTAINER_HASH_COMPOSE="${PORTAINER_PASS_HASH//\$/\$\$}"
 
@@ -6366,8 +6384,27 @@ BWEOF
 fi
 PATCHEOF
 chmod +x "$PATCHES_SCRIPT"
-clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless"
-bash "$PATCHES_SCRIPT" "wikiless" "$SRC_DIR"
+# Helper for parallel sync and patch
+sync_and_patch() {
+    local url=$1
+    local dir=$2
+    local service=$3
+    clone_repo "$url" "$dir"
+    bash "$PATCHES_SCRIPT" "$service" "$(dirname "$dir")"
+}
+export -f sync_and_patch
+export -f clone_repo
+export PATCHES_SCRIPT
+
+log_info "Synchronizing and patching source repositories in parallel..."
+sync_and_patch "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless" "wikiless" &
+sync_and_patch "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe" "scribe" &
+sync_and_patch "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious" "invidious" &
+sync_and_patch "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster" "odido-booster" &
+sync_and_patch "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert" "vert" &
+sync_and_patch "https://gitdab.com/cadence/breezewiki" "$SRC_DIR/breezewiki" "breezewiki" &
+wait
+
 WIKILESS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wikiless" || true)
 if [ -z "$WIKILESS_DOCKERFILE" ]; then
     log_warn "Wikiless Dockerfile not found - build may fail."
@@ -6430,23 +6467,17 @@ const config = {
 
 module.exports = config
 EOF
-clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe"
-bash "$PATCHES_SCRIPT" "scribe" "$SRC_DIR"
 SCRIBE_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/scribe" || true)
 if [ -z "$SCRIBE_DOCKERFILE" ]; then
     log_warn "Scribe Dockerfile not found - build may fail."
     SCRIBE_DOCKERFILE="Dockerfile"
 fi
 
-clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious"
-bash "$PATCHES_SCRIPT" "invidious" "$SRC_DIR"
 INVIDIOUS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/invidious" "docker/Dockerfile" || true)
 if [ -z "$INVIDIOUS_DOCKERFILE" ]; then
     log_warn "Invidious Dockerfile not found - build may fail."
     INVIDIOUS_DOCKERFILE="Dockerfile"
 fi
-clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster"
-bash "$PATCHES_SCRIPT" "odido-booster" "$SRC_DIR"
 ODIDO_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/odido-bundle-booster" || true)
 if [ -z "$ODIDO_DOCKERFILE" ]; then
     log_warn "Odido Booster Dockerfile not found - build may fail."
@@ -6463,22 +6494,19 @@ CMD ["python", "server.py"]
 EOF
 HUB_API_DOCKERFILE="Dockerfile"
 
-clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert"
-bash "$PATCHES_SCRIPT" "vert" "$SRC_DIR"
 VERT_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/vert" || true)
 if [ -z "$VERT_DOCKERFILE" ]; then
     log_warn "VERT Dockerfile not found - build may fail."
     VERT_DOCKERFILE="Dockerfile"
 fi
 
-clone_repo "https://gitdab.com/cadence/breezewiki" "$SRC_DIR/breezewiki"
-bash "$PATCHES_SCRIPT" "breezewiki" "$SRC_DIR"
 BREEZEWIKI_DOCKERFILE="Dockerfile.alpine"
 if [ -f "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE" ]; then
     log_info "BreezeWiki Dockerfile.alpine is ready."
 else
     log_warn "BreezeWiki Dockerfile.alpine missing - build may fail."
 fi
+
 
 chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$SRC_DIR/breezewiki" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
 
@@ -6528,11 +6556,11 @@ mkdir -p "$BACKUP_DIR"
 
                 if [ "$SERVICE" = "invidious" ]; then
 
-                    docker exec invidious-db dropdb -U kemal invidious
+                    sudo docker exec invidious-db dropdb -U kemal invidious
 
-                    docker exec invidious-db createdb -U kemal invidious
+                    sudo docker exec invidious-db createdb -U kemal invidious
 
-                    cat "$LATEST_BACKUP" | docker exec -i invidious-db psql -U kemal invidious
+                    cat "$LATEST_BACKUP" | sudo docker exec -i invidious-db psql -U kemal invidious
 
                     log "Restore complete."
 
@@ -6560,23 +6588,23 @@ mkdir -p "$BACKUP_DIR"
             log "CLEARING Invidious database (resetting to defaults)..."
             if [ "$BACKUP" != "no" ]; then
                 log "Creating safety backup..."
-                docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
+                sudo docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
             fi
             # Drop and recreate
-            docker exec invidious-db dropdb -U kemal invidious
-            docker exec invidious-db createdb -U kemal invidious
-            docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh
+            sudo docker exec invidious-db dropdb -U kemal invidious
+            sudo docker exec invidious-db createdb -U kemal invidious
+            sudo docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh
             log "Invidious database cleared."
         elif [ "$ACTION" = "migrate" ]; then
             log "Starting Invidious migration..."
             # 1. Backup existing data
             if [ "$BACKUP" != "no" ] && [ -d "$DATA_DIR/postgres" ]; then
                 log "Backing up Invidious database..."
-                docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"
+                sudo docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"
             fi
             # 2. Run migrations
             log "Applying schema updates..."
-            docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
+            sudo docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
             log "Invidious migration complete."
         elif [ "$ACTION" = "vacuum" ]; then
              log "Invidious (Postgres) handles vacuuming automatically. Skipping."
@@ -6590,7 +6618,7 @@ mkdir -p "$BACKUP_DIR"
     elif [ "$SERVICE" = "memos" ]; then
         if [ "$ACTION" = "vacuum" ]; then
             log "Optimizing Memos database (VACUUM)..."
-            docker exec memos sqlite3 /var/opt/memos/memos_prod.db "VACUUM;" 2>/dev/null || log "Memos container not ready or sqlite3 missing."
+            sudo docker exec memos sqlite3 /var/opt/memos/memos_prod.db "VACUUM;" 2>/dev/null || log "Memos container not ready or sqlite3 missing."
             log "Memos database optimized."
         fi
     else
@@ -6628,13 +6656,13 @@ if [ "$ACTION" = "activate" ]; then
         echo "$PROFILE_NAME" > "$NAME_FILE"
         DEPENDENTS="redlib wikiless wikiless_redis invidious invidious-db companion rimgo breezewiki anonymousoverflow scribe"
         # shellcheck disable=SC2086
-        docker stop $DEPENDENTS 2>/dev/null || true
-        docker compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
+        sudo docker stop $DEPENDENTS 2>/dev/null || true
+        sudo docker compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
         
         # Wait for gluetun to be healthy (max 30s)
         i=0
         while [ $i -lt 30 ]; do
-            HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
+            HEALTH=$(sudo docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
             if [ "$HEALTH" = "healthy" ]; then
                 break
             fi
@@ -6643,7 +6671,7 @@ if [ "$ACTION" = "activate" ]; then
         done
 
         # shellcheck disable=SC2086
-        docker compose -f /app/docker-compose.yml up -d --force-recreate $DEPENDENTS 2>/dev/null || true
+        sudo docker compose -f /app/docker-compose.yml up -d --force-recreate $DEPENDENTS 2>/dev/null || true
     else
         echo "Error: Profile not found"
         exit 1
@@ -6664,9 +6692,9 @@ elif [ "$ACTION" = "status" ]; then
     PUBLIC_IP="--"
     DATA_FILE="/app/.data_usage"
     
-    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^gluetun$"; then
+    if sudo docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^gluetun$"; then
         # Check container health status
-        HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
+        HEALTH=$(sudo docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
         if [ "$HEALTH" = "healthy" ]; then
             GLUETUN_HEALTHY="true"
         fi
@@ -6675,7 +6703,7 @@ elif [ "$ACTION" = "status" ]; then
         # API docs: https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
         
         # Get VPN status from control server
-        VPN_STATUS_RESPONSE=$(docker exec gluetun wget --user=gluetun --password="$ADMIN_PASS_RAW" -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
+        VPN_STATUS_RESPONSE=$(sudo docker exec gluetun wget --user=gluetun --password="$ADMIN_PASS_RAW" -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
         if [ -n "$VPN_STATUS_RESPONSE" ]; then
             # Extract status from {"status":"running"} or {"status":"stopped"}
             VPN_RUNNING=$(echo "$VPN_STATUS_RESPONSE" | grep -o '"status":"running"' || echo "")
@@ -6693,7 +6721,7 @@ elif [ "$ACTION" = "status" ]; then
         fi
         
         # Get public IP from control server
-        PUBLIC_IP_RESPONSE=$(docker exec gluetun wget --user=gluetun --password="$ADMIN_PASS_RAW" -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
+        PUBLIC_IP_RESPONSE=$(sudo docker exec gluetun wget --user=gluetun --password="$ADMIN_PASS_RAW" -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
         if [ -n "$PUBLIC_IP_RESPONSE" ]; then
             # Extract IP from {"public_ip":"x.x.x.x"}
             EXTRACTED_IP=$(echo "$PUBLIC_IP_RESPONSE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
@@ -6704,18 +6732,18 @@ elif [ "$ACTION" = "status" ]; then
         
         # Fallback to external IP check if control server didn't return an IP
         if [ -z "$PUBLIC_IP" ] || [ "$PUBLIC_IP" = "--" ]; then
-            PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
+            PUBLIC_IP=$(sudo docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
         fi
         
         # Try to get endpoint from WireGuard config if available
-        WG_CONF_ENDPOINT=$(docker exec gluetun cat /gluetun/wireguard/wg0.conf 2>/dev/null | grep -i "^Endpoint" | cut -d'=' -f2 | tr -d ' ' | head -1 || echo "")
+        WG_CONF_ENDPOINT=$(sudo docker exec gluetun cat /gluetun/wireguard/wg0.conf 2>/dev/null | grep -i "^Endpoint" | cut -d'=' -f2 | tr -d ' ' | head -1 || echo "")
         if [ -n "$WG_CONF_ENDPOINT" ]; then
             ENDPOINT="$WG_CONF_ENDPOINT"
         fi
         
         # Get current RX/TX from /proc/net/dev (works for tun0 or wg0 interface)
         # Format: iface: rx_bytes rx_packets ... tx_bytes tx_packets ...
-        NET_DEV=$(docker exec gluetun cat /proc/net/dev 2>/dev/null || echo "")
+        NET_DEV=$(sudo docker exec gluetun cat /proc/net/dev 2>/dev/null || echo "")
         CURRENT_RX="0"
         CURRENT_TX="0"
         if [ -n "$NET_DEV" ]; then
@@ -6790,11 +6818,11 @@ DATAEOF
     WGE_TOTAL_TX="0"
     WGE_DATA_FILE="/app/.wge_data_usage"
     
-    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^wg-easy$"; then
+    if sudo docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^wg-easy$"; then
         WGE_STATUS="up"
-        WGE_HOST=$(docker exec wg-easy printenv WG_HOST 2>/dev/null | tr -d '\n\r' || echo "Unknown")
+        WGE_HOST=$(sudo docker exec wg-easy printenv WG_HOST 2>/dev/null | tr -d '\n\r' || echo "Unknown")
         if [ -z "$WGE_HOST" ]; then WGE_HOST="Unknown"; fi
-        WG_PEER_DATA=$(docker exec wg-easy wg show wg0 2>/dev/null || echo "")
+        WG_PEER_DATA=$(sudo docker exec wg-easy wg show wg0 2>/dev/null || echo "")
         if [ -n "$WG_PEER_DATA" ]; then
             WGE_CLIENTS=$(echo "$WG_PEER_DATA" | grep -c "^peer:" 2>/dev/null || echo "0")
             CONNECTED_COUNT=0
@@ -6866,8 +6894,8 @@ WGEDATAEOF
         # Priority 1: Check Docker container health if it exists
         HEALTH="unknown"
         DETAILS=""
-        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${s_name}$"; then
-            STATE_JSON=$(docker inspect --format='{{json .State}}' "$s_name" 2>/dev/null)
+        if sudo docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${s_name}$"; then
+            STATE_JSON=$(sudo docker inspect --format='{{json .State}}' "$s_name" 2>/dev/null)
             HEALTH=$(echo "$STATE_JSON" | grep -oP '"Health":.*?"Status":"\K[^"]+' || echo "running")
             # If unhealthy, extract last error
             if [ "$HEALTH" = "unhealthy" ]; then
@@ -7155,7 +7183,7 @@ def load_services():
     return {}
 
 def get_proxy_opener():
-    # Gluetun proxy is usually available at gluetun:8888 within the same docker network
+    # Gluetun proxy is usually available at gluetun:8888 within the same sudo docker network
     proxy_handler = urllib.request.ProxyHandler({'http': 'http://gluetun:8888', 'https': 'http://gluetun:8888'})
     opener = urllib.request.build_opener(proxy_handler)
     return opener
@@ -7382,7 +7410,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
         if self.command == 'GET' and base_path in ['/', '/status', '/profiles', '/containers', '/services', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates', '/master-update', '/logs', '/system-health', '/theme', '/project-details']:
             return True
         
-        # Watchtower notification (comes from docker network, simple path check)
+        # Watchtower notification (comes from sudo docker network, simple path check)
         if self.path.startswith('/watchtower'):
             return True
 
@@ -8133,7 +8161,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 
                 # We use a detached process to avoid killing the API before it responds
                 # The restart will take 20-30 seconds.
-                subprocess.Popen(["/bin/sh", "-c", "sleep 2 && docker compose -f /app/docker-compose.yml restart"])
+                subprocess.Popen(["/bin/sh", "-c", "sleep 2 && sudo docker compose -f /app/docker-compose.yml restart"])
                 self._send_json({"success": True, "message": "Stack restart initiated"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -8397,7 +8425,7 @@ chmod +x "$WG_API_SCRIPT"
 
 # --- SECTION 13: ORCHESTRATION LAYER (DOCKER COMPOSE) ---
 # Compile the unified multi-container definition for the complete privacy stack.
-log_info "Compiling Orchestration Layer (docker-compose.yml)..."
+log_info "Compiling Orchestration Layer sudo docker-compose.yml)..."
 
 # Helper function to check if a service should be deployed
 should_deploy() {
@@ -9268,7 +9296,7 @@ if $DOCKER_CMD run --rm \
         cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
         cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
         
-        # Update docker-compose metadata for CasaOS dashboard transition to HTTPS/Domain
+        # Update sudo docker-compose metadata for CasaOS dashboard transition to HTTPS/Domain
         if [ -f "$COMPOSE_FILE" ]; then
             sed -i "s|dev.casaos.app.ui.protocol=http|dev.casaos.app.ui.protocol=https|g" "$COMPOSE_FILE"
             sed -i "s|dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB|dev.casaos.app.ui.port=8443|g" "$COMPOSE_FILE"
@@ -9284,7 +9312,7 @@ if $DOCKER_CMD run --rm \
         cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
         cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
 
-        # Update docker-compose metadata for CasaOS dashboard transition to HTTPS/Domain
+        # Update sudo docker-compose metadata for CasaOS dashboard transition to HTTPS/Domain
         if [ -f "$COMPOSE_FILE" ]; then
             sed -i "s|dev.casaos.app.ui.protocol=http|dev.casaos.app.ui.protocol=https|g" "$COMPOSE_FILE"
             sed -i "s|dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB|dev.casaos.app.ui.port=8443|g" "$COMPOSE_FILE"
@@ -9360,7 +9388,7 @@ if [ "$NEW_IP" != "$OLD_IP" ]; then
     fi
     
     sed -i "s|WG_HOST=.*|WG_HOST=$NEW_IP|g" "$COMPOSE_FILE"
-    docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate wg-easy
+    sudo docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate wg-easy
     echo "$(date) [INFO] WireGuard container restarted with new IP" >> "$LOG_FILE"
 fi
 EOF
@@ -9410,13 +9438,13 @@ modprobe tun || true
 
 # Explicitly remove portainer and hub-api if they exist to ensure clean state
 log_info "Launching core infrastructure services..."
-env DOCKER_CONFIG="$DOCKER_AUTH_DIR" $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --build hub-api adguard unbound gluetun
+sudo -E env DOCKER_CONFIG="$DOCKER_AUTH_DIR" $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --build hub-api adguard unbound gluetun
 
 # Wait for critical backends to be healthy before starting Nginx (dashboard)
 log_info "Waiting for backend services to stabilize (this may take up to 60s)..."
 for i in $(seq 1 60); do
-    HUB_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' hub-api 2>/dev/null || echo "unknown")
-    GLU_HEALTH=$(docker inspect --format='{{.State.Status}}' gluetun 2>/dev/null || echo "unknown")
+    HUB_HEALTH=$(sudo docker inspect --format='{{.State.Health.Status}}' hub-api 2>/dev/null || echo "unknown")
+    GLU_HEALTH=$(sudo docker inspect --format='{{.State.Status}}' gluetun 2>/dev/null || echo "unknown")
     
     if [ "$HUB_HEALTH" = "healthy" ] && [ "$GLU_HEALTH" = "running" ]; then
         log_info "Backends are stable. Finalizing stack launch..."
@@ -9427,7 +9455,7 @@ for i in $(seq 1 60); do
 done
 
 # Launch the rest of the stack
-env DOCKER_CONFIG="$DOCKER_AUTH_DIR" $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --remove-orphans
+sudo -E env DOCKER_CONFIG="$DOCKER_AUTH_DIR" $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --remove-orphans
 
 log_info "Verifying control plane connectivity..."
 sleep 5
