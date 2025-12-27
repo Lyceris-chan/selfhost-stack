@@ -1909,8 +1909,6 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         </div>
         </section>
 
-    <!-- Setup Wizard removed (Automated Deployment) -->
-
     <!-- Update Selection Modal -->
     <div id="update-selection-modal" class="modal-overlay">
         <div class="modal-card" style="max-width: 600px;">
@@ -6084,6 +6082,9 @@ server {
     ssl_certificate_key /etc/adguard/conf/ssl.key;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
+    
+    # Allow large uploads
+    client_max_body_size 500M;
 
     # Use Docker DNS resolver
     resolver 127.0.0.11 valid=30s;
