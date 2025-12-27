@@ -9466,7 +9466,7 @@ modprobe tun || true
 
 # Explicitly remove portainer and hub-api if they exist to ensure clean state
 log_info "Launching core infrastructure services..."
-env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --build hub-api adguard unbound gluetun
+env DOCKER_CONFIG="$DOCKER_AUTH_DIR" $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --build hub-api adguard unbound gluetun
 
 # Wait for critical backends to be healthy before starting Nginx (dashboard)
 log_info "Waiting for backend services to stabilize (this may take up to 60s)..."
@@ -9483,7 +9483,7 @@ for i in $(seq 1 60); do
 done
 
 # Launch the rest of the stack
-env DOCKER_CONFIG="$DOCKER_AUTH_DIR" docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+env DOCKER_CONFIG="$DOCKER_AUTH_DIR" $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --remove-orphans
 
 log_info "Verifying control plane connectivity..."
 sleep 5
