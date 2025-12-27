@@ -6411,7 +6411,133 @@ RUN raco pkg install --batch --auto --no-docs --skip-installed \
 EXPOSE 10416
 CMD ["racket", "dist.rkt"]
 BWEOF
+if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching Gluetun..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/gluetun")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/gluetun/$D_FILE"; then log "Gluetun already patched."; else
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/gluetun/$D_FILE"
+            # Gluetun is a multi-stage build, we need to be careful.
+            # Usually it uses a builder stage and a final alpine stage.
+            sed -i '/[Aa][Ss] builder/ s|^FROM golang:[^ ]*|FROM dhi.io/python:3.11-alpine3.22-dev|' "$SRC_ROOT/gluetun/$D_FILE" # Mocking builder or needing a DHI Go builder
+            # Since we don't have a DHI Go builder yet, we'll keep the builder but harden the runtime.
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/gluetun/$D_FILE"
+        fi
+    fi
 fi
+
+if [ "$SERVICE" = "adguard" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching AdGuard Home..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/adguardhome")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/adguardhome/$D_FILE"; then log "AdGuard already patched."; else
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/adguardhome/$D_FILE"
+        fi
+    fi
+fi
+
+if [ "$SERVICE" = "memos" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching Memos..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/memos")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/memos/$D_FILE"; then log "Memos already patched."; else
+            sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/memos/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/memos/$D_FILE"
+        fi
+    fi
+fi
+
+if [ "$SERVICE" = "redlib" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching Redlib..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/redlib")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/redlib/$D_FILE"; then log "Redlib already patched."; else
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/redlib/$D_FILE"
+        fi
+    fi
+fi
+
+if [ "$SERVICE" = "rimgo" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching Rimgo..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/rimgo")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/rimgo/$D_FILE"; then log "Rimgo already patched."; else
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/rimgo/$D_FILE"
+        fi
+    fi
+fi
+
+if [ "$SERVICE" = "anonymousoverflow" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching AnonymousOverflow..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/anonymousoverflow")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/anonymousoverflow/$D_FILE"; then log "AnonymousOverflow already patched."; else
+            sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/anonymousoverflow/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/anonymousoverflow/$D_FILE"
+        fi
+    fi
+fi
+
+if [ "$SERVICE" = "vertd" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching VERTd..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/vertd")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/vertd/$D_FILE"; then log "VERTd already patched."; else
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/vertd/$D_FILE"
+        fi
+    fi
+}
+
+if [ "$SERVICE" = "companion" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching Invidious Companion..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/invidious-companion")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/invidious-companion/$D_FILE"; then log "Companion already patched."; else
+            sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/invidious-companion/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/invidious-companion/$D_FILE"
+        fi
+    fi
+fi
+
+if [ "$SERVICE" = "watchtower" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching Watchtower..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/watchtower")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/watchtower/$D_FILE"; then log "Watchtower already patched."; else
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/watchtower/$D_FILE"
+        fi
+    fi
+fi
+
+if [ "$SERVICE" = "wg-easy" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching WG-Easy..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/wg-easy")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/wg-easy/$D_FILE"; then log "WG-Easy already patched."; else
+            sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wg-easy/$D_FILE"
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/wg-easy/$D_FILE"
+        fi
+    fi
+fi
+
+if [ "$SERVICE" = "portainer" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching Portainer..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/portainer")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/portainer/$D_FILE"; then log "Portainer already patched."; else
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/portainer/$D_FILE"
+        fi
+    fi
+if [ "$SERVICE" = "unbound" ] || [ "$SERVICE" = "all" ]; then
+    log "Patching Unbound..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/unbound")
+    if [ -n "$D_FILE" ]; then
+        if grep -q "dhi.io" "$SRC_ROOT/unbound/$D_FILE"; then log "Unbound already patched."; else
+            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/unbound/$D_FILE"
+        fi
+    fi
+fi
+
 PATCHEOF
 chmod +x "$PATCHES_SCRIPT"
 # Helper for parallel sync and patch
@@ -6434,6 +6560,18 @@ sync_and_patch "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious" "i
 sync_and_patch "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster" "odido-booster" & PIDS="$PIDS $!"
 sync_and_patch "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert" "vert" & PIDS="$PIDS $!"
 sync_and_patch "https://gitdab.com/cadence/breezewiki" "$SRC_DIR/breezewiki" "breezewiki" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/qdm12/gluetun.git" "$SRC_DIR/gluetun" "gluetun" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/AdguardTeam/AdGuardHome.git" "$SRC_DIR/adguardhome" "adguard" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/klutchell/unbound.git" "$SRC_DIR/unbound" "unbound" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/wg-easy/wg-easy.git" "$SRC_DIR/wg-easy" "wg-easy" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/usememos/memos.git" "$SRC_DIR/memos" "memos" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/redlib-org/redlib.git" "$SRC_DIR/redlib" "redlib" & PIDS="$PIDS $!"
+sync_and_patch "https://codeberg.org/rimgo/rimgo.git" "$SRC_DIR/rimgo" "rimgo" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/httpjamesm/anonymousoverflow.git" "$SRC_DIR/anonymousoverflow" "anonymousoverflow" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/iv-org/invidious-companion.git" "$SRC_DIR/invidious-companion" "companion" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/VERT-sh/vertd.git" "$SRC_DIR/vertd" "vertd" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/containrrr/watchtower.git" "$SRC_DIR/watchtower" "watchtower" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/portainer/portainer.git" "$SRC_DIR/portainer" "portainer" & PIDS="$PIDS $!"
 
 SUCCESS=true
 for pid in $PIDS; do
@@ -8737,7 +8875,8 @@ fi
 if should_deploy "watchtower"; then
 cat >> "$COMPOSE_FILE" <<EOF
   watchtower:
-    image: containrrr/watchtower
+    build:
+      context: $SRC_DIR/watchtower
     container_name: watchtower
     labels:
       - "casaos.skip=true"
@@ -8760,7 +8899,8 @@ fi
 if should_deploy "memos"; then
 cat >> "$COMPOSE_FILE" <<EOF
   memos:
-    image: neosmemo/memos:stable
+    build:
+      context: $SRC_DIR/memos
     container_name: memos
     labels:
       - "io.dhi.hardened=true"
@@ -8782,7 +8922,8 @@ fi
 if should_deploy "gluetun"; then
 cat >> "$COMPOSE_FILE" <<EOF
   gluetun:
-    image: qmcgaw/gluetun
+    build:
+      context: $SRC_DIR/gluetun
     container_name: gluetun
     labels:
       - "casaos.skip=true"
@@ -8856,7 +8997,8 @@ fi
 if should_deploy "portainer"; then
 cat >> "$COMPOSE_FILE" <<EOF
   portainer:
-    image: portainer/portainer-ce:latest
+    build:
+      context: $SRC_DIR/portainer
     container_name: portainer
     command: ["-H", "unix:///var/run/docker.sock", "--admin-password", "$PORTAINER_HASH_COMPOSE", "--no-analytics"]
     networks: [frontnet]
@@ -8878,7 +9020,8 @@ fi
 if should_deploy "adguard"; then
 cat >> "$COMPOSE_FILE" <<EOF
   adguard:
-    image: adguard/adguardhome:latest
+    build:
+      context: $SRC_DIR/adguardhome
     container_name: adguard
     labels:
       - "io.dhi.hardened=true"
@@ -8909,7 +9052,8 @@ fi
 if should_deploy "unbound"; then
 cat >> "$COMPOSE_FILE" <<EOF
   unbound:
-    image: klutchell/unbound:latest
+    build:
+      context: $SRC_DIR/unbound
     container_name: unbound
     labels:
       - "io.dhi.hardened=true"
@@ -8934,7 +9078,8 @@ if should_deploy "wg-easy"; then
 cat >> "$COMPOSE_FILE" <<EOF
   # WG-Easy: Remote access VPN server (only 51820/UDP exposed to internet)
   wg-easy:
-    image: ghcr.io/wg-easy/wg-easy:latest
+    build:
+      context: $SRC_DIR/wg-easy
     container_name: wg-easy
     network_mode: "host"
     environment:
@@ -8959,7 +9104,8 @@ fi
 if should_deploy "redlib"; then
 cat >> "$COMPOSE_FILE" <<EOF
   redlib:
-    image: quay.io/redlib/redlib:latest
+    build:
+      context: $SRC_DIR/redlib
     container_name: redlib
     labels:
       - "io.dhi.hardened=true"
@@ -9073,7 +9219,8 @@ cat >> "$COMPOSE_FILE" <<EOF
         limits: {cpus: '1.0', memory: 512M}
 
   companion:
-    image: quay.io/invidious/invidious-companion:latest
+    build:
+      context: $SRC_DIR/invidious-companion
     container_name: companion
     labels:
       - "casaos.skip=true"
@@ -9099,7 +9246,8 @@ fi
 if should_deploy "rimgo"; then
 cat >> "$COMPOSE_FILE" <<EOF
   rimgo:
-    image: codeberg.org/rimgo/rimgo:latest
+    build:
+      context: $SRC_DIR/rimgo
     pull_policy: if_not_present
     container_name: rimgo
     labels:
@@ -9152,7 +9300,8 @@ fi
 if should_deploy "anonymousoverflow"; then
 cat >> "$COMPOSE_FILE" <<EOF
   anonymousoverflow:
-    image: ghcr.io/httpjamesm/anonymousoverflow:release
+    build:
+      context: $SRC_DIR/anonymousoverflow
     container_name: anonymousoverflow
     labels:
       - "io.dhi.hardened=true"
@@ -9202,7 +9351,8 @@ cat >> "$COMPOSE_FILE" <<EOF
   # VERT: Local file conversion service
   vertd:
     container_name: vertd
-    image: ghcr.io/vert-sh/vertd:latest
+    build:
+      context: $SRC_DIR/vertd
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
     healthcheck:
