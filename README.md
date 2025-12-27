@@ -32,18 +32,19 @@ This **Automated Mode**:
 
 ## 📚 Contents
 
-1.  [Getting Started](#-getting-started)
-2.  [Dashboard & Services](#-dashboard--services)
-3.  [Network Configuration](#-network-configuration)
-4.  [Advanced Setup (OpenWrt)](#-advanced-setup-openwrt--double-nat)
-5.  [Privacy & Architecture](#-privacy--architecture)
-6.  [Security Standards](#-security-standards)
-7.  [System Requirements](#-system-requirements)
-8.  [Troubleshooting](#-troubleshooting)
-9.  [Maintenance](#-maintenance)
+1.  [Getting Started](#getting-started)
+2.  [Dashboard & Services](#dashboard--services)
+3.  [Network Configuration](#network-configuration)
+4.  [Advanced Setup (OpenWrt)](#advanced-setup)
+5.  [Privacy & Architecture](#privacy--architecture)
+6.  [Security Standards](#security-standards)
+7.  [System Requirements](#system-requirements)
+8.  [Troubleshooting](#troubleshooting)
+9.  [Maintenance](#maintenance)
 
 ---
 
+<a id="getting-started"></a>
 ## 🏗️ Getting Started
 
 ### Prerequisites
@@ -129,6 +130,7 @@ After installation, verify your stack:
 
 ---
 
+<a id="dashboard--services"></a>
 ## 🖥️ Dashboard & Services
 
 Access your unified control center at `http://<LAN_IP>:8081`.
@@ -153,6 +155,7 @@ Access your unified control center at `http://<LAN_IP>:8081`.
 
 ---
 
+<a id="network-configuration"></a>
 ## 🌐 Network Configuration
 
 To fully utilize the stack, configure your network:
@@ -179,6 +182,7 @@ This stack uses a **Dual Split Tunnel** architecture via Gluetun and WG-Easy to 
 
 ---
 
+<a id="advanced-setup"></a>
 ## 📡 Advanced Setup: OpenWrt & Double NAT
 
 If you are running a real router like **OpenWrt** behind your ISP modem, you are in a **Double NAT** situation. You need to fix the routing so your packets actually arrive.
@@ -240,6 +244,7 @@ To implement this on your router, refer to the following official guides:
 
 ---
 
+<a id="privacy--architecture"></a>
 ## 🛡️ Privacy & Architecture
 
 ### The "Trust Gap"
@@ -269,11 +274,16 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 *   **Zero Third-Parties**: We bypass "public" resolvers like **Google** and **Cloudflare**.
 *   **QNAME Minimization**: Only sends absolute minimum metadata upstream (RFC 7816).
 *   **Encrypted Local Path**: Native support for **DoH** (RFC 8484) and **DoQ** (RFC 9250).
-*   **High Performance**: 
-    *   **Intelligent Caching**: Large message and RRset caches reduce external lookups.
-    *   **Proactive Prefetching**: Frequently requested records are renewed before they expire.
-    *   **Glue Hardening**: Protects against cache poisoning by strictly verifying delegation records.
+*   **Hardened Security**:
+    *   **DNSSEC Stripping Protection**: Rejects responses that have been stripped of security signatures.
+    *   **Access Control**: Resolver strictly restricted to local RFC1918 subnets only.
+    *   **Fingerprint Resistance**: Identity and version queries are explicitly hidden.
     *   **0x20 Bit Randomization**: Mitigates spoofing attempts through query casing.
+    *   **Glue Hardening**: Strictly verifies delegation records to prevent cache poisoning.
+*   **Optimized Performance**: 
+    *   **Intelligent Caching**: Large message (50MB) and RRset (100MB) caches.
+    *   **Proactive Prefetching**: Automatically renews popular records before they expire.
+    *   **Minimal Responses**: Reduces packet size and amplification risks.
 
 ### 🛡️ Blocklist Information & DNS Filtering
 *   **Source**: Blocklists are generated using the [Lyceris-chan DNS Blocklist Generator](https://github.com/Lyceris-chan/dns-blocklist-generator/).
@@ -303,6 +313,7 @@ To ensure transparency, the deployment script [dynamically patches](https://gith
 
 ---
 
+<a id="security-standards"></a>
 ## 🔒 Security Standards
 
 ### DHI Hardened Images
@@ -318,6 +329,7 @@ Opening a port for WireGuard does **not** expose your home to scanning.
 
 ---
 
+<a id="system-requirements"></a>
 ## 🖥️ System Requirements
 
 ### Verified Environment (ZimaOS)
@@ -332,19 +344,21 @@ Opening a port for WireGuard does **not** expose your home to scanning.
 
 ---
 
+<a id="troubleshooting"></a>
 ## 🔧 Troubleshooting
 
 | Issue | Potential Solution |
 | :--- | :--- |
-| **"My internet broke!"** | DNS resolution likely failed. Set your router DNS to `9.9.9.9` or `1.1.1.1` temporarily to restore access, then restart the Hub. |
-| **"I can't connect remotely"** | **1.** Check Port 51820 forwarding. **2.** Verify Double NAT (Forward on both ISP and OpenWrt routers). **3.** Check for CGNAT. |
-| **"Services are slow"** | **1.** Check VPN speed in dashboard. **2.** Try a different ProtonVPN server config. **3.** Monitor system CPU/RAM usage. |
-| **"SSL is invalid"** | Ensure port 80/443 aren't blocked and your deSEC token is correct. Check `certbot/monitor.log`. |
+| **"My internet broke!"** | DNS resolution failed. Temporarily set your router DNS to **Quad9** (`9.9.9.9`) or **Mullvad** (`194.242.2.2`) to restore access, then check the Hub status. |
+| **"I can't connect remotely"** | **1.** Verify Port 51820 (UDP) is forwarded. **2.** If using OpenWrt, ensure "Double NAT" is handled (ISP -> OpenWrt -> Hub). **3.** Check if your ISP uses CGNAT. |
+| **"Services are slow"** | **1.** Check VPN throughput in the dashboard. **2.** Try a different ProtonVPN server config. **3.** Ensure your host has sufficient CPU/RAM for compilation tasks. |
+| **"SSL is invalid"** | Check `certbot/monitor.log` via dashboard. Ensure ports 80/443 are reachable for validation. Verify your deSEC token. |
 
 > 💡 **Pro-Tip**: Use `docker ps` to verify all containers are `Up (healthy)`. If a container is stuck, use `docker logs <name>` to see why.
 
 ---
 
+<a id="maintenance"></a>
 ## 💾 Maintenance
 
 *   **Update**: Click "Check Updates" in the dashboard or run `./zima.sh` again.
