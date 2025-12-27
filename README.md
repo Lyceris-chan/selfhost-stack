@@ -270,38 +270,38 @@ The dashboard includes a secure **Admin Mode** for sensitive operations.
 
 | Service & Source | Category | Purpose | 
 | :--- | :--- | :--- |
+| **[AnonOverflow](https://github.com/httpjamesm/anonymousoverflow)** | Privacy Frontend | Private Stack Overflow viewer |
+| **[BreezeWiki](https://gitdab.com/cadence/breezewiki)** | Privacy Frontend | De-fandomized Wiki interface |
 | **[Invidious](https://github.com/iv-org/invidious)** | Privacy Frontend | Anonymous YouTube (No ads/tracking) |
 | **[Redlib](https://github.com/redlib-org/redlib)** | Privacy Frontend | Lightweight Reddit interface |
+| **[Rimgo](https://codeberg.org/rimgo/rimgo)** | Privacy Frontend | Lightweight Imgur interface |
+| **[Scribe](https://git.sr.ht/~edwardloveall/scribe)** | Privacy Frontend | Alternative Medium frontend |
 | **[Wikiless](https://github.com/Metastem/Wikiless)** | Privacy Frontend | Private Wikipedia access |
 | **[Memos](https://github.com/usememos/memos)** | Utility | Private knowledge base & notes |
+| **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)** | Utility | Automated NL data bundle booster |
+| **[VERT](https://github.com/vert-sh/vert)** | Utility | Local, GPU-accelerated file conversion |
 | **[AdGuard Home](https://github.com/AdguardTeam/AdGuardHome)** | Core | DNS filtering & Ad-blocking |
 | **[WireGuard](https://github.com/wg-easy/wg-easy)** | Core | Secure remote access gateway |
 | **[Portainer](https://github.com/portainer/portainer)** | Admin | Advanced container management |
-| **[VERT](https://github.com/vert-sh/vert)** | Utility | Local, GPU-accelerated file conversion (VERTD requires a valid cert due to quirks) |
-| **[Rimgo](https://codeberg.org/rimgo/rimgo)** | Frontend | Lightweight Imgur interface |
-| **[BreezeWiki](https://gitdab.com/cadence/breezewiki)** | Frontend | De-fandomized Wiki interface |
-| **[AnonOverflow](https://github.com/httpjamesm/anonymousoverflow)** | Frontend | Private Stack Overflow viewer |
-| **[Scribe](https://git.sr.ht/~edwardloveall/scribe)** | Frontend | Alternative Medium frontend |
-| **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)** | Utility | Automated NL data bundle booster |
 
 ### Service Access & URLs
 The dashboard provides one-click launch cards for every service. 
 
 | Service | Local LAN URL | Category | 
 | :--- | :--- | :--- |
-| **Dashboard** | `http://<LAN_IP>:8081` | Management |
+| **AnonOverflow** | `http://<LAN_IP>:8480` | Privacy Frontend |
+| **BreezeWiki** | `http://<LAN_IP>:8380` | Privacy Frontend |
 | **Invidious** | `http://<LAN_IP>:3000` | Privacy Frontend |
 | **Redlib** | `http://<LAN_IP>:8080` | Privacy Frontend |
-| **Wikiless** | `http://<LAN_IP>:8180` | Privacy Frontend |
 | **Rimgo** | `http://<LAN_IP>:3002` | Privacy Frontend |
-| **BreezeWiki** | `http://<LAN_IP>:8380` | Privacy Frontend |
-| **AnonOverflow** | `http://<LAN_IP>:8480` | Privacy Frontend |
 | **Scribe** | `http://<LAN_IP>:8280` | Privacy Frontend |
+| **Wikiless** | `http://<LAN_IP>:8180` | Privacy Frontend |
 | **Memos** | `http://<LAN_IP>:5230` | Utility |
-| **VERT** | `http://<LAN_IP>:5555` | Utility |
 | **Odido Booster** | `http://<LAN_IP>:8085` | Utility |
+| **VERT** | `http://<LAN_IP>:5555` | Utility |
 | **AdGuard Home** | `http://<LAN_IP>:8083` | Infrastructure |
 | **WireGuard UI** | `http://<LAN_IP>:51821` | Infrastructure |
+| **Dashboard** | `http://<LAN_IP>:8081` | Management |
 | **Portainer** | `http://<LAN_IP>:9000` | Admin |
 
 > 🔒 **Domain Access**: When deSEC is configured, all services automatically become available via trusted HTTPS at `https://<service>.<domain>:8443/`.
@@ -420,29 +420,41 @@ Your Privacy Hub machine hosts your DNS resolver. If it loses power, crashes, or
 <details>
 <summary><strong>❌ Mistake #1: Dynamic MAC Addresses Enabled</strong></summary>
 
-**Symptom**: Port forwarding stops working after reboot, services unreachable remotely.
-**Fix**: Ensure "Private WiFi Address" (iOS) or "Randomized MAC" (Android/Windows) is **DISABLED** for your home network.
+**Symptom**:  
+Port forwarding stops working after reboot, services unreachable remotely.
+
+**Fix**:  
+Ensure "Private WiFi Address" (iOS) or "Randomized MAC" (Android/Windows) is **DISABLED** for your home network.
 </details>
 
 <details>
 <summary><strong>❌ Mistake #2: Google DNS as Secondary</strong></summary>
 
-**Symptom**: Ads still appear, tracking still occurs.
-**Fix**: Primary DNS must be Hub IP. **Leave Secondary DNS Empty**.
+**Symptom**:  
+Ads still appear, tracking still occurs.
+
+**Fix**:  
+Primary DNS must be Hub IP. **Leave Secondary DNS Empty**.
 </details>
 
 <details>
 <summary><strong>❌ Mistake #3: Skipping Port Forward on ISP Router</strong></summary>
 
-**Symptom**: WireGuard connects on home network, fails from coffee shop.
-**Fix**: Ensure UDP 51820 is forwarded on **BOTH** your ISP modem and your OpenWrt router.
+**Symptom**:  
+WireGuard connects on home network, fails from coffee shop.
+
+**Fix**:  
+Ensure UDP 51820 is forwarded on **BOTH** your ISP modem and your OpenWrt router.
 </details>
 
 <details>
 <summary><strong>❌ Mistake #4: Expecting Instant Updates</strong></summary>
 
-**Symptom**: Dashboard shows "No updates", but I know there are new commits.
-**Fix**: Initial check takes 2-5 minutes. Click "Check Updates" and wait for background background jobs to complete.
+**Symptom**:  
+Dashboard shows "No updates", but I know there are new commits.
+
+**Fix**:  
+Initial check takes 2-5 minutes. Click "Check Updates" and wait for background background jobs to complete.
 </details>
 
 ---
