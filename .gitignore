@@ -4,3 +4,4 @@ node_modules/
 tmp/
 tests/VERIFICATION_REPORT.md
 tests/deployment_input.txt
+__pycache__/

@@ -1,7 +1,0 @@
-- improve the Storage Breakdown section to show a loading screen as currently the window is broken while waiting for results [DONE]
-- remove the Utility tag from VERT thats only shown in admin view [DONE]
-- the portainer password generated with -p still doesnt work [DONE]
-- the portainer links on the admin dashboard still say hub Portainer give them a proper button with a material icon [DONE]
-- the toasts after removing the images are behind the blur and disappeared before i could see them and it should also show what can be removed [DONE]
-- the icon on the native zima os dashboard still doesnt show and the favicon isnt set or shown [DONE]
-- the box around the categories when switching to dark mode / light mode is still visible its square around it while the rest of the element is rounded within [DONE]
