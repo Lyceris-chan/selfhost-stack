@@ -5026,16 +5026,21 @@ clean_environment() {
                 rm -f "$BASE_DIR/.secrets" 2>/dev/null || true
                 rm -f "$BASE_DIR/.current_public_ip" 2>/dev/null || true
                 rm -f "$BASE_DIR/.active_profile_name" 2>/dev/null || true
+                rm -f "$BASE_DIR/.data_usage" 2>/dev/null || true
+                rm -f "$BASE_DIR/.wge_data_usage" 2>/dev/null || true
                 rm -rf "$BASE_DIR/config" 2>/dev/null || true
                 rm -rf "$BASE_DIR/env" 2>/dev/null || true
                 rm -rf "$BASE_DIR/sources" 2>/dev/null || true
+                rm -rf "$BASE_DIR/data" 2>/dev/null || true
+                rm -rf "$BASE_DIR/assets" 2>/dev/null || true
                 rm -rf "$BASE_DIR/wg-profiles" 2>/dev/null || true
                 rm -f "$BASE_DIR/active-wg.conf" 2>/dev/null || true
                 rm -f "$BASE_DIR/wg-ip-monitor.sh" 2>/dev/null || true
                 rm -f "$BASE_DIR/wg-control.sh" 2>/dev/null || true
-                rm -f "$BASE_DIR/wg-api.sh" 2>/dev/null || true
+                rm -f "$BASE_DIR/wg-api.py" 2>/dev/null || true
+                rm -f "$BASE_DIR/cert-monitor.sh" 2>/dev/null || true
+                rm -f "$BASE_DIR/migrate.sh" 2>/dev/null || true
                 rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
-                rm -f "$BASE_DIR/wg-ip-monitor.log" 2>/dev/null || true
                 rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
                 rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
                 rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
@@ -5598,6 +5603,12 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
         exit 1
     fi
     
+    # Cryptographic Secrets
+    SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64)
+    ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
+    IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
+
     cat > "$BASE_DIR/.secrets" <<EOF
 VPN_PASS_RAW=$VPN_PASS_RAW
 AGH_PASS_RAW=$AGH_PASS_RAW
@@ -5613,9 +5624,19 @@ SCRIBE_GH_TOKEN=$SCRIBE_GH_TOKEN
 ODIDO_USER_ID=$ODIDO_USER_ID
 ODIDO_TOKEN=$ODIDO_TOKEN
 ODIDO_API_KEY=$ODIDO_API_KEY
+SCRIBE_SECRET=$SCRIBE_SECRET
+ANONYMOUS_SECRET=$ANONYMOUS_SECRET
+IV_HMAC=$IV_HMAC
+IV_COMPANION=$IV_COMPANION
 EOF
 else
     source "$BASE_DIR/.secrets"
+    # Ensure all secrets are loaded/regenerated if missing
+    if [ -z "${SCRIBE_SECRET:-}" ]; then SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64); echo "SCRIBE_SECRET=$SCRIBE_SECRET" >> "$BASE_DIR/.secrets"; fi
+    if [ -z "${ANONYMOUS_SECRET:-}" ]; then ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32); echo "ANONYMOUS_SECRET=$ANONYMOUS_SECRET" >> "$BASE_DIR/.secrets"; fi
+    if [ -z "${IV_HMAC:-}" ]; then IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16); echo "IV_HMAC=$IV_HMAC" >> "$BASE_DIR/.secrets"; fi
+    if [ -z "${IV_COMPANION:-}" ]; then IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16); echo "IV_COMPANION=$IV_COMPANION" >> "$BASE_DIR/.secrets"; fi
+
     if [ -z "${ADMIN_PASS_RAW:-}" ]; then
         ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
         echo "ADMIN_PASS_RAW=$ADMIN_PASS_RAW" >> "$BASE_DIR/.secrets"
@@ -5777,13 +5798,6 @@ fi
 cp "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
 chmod 644 "$GLUETUN_ENV_FILE" "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
 echo "$INITIAL_PROFILE_NAME_SAFE" > "$ACTIVE_PROFILE_NAME_FILE"
-
-# --- SECTION 7: CRYPTOGRAPHIC SECRET GENERATION ---
-# Generate high-entropy unique keys for various service-level authentication mechanisms.
-SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64)
-ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
-IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
-IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
 
 # --- SECTION 8: PORT MAPPING CONFIGURATION ---
 # Define internal and external port mappings for all infrastructure components.
