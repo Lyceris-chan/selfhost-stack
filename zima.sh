@@ -5195,14 +5195,22 @@ clean_environment() {
         # Main data directory
         if [ -d "$BASE_DIR" ]; then
             check_cert_risk
-            if [ "$CERT_PROTECT" = true ]; then
-                log_info "  Preserving: $BASE_DIR (Certificate Protection)"
+            
+            log_info "  Removing: $BASE_DIR"
+            rm -rf "$BASE_DIR"
+
+            if [ "$CERT_RESTORE" = true ]; then
+                log_info "  Restoring preserved SSL certificate..."
+                mkdir -p "$BASE_DIR/config/adguard"
+                if [ -f "$CERT_BACKUP_DIR/ssl.crt" ]; then
+                    cp "$CERT_BACKUP_DIR/ssl.crt" "$BASE_DIR/config/adguard/"
+                fi
+                if [ -f "$CERT_BACKUP_DIR/ssl.key" ]; then
+                    cp "$CERT_BACKUP_DIR/ssl.key" "$BASE_DIR/config/adguard/"
+                fi
                 rm -rf "$CERT_BACKUP_DIR"
                 CERT_RESTORE=false
                 CERT_PROTECT=false
-            else
-                log_info "  Removing: $BASE_DIR"
-                rm -rf "$BASE_DIR"
             fi
         fi
         
