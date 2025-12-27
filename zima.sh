@@ -2604,6 +2604,27 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             return headers;
         }
 
+        async function apiCall(endpoint, options = {}) {
+            const url = endpoint.startsWith('http') ? endpoint : API + endpoint;
+            const headers = { ...getAuthHeaders(), ...(options.headers || {}) };
+            
+            try {
+                const res = await fetch(url, { ...options, headers });
+                
+                if (res.status === 401) {
+                    if (window.location.pathname !== '/login') {
+                        // Optional: trigger login modal or session expiry logic
+                        console.warn("Session expired or unauthorized");
+                    }
+                }
+                
+                return res;
+            } catch (e) {
+                console.error(`API Call failed: ${endpoint}`, e);
+                throw e;
+            }
+        }
+
         function dismissUpdateBanner() {
             const banner = document.getElementById('update-banner');
             if (banner) banner.classList.add('hidden-banner');
@@ -2629,7 +2650,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
 
         async function fetchUpdates() {
             try {
-                const res = await fetch(API + "/updates", { headers: getAuthHeaders() });
+                const res = await apiCall("/updates");
                 if (!res.ok) return;
                 const data = await res.json();
                 const updates = data.updates || {};
@@ -7052,48 +7073,33 @@ def metrics_collector():
 def log_structured(level, message, category="SYSTEM"):
     """Log to both file and SQLite."""
     # Humanize common logs
-    if "GET /system-health" in message:
-        message = "System health telemetry synchronized"
-    elif "GET /project-details" in message:
-        message = "Storage utilization breakdown fetched"
-    elif "POST /purge-images" in message:
-        message = "Unused Docker assets purged"
-    elif "POST /update-service" in message:
-        message = "Service update sequence initiated"
-    elif "POST /theme" in message:
-        message = "UI theme preferences updated"
-    elif "GET /theme" in message:
-        message = "UI theme configuration synchronized"
-    elif "GET /profiles" in message:
-        message = "VPN profile list retrieved"
-    elif "POST /activate" in message:
-        message = "VPN profile activation triggered"
-    elif "POST /upload" in message:
-        message = "VPN configuration profile uploaded"
-    elif "POST /delete" in message:
-        message = "VPN configuration profile deleted"
-    elif "POST /restart-stack" in message:
-        message = "Full system stack restart triggered"
-    elif "POST /batch-update" in message:
-        message = "Batch service update sequence started"
-    elif "POST /rotate-api-key" in message:
-        message = "Dashboard API security key rotated"
-    elif "GET /check-updates" in message:
-        message = "Update availability check requested"
-    elif "GET /changelog" in message:
-        message = "Service changelog retrieved"
-    elif "GET /services" in message:
-        message = "Service catalog synchronized"
-    elif "GET /status" in message:
-        return # Too noisy
-    elif "GET /metrics" in message:
-        return # Too noisy
-    elif "GET /containers" in message:
-        return # Too noisy
-    elif "GET /updates" in message:
-        return # Too noisy
-    elif "GET /certificate-status" in message:
-        return # Too noisy
+    HUMAN_LOGS = {
+        "GET /system-health": "System health telemetry synchronized",
+        "GET /project-details": "Storage utilization breakdown fetched",
+        "POST /purge-images": "Unused Docker assets purged",
+        "POST /update-service": "Service update sequence initiated",
+        "POST /theme": "UI theme preferences updated",
+        "GET /theme": "UI theme configuration synchronized",
+        "GET /profiles": "VPN profile list retrieved",
+        "POST /activate": "VPN profile activation triggered",
+        "POST /upload": "VPN configuration profile uploaded",
+        "POST /delete": "VPN configuration profile deleted",
+        "POST /restart-stack": "Full system stack restart triggered",
+        "POST /batch-update": "Batch service update sequence started",
+        "POST /rotate-api-key": "Dashboard API security key rotated",
+        "GET /check-updates": "Update availability check requested",
+        "GET /changelog": "Service changelog retrieved",
+        "GET /services": "Service catalog synchronized"
+    }
+    
+    for k, v in HUMAN_LOGS.items():
+        if k in message:
+            message = v
+            break
+
+    # Filter noisy logs
+    if any(x in message for x in ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /certificate-status']):
+        return
         
     entry = {
         "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -7145,27 +7151,24 @@ def get_proxy_opener():
     opener = urllib.request.build_opener(proxy_handler)
     return opener
 
-def download_text(url):
+def download_content(url, as_text=False):
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
     try:
         opener = get_proxy_opener()
         with opener.open(req, timeout=30) as resp:
-            return resp.read().decode("utf-8", errors="replace")
+            data = resp.read()
     except:
         # Fallback to direct if proxy fails
         with urllib.request.urlopen(req, timeout=30) as resp:
-            return resp.read().decode("utf-8", errors="replace")
+            data = resp.read()
+            
+    return data.decode("utf-8", errors="replace") if as_text else data
+
+def download_text(url):
+    return download_content(url, as_text=True)
 
 def download_binary(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
-    try:
-        opener = get_proxy_opener()
-        with opener.open(req, timeout=30) as resp:
-            return resp.read()
-    except:
-        # Fallback to direct if proxy fails
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return resp.read()
+    return download_content(url, as_text=False)
 
 def ensure_assets():
     if os.path.exists(ASSETS_DIR) and not os.path.isdir(ASSETS_DIR):
