@@ -68,10 +68,10 @@ done
 
 # Docker Compose Check (Plugin or Standalone)
 if sudo -E docker compose version >/dev/null 2>&1; then
-    DOCKER_COMPOSE_CMD="sudo -E docker compose"
+    DOCKER_COMPOSE_CMD="docker compose"
 elif command -vsudo docker-compose >/dev/null 2>&1; then
     if sudo -E docker-compose version >/dev/null 2>&1; then
-        DOCKER_COMPOSE_CMD="sudo -E docker-compose"
+        DOCKER_COMPOSE_CMD="docker-compose"
     else
         echo "[CRIT] Docker Compose is installed but not executable."
         exit 1
@@ -107,6 +107,7 @@ fi
 
 # Define consistent docker command using custom config for auth
 DOCKER_CMD="sudo -E env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" docker"
+DOCKER_COMPOSE_FINAL_CMD="sudo -E env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" $DOCKER_COMPOSE_CMD"
 
 # Paths
 SRC_DIR="$BASE_DIR/sources"
@@ -9359,7 +9360,41 @@ EOF
 
 cat >> "$MONITOR_SCRIPT" <<'EOF'
 # Use flock to prevent concurrent runs
-...
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    exit 0
+fi
+
+NEW_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ip-api.com/line?fields=query || echo "FAILED")
+
+if [[ ! "$NEW_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "$(date) [ERROR] Failed to get valid public IP (Response: $NEW_IP)" >> "$LOG_FILE"
+    exit 1
+fi
+
+OLD_IP=$(cat "$CURRENT_IP_FILE" 2>/dev/null || echo "")
+
+if [ "$NEW_IP" != "$OLD_IP" ]; then
+    echo "$(date) [INFO] IP Change detected: $OLD_IP -> $NEW_IP" >> "$LOG_FILE"
+    echo "$NEW_IP" > "$CURRENT_IP_FILE"
+    
+    if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
+        echo "$(date) [INFO] Updating deSEC DNS record for $DESEC_DOMAIN..." >> "$LOG_FILE"
+        DESEC_RESPONSE=$(curl -s -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
+            -H "Authorization: Token $DESEC_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$NEW_IP\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$NEW_IP\"]}]" 2>&1 || echo "CURL_ERROR")
+        
+        NEW_IP_ESCAPED=$(echo "$NEW_IP" | sed 's/\./\\./g')
+        if [[ "$DESEC_RESPONSE" == "CURL_ERROR" ]]; then
+            echo "$(date) [ERROR] Failed to communicate with deSEC API" >> "$LOG_FILE"
+        elif [ -z "$DESEC_RESPONSE" ] || echo "$DESEC_RESPONSE" | grep -qE "(${NEW_IP_ESCAPED}|\[\]|\"records\")" ; then
+            echo "$(date) [INFO] deSEC DNS updated successfully to $NEW_IP" >> "$LOG_FILE"
+        else
+            echo "$(date) [WARN] deSEC DNS update may have failed: $DESEC_RESPONSE" >> "$LOG_FILE"
+        fi
+    fi
+    
     sed -i "s|WG_HOST=.*|WG_HOST=$NEW_IP|g" "$COMPOSE_FILE"
     $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --no-deps --force-recreate wg-easy
     echo "$(date) [INFO] WireGuard container restarted with new IP" >> "$LOG_FILE"
@@ -9411,7 +9446,7 @@ modprobe tun || true
 
 # Explicitly remove portainer and hub-api if they exist to ensure clean state
 log_info "Launching core infrastructure services..."
-sudo -E env DOCKER_CONFIG="$DOCKER_AUTH_DIR" $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --build hub-api adguard unbound gluetun
+$DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d --build hub-api adguard unbound gluetun
 
 # Wait for critical backends to be healthy before starting Nginx (dashboard)
 log_info "Waiting for backend services to stabilize (this may take up to 60s)..."
@@ -9428,7 +9463,7 @@ for i in $(seq 1 60); do
 done
 
 # Launch the rest of the stack
-sudo -E env DOCKER_CONFIG="$DOCKER_AUTH_DIR" $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --remove-orphans
+$DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d --remove-orphans
 
 log_info "Verifying control plane connectivity..."
 sleep 5
