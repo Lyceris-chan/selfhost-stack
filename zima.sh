@@ -5340,7 +5340,7 @@ export DOCKER_CONFIG
 
 log_info "Pre-pulling core infrastructure images in parallel..."
 # We only pull core infrastructure and base images. App images built from source are skipped.
-CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
+CRITICAL_IMAGES="dhi.io/nginx:1.28-alpine3.21 dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22 dhi.io/alpine-base:3.22-dev dhi.io/redis:7.2-debian dhi.io/postgres:14-alpine3.22 84codes/crystal:1.16.3-alpine 84codes/crystal:1.8.1-alpine alpine:3.21 alpine:latest neilpang/acme.sh"
 
 PIDS=""
 for img in $CRITICAL_IMAGES; do
@@ -6232,6 +6232,10 @@ detect_dockerfile() {
         echo "$preferred"
         return 0
     fi
+    if [ -f "$repo_dir/Dockerfile.dhi" ]; then
+        echo "Dockerfile.dhi"
+        return 0
+    fi
     if [ -f "$repo_dir/Dockerfile" ]; then
         echo "Dockerfile"
         return 0
@@ -6262,6 +6266,7 @@ detect_dockerfile() {
     local preferred="${2:-}"
     local found=""
     if [ -n "$preferred" ] && [ -f "$repo_dir/$preferred" ]; then echo "$preferred"; return 0; fi
+    if [ -f "$repo_dir/Dockerfile.dhi" ]; then echo "Dockerfile.dhi"; return 0; fi
     if [ -f "$repo_dir/Dockerfile" ]; then echo "Dockerfile"; return 0; fi
     if [ -f "$repo_dir/docker/Dockerfile" ]; then echo "docker/Dockerfile"; return 0; fi
     found=$(find "$repo_dir" -maxdepth 3 -type f -name 'Dockerfile*' 2>/dev/null | head -n 1 || true)
@@ -6413,29 +6418,52 @@ CMD ["racket", "dist.rkt"]
 BWEOF
 fi
 
-if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
-    log "Patching Gluetun..."
-    D_FILE=$(detect_dockerfile "$SRC_ROOT/gluetun")
-    if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/gluetun/$D_FILE"; then log "Gluetun already patched."; else
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/gluetun/$D_FILE"
-            # Gluetun is a multi-stage build, we need to be careful.
-            # Usually it uses a builder stage and a final alpine stage.
-            sed -i '/[Aa][Ss] builder/ s|^FROM golang:[^ ]*|FROM dhi.io/python:3.11-alpine3.22-dev|' "$SRC_ROOT/gluetun/$D_FILE" # Mocking builder or needing a DHI Go builder
-            # Since we don't have a DHI Go builder yet, we'll keep the builder but harden the runtime.
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/gluetun/$D_FILE"
-        fi
-    fi
+if [ "$SERVICE" = "adguard" ] || [ "$SERVICE" = "all" ]; then
+    log "Recreating AdGuard Home Dockerfile..."
+    cat > "$SRC_ROOT/adguardhome/Dockerfile.dhi" <<'ADGEOF'
+# Build Stage
+FROM dhi.io/node:20-alpine3.22-dev AS builder
+RUN apk add --no-cache git make go
+WORKDIR /app
+COPY . .
+# AdGuard Home needs a specific build command
+RUN make frontend
+RUN GOTOOLCHAIN=auto make
+# Move to final location
+RUN mv AdGuardHome AdGuardHome_bin
+
+# Runtime Stage
+FROM dhi.io/alpine-base:3.22-dev
+RUN apk --no-cache add ca-certificates libcap tzdata && \
+    mkdir -p /opt/adguardhome/conf /opt/adguardhome/work && \
+    chown -R nobody: /opt/adguardhome
+COPY --from=builder /app/AdGuardHome_bin /opt/adguardhome/AdGuardHome
+RUN chown nobody:nogroup /opt/adguardhome/AdGuardHome && \
+    chmod +x /opt/adguardhome/AdGuardHome && \
+    setcap 'cap_net_bind_service=+eip' /opt/adguardhome/AdGuardHome
+EXPOSE 53/tcp 53/udp 67/udp 68/udp 80/tcp 443/tcp 443/udp 853/tcp 853/udp 3000/tcp 3000/udp 5443/tcp 5443/udp 6060/tcp
+WORKDIR /opt/adguardhome/work
+ENTRYPOINT ["/opt/adguardhome/AdGuardHome"]
+CMD ["--no-check-update", "-c", "/opt/adguardhome/conf/AdGuardHome.yaml", "-w", "/opt/adguardhome/work"]
+ADGEOF
 fi
 
-if [ "$SERVICE" = "adguard" ] || [ "$SERVICE" = "all" ]; then
-    log "Patching AdGuard Home..."
-    D_FILE=$(detect_dockerfile "$SRC_ROOT/adguardhome")
-    if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/adguardhome/$D_FILE"; then log "AdGuard already patched."; else
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/adguardhome/$D_FILE"
-        fi
-    fi
+if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
+    log "Recreating Gluetun Dockerfile..."
+    cat > "$SRC_ROOT/gluetun/Dockerfile.dhi" <<'GLUEOF'
+# Build Stage
+FROM dhi.io/python:3.11-alpine3.22-dev AS builder
+RUN apk add --no-cache git go
+    WORKDIR /app
+    COPY . .
+    RUN GOTOOLCHAIN=auto go build -trimpath -ldflags="-s -w" -o entrypoint cmd/gluetun/main.go
+# Runtime Stage
+FROM dhi.io/alpine-base:3.22-dev
+RUN apk add --no-cache ca-certificates iptables ip6tables iproute2
+COPY --from=builder /app/entrypoint /app/entrypoint
+# Gluetun needs some assets and specific setup
+ENTRYPOINT ["/app/entrypoint"]
+GLUEOF
 fi
 
 if [ "$SERVICE" = "memos" ] || [ "$SERVICE" = "all" ]; then
@@ -6501,8 +6529,6 @@ if [ "$SERVICE" = "companion" ] || [ "$SERVICE" = "all" ]; then
     fi
 fi
 
-fi
-
 if [ "$SERVICE" = "wg-easy" ] || [ "$SERVICE" = "all" ]; then
     log "Patching WG-Easy..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/wg-easy")
@@ -6522,14 +6548,26 @@ if [ "$SERVICE" = "portainer" ] || [ "$SERVICE" = "all" ]; then
             sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/portainer/$D_FILE"
         fi
     fi
+fi
+
 if [ "$SERVICE" = "unbound" ] || [ "$SERVICE" = "all" ]; then
-    log "Patching Unbound..."
-    D_FILE=$(detect_dockerfile "$SRC_ROOT/unbound")
-    if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/unbound/$D_FILE"; then log "Unbound already patched."; else
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/unbound/$D_FILE"
-        fi
-    fi
+    log "Recreating Unbound Dockerfile..."
+    cat > "$SRC_ROOT/unbound/Dockerfile.dhi" <<'UNBEOF'
+# Build Stage
+FROM dhi.io/alpine-base:3.22-dev AS builder
+RUN apk add --no-cache build-base libtool autoconf automake openssl-dev expat-dev bison flex
+WORKDIR /app
+COPY . .
+RUN ./configure --prefix=/opt/unbound --with-libexpat=/usr --with-ssl=/usr && make -j$(nproc) && make install
+
+# Runtime Stage
+FROM dhi.io/alpine-base:3.22-dev
+RUN apk add --no-cache openssl expat
+COPY --from=builder /opt/unbound /opt/unbound
+ENV PATH="/opt/unbound/sbin:/opt/unbound/bin:$PATH"
+EXPOSE 53/tcp 53/udp
+CMD ["unbound", "-d", "-c", "/opt/unbound/etc/unbound/unbound.conf"]
+UNBEOF
 fi
 
 PATCHEOF
@@ -6579,6 +6617,18 @@ if [ "$SUCCESS" = false ]; then
 fi
 
 WIKILESS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wikiless" || true)
+ADGUARD_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/adguardhome" || true)
+GLUETUN_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/gluetun" || true)
+UNBOUND_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/unbound" || true)
+WG_EASY_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wg-easy" || true)
+MEMOS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/memos" || true)
+REDLIB_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/redlib" || true)
+RIMGO_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/rimgo" || true)
+ANONYMOUS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/anonymousoverflow" || true)
+COMPANION_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/invidious-companion" || true)
+VERTD_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/vertd" || true)
+PORTAINER_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/portainer" || true)
+
 if [ -z "$WIKILESS_DOCKERFILE" ]; then
     log_warn "Wikiless Dockerfile not found - build may fail."
     WIKILESS_DOCKERFILE="Dockerfile"
@@ -8801,6 +8851,7 @@ cat >> "$COMPOSE_FILE" <<EOF
   memos:
     build:
       context: $SRC_DIR/memos
+      dockerfile: ${MEMOS_DOCKERFILE:-Dockerfile}
     container_name: memos
     labels:
       - "io.dhi.hardened=true"
@@ -8824,6 +8875,7 @@ cat >> "$COMPOSE_FILE" <<EOF
   gluetun:
     build:
       context: $SRC_DIR/gluetun
+      dockerfile: ${GLUETUN_DOCKERFILE:-Dockerfile}
     container_name: gluetun
     labels:
       - "casaos.skip=true"
@@ -8899,6 +8951,7 @@ cat >> "$COMPOSE_FILE" <<EOF
   portainer:
     build:
       context: $SRC_DIR/portainer
+      dockerfile: ${PORTAINER_DOCKERFILE:-Dockerfile}
     container_name: portainer
     command: ["-H", "unix:///var/run/docker.sock", "--admin-password", "$PORTAINER_HASH_COMPOSE", "--no-analytics"]
     networks: [frontnet]
@@ -8922,6 +8975,7 @@ cat >> "$COMPOSE_FILE" <<EOF
   adguard:
     build:
       context: $SRC_DIR/adguardhome
+      dockerfile: ${ADGUARD_DOCKERFILE:-Dockerfile}
     container_name: adguard
     labels:
       - "io.dhi.hardened=true"
@@ -8954,6 +9008,7 @@ cat >> "$COMPOSE_FILE" <<EOF
   unbound:
     build:
       context: $SRC_DIR/unbound
+      dockerfile: ${UNBOUND_DOCKERFILE:-Dockerfile}
     container_name: unbound
     labels:
       - "io.dhi.hardened=true"
@@ -8980,6 +9035,7 @@ cat >> "$COMPOSE_FILE" <<EOF
   wg-easy:
     build:
       context: $SRC_DIR/wg-easy
+      dockerfile: ${WG_EASY_DOCKERFILE:-Dockerfile}
     container_name: wg-easy
     network_mode: "host"
     environment:
@@ -9006,6 +9062,7 @@ cat >> "$COMPOSE_FILE" <<EOF
   redlib:
     build:
       context: $SRC_DIR/redlib
+      dockerfile: ${REDLIB_DOCKERFILE:-Dockerfile}
     container_name: redlib
     labels:
       - "io.dhi.hardened=true"
@@ -9119,6 +9176,7 @@ cat >> "$COMPOSE_FILE" <<EOF
   companion:
     build:
       context: $SRC_DIR/invidious-companion
+      dockerfile: ${COMPANION_DOCKERFILE:-Dockerfile}
     container_name: companion
     labels:
       - "casaos.skip=true"
@@ -9146,6 +9204,7 @@ cat >> "$COMPOSE_FILE" <<EOF
   rimgo:
     build:
       context: $SRC_DIR/rimgo
+      dockerfile: ${RIMGO_DOCKERFILE:-Dockerfile}
     pull_policy: if_not_present
     container_name: rimgo
     labels:
@@ -9200,6 +9259,7 @@ cat >> "$COMPOSE_FILE" <<EOF
   anonymousoverflow:
     build:
       context: $SRC_DIR/anonymousoverflow
+      dockerfile: ${ANONYMOUS_DOCKERFILE:-Dockerfile}
     container_name: anonymousoverflow
     labels:
       - "io.dhi.hardened=true"
@@ -9250,6 +9310,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     container_name: vertd
     build:
       context: $SRC_DIR/vertd
+      dockerfile: ${VERTD_DOCKERFILE:-Dockerfile}
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
     healthcheck:

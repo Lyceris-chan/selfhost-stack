@@ -1,0 +1,299 @@
+
+const puppeteer = require('puppeteer');
+
+const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://localhost:8081';
+const MOCK_API = process.env.MOCK_API === '1';
+const servicesList = [
+  'invidious',
+  'redlib',
+  'wikiless',
+  'rimgo',
+  'breezewiki',
+  'anonymousoverflow',
+  'scribe',
+  'memos',
+  'vert',
+  'adguard',
+  'portainer',
+  'wg-easy'
+];
+const serviceUrls = {
+  invidious: 'http://127.0.0.1:3000',
+  redlib: 'http://127.0.0.1:8080',
+  wikiless: 'http://127.0.0.1:8180',
+  rimgo: 'http://127.0.0.1:3002',
+  breezewiki: 'http://127.0.0.1:8380',
+  anonymousoverflow: 'http://127.0.0.1:8480',
+  scribe: 'http://127.0.0.1:8280',
+  memos: 'http://127.0.0.1:5230',
+  vert: 'http://127.0.0.1:5555',
+  adguard: 'http://127.0.0.1:8083',
+  portainer: 'http://127.0.0.1:9000',
+  'wg-easy': 'http://127.0.0.1:51821'
+};
+
+(async () => {
+  const browser = await puppeteer.launch({
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    headless: true // Run in headless mode
+  });
+  const page = await browser.newPage();
+
+  if (MOCK_API) {
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const url = request.url();
+      if (url.includes('/api/containers')) {
+        const containers = {};
+        servicesList.forEach((service) => {
+          containers[service] = { id: `${service}-id`, state: 'running', hardened: true };
+        });
+        request.respond({
+          contentType: 'application/json',
+          body: JSON.stringify({ containers })
+        });
+        return;
+      }
+      if (url.includes('/api/services')) {
+        const services = {};
+        servicesList.forEach((service, index) => {
+          services[service] = {
+            name: service.charAt(0).toUpperCase() + service.slice(1),
+            category: index < 8 ? 'apps' : (index === 8 ? 'tools' : 'system'),
+            order: index * 10,
+            url: serviceUrls[service] || ''
+          };
+        });
+        request.respond({
+          contentType: 'application/json',
+          body: JSON.stringify({ services })
+        });
+        return;
+      }
+      if (url.includes('/api/status')) {
+        const services = {};
+        servicesList.forEach((service) => { services[service] = 'healthy'; });
+        request.respond({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            gluetun: { status: 'up', healthy: true },
+            services
+          })
+        });
+        return;
+      }
+      if (url.includes('/api/profiles')) {
+        request.respond({
+          contentType: 'application/json',
+          body: JSON.stringify({ profiles: [] })
+        });
+        return;
+      }
+      if (url.includes('/api/') || url.includes('/odido-api/')) {
+        request.respond({
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, status: 'Healthy', containers: {}, updates: {}, services: {}, profiles: [] })
+        });
+        return;
+      }
+      request.continue();
+    });
+  }
+  
+  // Set viewport to desktop size
+  await page.setViewport({ width: 1280, height: 800 });
+
+  console.log(`[TEST] Navigating to ${DASHBOARD_URL}...`);
+  try {
+    await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // Clear localStorage to reset state (advisory, theme, filters)
+    await page.evaluate(() => localStorage.clear());
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => document.querySelectorAll('.card[data-container]').length > 0, { timeout: 10000 }).catch(() => {
+      console.warn("  - WARN: Dynamic cards not found after reload.");
+    });
+  } catch (e) {
+    console.error("[FAIL] Could not load dashboard:", e);
+    await browser.close();
+    process.exit(1);
+  }
+
+  // 1. Critical Advisory Check
+  console.log("[TEST] Checking Critical Network Advisory...");
+  const advisory = await page.$('#mac-advisory');
+  if (advisory) {
+    console.log("  - Advisory bar found.");
+    const dismissBtn = await page.$('#mac-advisory button');
+    if (dismissBtn) {
+      await dismissBtn.click();
+      console.log("  - Dismiss button clicked.");
+      // Wait for animation/hiding
+      const dismissed = await page.waitForFunction(() => {
+        const el = document.getElementById('mac-advisory');
+        if (!el) return true;
+        const style = window.getComputedStyle(el);
+        return style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || el.classList.contains('hidden');
+      }, { timeout: 2000 }).then(() => true).catch(() => false);
+      if (dismissed) console.log("  - PASS: Advisory dismissed.");
+      else console.error("  - FAIL: Advisory still visible.");
+    } else console.error("  - FAIL: Dismiss button not found.");
+  } else {
+    console.log("  - Advisory bar NOT found (might be already dismissed or not rendered).");
+  }
+
+  // 2. Chip Layout Check
+  console.log("[TEST] Verifying Chip Layout (CSS)...");
+  // Wait for dynamic grid to load
+  await page.waitForSelector('.chip-box', { timeout: 5000 }).catch(() => console.log("  - Waiting for chips..."));
+
+  const chipBox = await page.$('.chip-box');
+  if (chipBox) {
+    const chipBoxStyle = await page.$eval('.chip-box', el => getComputedStyle(el).flexWrap);
+    if (chipBoxStyle === 'wrap') console.log(`  - PASS: .chip-box flex-wrap is '${chipBoxStyle}'`);
+    else console.error(`  - FAIL: .chip-box flex-wrap is '${chipBoxStyle}'`);
+  } else {
+    console.error("  - FAIL: .chip-box not found.");
+  }
+
+  const chip = await page.$('.chip');
+  if (chip) {
+    const chipFlex = await page.$eval('.chip', el => getComputedStyle(el).flex);
+    // flex: 1 1 auto usually computes to "1 1 auto" or "1 1 0%" depending on browser.
+    if (chipFlex.startsWith('1 1')) console.log(`  - PASS: .chip flex is '${chipFlex}'`);
+    else console.error(`  - FAIL: .chip flex is '${chipFlex}'`);
+  } else {
+    console.error("  - FAIL: .chip not found.");
+  }
+
+  // 3. User Interactions
+  console.log("[TEST] Simulating User Interactions...");
+  
+  // Filter Chips - Test multi-select and 'all' toggle
+  const filters = ['apps', 'system', 'dns', 'tools'];
+  for (const filter of filters) {
+    const chip = await page.$(`.filter-chip[data-target="${filter}"]`);
+    if (chip) {
+      const wasActive = await page.$eval(`.filter-chip[data-target="${filter}"]`, el => el.classList.contains('active'));
+      console.log(`  - Filter ${filter} initial state: ${wasActive ? 'ON' : 'OFF'}`);
+      
+      await chip.click();
+      await new Promise(r => setTimeout(r, 200)); 
+      const isNowActive = await page.$eval(`.filter-chip[data-target="${filter}"]`, el => el.classList.contains('active'));
+      
+      if (isNowActive === wasActive) {
+        // Only fail if it wasn't the last active chip (safety logic)
+        const activeCount = await page.$$eval('.filter-chip.active:not([data-target="logs"])', els => els.length);
+        if (activeCount > 1 || wasActive === false) {
+           console.error(`  - FAIL: Filter ${filter} did not toggle.`);
+        } else {
+           console.log(`  - INFO: Filter ${filter} stayed active (last chip safety).`);
+        }
+      } else {
+        console.log(`  - PASS: Filter ${filter} toggled to ${isNowActive ? 'ON' : 'OFF'}.`);
+      }
+      
+      // If we turned it OFF, turn it back ON for subsequent tests
+      if (!isNowActive) {
+        await chip.click();
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+  }
+
+  // Test 'All' toggle
+  const allChip = await page.$('.filter-chip[data-target="all"]');
+  if (allChip) {
+    await allChip.click();
+    console.log("  - Clicked 'All' filter.");
+    await new Promise(r => setTimeout(r, 500));
+    
+    // Check if sections are visible (new behavior: all sections shown with headers)
+    const sections = await page.$$eval('section[data-category]:not(#section-all)', els => 
+      els.filter(el => window.getComputedStyle(el).display !== 'none').length
+    );
+    if (sections > 0) console.log(`  - PASS: ${sections} sections visible in 'All' view.`);
+    else console.error("  - FAIL: No sections visible in 'All' view.");
+  }
+
+  // Toggles
+  console.log("  - Toggling Privacy Mode...");
+  const privacySwitch = await page.$('#privacy-switch');
+  if (privacySwitch) {
+    await privacySwitch.click();
+    await new Promise(r => setTimeout(r, 200));
+    const isPrivate = await page.evaluate(() => document.body.classList.contains('privacy-mode'));
+    if (isPrivate) console.log("  - PASS: Privacy mode active.");
+    else console.error("  - FAIL: Privacy mode not active.");
+    
+    // Toggle back
+    await privacySwitch.click();
+  }
+
+  console.log("  - Toggling Theme...");
+  const themeToggle = await page.$('.theme-toggle');
+  if (themeToggle) {
+    const startTheme = await page.evaluate(() => document.documentElement.classList.contains('light-mode'));
+    await page.evaluate(() => {
+      const btn = document.querySelector('.theme-toggle');
+      if (btn) btn.click();
+    });
+    await new Promise(r => setTimeout(r, 200));
+    const endTheme = await page.evaluate(() => document.documentElement.classList.contains('light-mode'));
+    if (startTheme !== endTheme) console.log("  - PASS: Theme toggled.");
+    else console.error("  - FAIL: Theme did not change.");
+  }
+
+  // 4. Admin Mode Simulation
+  console.log("[TEST] Simulating Admin Mode...");
+  // We can't easily interact with window.prompt in headless, but we can call the function manually or mock the API.
+  // Actually, we can assume the user wants to check if the UI *reacts* to admin mode.
+  // Let's set it manually in JS context since we can't type in prompt easily without handling dialog event.
+  await page.evaluate(() => {
+    // Mock successful admin verification
+    isAdmin = true;
+    sessionStorage.setItem('is_admin', 'true');
+    document.body.classList.add('admin-mode');
+    // Force UI update
+    if (typeof updateAdminUI === 'function') updateAdminUI();
+  });
+  console.log("  - Admin mode forced via JS.");
+  
+  // Check if admin-only elements are visible
+  const logsChip = await page.$('.filter-chip[data-target="logs"]');
+  if (logsChip) {
+    const adminChipVisible = await page.$eval('.filter-chip[data-target="logs"]', el => {
+      return window.getComputedStyle(el).display !== 'none';
+    });
+    if (adminChipVisible) console.log("  - PASS: Admin-only 'Logs' filter is now visible.");
+    else console.error("  - FAIL: Admin-only elements still hidden.");
+  } else {
+    console.error("  - FAIL: Admin-only 'Logs' filter not found.");
+  }
+
+  // 5. Service Status Check
+  console.log("[TEST] Verifying Service Status (waiting for poll)...");
+  await new Promise(r => setTimeout(r, 15000)); // Wait 15s for polling cycle
+  
+  const statuses = await page.$$eval('.status-text', els => els.map(e => e.textContent.trim())).catch(() => []);
+  const total = statuses.length;
+  const online = statuses.filter(s => s === 'Connected' || s === 'Healthy' || s === 'Active' || s === 'Running' || s === 'Optimal' || s === 'Connected (Healthy)').length;
+  
+  console.log(`  - Found ${total} status indicators.`);
+  console.log(`  - ${online} services reporting online/healthy.`);
+  
+  statuses.forEach(s => {
+    if (s === 'Offline' || s === 'Issue Detected' || s === 'Down') {
+      console.warn(`  - WARN: Found service with status: ${s}`);
+    }
+  });
+
+  if (online > 5) console.log("  - PASS: Majority of services are online.");
+  else console.warn("  - WARN: Low number of online services. Check logs.");
+
+  // Screenshot for visual verification artifact (saved to internal/tests)
+  await page.screenshot({ path: 'verification_screenshot.png', fullPage: true });
+  console.log("[TEST] Screenshot saved to verification_screenshot.png");
+
+  await browser.close();
+})();
