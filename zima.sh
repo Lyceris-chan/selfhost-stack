@@ -229,7 +229,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZimaOS Privacy Hub</title>
+    <title>ZimaOS $APP_NAME</title>
     <link rel="icon" type="image/svg+xml" href="/assets/$APP_NAME.svg">
     <!-- Local privacy friendly assets (Hosted Locally) -->
     <link href="assets/gs.css" rel="stylesheet">
@@ -4710,6 +4710,9 @@ EOF
     sed -i "s|\$LAN_IP|$LAN_IP|g" "$DASHBOARD_FILE"
     sed -i "s|\$DESEC_DOMAIN|$DESEC_DOMAIN|g" "$DASHBOARD_FILE"
     sed -i "s|\$PORT_PORTAINER|$PORT_PORTAINER|g" "$DASHBOARD_FILE"
+    sed -i "s|\$BASE_DIR|$BASE_DIR|g" "$DASHBOARD_FILE"
+    sed -i "s|\$PORT_DASHBOARD_WEB|$PORT_DASHBOARD_WEB|g" "$DASHBOARD_FILE"
+    sed -i "s|\$APP_NAME|$APP_NAME|g" "$DASHBOARD_FILE"
 }
 
 authenticate_registries() {
@@ -4797,7 +4800,7 @@ setup_assets() {
         local dest="$1"
         local url="$2"
         local varname="$3"
-        if ! curl -fsSL -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$url" -o "$dest"; then
+        if ! curl -fsSL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$url" -o "$dest"; then
             log_warn "Asset source failed: $url"
         fi
         printf -v "$varname" '%s' "$url"
@@ -4818,7 +4821,7 @@ setup_assets() {
 
     # Material Color Utilities (Local for privacy)
     log_info "Downloading Material Color Utilities..."
-    if ! curl -fsSL -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/dist/material-color-utilities.min.js" -o "$ASSETS_DIR/mcu.js"; then
+    if ! curl -fsSL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/dist/material-color-utilities.min.js" -o "$ASSETS_DIR/mcu.js"; then
         log_warn "Failed to download Material Color Utilities. Using fallback logic."
     fi
 
@@ -4852,7 +4855,7 @@ setup_assets() {
                 fi
                 
                 if [ ! -f "$clean_name" ]; then
-                    curl -sL "$fetch_url" -o "$clean_name"
+                    curl -sL --max-time 15 "$fetch_url" -o "$clean_name"
                 fi
                 
                 escaped_url=$(echo "$url" | sed 's/[\/&|]/\\&/g')
@@ -5560,10 +5563,8 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
             log_info "Fetching Odido User ID automatically..."
             # Use curl with -L to follow redirects and capture the effective URL
             # Note: curl may fail on network issues, so we use || true to prevent script exit
-            ODIDO_REDIRECT_URL=$(curl -sL -o /dev/null -w '%{url_effective}' \
-                -H "Authorization: Bearer $ODIDO_TOKEN" \
-                -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
-                "https://capi.odido.nl/account/current" 2>/dev/null || true)
+            ODIDO_REDIRECT_URL=$(curl -sL --max-time 10 -o /dev/null -w '%{url_effective}' \
+                "https://www.odido.nl/my/bestelling-en-status/overzicht" || echo "FAILED")
             
             # Extract User ID from URL path - it's a 12-character hex string after capi.odido.nl/
             # Format: https://capi.odido.nl/{12-char-hex-userid}/account/...
@@ -5849,7 +5850,7 @@ if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
     log_info "Configuring Let's Encrypt with DNS-01 challenge..."
     
     log_info "Updating deSEC DNS record to point to $PUBLIC_IP..."
-    DESEC_RESPONSE=$(curl -s -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
+    DESEC_RESPONSE=$(curl -s --max-time 15 -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
         -H "Authorization: Token $DESEC_TOKEN" \
         -H "Content-Type: application/json" \
         -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}]" 2>&1 || echo "CURL_ERROR")
@@ -9460,7 +9461,7 @@ if [ "$NEW_IP" != "$OLD_IP" ]; then
     
     if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
         echo "$(date) [INFO] Updating deSEC DNS record for $DESEC_DOMAIN..." >> "$LOG_FILE"
-        DESEC_RESPONSE=$(curl -s -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
+        DESEC_RESPONSE=$(curl -s --max-time 15 -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
             -H "Authorization: Token $DESEC_TOKEN" \
             -H "Content-Type: application/json" \
             -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$NEW_IP\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$NEW_IP\"]}]" 2>&1 || echo "CURL_ERROR")
@@ -9571,12 +9572,12 @@ if [ "$AUTO_PASSWORD" = true ]; then
     if [ "$PORTAINER_READY" = true ]; then
         # Authenticate to get JWT (user was initialized via --admin-password CLI flag)
         # Try 'admin' first, then 'portainer' (in case it was already renamed in a previous run)
-        AUTH_RESPONSE=$(curl -s -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
+        AUTH_RESPONSE=$(curl -s --max-time 5 -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
             -H "Content-Type: application/json" \
             -d "{\"Username\":\"admin\",\"Password\":\"$PORTAINER_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
         
         if ! echo "$AUTH_RESPONSE" | grep -q "jwt"; then
-            AUTH_RESPONSE=$(curl -s -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
+            AUTH_RESPONSE=$(curl -s --max-time 5 -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
                 -H "Content-Type: application/json" \
                 -d "{\"Username\":\"portainer\",\"Password\":\"$PORTAINER_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
         fi
@@ -9586,7 +9587,7 @@ if [ "$AUTO_PASSWORD" = true ]; then
             
             # 1. Disable Telemetry/Analytics
             log_info "Disabling Portainer anonymous telemetry..."
-            curl -s -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/settings" \
+            curl -s --max-time 5 -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/settings" \
                 -H "Authorization: Bearer $PORTAINER_JWT" \
                 -H "Content-Type: application/json" \
                 -d '{"AllowAnalytics": false, "EnableTelemetry": false}' > /dev/null
@@ -9594,7 +9595,7 @@ if [ "$AUTO_PASSWORD" = true ]; then
             # 2. Change admin username to 'portainer'
             log_info "Updating Portainer administrator username to 'portainer'..."
             # Portainer user ID 1 is always the initial admin
-            curl -s -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/users/1" \
+            curl -s --max-time 5 -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/users/1" \
                 -H "Authorization: Bearer $PORTAINER_JWT" \
                 -H "Content-Type: application/json" \
                 -d '{"Username": "portainer"}' > /dev/null
