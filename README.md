@@ -1,9 +1,5 @@
 # 🛡️ ZimaOS Privacy Hub
 
-![Privacy Hub Banner](https://img.shields.io/badge/Privacy-Hub-D0BCFF?style=for-the-badge&logo=shield&logoColor=381E72)
-![Security](https://img.shields.io/badge/Security-Hardened-success?style=for-the-badge&logo=check)
-![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
-
 **Stop being the product.**
 A comprehensive, self-hosted privacy infrastructure designed for digital independence. Route your traffic through secure VPNs, eliminate tracking with isolated frontends, and manage everything from a unified **Material Design 3** dashboard.
 
@@ -39,10 +35,12 @@ This **Automated Mode**:
 1.  [Getting Started](#-getting-started)
 2.  [Dashboard & Services](#-dashboard--services)
 3.  [Network Configuration](#-network-configuration)
-4.  [Privacy Architecture](#-privacy--architecture)
-5.  [System Requirements](#-system-requirements)
-6.  [Troubleshooting](#-troubleshooting)
-7.  [Advanced Usage](#-advanced-usage)
+4.  [Advanced Setup (OpenWrt)](#-advanced-setup-openwrt--double-nat)
+5.  [Privacy & Architecture](#-privacy--architecture)
+6.  [Security Standards](#-security-standards)
+7.  [System Requirements](#-system-requirements)
+8.  [Troubleshooting](#-troubleshooting)
+9.  [Maintenance](#-maintenance)
 
 ---
 
@@ -69,10 +67,12 @@ Before you begin, gather these essentials:
 | :--- | :--- |
 | `-p` | **Auto-Passwords**: Generates random secure credentials. |
 | `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless mode). |
-| `-a` | **Allow Proton**: Whitelists ProtonVPN domains in AdGuard. |
-| `-c` | **Reset**: Clears containers but keeps data. |
-| `-x` | **Uninstall**: Wipes the stack (Data loss risk!). |
+| `-a` | **Allow Proton (Optional)**: **Not required**. Whitelists ProtonVPN domains in AdGuard. (Author uses this for personal usage to enable the **Proton VPN Browser Extension**). |
+| `-c` | **Maintenance Reset**: Removes only the containers and networks created by this stack to resolve glitches. strictly preserves persistent user data. Does not touch unrelated containers. |
+| `-x` | **REVERT (Factory Reset)**: ⚠️ **Targeted Cleanup** — This erases only the software and databases added by this specific project. It does not touch your personal files or other Docker containers you may have running. |
 | `-s` | **Selective**: Deploy only specific services (e.g., `-s invidious,memos`). |
+
+> ⚠️ **VPN Access Warning**: When you are connected to a commercial VPN (like ProtonVPN, NordVPN, etc.) directly on your device, you will **not** be able to access your Privacy Hub services. You must be connected to your home **WireGuard (wg-easy)** tunnel to reach them remotely. Using a different VPN will result in a `Connection Timed Out` or `DNS_PROBE_FINISHED_NXDOMAIN` error because your device can no longer "see" your home network.
 
 ### ✅ Verification
 
@@ -125,20 +125,150 @@ If you configured deSEC:
 *   Set your Android "Private DNS" to: `your-domain.dedyn.io`
 *   You now have ad-blocking and encryption on 4G/5G without a VPN app!
 
+### 4. Split Tunnel Configuration & Bandwidth Optimization
+This stack uses a **Dual Split Tunnel** architecture via Gluetun and WG-Easy to ensure performance:
+*   **VPN-Gated Services (Gluetun)**: Privacy frontends (Invidious, Redlib, etc.) are locked inside the VPN container. They cannot access the internet if the VPN disconnects (Killswitch enabled).
+*   **Remote Access Optimization (WG-Easy)**: When connected via the WireGuard app, only your requests to the Hub and DNS queries are sent home. This preserves your mobile data and speed: high-bandwidth streaming services like Netflix or native YouTube apps maintain their full, direct speed on your device rather than being forced to route back through your home upload connection first.
+*   **Local-Direct Services**: Core management tools (Dashboard, Portainer, AdGuard UI) remain accessible directly via your LAN IP. This ensures you never lose control of your hub even if the VPN provider has an outage.
+
+---
+
+## 📡 Advanced Setup: OpenWrt & Double NAT
+
+If you are running a real router like **OpenWrt** behind your ISP modem, you are in a **Double NAT** situation. You need to fix the routing so your packets actually arrive.
+
+### 1. Static IP Assignment (DHCP Lease)
+Assign a static lease so your Privacy Hub doesn't wander off to a different IP every time the power cycles.
+
+<details>
+<summary>💻 <strong>CLI: UCI Commands for Static Lease</strong> (Click to expand)</summary>
+
+```bash
+# Add the static lease (Replace MAC and IP with your own hardware's values)
+uci add dhcp host
+uci set dhcp.@host[-1].name='ZimaOS-Privacy-Hub'
+uci set dhcp.@host[-1].mac='00:11:22:33:44:55' # <--- REPLACE THIS WITH YOUR MAC
+uci set dhcp.@host[-1].ip='192.168.1.100'      # <--- REPLACE THIS WITH YOUR DESIRED IP
+uci commit dhcp
+/etc/init.d/dnsmasq restart
+```
+</details>
+
+### 2. Port Forwarding & Firewall
+OpenWrt is the gatekeeper. Point the traffic to your machine and then actually open the door.
+
+<details>
+<summary>💻 <strong>CLI: UCI Commands for Firewall</strong> (Click to expand)</summary>
+
+```bash
+# 1. Add Port Forwarding (Replace dest_ip with your ZimaOS machine's IP)
+uci add firewall redirect
+uci set firewall.@redirect[-1].name='Forward-WireGuard'
+uci set firewall.@redirect[-1].src='wan'
+uci set firewall.@redirect[-1].proto='udp'
+uci set firewall.@redirect[-1].src_dport='51820'
+uci set firewall.@redirect[-1].dest_ip='192.168.1.100' # <--- REPLACE THIS WITH YOUR IP
+uci set firewall.@redirect[-1].dest_port='51820'
+uci set firewall.@redirect[-1].target='DNAT'
+
+# 2. Add Traffic Rule (Allowance)
+uci add firewall rule
+uci set firewall.@rule[-1].name='Allow-WireGuard-Inbound'
+uci set firewall.@rule[-1].src='wan'
+uci set firewall.@rule[-1].proto='udp'
+uci set firewall.@rule[-1].dest_port='51820'
+uci set firewall.@rule[-1].target='ACCEPT'
+
+# Apply the changes
+uci commit firewall
+/etc/init.d/firewall restart
+```
+</details>
+
+### 3. DNS Hijacking (Force Compliance)
+Some devices (IoT, Smart TVs) hardcode DNS servers (like `8.8.8.8`) to bypass your filters. You can force them to comply using a **NAT Redirect** rule.
+
+To implement this on your router, refer to the following official guides:
+*   [OpenWrt Guide: Intercepting DNS](https://openwrt.org/docs/guide-user/firewall/fw3_configurations/intercept_dns) (Step-by-step NAT Redirection)
+*   [OpenWrt Guide: Blocking DoH (banIP)](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/ban_ip) (Preventing filter bypass via encrypted DNS)
+
 ---
 
 ## 🛡️ Privacy & Architecture
 
-### The "Zero-Leaks" Promise
-1.  **Split Tunneling**:
-    *   **Privacy Traffic** (Invidious, Redlib) -> **ProtonVPN** -> Internet.
-    *   **Home Traffic** (Netflix, Gaming) -> **ISP** -> Internet (Full Speed).
-2.  **Asset Proxying**: The dashboard downloads fonts and icons via the VPN proxy. Your home IP is never exposed to CDNs.
-3.  **Hardened Images**: We use custom `dhi.io` docker images that strip telemetry and reduce attack surface.
+### The "Trust Gap"
+If you don't own the hardware and the code running your network, you don't own your privacy. You're just renting a temporary privilege.
 
-### Security Best Practices
-*   **Never expose** the dashboard port (8081) to the internet directly. Use the WireGuard VPN to access it remotely.
-*   **Backup** your `.secrets` file located at `/DATA/AppData/privacy-hub/.secrets`.
+<details>
+<summary>🔍 <strong>Deep Dive: Why Self-Host?</strong> (Click to expand)</summary>
+
+*   **The Google Profile**: Google's DNS (8.8.8.8) turns you into a data source. They build profiles on your health, finances, and interests based on every domain you resolve.
+*   **The Cloudflare Illusion**: Even "neutral" providers can be forced to censor content by local governments.
+*   **ISP Predation**: Your ISP sees everything. They log, monetize, and sell your browsing history to data brokers.
+
+**This stack cuts out the middleman.**
+</details>
+
+### Zero-Leaks Asset Architecture
+External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN proxy** and served locally. Your public home IP is never exposed to CDNs.
+
+**Privacy Enforcement Logic:**
+1.  **Container Initiation**: When the Hub API container starts, it initiates an asset verification check.
+2.  **Proxy Routing**: If assets are missing, the Hub API routes download requests through the Gluetun VPN container (acting as an HTTP proxy on port 8888).
+3.  **Encapsulated Fetching**: All requests to external CDNs (Fontlay, JSDelivr) occur *inside* the VPN tunnel. Upstream providers only see the VPN IP.
+4.  **Local Persistence**: Assets are saved to a persistent Docker volume (`/assets`).
+5.  **Offline Serving**: The Management Dashboard (Nginx) serves all UI resources exclusively from this local volume.
+
+### Recursive DNS Engine (Independent Resolution)
+*   **Zero Third-Parties**: We bypass "public" resolvers like **Google** and **Cloudflare**.
+*   **QNAME Minimization**: Only sends absolute minimum metadata upstream (RFC 7816).
+*   **Encrypted Local Path**: Native support for **DoH** and **DoQ** (RFC 9250).
+*   **High Performance**: 
+    *   **Intelligent Caching**: Large message and RRset caches reduce external lookups.
+    *   **Proactive Prefetching**: Frequently requested records are renewed before they expire.
+    *   **Glue Hardening**: Protects against cache poisoning by strictly verifying delegation records.
+    *   **0x20 Bit Randomization**: Mitigates spoofing attempts through query casing.
+
+### 🛡️ Blocklist Information & DNS Filtering
+*   **Source**: Blocklists are generated using the [Lyceris-chan DNS Blocklist Generator](https://github.com/Lyceris-chan/dns-blocklist-generator/).
+*   **Composition**: Based on **Hagezi Pro++**, curated for performance and dutch users.
+*   **Note**: This blocklist is **aggressive** by design.
+
+### 📦 Docker Hardened Images (DHI)
+This stack utilizes **Digital Independence (DHI)** images (`dhi.io`) to ensure maximum security and privacy. These images are purpose-built for self-hosting:
+*   **Zero Telemetry**: All built-in tracking features are strictly removed.
+*   **Security Hardened**: Attack surfaces minimized by stripping unnecessary binaries.
+*   **Performance Optimized**: Pre-configured for low-resource environments.
+*   **Replacement Mapping**:
+    *   `dhi.io/nginx` replaces standard `nginx:alpine` (Hardened config, no server headers).
+    *   `dhi.io/python` replaces standard `python:alpine` (Stripped of build-time dependencies).
+    *   `dhi.io/node` & `dhi.io/bun` (Optimized for JS-heavy frontends).
+    *   `dhi.io/redis` & `dhi.io/postgres` (Hardened database engines).
+
+### 🛡️ Self-Healing & High Availability
+*   **VPN Monitoring**: Gluetun is continuously monitored. Docker restarts the gateway if the tunnel stalls.
+*   **Frontend Auto-Recovery**: Privacy frontends utilize `restart: always`.
+*   **Health-Gated Launch**: Infrastructure services must be `healthy` before frontends start.
+
+### Data Minimization & Anonymity
+*   **Specific User-Agent Signatures**: Requests use industry-standard signatures to blend in.
+*   **Zero Personal Data**: No API keys or hardware IDs are transmitted during checks.
+*   **Isolated Environment**: Requests execute from within containers without host-level access.
+
+---
+
+## 🔒 Security Standards
+
+### DHI Hardened Images
+We don't use standard "official" images where we can avoid it. We use **DHI hardened images** (`dhi.io`).
+*   **Why?**: Standard images are often packed with "convenience" tools that are security liabilities.
+*   **The Benefit**: Hardened images minimize the attack surface by removing unnecessary binaries and libraries, following the principle of least privilege. (Concept based on [CIS Benchmarks](https://www.cisecurity.org/benchmark/docker) and minimal base image best practices).
+
+### The "Silent" Security Model
+Opening a port for WireGuard does **not** expose your home to scanning.
+*   **Silent Drop**: WireGuard does not respond to packets it doesn't recognize. To a scanner, the port looks closed.
+*   **DDoS Mitigation**: Because it's silent to unauthenticated packets, it is inherently resistant to flooding attacks.
+*   **Cryptographic Ownership**: You can't "guess" a password. You need a valid 256-bit key.
 
 ---
 
@@ -159,10 +289,12 @@ If you configured deSEC:
 ## 🔧 Troubleshooting
 
 *   **"My internet stopped working!"**
-    *   If the Privacy Hub goes offline, DNS resolution fails. Set your router DNS to `1.1.1.1` temporarily to restore access.
+2.  **Emergency Fallback**: If you cannot fix the hub immediately, change your router or device DNS to a trusted public provider like **Mullvad DNS** ([194.242.2.2](https://mullvad.net/en/help/dns-over-https-and-dns-over-tls)) or **Quad9** ([9.9.9.9](https://quad9.net/service/service-addresses-and-features/)). Use this to restore connectivity until you can repair your self-hosted instance.
 *   **"I can't connect remotely."**
-    *   Check Port 51820 forwarding.
-    *   Ensure your ISP isn't using CGNAT (Double NAT).
+    *   **Check Ports**: Ensure UDP 51820 is forwarded to your Hub's IP.
+    *   **Double NAT vs. CGNAT**:
+        *   **Double NAT (ISP Router + OpenWrt)**: This is fine! Just forward the port on *both* routers (ISP -> OpenWrt -> Hub).
+        *   **CGNAT (Carrier-Grade)**: If your ISP shares your public IP with neighbors, port forwarding won't work. You may need to request a static IP or use IPv6.
 *   **"Services are slow."**
     *   Check your VPN connection speed in the dashboard.
     *   Try a different ProtonVPN server config.
@@ -181,21 +313,67 @@ If you configured deSEC:
     ```bash
     ./zima.sh -x
     ```
-    *(Warning: This deletes data!)*
+    *(Note: This **only** removes the containers and volumes created by this specific privacy stack. Your personal documents, photos, and unrelated Docker containers are **never** touched.)*
 
 ---
 
-## 📡 Advanced Usage
-
-### Double NAT & OpenWrt
-If you are behind an ISP modem *and* an OpenWrt router (Double NAT), you must forward UDP Port 51820 on **both** devices sequentially.
+## 🧩 Advanced Usage: Add Your Own Services
 
 <details>
-<summary><strong>🔧 Add Your Own Services</strong> (Click to expand)</summary>
+<summary><strong>🔧 Add Your Own Services</strong> (advanced, not needed for new users)</summary>
 
-1. **Definition**: Add your service block to Section 13 of `zima.sh`.
-2. **Monitoring**: Update the status loop in `WG_API_SCRIPT` inside `zima.sh`.
-3. **UI**: Add metadata to the `services.json` catalog generated in `zima.sh`.
+Everything lives in `zima.sh`, so one run rebuilds Docker Compose and the dashboard. Keep the service name consistent everywhere (Compose, monitoring, and UI IDs).
+
+### 1) Add it to Compose (SECTION 13)
+
+```bash
+if should_deploy "myservice"; then
+cat >> "$COMPOSE_FILE" <<EOF
+  myservice:
+    image: my-image:latest
+    container_name: myservice
+    networks: [frontnet]
+    restart: unless-stopped
+EOF
+fi
+```
+
+If you want the service to run through the VPN, use `network_mode: "service:gluetun"` and `depends_on: gluetun` like the existing privacy frontends.
+
+### 2) Monitoring & Health (status pill)
+
+Update the service status loop inside the `wg-control.sh` heredoc in `zima.sh` (search for `Check individual privacy services status internally`).
+
+- Add `"myservice:1234"` to the `for srv in ...` list.
+- If the service is routed through Gluetun, add `myservice` to the case that maps `TARGET_HOST="gluetun"`.
+- Optional: add a Docker `healthcheck` to surface `Healthy` rather than just `Online`.
+
+### 3) Dashboard UI (Dynamic Catalog)
+The dashboard renders cards dynamically from a `services.json` file. To add your service to the UI, find the **`SERVICES_JSON`** block in `zima.sh` (Section 13) and add a new entry:
+
+```json
+"myservice": {
+  "name": "My Service",
+  "description": "Short description of what it does.",
+  "category": "apps",
+  "order": 100,
+  "url": "http://\$LAN_IP:1234"
+}
+```
+*   **Category**: Use `apps`, `system`, or `tools`.
+*   **Order**: Determines the display position in the grid.
+*   **Actions**: (Optional) Add buttons for migrations or maintenance.
+
+### 4) Watchtower Updates
+
+- Watchtower updates all image-based containers by default.
+- To opt out, add `com.centurylinklabs.watchtower.enable=false` under the service labels.
+- For build-based services, Watchtower won't rebuild; re-run `./zima.sh` or use the dashboard Update flow.
+
+### 5) Dashboard Update Banner (optional)
+
+The Update banner checks git repos under `/app/sources/<service>`. If you want your service to appear there, keep its source repo in that path with a remote configured.
+
 </details>
 
 <details>
@@ -206,6 +384,31 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
 *   **Non-Interactive Deployment**: verified `-p -y` flow for zero-prompt success.
 *   **M3 Compliance Check**: Automated layout audits ensure the dynamic grid and chips adapt to any screen size.
 *   **Log & Metric Integrity**: Container logs audited for 502/504 errors.
+</details>
+
+<details>
+<summary><strong>External Services & Privacy Policies</strong></summary>
+
+- **Public IP Detection & Health**:
+  - [ipify.org](https://www.ipify.org/) (IP retrieval)
+  - [ip-api.com](https://ip-api.com/docs/legal) (IP retrieval)
+  - [connectivity-check.ubuntu.com](https://ubuntu.com/legal/data-privacy) (VPN health check)
+- **Infrastructure & Automation**:
+  - [deSEC.io](https://desec.io/privacy-policy) (DNS & SSL automation)
+  - [fontlay.com](https://github.com/miroocloud/fontlay) (Google Fonts proxy)
+  - [cdn.jsdelivr.net](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net) (MCU library hosting)
+- **Container Registries & Sources**:
+  - [Docker Hub / dhi.io](https://www.docker.com/legal/docker-privacy-policy/) (Hardened images)
+  - [GitHub / GHCR](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) (Sources & Images)
+  - [Codeberg](https://codeberg.org/privacy) (Sources & Images)
+  - [Quay.io](https://quay.io/privacy) (Images)
+  - [SourceHut](https://man.sr.ht/privacy.md) (Scribe source)
+  - [Gitdab](https://gitdab.com/) (BreezeWiki source)
+- **DNS blocklist compiler (sleepy list)**:
+  - [Blocklist Retrieval](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) (Combines and filters out duplicates every 6 hours using the set of default lists provided by AdGuard, using **Hagezi Pro ++** as the anchor. Merges additional lists for broad coverage without false positives. *Note: This list is for personal usage and won't be updated to allow specific lists or for the usage of others.*)
+- **Optional Service APIs**:
+  - [Odido API](https://www.odido.nl/privacy) (Data bundle management)
+
 </details>
 
 ---
