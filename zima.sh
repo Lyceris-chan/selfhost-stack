@@ -2433,9 +2433,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         async function toggleSessionCleanup() {
             const newState = !sessionCleanupEnabled;
             try {
-                const res = await fetch(API + "/toggle-session-cleanup", {
+                const res = await apiCall("/toggle-session-cleanup", {
                     method: 'POST',
-                    headers: getAuthHeaders(),
                     body: JSON.stringify({ enabled: newState })
                 });
                 const data = await res.json();
@@ -2488,9 +2487,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             if (!pass) return;
 
             try {
-                const res = await fetch(API + "/verify-admin", {
+                const res = await apiCall("/verify-admin", {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password: pass })
                 });
                 if (res.ok) {
@@ -2568,7 +2566,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
 
         async function fetchMetrics() {
             try {
-                const res = await fetch(API + "/metrics", { headers: getAuthHeaders() });
+                const res = await apiCall("/metrics");
                 if (!res.ok) return;
                 const data = await res.json();
                 containerMetrics = data.metrics || {};
@@ -2950,9 +2948,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const newKey = prompt("Enter new HUB_API_KEY. Warning: You must update your local .secrets manually if this fails!");
             if (!newKey) return;
             try {
-                const res = await fetch(API + "/rotate-api-key", {
+                const res = await apiCall("/rotate-api-key", {
                     method: 'POST',
-                    headers: getAuthHeaders(),
                     body: JSON.stringify({ new_key: newKey })
                 });
                 const data = await res.json();
@@ -2971,10 +2968,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const query = new URLSearchParams();
             if (level && level !== 'ALL') query.append('level', level);
             if (category && category !== 'ALL') query.append('category', category);
-            const url = API + "/logs?" + query.toString();
             
             try {
-                const res = await fetch(url, { headers: getAuthHeaders() });
+                const res = await apiCall("/logs?" + query.toString());
                 const data = await res.json();
                 const el = document.getElementById('log-container');
                 el.innerHTML = '';
@@ -2986,7 +2982,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         
         async function fetchContainerIds() {
             try {
-                const res = await fetch(API + "/containers");
+                const res = await apiCall("/containers");
                 if (!res.ok) throw new Error("API " + res.status);
                 const data = await res.json();
                 containerIds = data.containers || {};
@@ -3074,11 +3070,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 return;
             }
             try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                const res = await fetch(API + "/config-desec", {
+                const res = await apiCall("/config-desec", {
                     method: 'POST',
-                    headers,
                     body: JSON.stringify({ domain, token })
                 });
                 const result = await res.json();
@@ -3108,8 +3101,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             lastStatusTime = now;
 
             try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/status", { headers, signal: controller.signal });
+                const res = await apiCall("/status", { signal: controller.signal });
                 clearTimeout(timeoutId);
                 
                 if (res.status === 401) {
@@ -3294,8 +3286,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000);
             try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(ODIDO_API + "/status", { headers, signal: controller.signal });
+                const res = await fetch(ODIDO_API + "/status", { headers: getAuthHeaders(), signal: controller.signal });
                 clearTimeout(timeoutId);
                 if (!res.ok) {
                     const data = await res.json().catch(() => ({}));
@@ -3387,9 +3378,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     st.style.color = 'var(--p)';
                 }
                 try {
-                    const res = await fetch(API + "/odido-userid", {
+                    const res = await apiCall("/odido-userid", {
                         method: 'POST',
-                        headers: getAuthHeaders(),
                         body: JSON.stringify({ oauth_token: oauthToken })
                     });
                     const result = await res.json();
@@ -3463,11 +3453,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 st.style.color = 'var(--p)';
             }
             try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
                 const res = await fetch(ODIDO_API + "/odido/buy-bundle", {
                     method: 'POST',
-                    headers,
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({})
                 });
                 const result = await res.json();
@@ -3493,9 +3481,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 st.style.color = 'var(--p)';
             }
             try {
-                const headers = {};
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                const res = await fetch(ODIDO_API + "/odido/remaining", { headers });
+                const res = await fetch(ODIDO_API + "/odido/remaining", { headers: getAuthHeaders() });
                 const result = await res.json();
                 if (result.detail) throw new Error(result.detail);
                 if (st) {
@@ -4140,9 +4126,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             }
 
             try {
-                const res = await fetch(API + "/purge-images", { 
-                    method: 'POST', 
-                    headers: getAuthHeaders() 
+                const res = await apiCall("/purge-images", { 
+                    method: 'POST' 
                 });
                 const result = await res.json();
                 if (result.success) {
@@ -4166,9 +4151,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             
             showSnackbar("Uninstallation sequence initiated...");
             try {
-                const res = await fetch(API + "/uninstall", { 
-                    method: 'POST', 
-                    headers: getAuthHeaders() 
+                const res = await apiCall("/uninstall", { 
+                    method: 'POST' 
                 });
                 const result = await res.json();
                 if (result.success) {
@@ -4184,7 +4168,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
 
         async function loadAllSettings() {
             try {
-                const res = await fetch(API + "/theme?_=" + Date.now(), { headers: getAuthHeaders() });
+                const res = await apiCall("/theme?_=" + Date.now());
                 if (!res.ok) {
                     if (res.status >= 500) return; // Silent skip if backend not ready
                     throw new Error("Server responded with " + res.status);
@@ -4385,7 +4369,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
-                const res = await fetch(API + "/certificate-status", { signal: controller.signal });
+                const res = await apiCall("/certificate-status", { signal: controller.signal });
                 clearTimeout(timeoutId);
                 
                 if (res.status === 401) throw new Error("401");
@@ -4472,7 +4456,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             btn.disabled = true;
             btn.style.opacity = '0.5';
             try {
-                const res = await fetch(API + "/request-ssl-check", { headers: getAuthHeaders() });
+                const res = await apiCall("/request-ssl-check");
                 const data = await res.json();
                 if (data.success) {
                     alert("SSL Check triggered in background. This may take 2-3 minutes. Refresh the dashboard later.");
@@ -4488,7 +4472,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         async function checkUpdates() {
             showSnackbar("Update check initiated... checking images and sources.");
             try {
-                const res = await fetch(API + "/check-updates", { headers: getAuthHeaders() });
+                const res = await apiCall("/check-updates");
                 const data = await res.json();
                 if (data.success) {
                     showSnackbar("Update check running... Please wait.", "OK");
@@ -4511,9 +4495,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             if (!confirm("Are you sure you want to restart the entire stack? The dashboard and all services will be unreachable for approximately 30 seconds.")) return;
             
             try {
-                const res = await fetch(API + "/restart-stack", {
-                    method: 'POST',
-                    headers: getAuthHeaders()
+                const res = await apiCall("/restart-stack", {
+                    method: 'POST'
                 });
                 
                 const data = await res.json();
@@ -4556,7 +4539,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         
         async function fetchSystemHealth() {
             try {
-                const res = await fetch(API + "/system-health", { headers: getAuthHeaders() });
+                const res = await apiCall("/system-health");
                 if (res.status === 401) throw new Error("401");
                 const data = await res.json();
                 
@@ -7680,32 +7663,45 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"updates": updates})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path.startswith('/migrate'):
+        def run_migration_task(service, action, backup_flag=None):
+            cmd = ["/usr/local/bin/migrate.sh", service, action]
+            if backup_flag:
+                cmd.append(backup_flag)
+            
             try:
-                # Usage: /migrate?service=invidious&backup=yes
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                return {"success": True, "output": res.stdout}
+            except subprocess.TimeoutExpired:
+                return {"error": "Operation timed out"}, 504
+            except Exception as e:
+                return {"error": str(e)}, 500
+
+        if self.path.startswith('/migrate'):
+            try:
                 from urllib.parse import urlparse, parse_qs
                 query = urlparse(self.path).query
                 params = parse_qs(query)
                 service = params.get('service', [''])[0]
                 do_backup = params.get('backup', ['yes'])[0]
                 if service:
-                    res = subprocess.run(["/usr/local/bin/migrate.sh", service, "migrate", do_backup], capture_output=True, text=True, timeout=120)
-                    self._send_json({"success": True, "output": res.stdout})
+                    result, code = run_migration_task(service, "migrate", do_backup), 200
+                    if isinstance(result, tuple): result, code = result
+                    self._send_json(result, code)
                 else:
                     self._send_json({"error": "Service parameter missing"}, 400)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path.startswith('/clear-db'):
             try:
-                # Usage: /clear-db?service=invidious&backup=yes
                 from urllib.parse import urlparse, parse_qs
                 query = urlparse(self.path).query
                 params = parse_qs(query)
                 service = params.get('service', [''])[0]
                 do_backup = params.get('backup', ['yes'])[0]
                 if service:
-                    res = subprocess.run(["/usr/local/bin/migrate.sh", service, "clear", do_backup], capture_output=True, text=True, timeout=120)
-                    self._send_json({"success": True, "output": res.stdout})
+                    result, code = run_migration_task(service, "clear", do_backup), 200
+                    if isinstance(result, tuple): result, code = result
+                    self._send_json(result, code)
                 else:
                     self._send_json({"error": "Service parameter missing"}, 400)
             except Exception as e:
@@ -7717,8 +7713,9 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 params = parse_qs(query)
                 service = params.get('service', [''])[0]
                 if service:
-                    res = subprocess.run(["/usr/local/bin/migrate.sh", service, "clear-logs"], capture_output=True, text=True, timeout=60)
-                    self._send_json({"success": True, "output": res.stdout})
+                    result, code = run_migration_task(service, "clear-logs"), 200
+                    if isinstance(result, tuple): result, code = result
+                    self._send_json(result, code)
                 else:
                     self._send_json({"error": "Service parameter missing"}, 400)
             except Exception as e:
@@ -7730,8 +7727,9 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 params = parse_qs(query)
                 service = params.get('service', [''])[0]
                 if service:
-                    res = subprocess.run(["/usr/local/bin/migrate.sh", service, "vacuum"], capture_output=True, text=True, timeout=60)
-                    self._send_json({"success": True, "output": res.stdout})
+                    result, code = run_migration_task(service, "vacuum"), 200
+                    if isinstance(result, tuple): result, code = result
+                    self._send_json(result, code)
                 else:
                     self._send_json({"error": "Service parameter missing"}, 400)
             except Exception as e:
