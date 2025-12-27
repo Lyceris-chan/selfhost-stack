@@ -2008,7 +2008,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         async function loadServiceCatalog() {
             if (Object.keys(serviceCatalog).length) return serviceCatalog;
             try {
-                const res = await fetch(API + "/services");
+                const res = await apiCall("/services");
                 const data = await res.json();
                 serviceCatalog = data.services || {};
             } catch (e) {
@@ -2109,7 +2109,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         async function renderDynamicGrid() {
             try {
                 const [containerRes, catalog] = await Promise.all([
-                    fetch(API + "/containers"),
+                    apiCall("/containers"),
                     loadServiceCatalog()
                 ]);
                 const data = await containerRes.json();
@@ -2741,7 +2741,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             document.getElementById('start-update-btn').disabled = true;
             
             // Trigger check
-            fetch(API + "/check-updates", { headers: odidoApiKey ? { 'X-API-Key': odidoApiKey } : {} });
+            apiCall("/check-updates");
             
             // Poll for results
             const listContainer = document.getElementById('update-list-container');
@@ -2752,7 +2752,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 attempts++;
                 statusLabel.textContent = "Scanning repositories... (" + attempts + ")";
                 try {
-                    const res = await fetch(API + "/updates", { headers: odidoApiKey ? { 'X-API-Key': odidoApiKey } : {} });
+                    const res = await apiCall("/updates");
                     const data = await res.json();
                     const updates = data.updates || {};
                     const keys = Object.keys(updates);
@@ -2812,8 +2812,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             modal.style.display = 'flex';
             
             try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/changelog?service=" + service, { headers });
+                const res = await apiCall("/changelog?service=" + service);
                 const data = await res.json();
                 
                 if (data.error) throw new Error(data.error);
@@ -2847,9 +2846,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             showSnackbar(`Batch update initiated for ${selected.length} services. Rebuilding in background...`, "Dismiss");
             
             try {
-                const res = await fetch(API + "/batch-update", {
+                const res = await apiCall("/batch-update", {
                     method: 'POST',
-                    headers: getAuthHeaders(),
                     body: JSON.stringify({ services: selected })
                 });
                 const data = await res.json();
@@ -2870,9 +2868,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             showSnackbar(`Initiating update for ${name}...`, "Dismiss");
 
             try {
-                const res = await fetch(API + "/update-service", {
+                const res = await apiCall("/update-service", {
                     method: 'POST',
-                    headers: getAuthHeaders(),
                     body: JSON.stringify({ service: name })
                 });
                 const data = await res.json();
@@ -2895,7 +2892,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const doBackup = document.getElementById('invidious-backup-toggle')?.checked ? 'yes' : 'no';
             if (!confirm("Run foolproof migration for " + name + "?" + (doBackup === 'yes' ? " This will create a database backup first." : " WARNING: No backup will be created."))) return;
             try {
-                const res = await fetch(API + "/migrate?service=" + name + "&backup=" + doBackup);
+                const res = await apiCall("/migrate?service=" + name + "&backup=" + doBackup);
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
                 alert("Migration successful!\n\n" + data.output);
@@ -2909,7 +2906,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const doBackup = document.getElementById('invidious-backup-toggle')?.checked ? 'yes' : 'no';
             if (!confirm("DANGER: This will permanently DELETE all subscriptions and preferences for " + name + "." + (doBackup === 'yes' ? " A backup will be created first." : " WARNING: NO BACKUP WILL BE CREATED.") + " Continue?")) return;
             try {
-                const res = await fetch(API + "/clear-db?service=" + name + "&backup=" + doBackup);
+                const res = await apiCall("/clear-db?service=" + name + "&backup=" + doBackup);
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
                 alert("Database cleared successfully!\n\n" + data.output);
@@ -2922,7 +2919,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             if (event) { event.preventDefault(); event.stopPropagation(); }
             if (!confirm("Clear all historical query logs for " + name + "? This cannot be undone.")) return;
             try {
-                const res = await fetch(API + "/clear-logs?service=" + name);
+                const res = await apiCall("/clear-logs?service=" + name);
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
                 showSnackbar("Logs cleared successfully!");
@@ -2935,7 +2932,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             if (event) { event.preventDefault(); event.stopPropagation(); }
             showSnackbar("Optimizing database... please wait.");
             try {
-                const res = await fetch(API + "/vacuum?service=" + name);
+                const res = await apiCall("/vacuum?service=" + name);
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
                 showSnackbar("Database optimized successfully!");
@@ -3499,8 +3496,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         
         async function fetchProfiles() {
             try {
-                const headers = odidoApiKey ? { 'X-API-Key': odidoApiKey } : {};
-                const res = await fetch(API + "/profiles", { headers });
+                const res = await apiCall("/profiles");
                 if (res.status === 401) throw new Error("401");
                 const data = await res.json();
                 const el = document.getElementById('profile-list');
@@ -3568,20 +3564,16 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             if(!config) { if(st) st.textContent="Error: Config content missing"; else alert("Error: Config content missing"); return; }
             if(st) st.textContent = "Uploading...";
             try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                const upRes = await fetch(API + "/upload", { 
+                const upRes = await apiCall("/upload", { 
                     method:'POST', 
-                    headers: headers,
                     body:JSON.stringify({name: nameInput, config: config}) 
                 });
                 const upData = await upRes.json();
                 if(upData.error) throw new Error(upData.error);
                 const activeName = upData.name;
                 if(st) st.textContent = "Activating " + activeName + "...";
-                await fetch(API + "/activate", { 
+                await apiCall("/activate", { 
                     method:'POST', 
-                    headers: headers,
                     body:JSON.stringify({name: activeName}) 
                 });
                 if(st) st.textContent = "Success! VPN restarting."; else alert("Success! VPN restarting.");
@@ -3592,11 +3584,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         async function activateProfile(name) {
             if(!confirm("Switch to " + name + "?")) return;
             try { 
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                await fetch(API + "/activate", { 
+                await apiCall("/activate", { 
                     method:'POST', 
-                    headers: headers,
                     body:JSON.stringify({name: name}) 
                 }); 
                 alert("Profile switched. VPN restarting."); 
@@ -3606,11 +3595,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         async function deleteProfile(name) {
             if(!confirm("Delete " + name + "?")) return;
             try { 
-                const headers = { 'Content-Type': 'application/json' };
-                if (odidoApiKey) headers['X-API-Key'] = odidoApiKey;
-                await fetch(API + "/delete", { 
+                await apiCall("/delete", { 
                     method:'POST', 
-                    headers: headers,
                     body:JSON.stringify({name: name}) 
                 }); 
                 fetchProfiles(); 
@@ -4072,7 +4058,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             loading.style.display = 'block';
             
             try {
-                const res = await fetch(API + "/project-details", { headers: getAuthHeaders() });
+                const res = await apiCall("/project-details");
                 const data = await res.json();
                 
                 list.innerHTML = '';
@@ -4600,7 +4586,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
 
         document.addEventListener('DOMContentLoaded', () => {
             // Load deSEC config if available
-            fetch(API + "/status").then(r => r.json()).then(data => {
+            apiCall("/status").then(r => r.json()).then(data => {
                 if (data.gluetun && data.gluetun.desec_domain) {
                     document.getElementById('desec-domain-input').placeholder = data.gluetun.desec_domain;
                 }
