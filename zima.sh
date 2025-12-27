@@ -315,6 +315,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
             width: 100%;
             outline: none !important;
             box-shadow: none !important;
+            transition: background-color 300ms ease;
         }
         .filter-bar::-webkit-scrollbar { display: none; }
         
@@ -2606,7 +2607,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         function dismissUpdateBanner() {
             const banner = document.getElementById('update-banner');
             if (banner) banner.classList.add('hidden-banner');
-            sessionStorage.setItem('update_banner_dismissed', pendingUpdates.sort().join(','));
+            localStorage.setItem('update_banner_dismissed', pendingUpdates.sort().join(','));
         }
 
         function dismissMacAdvisory() {
@@ -2638,7 +2639,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 const list = document.getElementById('update-list');
                 
                 if (pendingUpdates.length > 0) {
-                    const dismissed = sessionStorage.getItem('update_banner_dismissed');
+                    const dismissed = localStorage.getItem('update_banner_dismissed');
                     if (dismissed === pendingUpdates.join(',')) {
                         if (banner) banner.classList.add('hidden-banner');
                     } else {
@@ -7435,6 +7436,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 # Volumes & Containers Size
                 volumes_size = 0
                 containers_size = 0
+                dangling_size = 0
                 vol_res = subprocess.run(['docker', 'system', 'df', '--format', '{{.Type}}\t{{.Size}}'], capture_output=True, text=True, timeout=10)
                 if vol_res.returncode == 0:
                     for line in vol_res.stdout.strip().split('\n'):
@@ -7450,10 +7452,11 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             val_bytes = int(sz_val * mult)
                             if dtype == 'Local Volumes': volumes_size = val_bytes
                             elif dtype == 'Containers': containers_size = val_bytes
+                            elif dtype == 'Build Cache': dangling_size += val_bytes
                         except: continue
 
                 # Dangling Images (Reclaimable)
-                dangling_size = 0
+                # dangling_size is already initialized and may contain Build Cache size
                 dang_res = subprocess.run(['docker', 'images', '-f', 'dangling=true', '--format', '{{.Size}}'], capture_output=True, text=True, timeout=10)
                 if dang_res.returncode == 0:
                     for s_line in dang_res.stdout.strip().split('\n'):

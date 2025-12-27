@@ -111,7 +111,7 @@ This automated mode:
 
 - [ ] **Odido OAuth Token** (Dutch users only)
   - Required for automated data bundle management
-  - Obtain via [Odido Authenticator](https://github.com/GuusBackup/Odido.Authenticator)
+  - Obtain via [Odido Authenticator](https://github.com/GuusBackup/Odido.Authenticator/releases/latest) (Download executable)
 
 ---
 
@@ -258,6 +258,12 @@ The dashboard is built to strictly follow **[Google's Material Design 3](https:/
 *   **Changelogs**: View commit logs (for source builds) or release notes (for images) directly in the UI before updating.
 *   **Granular Control**: Update all services at once or select specific ones.
 *   **Safety First**: Automatic database backups are created before any update is applied.
+
+### Admin Mode & Security
+The dashboard includes a secure **Admin Mode** for sensitive operations.
+*   **Lock/Unlock**: Click the lock icon in the header to toggle admin features (updates, restarts, sensitive configs).
+*   **Session Cleanup**: By default, admin sessions auto-expire after 30 minutes of inactivity. This can be configured in the "Security & Privacy" card.
+*   **Credentials**: The initial admin password is generated during setup and stored in `.secrets`.
 
 <a id="included-services"></a>
 ## 📦 Included Services
