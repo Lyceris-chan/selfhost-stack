@@ -83,6 +83,8 @@ fi
 
 APP_NAME="privacy-hub"
 BASE_DIR="./DATA/AppData/$APP_NAME"
+mkdir -p "$BASE_DIR"
+BASE_DIR="$(cd "$BASE_DIR" && pwd)"
 
 # Docker Auth Config (stored in /tmp to survive -c cleanup)
 DOCKER_AUTH_DIR="/tmp/$APP_NAME-docker-auth"
@@ -158,6 +160,8 @@ MIGRATE_SCRIPT="$BASE_DIR/migrate.sh"
 # Memos storage
 MEMOS_HOST_DIR="./DATA/AppData/memos"
 mkdir -p "$MEMOS_HOST_DIR"
+MEMOS_HOST_DIR="$(cd "$MEMOS_HOST_DIR" && pwd)"
+SCRIBE_GH_USER=""
 
 # Logging Functions
 log_info() { 
@@ -9085,7 +9089,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     labels:
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
-    env_file: ["./env/anonymousoverflow.env"]
+    env_file: ["$ENV_DIR/anonymousoverflow.env"]
     environment: {PORT: "$PORT_INT_ANONYMOUS"}
     depends_on: {gluetun: {condition: service_healthy}}
     restart: always
@@ -9106,7 +9110,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "com.centurylinklabs.watchtower.enable=false"
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
-    env_file: ["./env/scribe.env"]
+    env_file: ["$ENV_DIR/scribe.env"]
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8280/ || exit 1"]
       interval: 1m
