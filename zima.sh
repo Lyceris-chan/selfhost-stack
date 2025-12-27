@@ -2756,10 +2756,10 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     const updates = data.updates || {};
                     const keys = Object.keys(updates);
                     
-                    if (keys.length > 0 || attempts > 5) {
+                    if (keys.length > 0 || attempts > 30) {
                         clearInterval(poll);
                         renderUpdateList(keys);
-                        statusLabel.textContent = keys.length + " updates found.";
+                        statusLabel.textContent = keys.length > 0 ? keys.length + " updates found." : "No updates found.";
                         document.getElementById('start-update-btn').disabled = keys.length === 0;
                     }
                 } catch(e) {}
@@ -7648,8 +7648,24 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
         elif path_clean == '/check-updates':
             try:
                 log_structured("INFO", "Checking for system-wide container and source updates...", "MAINTENANCE")
-                # Trigger Watchtower run-once to check for image updates
-                subprocess.Popen(['docker', 'run', '--rm', '-v', '/var/run/docker.sock:/var/run/docker.sock', 'containrrr/watchtower', '--run-once', '--cleanup', '--include-stopped'])
+                
+                # Clear previous image updates
+                try:
+                    os.remove("/app/data/image_updates.json")
+                except: pass
+
+                # Trigger Watchtower run-once in MONITOR mode (no auto-update)
+                # We expect it to hit the /watchtower webhook if updates are found
+                subprocess.Popen(['docker', 'run', '--rm', 
+                    '-v', '/var/run/docker.sock:/var/run/docker.sock', 
+                    'containrrr/watchtower', 
+                    '--run-once', 
+                    '--monitor-only', 
+                    '--cleanup', 
+                    '--include-stopped',
+                    '--notification-url', 'generic://hub-api:55555/watchtower?template=json&disabletls=yes'
+                ])
+                
                 # Also trigger git fetch for sources in background
                 src_root = "/app/sources"
                 if os.path.exists(src_root):
@@ -7663,18 +7679,31 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
         elif path_clean == '/updates':
             try:
-                # Check for updates in source repositories
-                src_root = "/app/sources"
                 updates = {}
+                
+                # 1. Check Git Sources
+                src_root = "/app/sources"
                 if os.path.exists(src_root):
                     for repo in os.listdir(src_root):
                         repo_path = os.path.join(src_root, repo)
                         if os.path.isdir(os.path.join(repo_path, ".git")):
-                            # Fetch remote and check status
-                            subprocess.run(["git", "fetch"], cwd=repo_path, capture_output=True, timeout=15)
+                            # Fetch remote and check status (already fetched by check-updates)
                             res = subprocess.run(["git", "status", "-uno"], cwd=repo_path, capture_output=True, text=True, timeout=10)
                             if "behind" in res.stdout:
                                 updates[repo] = "Update Available"
+                
+                # 2. Check Pending Image Updates
+                updates_file = "/app/data/image_updates.json"
+                if os.path.exists(updates_file):
+                    try:
+                        with open(updates_file, 'r') as f:
+                            img_updates = json.load(f)
+                            # Merge, ignoring timestamp keys
+                            for k, v in img_updates.items():
+                                if not k.startswith('_'):
+                                    updates[k] = v
+                    except: pass
+
                 self._send_json({"updates": updates})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -8006,21 +8035,53 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             try:
                 content_length = int(self.headers.get('Content-Length', 0))
                 body = self.rfile.read(content_length).decode('utf-8')
-                # Watchtower sends a JSON list of messages or a single message depending on template
-                # We configured it with template=json, so we expect a JSON structure.
-                # However, the generic webhook usually sends a simple JSON payload.
-                # Let's just log it and mark updates as available.
-                # Since we can't easily parse specific container names from standard generic webhooks reliably without a custom template,
-                # we will just trigger a 'check-updates' logic or store a generic flag.
-                # BUT, better yet, let's try to parse the message if possible.
                 
-                # To keep it robust: We will store "Image Updates Available" in a file that /updates can read.
-                # Actually, /updates logic for images is tricky because we don't persist "pending updates" state for images easily
-                # without querying the registry. Watchtower run-once in /check-updates does the checking.
-                # If this webhook is called, it means Watchtower found something (if it's running in notification mode).
-                
-                # We will simply log the event for now as "Update Available"
-                log_structured("INFO", f"Watchtower Notification: {body}", "MAINTENANCE")
+                # Parse Watchtower notification (JSON)
+                try:
+                    # Watchtower sends a list of entries or a single object
+                    # We expect: [{"message": "Found new image for container..."}] or similar structure depending on template
+                    # But generic template usually sends simple JSON.
+                    # Let's assume we can extract container names if possible, or just mark "Image Update"
+                    # For robustness, we'll just log "Image Updates Available" for now as a persistent state.
+                    
+                    # Update: We will save a generic flag file or parse specific containers if the template allows.
+                    # Since we use default JSON template, we might not get container names easily without a custom template.
+                    # We will mark a global "check required" or store the raw message.
+                    
+                    updates_file = "/app/data/image_updates.json"
+                    current_updates = {}
+                    if os.path.exists(updates_file):
+                        try:
+                            with open(updates_file, 'r') as f:
+                                current_updates = json.load(f)
+                        except: pass
+                    
+                    # Store a generic "Updates Available" entry keyed by 'watchtower'
+                    # Ideally we'd map this to services, but without a custom template, it's hard.
+                    # Improvement: The dashboard can show "Container Updates" as a generic item or we rely on 'check-updates' logic.
+                    # Let's try to be smarter: The notification message might contain info.
+                    
+                    msg_data = json.loads(body)
+                    # If it's a list, iterate
+                    if isinstance(msg_data, list):
+                        for entry in msg_data:
+                            # Extract useful info if possible, else generic
+                            current_updates["_last_check"] = time.time()
+                    else:
+                        current_updates["_last_check"] = time.time()
+                        
+                    # We will rely on the fact that Watchtower found *something*.
+                    # To be truly useful, we should set a flag that /updates reads.
+                    # We'll set a special key that the dashboard UI can interpret or just list "Docker Images".
+                    current_updates["Docker Images"] = "Update Available"
+                    
+                    with open(updates_file, 'w') as f:
+                        json.dump(current_updates, f)
+                        
+                except Exception as e:
+                    log_structured("WARN", f"Failed to parse Watchtower body: {e}", "MAINTENANCE")
+
+                log_structured("INFO", "Watchtower reports new updates available.", "MAINTENANCE")
                 self._send_json({"success": True})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -8110,6 +8171,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                 
                                 # 3. Rebuild and restart
                                 log_structured("INFO", f"[Update Engine] Rebuilding {name}...", "MAINTENANCE")
+                                subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'pull', name], timeout=300)
                                 subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', name], timeout=600)
                                 
                                 # 4. Migrate
@@ -8159,6 +8221,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         
                         # 3. Rebuild and restart
                         log_structured("INFO", f"[Update Engine] Build process for {name} initiated (Expect increased resource usage).", "MAINTENANCE")
+                        subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'pull', name], timeout=300)
                         subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', name], timeout=600)
                         log_structured("INFO", f"[Update Engine] {name} update completed successfully.", "MAINTENANCE")
                     except Exception as ex:
@@ -9470,6 +9533,7 @@ generate_protonpass_export
 
 echo "[+] Finalizing environment (cleaning up dangling images)..."
 $DOCKER_CMD image prune -f
+$DOCKER_CMD builder prune -f
 
 $DOCKER_CMD restart portainer 2>/dev/null || true
 
