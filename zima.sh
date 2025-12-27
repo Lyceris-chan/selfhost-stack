@@ -5214,6 +5214,15 @@ clean_environment() {
             fi
         fi
         
+        # Remove temporary directories
+        if [ -d "$DOCKER_AUTH_DIR" ]; then
+            log_info "  Removing temporary auth: $DOCKER_AUTH_DIR"
+            rm -rf "$DOCKER_AUTH_DIR"
+        fi
+        if [ -d "$CERT_BACKUP_DIR" ]; then
+            rm -rf "$CERT_BACKUP_DIR"
+        fi
+        
         # Alternative locations that might have been created
         if [ -d "./DATA/AppData/privacy-hub" ]; then
             log_info "  Removing directory: ./DATA/AppData/privacy-hub"
