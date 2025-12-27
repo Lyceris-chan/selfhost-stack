@@ -8689,6 +8689,11 @@ cat >> "$COMPOSE_FILE" <<EOF
       - ODIDO_USER_ID=$ODIDO_USER_ID
       - ODIDO_TOKEN=$ODIDO_TOKEN
       - PORT=8080
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     volumes:
       - $DATA_DIR/odido:/data
     restart: unless-stopped
@@ -8731,6 +8736,11 @@ cat >> "$COMPOSE_FILE" <<EOF
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_MEMOS:5230"]
     volumes: ["$MEMOS_HOST_DIR:/var/opt/memos"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:5230/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
     deploy:
       resources:
@@ -8821,6 +8831,11 @@ cat >> "$COMPOSE_FILE" <<EOF
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
     volumes: ["/var/run/docker.sock:/var/run/docker.sock", "$DATA_DIR/portainer:/data"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     # Admin password is saved in protonpass_import.csv for initial setup
     restart: unless-stopped
     deploy:
@@ -8846,6 +8861,11 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "$LAN_IP:853:853/tcp"
       - "$LAN_IP:853:853/udp"
     volumes: ["$DATA_DIR/adguard-work:/opt/adguardhome/work", "$AGH_CONF_DIR:/opt/adguardhome/conf"]
+    healthcheck:
+      test: ["CMD", "/opt/adguardhome/AdGuardHome", "--check-config"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     depends_on:
       - unbound
     restart: unless-stopped
@@ -8867,6 +8887,11 @@ cat >> "$COMPOSE_FILE" <<EOF
         ipv4_address: 172.$FOUND_OCTET.0.250
     volumes:
       - "$UNBOUND_CONF:/opt/unbound/etc/unbound/unbound.conf:ro"
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q '127.0.0.1' /etc/resolv.conf || exit 0"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
     deploy:
       resources:
@@ -9050,6 +9075,11 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment: {IMGUR_CLIENT_ID: "546c25a59c58ad7", ADDRESS: "0.0.0.0", PORT: "$PORT_INT_RIMGO"}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3002/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     depends_on: {gluetun: {condition: service_healthy}}
     restart: always
     deploy:
@@ -9098,6 +9128,11 @@ cat >> "$COMPOSE_FILE" <<EOF
     network_mode: "service:gluetun"
     env_file: ["$ENV_DIR/anonymousoverflow.env"]
     environment: {PORT: "$PORT_INT_ANONYMOUS"}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8480/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     depends_on: {gluetun: {condition: service_healthy}}
     restart: always
     deploy:
@@ -9139,6 +9174,11 @@ cat >> "$COMPOSE_FILE" <<EOF
     image: ghcr.io/vert-sh/vertd:latest
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:24153/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     labels:
       - "casaos.skip=true"
       - "io.dhi.hardened=true"
@@ -9177,6 +9217,11 @@ $(if [ -n "$VERTD_NVIDIA" ]; then echo "        reservations:
       - PUB_DISABLE_DONATIONS=true
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_VERT:$PORT_INT_VERT"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:5555/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     depends_on:
       vertd: {condition: service_started}
     restart: unless-stopped
