@@ -2584,7 +2584,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         }
 
         const PORTAINER_URL = getPortainerBaseUrl();
-        const DEFAULT_ODIDO_API_KEY = "$ODIDO_API_KEY";
+        const DEFAULT_ODIDO_API_KEY = "";
         let storedOdidoKey = sessionStorage.getItem('odido_api_key');
         if (DEFAULT_ODIDO_API_KEY && !storedOdidoKey) {
             // Keep default key in session only
@@ -4717,7 +4717,6 @@ EOF
     sed -i "s|\$LAN_IP|$LAN_IP|g" "$DASHBOARD_FILE"
     sed -i "s|\$DESEC_DOMAIN|$DESEC_DOMAIN|g" "$DASHBOARD_FILE"
     sed -i "s|\$PORT_PORTAINER|$PORT_PORTAINER|g" "$DASHBOARD_FILE"
-    sed -i "s|\$ODIDO_API_KEY|$ODIDO_API_KEY|g" "$DASHBOARD_FILE"
 }
 
 authenticate_registries() {
