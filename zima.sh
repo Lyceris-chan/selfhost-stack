@@ -230,7 +230,7 @@ cat > "$DASHBOARD_FILE" <<'EOF'
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZimaOS Privacy Hub</title>
-    <link rel="icon" type="image/svg+xml" href="/assets/privacy-hub.svg">
+    <link rel="icon" type="image/svg+xml" href="/assets/$APP_NAME.svg">
     <!-- Local privacy friendly assets (Hosted Locally) -->
     <link href="assets/gs.css" rel="stylesheet">
     <link href="assets/cc.css" rel="stylesheet">
@@ -4867,7 +4867,7 @@ setup_assets() {
 
     # Create local SVG icon for CasaOS/ZimaOS dashboard
     log_info "Creating local SVG icon for the dashboard..."
-    cat > "$ASSETS_DIR/privacy-hub.svg" <<EOF
+    cat > "$ASSETS_DIR/$APP_NAME.svg" <<EOF
 <svg xmlns="http://www.w3.org/2000/svg" height="128" viewBox="0 -960 960 960" width="128" fill="#D0BCFF">
     <path d="M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z"/>
 </svg>
@@ -6426,13 +6426,25 @@ export -f clone_repo
 export PATCHES_SCRIPT
 
 log_info "Synchronizing and patching source repositories in parallel..."
-sync_and_patch "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless" "wikiless" &
-sync_and_patch "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe" "scribe" &
-sync_and_patch "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious" "invidious" &
-sync_and_patch "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster" "odido-booster" &
-sync_and_patch "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert" "vert" &
-sync_and_patch "https://gitdab.com/cadence/breezewiki" "$SRC_DIR/breezewiki" "breezewiki" &
-wait
+PIDS=""
+sync_and_patch "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless" "wikiless" & PIDS="$PIDS $!"
+sync_and_patch "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe" "scribe" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious" "invidious" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster" "odido-booster" & PIDS="$PIDS $!"
+sync_and_patch "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert" "vert" & PIDS="$PIDS $!"
+sync_and_patch "https://gitdab.com/cadence/breezewiki" "$SRC_DIR/breezewiki" "breezewiki" & PIDS="$PIDS $!"
+
+SUCCESS=true
+for pid in $PIDS; do
+    if ! wait "$pid"; then
+        SUCCESS=false
+    fi
+done
+
+if [ "$SUCCESS" = false ]; then
+    log_crit "One or more source repositories failed to synchronize. Build may fail."
+    # We don't exit here because some repositories might have existing files we can use
+fi
 
 WIKILESS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wikiless" || true)
 if [ -z "$WIKILESS_DOCKERFILE" ]; then
@@ -7337,7 +7349,7 @@ def ensure_assets():
             log_fonts(f"Failed to download mcu.js: {e}", "WARN")
 
     # Ensure local SVG icon
-    svg_path = os.path.join(ASSETS_DIR, "privacy-hub.svg")
+    svg_path = os.path.join(ASSETS_DIR, "$APP_NAME.svg")
     if not os.path.exists(svg_path):
         try:
             svg = """<svg xmlns="http://www.w3.org/2000/svg" height="128" viewBox="0 -960 960 960" width="128" fill="#D0BCFF">
@@ -7345,9 +7357,9 @@ def ensure_assets():
 </svg>"""
             with open(svg_path, "w", encoding="utf-8") as f:
                 f.write(svg)
-            log_fonts("Generated privacy-hub.svg")
+            log_fonts("Generated $APP_NAME.svg")
         except Exception as e:
-            log_fonts(f"Failed to generate privacy-hub.svg: {e}", "WARN")
+            log_fonts(f"Failed to generate $APP_NAME.svg: {e}", "WARN")
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
@@ -7494,7 +7506,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         parts = line.split('\t')
                         if len(parts) < 2: continue
                         size_str, repo = parts[0], parts[1]
-                        if any(x in repo for x in ['privacy-hub', 'gluetun', 'adguard', 'unbound', 'redlib', 'wikiless', 'invidious', 'rimgo', 'breezewiki', 'memos', 'vert', 'scribe', 'anonymousoverflow', 'odido-booster', 'watchtower', 'portainer', 'wg-easy']):
+                        if any(x in repo for x in ['$APP_NAME', 'gluetun', 'adguard', 'unbound', 'redlib', 'wikiless', 'invidious', 'rimgo', 'breezewiki', 'memos', 'vert', 'scribe', 'anonymousoverflow', 'odido-booster', 'watchtower', 'portainer', 'wg-easy']):
                             mult = 1
                             if 'GB' in size_str.upper(): mult = 1024*1024*1024
                             elif 'MB' in size_str.upper(): mult = 1024*1024
@@ -7575,7 +7587,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         for line in img_res.stdout.strip().split('\n'):
                             size_str, repo = line.split('\t')
                             # Check if it belongs to our stack
-                            if any(x in repo for x in ['privacy-hub', 'gluetun', 'adguard', 'unbound', 'redlib', 'wikiless', 'invidious', 'rimgo', 'breezewiki', 'memos', 'vert', 'scribe', 'anonymousoverflow', 'odido-booster', 'watchtower', 'portainer', 'wg-easy']):
+                            if any(x in repo for x in ['$APP_NAME', 'gluetun', 'adguard', 'unbound', 'redlib', 'wikiless', 'invidious', 'rimgo', 'breezewiki', 'memos', 'vert', 'scribe', 'anonymousoverflow', 'odido-booster', 'watchtower', 'portainer', 'wg-easy']):
                                 mult = 1
                                 if 'GB' in size_str.upper(): mult = 1024*1024*1024
                                 elif 'MB' in size_str.upper(): mult = 1024*1024
@@ -8824,8 +8836,8 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "dev.casaos.app.ui.protocol=http"
       - "dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB"
       - "dev.casaos.app.ui.hostname=$LAN_IP"
-      - "dev.casaos.app.ui.icon=/assets/privacy-hub.svg"
-      - "dev.casaos.app.icon=/assets/privacy-hub.svg"
+      - "dev.casaos.app.ui.icon=/assets/$APP_NAME.svg"
+      - "dev.casaos.app.icon=/assets/$APP_NAME.svg"
     depends_on:
       hub-api: {condition: service_healthy}
     healthcheck:
@@ -9270,7 +9282,7 @@ x-casaos:
       instead of renting a false sense of security. Includes WireGuard VPN access,
       recursive DNS with AdGuard filtering, and VPN-isolated privacy frontends
       \(Invidious, Redlib, etc.\) that reduce tracking and prevent home IP exposure.
-  icon: assets/privacy-hub.svg
+  icon: assets/$APP_NAME.svg
 EOF
 
 # --- SECTION 14: DASHBOARD & UI GENERATION ---
