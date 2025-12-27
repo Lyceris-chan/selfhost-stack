@@ -89,19 +89,19 @@ Access your unified control center at `http://<LAN_IP>:8081`.
 
 ### Included Privacy Services
 
-| Service | Local URL | Category | Description |
+| Service | Source | Category | Description |
 | :--- | :--- | :--- | :--- |
-| **Invidious** | `http://<LAN_IP>:3000` | Frontend | YouTube without ads or tracking. |
-| **Redlib** | `http://<LAN_IP>:8080` | Frontend | Private Reddit viewer. |
-| **Rimgo** | `http://<LAN_IP>:3002` | Frontend | Anonymous Imgur browser. |
-| **Wikiless** | `http://<LAN_IP>:8180` | Frontend | Private Wikipedia reader. |
-| **Scribe** | `http://<LAN_IP>:8280` | Frontend | Alternative Medium frontend. |
-| **BreezeWiki** | `http://<LAN_IP>:8380` | Frontend | De-fandomized Wiki interface. |
-| **AnonOverflow** | `http://<LAN_IP>:8480` | Frontend | Private Stack Overflow viewer. |
-| **Memos** | `http://<LAN_IP>:5230` | Utility | Self-hosted notes & knowledge base. |
-| **VERT** | `http://<LAN_IP>:5555` | Utility | Secure local file conversion. |
-| **AdGuard Home** | `http://<LAN_IP>:8083` | Core | Network-wide DNS ad-blocking. |
-| **WireGuard** | `http://<LAN_IP>:51821` | Core | Secure remote access to your home LAN. |
+| **Invidious** | [iv-org/invidious](https://github.com/iv-org/invidious) | Frontend | YouTube without ads or tracking. |
+| **Redlib** | [redlib-org/redlib](https://github.com/redlib-org/redlib) | Frontend | Private Reddit viewer. |
+| **Rimgo** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) | Frontend | Anonymous Imgur browser. |
+| **Wikiless** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) | Frontend | Private Wikipedia reader. |
+| **Scribe** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) | Frontend | Alternative Medium frontend. |
+| **BreezeWiki** | [breezewiki/breezewiki](https://gitdab.com/cadence/breezewiki) | Frontend | De-fandomized Wiki interface. |
+| **AnonOverflow** | [httpjamesm/anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) | Frontend | Private Stack Overflow viewer. |
+| **Memos** | [usememos/memos](https://github.com/usememos/memos) | Utility | Self-hosted notes & knowledge base. |
+| **VERT** | [vert-sh/vert](https://github.com/vert-sh/vert) | Utility | Secure local file conversion. |
+| **AdGuard Home** | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) | Core | Network-wide DNS ad-blocking. |
+| **WireGuard** | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) | Core | Secure remote access gateway. |
 
 > **Note**: All "Frontend" services are routed through the VPN tunnel automatically.
 
@@ -222,7 +222,7 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 ### Recursive DNS Engine (Independent Resolution)
 *   **Zero Third-Parties**: We bypass "public" resolvers like **Google** and **Cloudflare**.
 *   **QNAME Minimization**: Only sends absolute minimum metadata upstream (RFC 7816).
-*   **Encrypted Local Path**: Native support for **DoH** and **DoQ** (RFC 9250).
+*   **Encrypted Local Path**: Native support for **DoH** (RFC 8484) and **DoQ** (RFC 9250).
 *   **High Performance**: 
     *   **Intelligent Caching**: Large message and RRset caches reduce external lookups.
     *   **Proactive Prefetching**: Frequently requested records are renewed before they expire.
@@ -235,15 +235,15 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 *   **Note**: This blocklist is **aggressive** by design.
 
 ### 📦 Docker Hardened Images (DHI)
-This stack utilizes **Digital Independence (DHI)** images (`dhi.io`) to ensure maximum security and privacy. These images are purpose-built for self-hosting:
-*   **Zero Telemetry**: All built-in tracking features are strictly removed.
-*   **Security Hardened**: Attack surfaces minimized by stripping unnecessary binaries.
-*   **Performance Optimized**: Pre-configured for low-resource environments.
-*   **Replacement Mapping**:
-    *   `dhi.io/nginx` replaces standard `nginx:alpine` (Hardened config, no server headers).
-    *   `dhi.io/python` replaces standard `python:alpine` (Stripped of build-time dependencies).
-    *   `dhi.io/node` & `dhi.io/bun` (Optimized for JS-heavy frontends).
-    *   `dhi.io/redis` & `dhi.io/postgres` (Hardened database engines).
+This stack utilizes **Digital Independence (DHI)** images (`dhi.io`) to ensure maximum security. These images follow the principle of least privilege by stripping unnecessary binaries and telemetry.
+
+**Transparent Hardening**:
+To ensure transparency, the deployment script [dynamically patches](https://github.com/Lyceris-chan/selfhost-stack/blob/main/zima.sh#L6229) upstream Dockerfiles during build to replace standard base images with hardened alternatives:
+*   **Node.js**: Replaced with `dhi.io/node:20-alpine3.22-dev`
+*   **Bun**: Replaced with `dhi.io/bun:1-alpine3.22-dev`
+*   **Python**: Replaced with `dhi.io/python:3.11-alpine3.22-dev`
+*   **Alpine Base**: All Alpine-based services are repinned to `dhi.io/alpine-base:3.22-dev`
+*   **Nginx**: The dashboard uses `dhi.io/nginx:1.28-alpine3.21`
 
 ### 🛡️ Self-Healing & High Availability
 *   **VPN Monitoring**: Gluetun is continuously monitored. Docker restarts the gateway if the tunnel stalls.
@@ -288,16 +288,14 @@ Opening a port for WireGuard does **not** expose your home to scanning.
 
 ## 🔧 Troubleshooting
 
-*   **"My internet stopped working!"**
-2.  **Emergency Fallback**: If you cannot fix the hub immediately, change your router or device DNS to a trusted public provider like **Mullvad DNS** ([194.242.2.2](https://mullvad.net/en/help/dns-over-https-and-dns-over-tls)) or **Quad9** ([9.9.9.9](https://quad9.net/service/service-addresses-and-features/)). Use this to restore connectivity until you can repair your self-hosted instance.
-*   **"I can't connect remotely."**
-    *   **Check Ports**: Ensure UDP 51820 is forwarded to your Hub's IP.
-    *   **Double NAT vs. CGNAT**:
-        *   **Double NAT (ISP Router + OpenWrt)**: This is fine! Just forward the port on *both* routers (ISP -> OpenWrt -> Hub).
-        *   **CGNAT (Carrier-Grade)**: If your ISP shares your public IP with neighbors, port forwarding won't work. You may need to request a static IP or use IPv6.
-*   **"Services are slow."**
-    *   Check your VPN connection speed in the dashboard.
-    *   Try a different ProtonVPN server config.
+| Issue | Potential Solution |
+| :--- | :--- |
+| **"My internet broke!"** | DNS resolution likely failed. Set your router DNS to `9.9.9.9` or `1.1.1.1` temporarily to restore access, then restart the Hub. |
+| **"I can't connect remotely"** | **1.** Check Port 51820 forwarding. **2.** Verify Double NAT (Forward on both ISP and OpenWrt routers). **3.** Check for CGNAT. |
+| **"Services are slow"** | **1.** Check VPN speed in dashboard. **2.** Try a different ProtonVPN server config. **3.** Monitor system CPU/RAM usage. |
+| **"SSL is invalid"** | Ensure port 80/443 aren't blocked and your deSEC token is correct. Check `certbot/monitor.log`. |
+
+> 💡 **Pro-Tip**: Use `docker ps` to verify all containers are `Up (healthy)`. If a container is stuck, use `docker logs <name>` to see why.
 
 ---
 
