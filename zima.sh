@@ -2315,11 +2315,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     chip.classList.add('active');
                     mainChips.forEach(c => c.classList.add('active'));
                 } else {
-                    // Material 3: If everything is on, we don't just turn everything off. 
-                    // But if 'All' is clicked while active, we can treat it as a reset to 'All ON' or do nothing.
-                    // The user says "should also be a category on its own as well representing the state of all categories enables at the same time"
-                    // So if it's already on and we click it, maybe we keep it on? 
-                    // Let's make it so clicking 'All' always ensures all main categories are ON.
+                    // Clicking 'All' ensures all main categories are enabled.
                     mainChips.forEach(c => c.classList.add('active'));
                     chip.classList.add('active');
                 }
@@ -2392,14 +2388,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             if (switchEl) switchEl.classList.toggle('active', sessionCleanupEnabled);
             
             if (isAdmin) {
-                // Ensure logs are toggled on when entering admin mode
-                // Removed auto-toggle as per user request to default to all services or preserve state
-                /*
-                const logsChip = document.querySelector('.filter-chip[data-target="logs"]');
-                if (logsChip && !logsChip.classList.contains('active')) {
-                    filterCategory('logs');
-                }
-                */
+                // Admin UI updates
             }
 
             if (warningEl && isAdmin) {
@@ -7045,36 +7034,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-def metrics_collector():
-    """Background thread to collect container metrics. Only runs when active sessions exist."""
-    global valid_sessions
-    while True:
-        try:
-            # Check if there are any active sessions (simple optimization)
-            # We assume if valid_sessions is empty, no one is looking at the dashboard.
-            # However, we should also consider if the dashboard is open but not logged in?
-            # Actually, the dashboard polls /metrics which requires auth (or we made it public?).
-            # Wait, /metrics in do_GET is allowed without auth in _check_auth?
-            # Yes, /metrics is in the whitelist. So the dashboard can be open without a session token if it's local?
-            # If so, valid_sessions might be empty but we still need metrics.
-            # BUT, the dashboard JS sends requests.
-            # If we want to optimize, we can track "last_metrics_request_time".
-            # Let's use a "last_activity" timestamp updated by any API call.
-            
-            # For now, let's stick to the user request: "active session".
-            # But if /metrics is public, the dashboard might not have a session.
-            # Let's look at _check_auth.
-            pass
-        except: pass
-        
-        # Real implementation:
-        # We'll use a global 'last_metrics_access' timestamp updated by the /metrics endpoint.
-        # If no one asked for metrics in the last 60 seconds, we stop collecting.
-        time.sleep(30)
-
-# We need to inject the logic into the existing function.
-# I will rewrite the function to check a global timestamp.
-
 last_metrics_request = 0
 
 def metrics_collector():
@@ -8092,16 +8051,6 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 
                 # Parse Watchtower notification (JSON)
                 try:
-                    # Watchtower sends a list of entries or a single object
-                    # We expect: [{"message": "Found new image for container..."}] or similar structure depending on template
-                    # But generic template usually sends simple JSON.
-                    # Let's assume we can extract container names if possible, or just mark "Image Update"
-                    # For robustness, we'll just log "Image Updates Available" for now as a persistent state.
-                    
-                    # Update: We will save a generic flag file or parse specific containers if the template allows.
-                    # Since we use default JSON template, we might not get container names easily without a custom template.
-                    # We will mark a global "check required" or store the raw message.
-                    
                     updates_file = "/app/data/image_updates.json"
                     current_updates = {}
                     if os.path.exists(updates_file):
@@ -8109,11 +8058,6 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             with open(updates_file, 'r') as f:
                                 current_updates = json.load(f)
                         except: pass
-                    
-                    # Store a generic "Updates Available" entry keyed by 'watchtower'
-                    # Ideally we'd map this to services, but without a custom template, it's hard.
-                    # Improvement: The dashboard can show "Container Updates" as a generic item or we rely on 'check-updates' logic.
-                    # Let's try to be smarter: The notification message might contain info.
                     
                     msg_data = json.loads(body)
                     # If it's a list, iterate

@@ -1,7 +1,0 @@
-DONE:
-- Renamed "System Reset" to "REVERT: Rolling back deployment..." with professional wording.
-- Implemented M3 color contrast safeguards (Luminance check) in dashboard.html.
-- Fixed hub-api 502 errors and asset 404s (switched to jsdelivr).
-- Enabled Gluetun HTTP proxy for private asset fetching.
-- Verified container logs are clean.
-- Verified dashboard UI interactions.
