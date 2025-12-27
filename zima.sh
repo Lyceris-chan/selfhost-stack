@@ -58,7 +58,11 @@ shift $((OPTIND -1))
 
 # --- SECTION 1: ENVIRONMENT VALIDATION & DIRECTORY SETUP ---
 # Verify core dependencies before proceeding.
-REQUIRED_COMMANDS="sudo docker curl git crontab iptables flock"
+REQUIRED_COMMANDS="docker curl git crontab iptables flock"
+if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
+    echo "[CRIT] sudo is required for non-root users. Please install it."
+    exit 1
+fi
 for cmd in $REQUIRED_COMMANDS; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "[CRIT] '$cmd' is required but not installed. Please install it."
@@ -66,11 +70,18 @@ for cmd in $REQUIRED_COMMANDS; do
     fi
 done
 
+# Detect if sudo is available
+if command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo -E"
+else
+    SUDO=""
+fi
+
 # Docker Compose Check (Plugin or Standalone)
-if sudo -E docker compose version >/dev/null 2>&1; then
+if $SUDO docker compose version >/dev/null 2>&1; then
     DOCKER_COMPOSE_CMD="docker compose"
 elif command -v docker-compose >/dev/null 2>&1; then
-    if sudo -E docker-compose version >/dev/null 2>&1; then
+    if $SUDO docker-compose version >/dev/null 2>&1; then
         DOCKER_COMPOSE_CMD="docker-compose"
     else
         echo "[CRIT] Docker Compose is installed but not executable."
@@ -105,8 +116,8 @@ else
 fi
 
 # Define consistent docker command using custom config for auth
-DOCKER_CMD="sudo -E env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" docker"
-DOCKER_COMPOSE_FINAL_CMD="sudo -E env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" $DOCKER_COMPOSE_CMD"
+DOCKER_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" docker"
+DOCKER_COMPOSE_FINAL_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" $DOCKER_COMPOSE_CMD"
 
 # Paths
 SRC_DIR="$BASE_DIR/sources"
@@ -1803,9 +1814,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 <h3>System Information</h3>
                 <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
                 <div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1;">
-                    <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace" style="font-size: 12px;">./DATA/AppData/privacy-hub/.secrets</span></div>
-                    <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace" style="font-size: 12px;">./DATA/AppData/privacy-hub/config</span></div>
-                    <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">8081</span></div>
+                    <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace" style="font-size: 12px;">$BASE_DIR/.secrets</span></div>
+                    <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace" style="font-size: 12px;">$BASE_DIR/config</span></div>
+                    <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">$PORT_DASHBOARD_WEB</span></div>
                     <div class="stat-row"><span class="stat-label">Safe Display Mode</span><span class="stat-value">Active (Local)</span></div>
                 </div>
                 <div class="admin-only" style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
@@ -5007,7 +5018,7 @@ clean_environment() {
         fi
     fi
 
-    CONFLICT_NETS=$($DOCKER_CMD network ls --format '{{.Name}}' | grep -E '(privacy-hub_frontnet|privacyhub_frontnet|privacy-hub_default|privacyhub_default)' || true)
+    CONFLICT_NETS=$($DOCKER_CMD network ls --format '{{.Name}}' | grep -E "(${APP_NAME}_frontnet|${APP_NAME//-/}_frontnet|${APP_NAME}_default|${APP_NAME//-/}_default)" || true)
     if [ -n "$CONFLICT_NETS" ]; then
         if ask_confirm "Conflicting networks detected. Should they be cleared?"; then
             for net in $CONFLICT_NETS; do
@@ -5044,6 +5055,9 @@ clean_environment() {
                 rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
                 rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
                 rm -rf "$BASE_DIR" 2>/dev/null || true
+            fi
+            if [ -d "$MEMOS_HOST_DIR" ]; then
+                rm -rf "$MEMOS_HOST_DIR" 2>/dev/null || true
             fi
             # Remove volumes - try both unprefixed and prefixed names (sudo docker compose uses project prefix)
             for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
@@ -5113,7 +5127,7 @@ clean_environment() {
                     REMOVED_VOLUMES="${REMOVED_VOLUMES}$vol "
                     ;;
                 # Match prefixed names (sudo docker compose project prefix)
-                privacy-hub_*|privacyhub_*)
+                ${APP_NAME}_*|${APP_NAME//-/}_*)
                     log_info "  Removing volume: $vol"
                     $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
                     REMOVED_VOLUMES="${REMOVED_VOLUMES}$vol "
@@ -5138,7 +5152,7 @@ clean_environment() {
                 # Skip default Docker networks
                 bridge|host|none) continue ;;
                 # Match our networks
-                privacy-hub_*|privacyhub_*|*frontnet*)
+                ${APP_NAME}_*|${APP_NAME//-/}_*|*frontnet*)
                     log_info "  Removing network: $net"
                     safe_remove_network "$net"
                     REMOVED_NETWORKS="${REMOVED_NETWORKS}$net "
@@ -5166,7 +5180,7 @@ clean_environment() {
             img_name=$(echo "$img_info" | awk '{print $1}')
             img_id=$(echo "$img_info" | awk '{print $2}')
             case "$img_name" in
-                *privacy-hub*|*privacyhub*|*odido*|*redlib*|*wikiless*|*scribe*|*vert*|*invidious*|*sources_*)
+                *${APP_NAME}*|*${APP_NAME//-/}*|*odido*|*redlib*|*wikiless*|*scribe*|*vert*|*invidious*|*sources_*)
                     log_info "  Removing local image: $img_name"
                     $DOCKER_CMD rmi -f "$img_id" 2>/dev/null || true
                     # Note: We can't easily append to REMOVED_IMAGES inside a subshell/pipe loop
@@ -5206,14 +5220,19 @@ clean_environment() {
             fi
         fi
         
+        if [ -d "$MEMOS_HOST_DIR" ]; then
+            log_info "  Removing: $MEMOS_HOST_DIR"
+            rm -rf "$MEMOS_HOST_DIR"
+        fi
+        
         if [ -d "$CERT_BACKUP_DIR" ]; then
             rm -rf "$CERT_BACKUP_DIR"
         fi
         
         # Alternative locations that might have been created
-        if [ -d "./DATA/AppData/privacy-hub" ]; then
-            log_info "  Removing directory: ./DATA/AppData/privacy-hub"
-            rm -rf "./DATA/AppData/privacy-hub"
+        if [ -d "./DATA/AppData/$APP_NAME" ]; then
+            log_info "  Removing directory: ./DATA/AppData/$APP_NAME"
+            rm -rf "./DATA/AppData/$APP_NAME"
         fi
         
         # ============================================================
@@ -5227,7 +5246,7 @@ clean_environment() {
         
         if [ -n "$REMOVED_CRONS" ]; then
             log_info "  Clearing cron entries: $REMOVED_CRONS"
-            echo "$EXISTING_CRON" | grep -v "wg-ip-monitor" | grep -v "cert-monitor" | grep -v "privacy-hub" | crontab - 2>/dev/null || true
+            echo "$EXISTING_CRON" | grep -v "wg-ip-monitor" | grep -v "cert-monitor" | grep -v "$APP_NAME" | crontab - 2>/dev/null || true
         fi
         
         # ============================================================
@@ -5246,14 +5265,14 @@ clean_environment() {
         # ============================================================
         log_info "Phase 9: Cleaning up specific networking rules (existing host rules will be preserved)..."
         # Only remove rules if they exist to avoid affecting other system configurations
-        if sudo -E iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null; then
-            sudo -E iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
+        if $SUDO iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null; then
+            $SUDO iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
         fi
-        if sudo -E iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null; then
-            sudo -E iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
+        if $SUDO iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null; then
+            $SUDO iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
         fi
-        if sudo -E iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
-            sudo -E iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
+        if $SUDO iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
+            $SUDO iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
         fi
         
         echo ""
@@ -9277,8 +9296,8 @@ COMPOSE_FILE="$COMPOSE_FILE"
 LAN_IP="$LAN_IP"
 PORT_DASHBOARD_WEB="$PORT_DASHBOARD_WEB"
 DOCKER_AUTH_DIR="$DOCKER_AUTH_DIR"
-DOCKER_CMD="sudo -E env DOCKER_CONFIG=\"\$DOCKER_AUTH_DIR\" docker"
-DOCKER_COMPOSE_CMD="sudo -E env DOCKER_CONFIG=\"\$DOCKER_AUTH_DIR\" $DOCKER_COMPOSE_CMD"
+DOCKER_CMD="$SUDO env DOCKER_CONFIG=\"\$DOCKER_AUTH_DIR\" docker"
+DOCKER_COMPOSE_CMD="$SUDO env DOCKER_CONFIG=\"\$DOCKER_AUTH_DIR\" $DOCKER_COMPOSE_CMD"
 LOG_FILE="\$AGH_CONF_DIR/certbot/monitor.log"
 LOCK_FILE="\$AGH_CONF_DIR/certbot/monitor.lock"
 EOF
@@ -9403,7 +9422,7 @@ LOCK_FILE="$BASE_DIR/.ip-monitor.lock"
 DESEC_DOMAIN="$DESEC_MONITOR_DOMAIN"
 DESEC_TOKEN="$DESEC_MONITOR_TOKEN"
 DOCKER_CONFIG="$DOCKER_AUTH_DIR"
-DOCKER_COMPOSE_CMD="sudo -E env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" $DOCKER_COMPOSE_CMD"
+DOCKER_COMPOSE_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" $DOCKER_COMPOSE_CMD"
 export DOCKER_CONFIG
 EOF
 
@@ -9481,9 +9500,9 @@ EOF
 # Execute system deployment and verify global infrastructure integrity.
 check_iptables() {
     log_info "Verifying iptables rules..."
-    if sudo -E iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null && \
-       sudo -E iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null && \
-       sudo -E iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
+    if $SUDO iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null && \
+       $SUDO iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null && \
+       $SUDO iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
         log_info "Network routing rules verified (WireGuard traffic allowed)."
     else
         log_warn "Network routing rules incomplete. External VPN access may be limited."
@@ -9491,7 +9510,7 @@ check_iptables() {
     fi
 }
 
-sudo -E modprobe tun || true
+$SUDO modprobe tun || true
 
 # Explicitly remove portainer and hub-api if they exist to ensure clean state
 log_info "Launching core infrastructure services..."
