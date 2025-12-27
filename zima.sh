@@ -4728,14 +4728,14 @@ authenticate_registries() {
         
         # DHI Login
         log_info "Attempting dhi.io login for $REG_USER..."
-        if echo "$REG_TOKEN" | sudo -E env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
+        if echo "$REG_TOKEN" | $DOCKER_CMD login dhi.io -u "$REG_USER" --password-stdin; then
             log_info "dhi.io: Authentication successful."
         else
             log_warn "dhi.io: Authentication failed. This is required to access the free DHI hardened images."
         fi
 
         # Docker Hub Login
-        if echo "$REG_TOKEN" | sudo -E env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+        if echo "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
              log_info "Docker Hub: Authentication successful."
         else
              log_warn "Docker Hub: Authentication failed."
@@ -4755,7 +4755,7 @@ authenticate_registries() {
         
         # DHI Login
         DHI_LOGIN_OK=false
-        if echo "$REG_TOKEN" | sudo -E env DOCKER_CONFIG="$DOCKER_CONFIG" docker login dhi.io -u "$REG_USER" --password-stdin; then
+        if echo "$REG_TOKEN" | $DOCKER_CMD login dhi.io -u "$REG_USER" --password-stdin; then
             log_info "dhi.io: Authentication successful."
             DHI_LOGIN_OK=true
         else
@@ -4764,7 +4764,7 @@ authenticate_registries() {
 
         # Docker Hub Login
         HUB_LOGIN_OK=false
-        if echo "$REG_TOKEN" | sudo -E env DOCKER_CONFIG="$DOCKER_CONFIG" docker login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+        if echo "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
              log_info "Docker Hub: Authentication successful."
              HUB_LOGIN_OK=true
         else
@@ -5252,14 +5252,14 @@ clean_environment() {
         # ============================================================
         log_info "Phase 9: Cleaning up specific networking rules (existing host rules will be preserved)..."
         # Only remove rules if they exist to avoid affecting other system configurations
-        if iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null; then
-            iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
+        if sudo iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null; then
+            sudo iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
         fi
-        if iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null; then
-            iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
+        if sudo iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null; then
+            sudo iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
         fi
-        if iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
-            iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
+        if sudo iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
+            sudo iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
         fi
         
         echo ""
@@ -5308,7 +5308,7 @@ pull_with_retry() {
     local max_retries=3
     local count=0
     while [ $count -lt $max_retries ]; do
-        if sudo -E env DOCKER_CONFIG="$DOCKER_CONFIG" docker pull "$img" >/dev/null 2>&1; then
+        if $DOCKER_CMD pull "$img" >/dev/null 2>&1; then
             echo "[INFO] Successfully pulled $img"
             return 0
         fi
@@ -9229,7 +9229,8 @@ COMPOSE_FILE="$COMPOSE_FILE"
 LAN_IP="$LAN_IP"
 PORT_DASHBOARD_WEB="$PORT_DASHBOARD_WEB"
 DOCKER_AUTH_DIR="$DOCKER_AUTH_DIR"
-DOCKER_CMD="env DOCKER_CONFIG=\"\$DOCKER_AUTH_DIR\" docker"
+DOCKER_CMD="sudo -E env DOCKER_CONFIG=\"\$DOCKER_AUTH_DIR\" docker"
+DOCKER_COMPOSE_CMD="sudo -E env DOCKER_CONFIG=\"\$DOCKER_AUTH_DIR\" $DOCKER_COMPOSE_CMD"
 LOG_FILE="\$AGH_CONF_DIR/certbot/monitor.log"
 LOCK_FILE="\$AGH_CONF_DIR/certbot/monitor.lock"
 EOF
@@ -9309,7 +9310,7 @@ if $DOCKER_CMD run --rm \
             sed -i "s|dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB|dev.casaos.app.ui.port=8443|g" "$COMPOSE_FILE"
             sed -i "s|dev.casaos.app.ui.hostname=$LAN_IP|dev.casaos.app.ui.hostname=$DESEC_DOMAIN|g" "$COMPOSE_FILE"
             sed -i "s|scheme: http|scheme: https|g" "$COMPOSE_FILE"
-            $DOCKER_CMD compose -f "$COMPOSE_FILE" up -d --no-deps dashboard
+            $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --no-deps dashboard
         fi
 
         $DOCKER_CMD restart adguard
@@ -9325,7 +9326,7 @@ if $DOCKER_CMD run --rm \
             sed -i "s|dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB|dev.casaos.app.ui.port=8443|g" "$COMPOSE_FILE"
             sed -i "s|dev.casaos.app.ui.hostname=$LAN_IP|dev.casaos.app.ui.hostname=$DESEC_DOMAIN|g" "$COMPOSE_FILE"
             sed -i "s|scheme: http|scheme: https|g" "$COMPOSE_FILE"
-            $DOCKER_CMD compose -f "$COMPOSE_FILE" up -d --no-deps dashboard
+            $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --no-deps dashboard
         fi
 
         $DOCKER_CMD restart adguard
@@ -9354,7 +9355,7 @@ LOCK_FILE="$BASE_DIR/.ip-monitor.lock"
 DESEC_DOMAIN="$DESEC_MONITOR_DOMAIN"
 DESEC_TOKEN="$DESEC_MONITOR_TOKEN"
 DOCKER_CONFIG="$DOCKER_AUTH_DIR"
-DOCKER_COMPOSE_CMD="$DOCKER_COMPOSE_CMD"
+DOCKER_COMPOSE_CMD="sudo -E env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" $DOCKER_COMPOSE_CMD"
 export DOCKER_CONFIG
 EOF
 
@@ -9432,9 +9433,9 @@ EOF
 # Execute system deployment and verify global infrastructure integrity.
 check_iptables() {
     log_info "Verifying iptables rules..."
-    if iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null && \
-       iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null && \
-       iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
+    if sudo iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null && \
+       sudo iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null && \
+       sudo iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null; then
         log_info "Network routing rules verified (WireGuard traffic allowed)."
     else
         log_warn "Network routing rules incomplete. External VPN access may be limited."
@@ -9442,7 +9443,7 @@ check_iptables() {
     fi
 }
 
-modprobe tun || true
+sudo modprobe tun || true
 
 # Explicitly remove portainer and hub-api if they exist to ensure clean state
 log_info "Launching core infrastructure services..."
