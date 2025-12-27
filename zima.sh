@@ -8864,7 +8864,7 @@ cat >> "$COMPOSE_FILE" <<EOF
       - "io.dhi.hardened=true"
     networks:
       frontnet:
-        ipv4_address: 172.20.0.250
+        ipv4_address: 172.$FOUND_OCTET.0.250
     volumes:
       - "$UNBOUND_CONF:/opt/unbound/etc/unbound/unbound.conf:ro"
     restart: unless-stopped
