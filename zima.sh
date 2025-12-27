@@ -5005,7 +5005,7 @@ clean_environment() {
         log_warn "FORCE CLEAN ENABLED (-c): All existing data, configurations, and volumes will be permanently removed."
     fi
 
-    TARGET_CONTAINERS="gluetun adguard dashboard portainer watchtower wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd"
+    TARGET_CONTAINERS="gluetun adguard dashboard portainer wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd"
     
     FOUND_CONTAINERS=""
     for c in $TARGET_CONTAINERS; do
@@ -5169,7 +5169,7 @@ clean_environment() {
         log_info "Phase 5: Removing images..."
         REMOVED_IMAGES=""
         # Remove images by known names
-        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21-dev dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/node:20-alpine3.22 dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
+        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21-dev dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/node:20-alpine3.22 dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
         for img in $KNOWN_IMAGES; do
             if $DOCKER_CMD images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -q "$img"; then
                 log_info "  Removing: $img"
@@ -5340,7 +5340,7 @@ export DOCKER_CONFIG
 
 log_info "Pre-pulling core infrastructure images in parallel..."
 # We only pull core infrastructure and base images. App images built from source are skipped.
-CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce containrrr/watchtower dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
+CRITICAL_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound 84codes/crystal:1.16.3-alpine alpine:latest neilpang/acme.sh"
 
 PIDS=""
 for img in $CRITICAL_IMAGES; do
@@ -6411,6 +6411,8 @@ RUN raco pkg install --batch --auto --no-docs --skip-installed \
 EXPOSE 10416
 CMD ["racket", "dist.rkt"]
 BWEOF
+fi
+
 if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Gluetun..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/gluetun")
@@ -6486,7 +6488,7 @@ if [ "$SERVICE" = "vertd" ] || [ "$SERVICE" = "all" ]; then
             sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/vertd/$D_FILE"
         fi
     fi
-}
+fi
 
 if [ "$SERVICE" = "companion" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Invidious Companion..."
@@ -6499,14 +6501,6 @@ if [ "$SERVICE" = "companion" ] || [ "$SERVICE" = "all" ]; then
     fi
 fi
 
-if [ "$SERVICE" = "watchtower" ] || [ "$SERVICE" = "all" ]; then
-    log "Patching Watchtower..."
-    D_FILE=$(detect_dockerfile "$SRC_ROOT/watchtower")
-    if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/watchtower/$D_FILE"; then log "Watchtower already patched."; else
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22|g' "$SRC_ROOT/watchtower/$D_FILE"
-        fi
-    fi
 fi
 
 if [ "$SERVICE" = "wg-easy" ] || [ "$SERVICE" = "all" ]; then
@@ -6570,7 +6564,6 @@ sync_and_patch "https://codeberg.org/rimgo/rimgo.git" "$SRC_DIR/rimgo" "rimgo" &
 sync_and_patch "https://github.com/httpjamesm/anonymousoverflow.git" "$SRC_DIR/anonymousoverflow" "anonymousoverflow" & PIDS="$PIDS $!"
 sync_and_patch "https://github.com/iv-org/invidious-companion.git" "$SRC_DIR/invidious-companion" "companion" & PIDS="$PIDS $!"
 sync_and_patch "https://github.com/VERT-sh/vertd.git" "$SRC_DIR/vertd" "vertd" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/containrrr/watchtower.git" "$SRC_DIR/watchtower" "watchtower" & PIDS="$PIDS $!"
 sync_and_patch "https://github.com/portainer/portainer.git" "$SRC_DIR/portainer" "portainer" & PIDS="$PIDS $!"
 
 SUCCESS=true
@@ -7645,7 +7638,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         parts = line.split('\t')
                         if len(parts) < 2: continue
                         size_str, repo = parts[0], parts[1]
-                        if any(x in repo for x in ['$APP_NAME', 'gluetun', 'adguard', 'unbound', 'redlib', 'wikiless', 'invidious', 'rimgo', 'breezewiki', 'memos', 'vert', 'scribe', 'anonymousoverflow', 'odido-booster', 'watchtower', 'portainer', 'wg-easy']):
+                        if any(x in repo for x in ['$APP_NAME', 'gluetun', 'adguard', 'unbound', 'redlib', 'wikiless', 'invidious', 'rimgo', 'breezewiki', 'memos', 'vert', 'scribe', 'anonymousoverflow', 'odido-booster', 'portainer', 'wg-easy']):
                             mult = 1
                             if 'GB' in size_str.upper(): mult = 1024*1024*1024
                             elif 'MB' in size_str.upper(): mult = 1024*1024
@@ -7726,7 +7719,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         for line in img_res.stdout.strip().split('\n'):
                             size_str, repo = line.split('\t')
                             # Check if it belongs to our stack
-                            if any(x in repo for x in ['$APP_NAME', 'gluetun', 'adguard', 'unbound', 'redlib', 'wikiless', 'invidious', 'rimgo', 'breezewiki', 'memos', 'vert', 'scribe', 'anonymousoverflow', 'odido-booster', 'watchtower', 'portainer', 'wg-easy']):
+                            if any(x in repo for x in ['$APP_NAME', 'gluetun', 'adguard', 'unbound', 'redlib', 'wikiless', 'invidious', 'rimgo', 'breezewiki', 'memos', 'vert', 'scribe', 'anonymousoverflow', 'odido-booster', 'portainer', 'wg-easy']):
                                 mult = 1
                                 if 'GB' in size_str.upper(): mult = 1024*1024*1024
                                 elif 'MB' in size_str.upper(): mult = 1024*1024
@@ -7842,11 +7835,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         log_structured("INFO", "[Update Engine] Creating pre-update backup...", "MAINTENANCE")
                         subprocess.run(["/usr/local/bin/migrate.sh", "all", "backup-all"], timeout=300)
                         
-                        # 3. Trigger Watchtower for all images
-                        log_structured("INFO", "[Update Engine] Pulling latest container images...", "MAINTENANCE")
-                        subprocess.run(['docker', 'run', '--rm', '-v', '/var/run/docker.sock:/var/run/docker.sock', 'containrrr/watchtower', '--run-once', '--cleanup'])
-                        
-                        # 4. Trigger source updates for all
+                        # 3. Trigger source updates for all
                         src_root = "/app/sources"
                         if os.path.exists(src_root):
                             log_structured("INFO", "[Update Engine] Refreshing service source code...", "MAINTENANCE")
@@ -7854,6 +7843,10 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                 repo_path = os.path.join(src_root, repo)
                                 if os.path.isdir(os.path.join(repo_path, ".git")):
                                     subprocess.run(["git", "fetch", "--all"], cwd=repo_path)
+                        
+                        # 4. Trigger rebuilds for all services
+                        log_structured("INFO", "[Update Engine] Rebuilding all services from source...", "MAINTENANCE")
+                        subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build'], timeout=1200)
                         
                         log_structured("INFO", "[Update Engine] Master Update successfully completed.", "MAINTENANCE")
                     except Exception as e:
@@ -7866,24 +7859,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
         elif path_clean == '/check-updates':
             try:
-                log_structured("INFO", "Checking for system-wide container and source updates...", "MAINTENANCE")
-                
-                # Clear previous image updates
-                try:
-                    os.remove("/app/data/image_updates.json")
-                except: pass
-
-                # Trigger Watchtower run-once in MONITOR mode (no auto-update)
-                # We expect it to hit the /watchtower webhook if updates are found
-                subprocess.Popen(['docker', 'run', '--rm', 
-                    '-v', '/var/run/docker.sock:/var/run/docker.sock', 
-                    'containrrr/watchtower', 
-                    '--run-once', 
-                    '--monitor-only', 
-                    '--cleanup', 
-                    '--include-stopped',
-                    '--notification-url', 'generic://hub-api:55555/watchtower?template=json&disabletls=yes'
-                ])
+                log_structured("INFO", "Checking for system-wide source updates...", "MAINTENANCE")
                 
                 # Also trigger git fetch for sources in background
                 src_root = "/app/sources"
@@ -7891,9 +7867,9 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     for repo in os.listdir(src_root):
                         repo_path = os.path.join(src_root, repo)
                         if os.path.isdir(os.path.join(repo_path, ".git")):
-                            log_structured("INFO", f"Refreshing repository: {repo}", "MAINTENANCE")
                             subprocess.Popen(["git", "fetch"], cwd=repo_path)
-                self._send_json({"success": True, "message": "Update check initiated in background"})
+                
+                self._send_json({"success": True, "message": "Source update check initiated"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif path_clean == '/updates':
@@ -8252,47 +8228,6 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"error": "Unauthorized"}, 401)
             return
 
-        if self.path == '/watchtower' and self.command == 'POST':
-            try:
-                content_length = int(self.headers.get('Content-Length', 0))
-                body = self.rfile.read(content_length).decode('utf-8')
-                
-                # Parse Watchtower notification (JSON)
-                try:
-                    updates_file = "/app/data/image_updates.json"
-                    current_updates = {}
-                    if os.path.exists(updates_file):
-                        try:
-                            with open(updates_file, 'r') as f:
-                                current_updates = json.load(f)
-                        except: pass
-                    
-                    msg_data = json.loads(body)
-                    # If it's a list, iterate
-                    if isinstance(msg_data, list):
-                        for entry in msg_data:
-                            # Extract useful info if possible, else generic
-                            current_updates["_last_check"] = time.time()
-                    else:
-                        current_updates["_last_check"] = time.time()
-                        
-                    # We will rely on the fact that Watchtower found *something*.
-                    # To be truly useful, we should set a flag that /updates reads.
-                    # We'll set a special key that the dashboard UI can interpret or just list "Docker Images".
-                    current_updates["Docker Images"] = "Update Available"
-                    
-                    with open(updates_file, 'w') as f:
-                        json.dump(current_updates, f)
-                        
-                except Exception as e:
-                    log_structured("WARN", f"Failed to parse Watchtower body: {e}", "MAINTENANCE")
-
-                log_structured("INFO", "Watchtower reports new updates available.", "MAINTENANCE")
-                self._send_json({"success": True})
-            except Exception as e:
-                self._send_json({"error": str(e)}, 500)
-            return
-
         if self.path == '/theme':
             theme_file = os.path.join(CONFIG_DIR, "theme.json")
             try:
@@ -8477,16 +8412,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 SERVICE_REPOS = {
                     "adguard": {"repo": "AdguardTeam/AdGuardHome", "type": "github"},
                     "portainer": {"repo": "portainer/portainer", "type": "github"},
-                    "wg-easy": {"repo": "wg-easy/wg-easy", "type": "github"},
-                    "redlib": {"repo": "redlib-org/redlib", "type": "github"},
-                    "gluetun": {"repo": "qdm12/gluetun", "type": "github"},
-                    "anonymousoverflow": {"repo": "httpjamesm/AnonymousOverflow", "type": "github"},
-                    "rimgo": {"repo": "rimgo/rimgo", "type": "codeberg"},
-                    "memos": {"repo": "usememos/memos", "type": "github"},
-                    "watchtower": {"repo": "containrrr/watchtower", "type": "github"},
-                    "unbound": {"repo": "klutchell/unbound", "type": "github"},
-                    "vertd": {"repo": "VERT-sh/vertd", "type": "github"}
-                }
+
 
                 # Check if it's a source-based service
                 repo_path = f"/app/sources/{service}"
@@ -8612,7 +8538,7 @@ should_deploy() {
     local srv=$1
     if [ -z "$SELECTED_SERVICES" ]; then return 0; fi
     # Core infrastructure always deployed
-    if [[ "$srv" =~ ^(hub-api|gluetun|dashboard|adguard|unbound|watchtower|wg-easy)$ ]]; then return 0; fi
+    if [[ "$srv" =~ ^(hub-api|gluetun|dashboard|adguard|unbound|wg-easy)$ ]]; then return 0; fi
     # Dependencies
     if [[ "$srv" == "invidious-db" || "$srv" == "companion" ]]; then srv="invidious"; fi
     if [[ "$srv" == "wikiless_redis" ]]; then srv="wikiless"; fi
@@ -8796,7 +8722,6 @@ cat >> "$COMPOSE_FILE" <<EOF
     container_name: hub-api
     labels:
       - "casaos.skip=true"
-      - "com.centurylinklabs.watchtower.enable=false"
       - "io.dhi.hardened=true"
     networks: [frontnet]
     volumes:
@@ -8849,7 +8774,6 @@ cat >> "$COMPOSE_FILE" <<EOF
       dockerfile: $ODIDO_DOCKERFILE
     container_name: odido-booster
     labels:
-      - "com.centurylinklabs.watchtower.enable=false"
       - "io.dhi.hardened=true"
     networks: [frontnet]
     ports: ["$LAN_IP:8085:8080"]
@@ -8869,30 +8793,6 @@ cat >> "$COMPOSE_FILE" <<EOF
     deploy:
       resources:
         limits: {cpus: '0.3', memory: 128M}
-EOF
-fi
-
-if should_deploy "watchtower"; then
-cat >> "$COMPOSE_FILE" <<EOF
-  watchtower:
-    build:
-      context: $SRC_DIR/watchtower
-    container_name: watchtower
-    labels:
-      - "casaos.skip=true"
-    networks: [frontnet]
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: >
-      --schedule "0 0 3 * * *"
-      --cleanup
-      --include-stopped
-      --disable-containers watchtower
-      --notification-url "generic://hub-api:55555/watchtower?template=json&disabletls=yes"
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits: {cpus: '0.2', memory: 128M}
 EOF
 fi
 
@@ -9136,7 +9036,6 @@ cat >> "$COMPOSE_FILE" <<EOF
       dockerfile: $WIKILESS_DOCKERFILE
     container_name: wikiless
     labels:
-      - "com.centurylinklabs.watchtower.enable=false"
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment: {DOMAIN: "$LAN_IP:$PORT_WIKILESS", NONSSL_PORT: "$PORT_INT_WIKILESS", REDIS_URL: "redis://127.0.0.1:6379"}
@@ -9171,7 +9070,6 @@ cat >> "$COMPOSE_FILE" <<EOF
       dockerfile: $INVIDIOUS_DOCKERFILE
     container_name: invidious
     labels:
-      - "com.centurylinklabs.watchtower.enable=false"
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment:
@@ -9329,7 +9227,6 @@ cat >> "$COMPOSE_FILE" <<EOF
       dockerfile: $SCRIBE_DOCKERFILE
     container_name: scribe
     labels:
-      - "com.centurylinklabs.watchtower.enable=false"
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     env_file: ["$ENV_DIR/scribe.env"]
@@ -9384,7 +9281,6 @@ $(if [ -n "$VERTD_NVIDIA" ]; then echo "        reservations:
       dockerfile: $VERT_DOCKERFILE
     labels:
       - "casaos.skip=true"
-      - "com.centurylinklabs.watchtower.enable=false"
       - "io.dhi.hardened=true"
     environment:
       - PUB_HOSTNAME=$VERT_PUB_HOSTNAME
