@@ -48,12 +48,58 @@ This **Automated Mode**:
 
 ### Prerequisites
 
-Before you begin, gather these essentials:
+Gather these essentials before starting the installation. Each token should be created with the **least privilege** required.
 
-*   **Docker Hub Account**: Username & Access Token (Read-only) to avoid rate limits.
-*   **ProtonVPN WireGuard Config**: Required for the `Gluetun` VPN gateway to hide your IP.
-    *   *Download a free config from your ProtonVPN account dashboard.*
+#### 🛠️ Essential Tokens
+*   **Docker Hub Account**: Required to pull hardened images and avoid rate limits.
+    *   **Token Rights**: Create a "Personal Access Token" with **Public Read-only** (or Read-only) permissions.
+    *   **Source**: [Docker Hub Security Settings](https://hub.docker.com/settings/security).
+*   **ProtonVPN WireGuard Config**: Critical for the `Gluetun` VPN gateway to mask your IP.
+    *   **Source**: [ProtonVPN Downloads](https://account.protonvpn.com/downloads). (See [ProtonVPN Guide](#-protonvpn-wireguard-setup) below).
 *   **deSEC Domain (Optional)**: For trusted SSL certificates and mobile "Private DNS" support.
+    *   **Source**: [deSEC.io](https://desec.io).
+
+#### 🔧 Service-Specific Secrets (Optional)
+*   **GitHub Token**: Required for the **Scribe** frontend to avoid API rate limits.
+    *   **Token Rights**: "Classic" token with `gist` scope only.
+    *   **Source**: [GitHub Personal Access Tokens](https://github.com/settings/tokens).
+*   **Odido OAuth Token**: For Dutch users utilizing the **Odido Booster**.
+    *   **Source**: [Odido Authenticator](https://github.com/GuusBackup/Odido.Authenticator/releases/latest).
+
+---
+
+<details>
+<summary>📥 <strong>ProtonVPN WireGuard Setup</strong> (Click to expand)</summary>
+
+1.  **Login** to your [ProtonVPN Account](https://account.protonvpn.com/downloads).
+2.  Navigate to **Downloads** -> **WireGuard configuration**.
+3.  **Name** your configuration (e.g., `Zima-Privacy-Hub`).
+4.  Select a **Free** (or Paid) server in your preferred region.
+5.  **Toggle ON** "NAT-PMP" (Optional but recommended).
+6.  **Download** the `.conf` file.
+7.  **Usage**: You will be prompted to paste the text content of this file during installation.
+
+> 🛡️ **Privacy Impact**: Without this config, your home IP is exposed to YouTube/Reddit. With it, they only see Proton's commercial IP.
+</details>
+
+<details>
+<summary>🔑 <strong>Token & Secret Guides</strong> (Click to expand)</summary>
+
+*   **Docker Hub PAT**:
+    1. Go to [Security Settings](https://hub.docker.com/settings/security).
+    2. Click **New Access Token**.
+    3. Set Access permissions to **Read-only**.
+*   **GitHub PAT (Scribe)**:
+    1. Go to [Token Settings](https://github.com/settings/tokens).
+    2. Select **Generate new token (classic)**.
+    3. Check **only** the `gist` box.
+*   **deSEC Domain**:
+    1. Register at [deSEC.io](https://desec.io).
+    2. Create a domain (e.g., `your-name.dedyn.io`).
+    3. Generate an API token in the dashboard.
+</details>
+
+---
 
 ### Installation
 
