@@ -7066,7 +7066,7 @@ def metrics_collector():
                 conn.close()
         except Exception as e:
             print(f"Metrics Error: {e}")
-        time.sleep(15)
+        time.sleep(30)
 
 def log_structured(level, message, category="SYSTEM"):
     """Log to both file and SQLite."""
