@@ -7029,41 +7029,76 @@ def init_db():
     conn.close()
 
 def metrics_collector():
-    """Background thread to collect container metrics."""
+    """Background thread to collect container metrics. Only runs when active sessions exist."""
+    global valid_sessions
     while True:
         try:
-            res = subprocess.run(
-                ['docker', 'stats', '--no-stream', '--format', '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'],
-                capture_output=True, text=True, timeout=30
-            )
-            if res.returncode == 0:
-                conn = sqlite3.connect(DB_FILE)
-                c = conn.cursor()
-                for line in res.stdout.strip().split('\n'):
-                    if not line: continue
-                    parts = line.split('\t')
-                    if len(parts) == 3:
-                        name, cpu_str, mem_combined = parts
-                        cpu = float(cpu_str.replace('%', ''))
-                        
-                        def to_mb(val):
-                            val = val.upper()
-                            if 'GIB' in val: return float(val.replace('GIB', '')) * 1024
-                            if 'MIB' in val: return float(val.replace('MIB', ''))
-                            if 'KIB' in val: return float(val.replace('KIB', '')) / 1024
-                            if 'B' in val: return float(val.replace('B', '')) / 1024 / 1024
-                            return 0.0
+            # Check if there are any active sessions (simple optimization)
+            # We assume if valid_sessions is empty, no one is looking at the dashboard.
+            # However, we should also consider if the dashboard is open but not logged in?
+            # Actually, the dashboard polls /metrics which requires auth (or we made it public?).
+            # Wait, /metrics in do_GET is allowed without auth in _check_auth?
+            # Yes, /metrics is in the whitelist. So the dashboard can be open without a session token if it's local?
+            # If so, valid_sessions might be empty but we still need metrics.
+            # BUT, the dashboard JS sends requests.
+            # If we want to optimize, we can track "last_metrics_request_time".
+            # Let's use a "last_activity" timestamp updated by any API call.
+            
+            # For now, let's stick to the user request: "active session".
+            # But if /metrics is public, the dashboard might not have a session.
+            # Let's look at _check_auth.
+            pass
+        except: pass
+        
+        # Real implementation:
+        # We'll use a global 'last_metrics_access' timestamp updated by the /metrics endpoint.
+        # If no one asked for metrics in the last 60 seconds, we stop collecting.
+        time.sleep(30)
 
-                        mem_parts = mem_combined.split(' / ')
-                        mem_usage = to_mb(mem_parts[0])
-                        mem_limit = to_mb(mem_parts[1]) if len(mem_parts) > 1 else 0.0
-                        
-                        c.execute("INSERT INTO metrics (container, cpu_percent, mem_usage, mem_limit) VALUES (?, ?, ?, ?)",
-                                  (name, cpu, mem_usage, mem_limit))
-                
-                c.execute("DELETE FROM metrics WHERE timestamp < datetime('now', '-1 hour')")
-                conn.commit()
-                conn.close()
+# We need to inject the logic into the existing function.
+# I will rewrite the function to check a global timestamp.
+
+last_metrics_request = 0
+
+def metrics_collector():
+    """Background thread to collect container metrics. Pauses if no requests received."""
+    global last_metrics_request
+    while True:
+        try:
+            # Only collect if someone requested metrics recently (e.g. last 60s)
+            if time.time() - last_metrics_request < 60:
+                res = subprocess.run(
+                    ['docker', 'stats', '--no-stream', '--format', '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'],
+                    capture_output=True, text=True, timeout=30
+                )
+                if res.returncode == 0:
+                    conn = sqlite3.connect(DB_FILE)
+                    c = conn.cursor()
+                    for line in res.stdout.strip().split('\n'):
+                        if not line: continue
+                        parts = line.split('\t')
+                        if len(parts) == 3:
+                            name, cpu_str, mem_combined = parts
+                            cpu = float(cpu_str.replace('%', ''))
+                            
+                            def to_mb(val):
+                                val = val.upper()
+                                if 'GIB' in val: return float(val.replace('GIB', '')) * 1024
+                                if 'MIB' in val: return float(val.replace('MIB', ''))
+                                if 'KIB' in val: return float(val.replace('KIB', '')) / 1024
+                                if 'B' in val: return float(val.replace('B', '')) / 1024 / 1024
+                                return 0.0
+
+                            mem_parts = mem_combined.split(' / ')
+                            mem_usage = to_mb(mem_parts[0])
+                            mem_limit = to_mb(mem_parts[1]) if len(mem_parts) > 1 else 0.0
+                            
+                            c.execute("INSERT INTO metrics (container, cpu_percent, mem_usage, mem_limit) VALUES (?, ?, ?, ?)",
+                                      (name, cpu, mem_usage, mem_limit))
+                    
+                    c.execute("DELETE FROM metrics WHERE timestamp < datetime('now', '-1 hour')")
+                    conn.commit()
+                    conn.close()
         except Exception as e:
             print(f"Metrics Error: {e}")
         time.sleep(30)
@@ -7881,6 +7916,8 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
         elif path_clean == '/metrics':
             try:
+                global last_metrics_request
+                last_metrics_request = time.time()
                 conn = sqlite3.connect(DB_FILE)
                 c = conn.cursor()
                 # Get latest metrics for each container
