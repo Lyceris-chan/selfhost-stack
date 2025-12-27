@@ -69,7 +69,7 @@ Before you begin, gather these essentials:
 | `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless mode). |
 | `-a` | **Allow Proton (Optional)**: **Not required**. Whitelists ProtonVPN domains in AdGuard. (Author uses this for personal usage to enable the **Proton VPN Browser Extension**). |
 | `-c` | **Maintenance Reset**: Removes only the containers and networks created by this stack to resolve glitches. strictly preserves persistent user data. Does not touch unrelated containers. |
-| `-x` | **REVERT (Factory Reset)**: ⚠️ **Targeted Cleanup** — This erases only the software and databases added by this specific project. It does not touch your personal files or other Docker containers you may have running. |
+| `-x` | **REVERT (Factory Reset)**: ⚠️ **Targeted Cleanup** - This erases only the software and databases added by this specific project. It does not touch your personal files or other Docker containers you may have running. |
 | `-s` | **Selective**: Deploy only specific services (e.g., `-s invidious,memos`). |
 
 > ⚠️ **VPN Access Warning**: When you are connected to a commercial VPN (like ProtonVPN, NordVPN, etc.) directly on your device, you will **not** be able to access your Privacy Hub services. You must be connected to your home **WireGuard (wg-easy)** tunnel to reach them remotely. Using a different VPN will result in a `Connection Timed Out` or `DNS_PROBE_FINISHED_NXDOMAIN` error because your device can no longer "see" your home network.
@@ -402,7 +402,7 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
   - [Quay.io](https://quay.io/privacy) (Images)
   - [SourceHut](https://man.sr.ht/privacy.md) (Scribe source)
   - [Gitdab](https://gitdab.com/) (BreezeWiki source)
-- **DNS blocklist compiler (sleepy list)**:
+- **DNS blocklist compiler ([sleepy list](https://github.com/Lyceris-chan/dns-blocklist-generator))**:
   - [Blocklist Retrieval](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) (Combines and filters out duplicates every 6 hours using the set of default lists provided by AdGuard, using **Hagezi Pro ++** as the anchor. Merges additional lists for broad coverage without false positives. *Note: This list is for personal usage and won't be updated to allow specific lists or for the usage of others.*)
 - **Optional Service APIs**:
   - [Odido API](https://www.odido.nl/privacy) (Data bundle management)
