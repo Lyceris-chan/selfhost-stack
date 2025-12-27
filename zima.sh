@@ -9588,6 +9588,7 @@ generate_protonpass_export
 echo "[+] Finalizing environment (cleaning up dangling images)..."
 $DOCKER_CMD image prune -f
 $DOCKER_CMD builder prune -f
+rm -rf "$DOCKER_AUTH_DIR"
 
 $DOCKER_CMD restart portainer 2>/dev/null || true
 
