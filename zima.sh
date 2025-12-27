@@ -2603,7 +2603,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
         }
 
         async function apiCall(endpoint, options = {}) {
-            const url = endpoint.startsWith('http') ? endpoint : API + endpoint;
+            const baseUrl = options.baseUrl || API;
+            const url = endpoint.startsWith('http') ? endpoint : baseUrl + endpoint;
             const headers = { ...getAuthHeaders(), ...(options.headers || {}) };
             
             try {
@@ -3283,7 +3284,10 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000);
             try {
-                const res = await fetch(ODIDO_API + "/status", { headers: getAuthHeaders(), signal: controller.signal });
+                const res = await apiCall("/status", { 
+                    baseUrl: ODIDO_API,
+                    signal: controller.signal 
+                });
                 clearTimeout(timeoutId);
                 if (!res.ok) {
                     const data = await res.json().catch(() => ({}));
@@ -3416,9 +3420,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 st.style.color = 'var(--p)';
             }
             try {
-                const res = await fetch(ODIDO_API + "/config", {
+                const res = await apiCall("/config", {
+                    baseUrl: ODIDO_API,
                     method: 'POST',
-                    headers: getAuthHeaders(),
                     body: JSON.stringify(data)
                 });
                 const result = await res.json();
@@ -3450,9 +3454,9 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 st.style.color = 'var(--p)';
             }
             try {
-                const res = await fetch(ODIDO_API + "/odido/buy-bundle", {
+                const res = await apiCall("/odido/buy-bundle", {
+                    baseUrl: ODIDO_API,
                     method: 'POST',
-                    headers: getAuthHeaders(),
                     body: JSON.stringify({})
                 });
                 const result = await res.json();
@@ -3478,7 +3482,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 st.style.color = 'var(--p)';
             }
             try {
-                const res = await fetch(ODIDO_API + "/odido/remaining", { headers: getAuthHeaders() });
+                const res = await apiCall("/odido/remaining", { baseUrl: ODIDO_API });
                 const result = await res.json();
                 if (result.detail) throw new Error(result.detail);
                 if (st) {
@@ -4034,9 +4038,8 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             };
 
             try {
-                await fetch(API + "/theme", {
+                await apiCall("/theme", {
                     method: 'POST',
-                    headers: getAuthHeaders(),
                     body: JSON.stringify(settings)
                 });
             } catch(e) { console.warn("Failed to sync settings to server", e); }
