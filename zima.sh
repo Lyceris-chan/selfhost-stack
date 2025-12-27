@@ -106,7 +106,7 @@ else
 fi
 
 # Define consistent docker command using custom config for auth
-DOCKER_CMD="sudo -E env DOCKER_CONFIG=$DOCKER_AUTH_DIR docker"
+DOCKER_CMD="sudo -E env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" docker"
 
 # Paths
 SRC_DIR="$BASE_DIR/sources"
@@ -4879,7 +4879,7 @@ check_docker_rate_limit() {
     # Export DOCKER_CONFIG globally
     export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
     
-    if ! output=$(env DOCKER_CONFIG="$DOCKER_CONFIG" sudo docker pull hello-world 2>&1); then
+    if ! output=$($DOCKER_CMD pull hello-world 2>&1); then
         if echo "$output" | grep -iaE "toomanyrequests|rate.*limit|pull.*limit|reached.*limit" >/dev/null; then
             log_crit "Docker Hub Rate Limit Reached! They want you to log in."
             # We already tried to auth at start, but maybe it failed or they skipped?
@@ -5280,7 +5280,7 @@ fi
 # Authenticate to registries (DHI & Docker Hub)
 if [ "${DASHBOARD_ONLY:-false}" = true ]; then
     log_info "Dashboard-only mode active. Generating UI and exiting."
-    LAN_IP="${LAN_IP_OVERRIDE:-10.0.1.183}"
+    LAN_IP="${LAN_IP_OVERRIDE:-192.168.1.100}"
     PUBLIC_IP="${PUBLIC_IP:-1.2.3.4}"
     ODIDO_API_KEY="${ODIDO_API_KEY:-mock_key}"
     PORT_DASHBOARD_WEB="8081"
@@ -5728,6 +5728,8 @@ cat > "$GLUETUN_ENV_FILE" <<EOF
 VPN_SERVICE_PROVIDER=custom
 VPN_TYPE=wireguard
 HTTPPROXY=on
+HTTP_CONTROL_SERVER=on
+HTTP_CONTROL_SERVER_ADDRESS=:8000
 HTTP_CONTROL_SERVER_AUTH_USER=gluetun
 HTTP_CONTROL_SERVER_AUTH_PASSWORD=$ADMIN_PASS_RAW
 FIREWALL_VPN_INPUT_PORTS=8080,8180,3000,3002,8280,10416,8480
@@ -6072,7 +6074,7 @@ map \$http_host \$backend {
     invidious.$DESEC_DOMAIN  http://gluetun:3000;
     redlib.$DESEC_DOMAIN     http://gluetun:8080;
     wikiless.$DESEC_DOMAIN   http://gluetun:8180;
-    memos.$DESEC_DOMAIN      http://$LAN_IP:$PORT_MEMOS;
+    memos.$DESEC_DOMAIN      http://memos:5230;
     rimgo.$DESEC_DOMAIN      http://gluetun:3002;
     scribe.$DESEC_DOMAIN     http://gluetun:8280;
     breezewiki.$DESEC_DOMAIN http://gluetun:10416;
@@ -6088,7 +6090,7 @@ map \$http_host \$backend {
     "invidious.$DESEC_DOMAIN:8443"  http://gluetun:3000;
     "redlib.$DESEC_DOMAIN:8443"     http://gluetun:8080;
     "wikiless.$DESEC_DOMAIN:8443"   http://gluetun:8180;
-    "memos.$DESEC_DOMAIN:8443"      http://$LAN_IP:$PORT_MEMOS;
+    "memos.$DESEC_DOMAIN:8443"      http://memos:5230;
     "rimgo.$DESEC_DOMAIN:8443"      http://gluetun:3002;
     "scribe.$DESEC_DOMAIN:8443"     http://gluetun:8280;
     "breezewiki.$DESEC_DOMAIN:8443" http://gluetun:10416;
@@ -6558,15 +6560,15 @@ mkdir -p "$BACKUP_DIR"
 
                 log "Restoring from $LATEST_BACKUP..."
 
-                if [ "$SERVICE" = "invidious" ]; then
+                                if [ "$SERVICE" = "invidious" ]; then
 
-                    sudo docker exec invidious-db dropdb -U kemal invidious
+                                    docker exec invidious-db dropdb -U kemal invidious
 
-                    sudo docker exec invidious-db createdb -U kemal invidious
+                                    docker exec invidious-db createdb -U kemal invidious
 
-                    cat "$LATEST_BACKUP" | sudo docker exec -i invidious-db psql -U kemal invidious
+                                    cat "$LATEST_BACKUP" | docker exec -i invidious-db psql -U kemal invidious
 
-                    log "Restore complete."
+                                    log "Restore complete."
 
                 else
 
@@ -6592,23 +6594,23 @@ mkdir -p "$BACKUP_DIR"
             log "CLEARING Invidious database (resetting to defaults)..."
             if [ "$BACKUP" != "no" ]; then
                 log "Creating safety backup..."
-                sudo docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
+                docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
             fi
             # Drop and recreate
-            sudo docker exec invidious-db dropdb -U kemal invidious
-            sudo docker exec invidious-db createdb -U kemal invidious
-            sudo docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh
+            docker exec invidious-db dropdb -U kemal invidious
+            docker exec invidious-db createdb -U kemal invidious
+            docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh
             log "Invidious database cleared."
         elif [ "$ACTION" = "migrate" ]; then
             log "Starting Invidious migration..."
             # 1. Backup existing data
             if [ "$BACKUP" != "no" ] && [ -d "$DATA_DIR/postgres" ]; then
                 log "Backing up Invidious database..."
-                sudo docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"
+                docker exec invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"
             fi
             # 2. Run migrations
             log "Applying schema updates..."
-            sudo docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
+            docker exec invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
             log "Invidious migration complete."
         elif [ "$ACTION" = "vacuum" ]; then
              log "Invidious (Postgres) handles vacuuming automatically. Skipping."
@@ -6622,7 +6624,7 @@ mkdir -p "$BACKUP_DIR"
     elif [ "$SERVICE" = "memos" ]; then
         if [ "$ACTION" = "vacuum" ]; then
             log "Optimizing Memos database (VACUUM)..."
-            sudo docker exec memos sqlite3 /var/opt/memos/memos_prod.db "VACUUM;" 2>/dev/null || log "Memos container not ready or sqlite3 missing."
+            docker exec memos sqlite3 /var/opt/memos/memos_prod.db "VACUUM;" 2>/dev/null || log "Memos container not ready or sqlite3 missing."
             log "Memos database optimized."
         fi
     else
@@ -6660,13 +6662,13 @@ if [ "$ACTION" = "activate" ]; then
         echo "$PROFILE_NAME" > "$NAME_FILE"
         DEPENDENTS="redlib wikiless wikiless_redis invidious invidious-db companion rimgo breezewiki anonymousoverflow scribe"
         # shellcheck disable=SC2086
-        sudo docker stop $DEPENDENTS 2>/dev/null || true
-        sudo docker compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
+        docker stop $DEPENDENTS 2>/dev/null || true
+        docker compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
         
         # Wait for gluetun to be healthy (max 30s)
         i=0
         while [ $i -lt 30 ]; do
-            HEALTH=$(sudo docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
+            HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
             if [ "$HEALTH" = "healthy" ]; then
                 break
             fi
@@ -6675,7 +6677,7 @@ if [ "$ACTION" = "activate" ]; then
         done
 
         # shellcheck disable=SC2086
-        sudo docker compose -f /app/docker-compose.yml up -d --force-recreate $DEPENDENTS 2>/dev/null || true
+        docker compose -f /app/docker-compose.yml up -d --force-recreate $DEPENDENTS 2>/dev/null || true
     else
         echo "Error: Profile not found"
         exit 1
@@ -6696,9 +6698,9 @@ elif [ "$ACTION" = "status" ]; then
     PUBLIC_IP="--"
     DATA_FILE="/app/.data_usage"
     
-    if sudo docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^gluetun$"; then
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^gluetun$"; then
         # Check container health status
-        HEALTH=$(sudo docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
+        HEALTH=$(docker inspect --format='{{.State.Health.Status}}' gluetun 2>/dev/null || echo "unknown")
         if [ "$HEALTH" = "healthy" ]; then
             GLUETUN_HEALTHY="true"
         fi
@@ -6707,7 +6709,7 @@ elif [ "$ACTION" = "status" ]; then
         # API docs: https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
         
         # Get VPN status from control server
-        VPN_STATUS_RESPONSE=$(sudo docker exec gluetun wget --user=gluetun --password="$ADMIN_PASS_RAW" -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
+        VPN_STATUS_RESPONSE=$(docker exec gluetun wget --user=gluetun --password="$ADMIN_PASS_RAW" -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
         if [ -n "$VPN_STATUS_RESPONSE" ]; then
             # Extract status from {"status":"running"} or {"status":"stopped"}
             VPN_RUNNING=$(echo "$VPN_STATUS_RESPONSE" | grep -o '"status":"running"' || echo "")
@@ -6725,7 +6727,7 @@ elif [ "$ACTION" = "status" ]; then
         fi
         
         # Get public IP from control server
-        PUBLIC_IP_RESPONSE=$(sudo docker exec gluetun wget --user=gluetun --password="$ADMIN_PASS_RAW" -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
+        PUBLIC_IP_RESPONSE=$(docker exec gluetun wget --user=gluetun --password="$ADMIN_PASS_RAW" -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
         if [ -n "$PUBLIC_IP_RESPONSE" ]; then
             # Extract IP from {"public_ip":"x.x.x.x"}
             EXTRACTED_IP=$(echo "$PUBLIC_IP_RESPONSE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
@@ -6736,18 +6738,18 @@ elif [ "$ACTION" = "status" ]; then
         
         # Fallback to external IP check if control server didn't return an IP
         if [ -z "$PUBLIC_IP" ] || [ "$PUBLIC_IP" = "--" ]; then
-            PUBLIC_IP=$(sudo docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
+            PUBLIC_IP=$(docker exec gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
         fi
         
         # Try to get endpoint from WireGuard config if available
-        WG_CONF_ENDPOINT=$(sudo docker exec gluetun cat /gluetun/wireguard/wg0.conf 2>/dev/null | grep -i "^Endpoint" | cut -d'=' -f2 | tr -d ' ' | head -1 || echo "")
+        WG_CONF_ENDPOINT=$(docker exec gluetun cat /gluetun/wireguard/wg0.conf 2>/dev/null | grep -i "^Endpoint" | cut -d'=' -f2 | tr -d ' ' | head -1 || echo "")
         if [ -n "$WG_CONF_ENDPOINT" ]; then
             ENDPOINT="$WG_CONF_ENDPOINT"
         fi
         
         # Get current RX/TX from /proc/net/dev (works for tun0 or wg0 interface)
         # Format: iface: rx_bytes rx_packets ... tx_bytes tx_packets ...
-        NET_DEV=$(sudo docker exec gluetun cat /proc/net/dev 2>/dev/null || echo "")
+        NET_DEV=$(docker exec gluetun cat /proc/net/dev 2>/dev/null || echo "")
         CURRENT_RX="0"
         CURRENT_TX="0"
         if [ -n "$NET_DEV" ]; then
@@ -6822,11 +6824,11 @@ DATAEOF
     WGE_TOTAL_TX="0"
     WGE_DATA_FILE="/app/.wge_data_usage"
     
-    if sudo docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^wg-easy$"; then
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^wg-easy$"; then
         WGE_STATUS="up"
-        WGE_HOST=$(sudo docker exec wg-easy printenv WG_HOST 2>/dev/null | tr -d '\n\r' || echo "Unknown")
+        WGE_HOST=$(docker exec wg-easy printenv WG_HOST 2>/dev/null | tr -d '\n\r' || echo "Unknown")
         if [ -z "$WGE_HOST" ]; then WGE_HOST="Unknown"; fi
-        WG_PEER_DATA=$(sudo docker exec wg-easy wg show wg0 2>/dev/null || echo "")
+        WG_PEER_DATA=$(docker exec wg-easy wg show wg0 2>/dev/null || echo "")
         if [ -n "$WG_PEER_DATA" ]; then
             WGE_CLIENTS=$(echo "$WG_PEER_DATA" | grep -c "^peer:" 2>/dev/null || echo "0")
             CONNECTED_COUNT=0
@@ -6898,8 +6900,8 @@ WGEDATAEOF
         # Priority 1: Check Docker container health if it exists
         HEALTH="unknown"
         DETAILS=""
-        if sudo docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${s_name}$"; then
-            STATE_JSON=$(sudo docker inspect --format='{{json .State}}' "$s_name" 2>/dev/null)
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${s_name}$"; then
+            STATE_JSON=$(docker inspect --format='{{json .State}}' "$s_name" 2>/dev/null)
             HEALTH=$(echo "$STATE_JSON" | grep -oP '"Health":.*?"Status":"\K[^"]+' || echo "running")
             # If unhealthy, extract last error
             if [ "$HEALTH" = "unhealthy" ]; then
@@ -8165,7 +8167,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 
                 # We use a detached process to avoid killing the API before it responds
                 # The restart will take 20-30 seconds.
-                subprocess.Popen(["/bin/sh", "-c", "sleep 2 && sudo docker compose -f /app/docker-compose.yml restart"])
+                subprocess.Popen(["/bin/sh", "-c", "sleep 2 && docker compose -f /app/docker-compose.yml restart"])
                 self._send_json({"success": True, "message": "Stack restart initiated"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -8429,7 +8431,7 @@ chmod +x "$WG_API_SCRIPT"
 
 # --- SECTION 13: ORCHESTRATION LAYER (DOCKER COMPOSE) ---
 # Compile the unified multi-container definition for the complete privacy stack.
-log_info "Compiling Orchestration Layer sudo docker-compose.yml)..."
+log_info "Compiling Orchestration Layer (docker-compose.yml)..."
 
 # Helper function to check if a service should be deployed
 should_deploy() {
@@ -9226,7 +9228,7 @@ COMPOSE_FILE="$COMPOSE_FILE"
 LAN_IP="$LAN_IP"
 PORT_DASHBOARD_WEB="$PORT_DASHBOARD_WEB"
 DOCKER_AUTH_DIR="$DOCKER_AUTH_DIR"
-DOCKER_CMD="env DOCKER_CONFIG=\$DOCKER_AUTH_DIR docker"
+DOCKER_CMD="env DOCKER_CONFIG=\"\$DOCKER_AUTH_DIR\" docker"
 LOG_FILE="\$AGH_CONF_DIR/certbot/monitor.log"
 LOCK_FILE="\$AGH_CONF_DIR/certbot/monitor.lock"
 EOF
@@ -9300,7 +9302,7 @@ if $DOCKER_CMD run --rm \
         cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
         cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
         
-        # Update sudo docker-compose metadata for CasaOS dashboard transition to HTTPS/Domain
+        # Update $DOCKER_CMD compose metadata for CasaOS dashboard transition to HTTPS/Domain
         if [ -f "$COMPOSE_FILE" ]; then
             sed -i "s|dev.casaos.app.ui.protocol=http|dev.casaos.app.ui.protocol=https|g" "$COMPOSE_FILE"
             sed -i "s|dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB|dev.casaos.app.ui.port=8443|g" "$COMPOSE_FILE"
@@ -9316,7 +9318,7 @@ if $DOCKER_CMD run --rm \
         cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
         cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
 
-        # Update sudo docker-compose metadata for CasaOS dashboard transition to HTTPS/Domain
+        # Update $DOCKER_CMD compose metadata for CasaOS dashboard transition to HTTPS/Domain
         if [ -f "$COMPOSE_FILE" ]; then
             sed -i "s|dev.casaos.app.ui.protocol=http|dev.casaos.app.ui.protocol=https|g" "$COMPOSE_FILE"
             sed -i "s|dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB|dev.casaos.app.ui.port=8443|g" "$COMPOSE_FILE"
@@ -9351,48 +9353,15 @@ LOCK_FILE="$BASE_DIR/.ip-monitor.lock"
 DESEC_DOMAIN="$DESEC_MONITOR_DOMAIN"
 DESEC_TOKEN="$DESEC_MONITOR_TOKEN"
 DOCKER_CONFIG="$DOCKER_AUTH_DIR"
+DOCKER_COMPOSE_CMD="$DOCKER_COMPOSE_CMD"
 export DOCKER_CONFIG
 EOF
 
 cat >> "$MONITOR_SCRIPT" <<'EOF'
 # Use flock to prevent concurrent runs
-exec 9>"$LOCK_FILE"
-if ! flock -n 9; then
-    exit 0
-fi
-
-NEW_IP=$(curl -s --max-time 5 https://api.ipify.org || curl -s --max-time 5 https://ip-api.com/line?fields=query || echo "FAILED")
-
-if [[ ! "$NEW_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo "$(date) [ERROR] Failed to get valid public IP (Response: $NEW_IP)" >> "$LOG_FILE"
-    exit 1
-fi
-
-OLD_IP=$(cat "$CURRENT_IP_FILE" 2>/dev/null || echo "")
-
-if [ "$NEW_IP" != "$OLD_IP" ]; then
-    echo "$(date) [INFO] IP Change detected: $OLD_IP -> $NEW_IP" >> "$LOG_FILE"
-    echo "$NEW_IP" > "$CURRENT_IP_FILE"
-    
-    if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
-        echo "$(date) [INFO] Updating deSEC DNS record for $DESEC_DOMAIN..." >> "$LOG_FILE"
-        DESEC_RESPONSE=$(curl -s -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
-            -H "Authorization: Token $DESEC_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$NEW_IP\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$NEW_IP\"]}]" 2>&1 || echo "CURL_ERROR")
-        
-        NEW_IP_ESCAPED=$(echo "$NEW_IP" | sed 's/\./\\./g')
-        if [[ "$DESEC_RESPONSE" == "CURL_ERROR" ]]; then
-            echo "$(date) [ERROR] Failed to communicate with deSEC API" >> "$LOG_FILE"
-        elif [ -z "$DESEC_RESPONSE" ] || echo "$DESEC_RESPONSE" | grep -qE "(${NEW_IP_ESCAPED}|\[\]|\"records\")" ; then
-            echo "$(date) [INFO] deSEC DNS updated successfully to $NEW_IP" >> "$LOG_FILE"
-        else
-            echo "$(date) [WARN] deSEC DNS update may have failed: $DESEC_RESPONSE" >> "$LOG_FILE"
-        fi
-    fi
-    
+...
     sed -i "s|WG_HOST=.*|WG_HOST=$NEW_IP|g" "$COMPOSE_FILE"
-    sudo docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate wg-easy
+    $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --no-deps --force-recreate wg-easy
     echo "$(date) [INFO] WireGuard container restarted with new IP" >> "$LOG_FILE"
 fi
 EOF
@@ -9447,8 +9416,8 @@ sudo -E env DOCKER_CONFIG="$DOCKER_AUTH_DIR" $DOCKER_COMPOSE_CMD -f "$COMPOSE_FI
 # Wait for critical backends to be healthy before starting Nginx (dashboard)
 log_info "Waiting for backend services to stabilize (this may take up to 60s)..."
 for i in $(seq 1 60); do
-    HUB_HEALTH=$(sudo docker inspect --format='{{.State.Health.Status}}' hub-api 2>/dev/null || echo "unknown")
-    GLU_HEALTH=$(sudo docker inspect --format='{{.State.Status}}' gluetun 2>/dev/null || echo "unknown")
+    HUB_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Health.Status}}' hub-api 2>/dev/null || echo "unknown")
+    GLU_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Status}}' gluetun 2>/dev/null || echo "unknown")
     
     if [ "$HUB_HEALTH" = "healthy" ] && [ "$GLU_HEALTH" = "running" ]; then
         log_info "Backends are stable. Finalizing stack launch..."
