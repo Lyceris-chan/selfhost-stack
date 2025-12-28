@@ -94,6 +94,8 @@ fi
 
 APP_NAME="privacy-hub"
 BASE_DIR="./DATA/AppData/$APP_NAME"
+UPDATE_STRATEGY="stable"
+export UPDATE_STRATEGY
 mkdir -p "$BASE_DIR"
 BASE_DIR="$(cd "$BASE_DIR" && pwd)"
 
@@ -1792,6 +1794,16 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                     </div>
                     <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
                         <div style="flex: 1;">
+                            <span class="label-large">Update Strategy</span>
+                            <p class="body-small" id="strategy-desc" style="color: var(--md-sys-color-on-surface-variant);">Stable: Use latest git tags (Recommended).</p>
+                        </div>
+                        <select id="update-strategy-select" class="btn btn-tonal" style="height: 40px; padding: 0 12px;" onchange="updateStrategyChange()">
+                            <option value="stable">Stable (Tags)</option>
+                            <option value="latest">Latest (Branch)</option>
+                        </select>
+                    </div>
+                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+                        <div style="flex: 1;">
                             <span class="label-large">Session Auto-Cleanup</span>
                             <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Automatically expire admin sessions after inactivity.</p>
                         </div>
@@ -2254,6 +2266,50 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             return card;
         }
 
+        async function loadServerSettings() {
+            try {
+                const res = await apiCall("/theme");
+                if (!res.ok) return;
+                const settings = await res.json();
+                
+                if (settings.update_strategy) {
+                    const select = document.getElementById('update-strategy-select');
+                    if (select) {
+                        select.value = settings.update_strategy;
+                        updateStrategyChange();
+                    }
+                }
+                
+                if (settings.update_strategy) {
+                    const select = document.getElementById('update-strategy-select');
+                    if (select) {
+                        select.value = settings.update_strategy;
+                        const desc = document.getElementById('strategy-desc');
+                        if (select.value === 'stable') {
+                            desc.textContent = "Stable: Use latest git tags (Recommended).";
+                        } else {
+                            desc.textContent = "Latest: Use latest branch commits (Bleeding edge).";
+                        }
+                    }
+                }
+                
+                if (settings.session_timeout) {
+                    const input = document.getElementById('session-timeout-input');
+                    if (input) input.value = settings.session_timeout;
+                }
+                
+                // Privacy Mode (from server)
+                if (settings.privacy_mode !== undefined) {
+                    const toggle = document.getElementById('privacy-switch');
+                    if (toggle) {
+                        toggle.classList.toggle('active', settings.privacy_mode);
+                        document.body.classList.toggle('privacy-mode', settings.privacy_mode);
+                    }
+                }
+            } catch(e) { console.warn("Failed to load server settings", e); }
+        }
+
+        // Initialize dynamic grid
         // Initialize dynamic grid
         document.addEventListener('DOMContentLoaded', () => {
             renderDynamicGrid();
@@ -4011,12 +4067,24 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
             }
         }
 
+        function updateStrategyChange() {
+            const select = document.getElementById('update-strategy-select');
+            const desc = document.getElementById('strategy-desc');
+            if (select.value === 'stable') {
+                desc.textContent = "Stable: Use latest git tags (Recommended).";
+            } else {
+                desc.textContent = "Latest: Use latest branch commits (Bleeding edge).";
+            }
+            syncSettings();
+        }
+
         async function syncSettings() {
             const seed = document.getElementById('theme-seed-color').value;
             const isLight = document.documentElement.classList.contains('light-mode');
             const isPrivacy = document.body.classList.contains('privacy-mode');
             const activeFilter = localStorage.getItem('dashboard_filter') || 'legacy';
             const sessionTimeout = document.getElementById('session-timeout-input') ? document.getElementById('session-timeout-input').value : 30;
+            const updateStrategy = document.getElementById('update-strategy-select') ? document.getElementById('update-strategy-select').value : 'stable';
             
             const settings = {
                 seed,
@@ -4025,6 +4093,7 @@ cat >> "$DASHBOARD_FILE" <<'EOF'
                 dashboard_filter: activeFilter,
                 is_admin: isAdmin,
                 session_timeout: parseInt(sessionTimeout),
+                update_strategy: updateStrategy,
                 timestamp: Date.now()
             };
 
@@ -5339,6 +5408,26 @@ export -f pull_with_retry
 export DOCKER_CONFIG
 
 log_info "Pre-pulling core infrastructure images in parallel..."
+# --- SECTION 2.5: IMAGE SLOT MANAGEMENT (A/B SCHEME) ---
+DOTENV_FILE="$BASE_DIR/.env"
+if [ ! -f "$DOTENV_FILE" ]; then
+    touch "$DOTENV_FILE"
+fi
+
+# Define all services that use the A/B scheme
+AB_SERVICES="hub-api odido-booster memos gluetun portainer adguard unbound wg-easy redlib wikiless invidious rimgo breezewiki anonymousoverflow scribe vert vertd companion"
+
+for srv in $AB_SERVICES; do
+    VAR_NAME="${srv//-/_}_IMAGE_TAG"
+    VAR_NAME=$(echo $VAR_NAME | tr '[:lower:]' '[:upper:]')
+    if ! grep -q "^$VAR_NAME=" "$DOTENV_FILE"; then
+        echo "$VAR_NAME=latest" >> "$DOTENV_FILE"
+    fi
+    # Also export it so it's available for current session
+    val=$(grep "^$VAR_NAME=" "$DOTENV_FILE" | cut -d'=' -f2)
+    export "$VAR_NAME=$val"
+done
+
 # We only pull core infrastructure and base images. App images built from source are skipped.
 CRITICAL_IMAGES="dhi.io/nginx:1.28-alpine3.21 dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22 dhi.io/alpine-base:3.22-dev dhi.io/redis:7.2-debian dhi.io/postgres:14-alpine3.22 neilpang/acme.sh"
 
@@ -5596,6 +5685,7 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     
     log_info "Generating Secrets..."
     ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    HUB_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
     $DOCKER_CMD pull -q ghcr.io/wg-easy/wg-easy:latest > /dev/null || log_warn "Failed to pull wg-easy image, attempting to use local if available."
     
     # Safely generate WG hash
@@ -5629,24 +5719,18 @@ if [ ! -f "$BASE_DIR/.secrets" ]; then
     IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
 
     cat > "$BASE_DIR/.secrets" <<EOF
-VPN_PASS_RAW='$VPN_PASS_RAW'
-AGH_PASS_RAW='$AGH_PASS_RAW'
-ADMIN_PASS_RAW='$ADMIN_PASS_RAW'
-PORTAINER_PASS_RAW='$PORTAINER_PASS_RAW'
-WG_HASH_CLEAN='$WG_HASH_CLEAN'
-AGH_PASS_HASH='$AGH_PASS_HASH'
-PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'
-DESEC_DOMAIN='$DESEC_DOMAIN'
-DESEC_TOKEN='$DESEC_TOKEN'
-SCRIBE_GH_USER='$SCRIBE_GH_USER'
-SCRIBE_GH_TOKEN='$SCRIBE_GH_TOKEN'
-ODIDO_USER_ID='$ODIDO_USER_ID'
-ODIDO_TOKEN='$ODIDO_TOKEN'
-ODIDO_API_KEY='$ODIDO_API_KEY'
-SCRIBE_SECRET='$SCRIBE_SECRET'
-ANONYMOUS_SECRET='$ANONYMOUS_SECRET'
-IV_HMAC='$IV_HMAC'
-IV_COMPANION='$IV_COMPANION'
+VPN_PASS_RAW="$VPN_PASS_RAW"
+AGH_PASS_RAW="$AGH_PASS_RAW"
+ADMIN_PASS_RAW="$ADMIN_PASS_RAW"
+PORTAINER_PASS_RAW="$PORTAINER_PASS_RAW"
+DESEC_DOMAIN="$DESEC_DOMAIN"
+DESEC_TOKEN="$DESEC_TOKEN"
+SCRIBE_GH_USER="$SCRIBE_GH_USER"
+SCRIBE_GH_TOKEN="$SCRIBE_GH_TOKEN"
+ODIDO_TOKEN="$ODIDO_TOKEN"
+ODIDO_USER_ID="$ODIDO_USER_ID"
+HUB_API_KEY="$HUB_API_KEY"
+UPDATE_STRATEGY="stable"
 EOF
 else
     source "$BASE_DIR/.secrets"
@@ -5674,6 +5758,11 @@ else
         ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
         echo "ODIDO_API_KEY=$ODIDO_API_KEY" >> "$BASE_DIR/.secrets"
     fi
+    if [ -z "${UPDATE_STRATEGY:-}" ]; then
+        UPDATE_STRATEGY="stable"
+        echo "UPDATE_STRATEGY=stable" >> "$BASE_DIR/.secrets"
+    fi
+    export UPDATE_STRATEGY
     # If using an old .secrets file that has WG_HASH_ESCAPED but not WG_HASH_CLEAN
     if [ -z "${WG_HASH_CLEAN:-}" ] && [ -n "${WG_HASH_ESCAPED:-}" ]; then
         WG_HASH_CLEAN="${WG_HASH_ESCAPED//\$\$/\$}"
@@ -6216,12 +6305,77 @@ EOF
 # Initialize or update external source code for locally-built application containers.
 log_info "Synchronizing Source Repositories..."
 clone_repo() { 
-    if [ ! -d "$2/.git" ]; then 
-        git clone --depth 1 "$1" "$2"
-    else 
-        (cd "$2" && git fetch --all && git reset --hard "origin/$(git rev-parse --abbrev-ref HEAD)" && git pull)
+    local repo_url="$1"
+    local target_dir="$2"
+    local service_name
+    service_name=$(basename "$target_dir")
+
+    if [ ! -d "$target_dir/.git" ]; then 
+        log_info "Cloning $service_name..."
+        git clone "$repo_url" "$target_dir"
     fi
+
+    (
+        cd "$target_dir" || return
+        git fetch --all --tags --prune
+        
+        # Optimization: Try to get default branch from remotes/origin/HEAD first
+        local DEFAULT_BRANCH
+        DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|^refs/remotes/origin/||')
+        if [ -z "$DEFAULT_BRANCH" ]; then
+             # Fallback to slower remote query
+             DEFAULT_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
+        fi
+        [ -z "$DEFAULT_BRANCH" ] && DEFAULT_BRANCH="master"
+
+        if [ "$UPDATE_STRATEGY" = "stable" ]; then
+            # Try to find the latest semver tag
+            local LATEST_TAG
+            LATEST_TAG=$(git tag -l | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+            
+            if [ -n "$LATEST_TAG" ]; then
+                log_info "Updating $service_name to stable tag: $LATEST_TAG"
+                git checkout -f "$LATEST_TAG"
+            else
+                log_warn "No version tag found for $service_name, using latest from $DEFAULT_BRANCH branch."
+                git checkout -f "$DEFAULT_BRANCH"
+                git reset --hard "origin/$DEFAULT_BRANCH"
+                git pull
+            fi
+        else
+            log_info "Updating $service_name to latest branch: $DEFAULT_BRANCH"
+            git checkout -f "$DEFAULT_BRANCH"
+            git reset --hard "origin/$DEFAULT_BRANCH"
+            git pull
+        fi
+    )
 }
+
+    clone_repo "https://github.com/iv-org/invidious" "$SRC_DIR/invidious"
+    clone_repo "https://github.com/redlib-org/redlib" "$SRC_DIR/redlib"
+    clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless"
+    clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe"
+    clone_repo "https://gitdab.com/cadence/breezewiki" "$SRC_DIR/breezewiki"
+    clone_repo "https://codeberg.org/rimgo/rimgo" "$SRC_DIR/rimgo"
+    clone_repo "https://github.com/httpjamesm/anonymousoverflow" "$SRC_DIR/anonymousoverflow"
+    clone_repo "https://github.com/usememos/memos" "$SRC_DIR/memos"
+    clone_repo "https://github.com/vert-sh/vert" "$SRC_DIR/vert"
+    clone_repo "https://github.com/vert-sh/vertd" "$SRC_DIR/vertd"
+    clone_repo "https://github.com/lodu/TMobile-NL-Unlimited-Bundle-Automated" "$SRC_DIR/odido-bundle-booster"
+    clone_repo "https://github.com/klutchell/unbound" "$SRC_DIR/unbound"
+    clone_repo "https://github.com/qdm12/gluetun" "$SRC_DIR/gluetun"
+    clone_repo "https://github.com/AdguardTeam/AdGuardHome" "$SRC_DIR/adguardhome"
+    clone_repo "https://github.com/portainer/portainer" "$SRC_DIR/portainer"
+    clone_repo "https://github.com/wg-easy/wg-easy" "$SRC_DIR/wg-easy"
+    clone_repo "https://github.com/iv-org/invidious-companion" "$SRC_DIR/invidious-companion"
+    
+    mkdir -p "$SRC_DIR/hub-api"
+    if [ ! -f "$SRC_DIR/hub-api/Dockerfile" ]; then
+        echo "FROM dhi.io/python:3.11-alpine3.22-dev" > "$SRC_DIR/hub-api/Dockerfile"
+        echo "WORKDIR /app" >> "$SRC_DIR/hub-api/Dockerfile"
+        echo "RUN pip install flask requests docker" >> "$SRC_DIR/hub-api/Dockerfile"
+        echo "CMD [\"python\", \"server.py\"]" >> "$SRC_DIR/hub-api/Dockerfile"
+    fi
 
 detect_dockerfile() {
     local repo_dir="$1"
@@ -6254,6 +6408,7 @@ detect_dockerfile() {
 }
 
 PATCHES_SCRIPT="$BASE_DIR/patches.sh"
+
 cat > "$PATCHES_SCRIPT" <<'PATCHEOF'
 #!/bin/sh
 SERVICE=$1
@@ -6269,25 +6424,34 @@ detect_dockerfile() {
     if [ -f "$repo_dir/Dockerfile.dhi" ]; then echo "Dockerfile.dhi"; return 0; fi
     if [ -f "$repo_dir/Dockerfile" ]; then echo "Dockerfile"; return 0; fi
     if [ -f "$repo_dir/docker/Dockerfile" ]; then echo "docker/Dockerfile"; return 0; fi
-    found=$(find "$repo_dir" -maxdepth 3 -type f -name 'Dockerfile*' 2>/dev/null | head -n 1 || true)
+    # Search deeper
+    found=$(find "$repo_dir" -maxdepth 3 -type f -name 'Dockerfile' -not -path '*/.*' 2>/dev/null | head -n 1 || true)
     if [ -n "$found" ]; then echo "${found#"$repo_dir/"}"; return 0; fi
     return 1
 }
 
-    if [ "$SERVICE" = "wikiless" ] || [ "$SERVICE" = "all" ]; then
+patch_generic() {
+    local file="$1"
+    [ ! -f "$file" ] && return
+    # Base OS (only if it's a FROM line and not FROM scratch/distroless)
+    sed -i '/^FROM [^ ]*\(scratch\|distroless\)/! s|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$file"
+    sed -i '/^FROM [^ ]*\(scratch\|distroless\)/! s|^FROM debian:[^ ]*|FROM dhi.io/debian-base:12-dev|g' "$file"
+    # Node.js (build stages)
+    sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$file"
+    # Go (build stages)
+    sed -i 's|^FROM golang:[^ ]*|FROM golang:1.23-alpine3.21|g' "$file"
+    # Python (build stages)
+    sed -i 's|^FROM python:[^ ]*|FROM dhi.io/python:3.11-alpine3.22-dev|g' "$file"
+}
+
+if [ "$SERVICE" = "wikiless" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Wikiless..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/wikiless")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/wikiless/$D_FILE"; then log "Wikiless already patched."; else
-            sed -i '/[Aa][Ss] builder/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/wikiless/$D_FILE"
-            sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/wikiless/$D_FILE"
-            sed -i 's|^FROM gcr.io/distroless/nodejs[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
-            sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
-            sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/wikiless/$D_FILE"
-            sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/wikiless/$D_FILE"
-            sed -i 's|CMD \["src/wikiless.js"\]|CMD ["node", "src/wikiless.js"]|g' "$SRC_ROOT/wikiless/$D_FILE"
-        fi
+        # Switch build stage to hardened
+        sed -i 's|^FROM node:[^ ]* AS build|FROM dhi.io/node:20-alpine3.22-dev AS build|g' "$SRC_ROOT/wikiless/$D_FILE"
+        # Keep distroless runtime as requested by user
+        sed -i 's|CMD \["src/wikiless.js"\]|CMD ["node", "src/wikiless.js"]|g' "$SRC_ROOT/wikiless/$D_FILE"
     fi
 fi
 
@@ -6295,15 +6459,14 @@ if [ "$SERVICE" = "scribe" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Scribe..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/scribe")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/scribe/$D_FILE"; then log "Scribe already patched."; else
-            sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.8.1-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
-            sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
-            sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/scribe/$D_FILE"
-            sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/scribe/$D_FILE"
-            sed -i '/FROM dhi.io\/alpine-base:3.22-dev/a USER root' "$SRC_ROOT/scribe/$D_FILE"
-            sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_ROOT/scribe/$D_FILE"
+        patch_generic "$SRC_ROOT/scribe/$D_FILE"
+        # Scribe needs crystal 1.14+ for modern versions
+        sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.14-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
+        # Ensure root for entrypoint execution if using alpine base
+        if grep -q "FROM dhi.io/alpine-base" "$SRC_ROOT/scribe/$D_FILE"; then
+             sed -i '/FROM dhi.io\/alpine-base:3.22-dev/a USER root' "$SRC_ROOT/scribe/$D_FILE"
         fi
+        sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_ROOT/scribe/$D_FILE"
     fi
 fi
 
@@ -6311,19 +6474,8 @@ if [ "$SERVICE" = "invidious" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Invidious..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/invidious" "docker/Dockerfile")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/invidious/$D_FILE"; then log "Invidious already patched."; else
-            sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/$D_FILE"
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/$D_FILE"
-            sed -i 's|^FROM alpine[[:space:]]|FROM dhi.io/alpine-base:3.22-dev |g' "$SRC_ROOT/invidious/$D_FILE"
-            sed -i 's|^FROM alpine$|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/$D_FILE"
-        fi
-    fi
-    # Also patch arm64 if exists
-    if [ -f "$SRC_ROOT/invidious/docker/Dockerfile.arm64" ]; then
-        if ! grep -q "dhi.io" "$SRC_ROOT/invidious/docker/Dockerfile.arm64"; then
-            sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious/docker/Dockerfile.arm64"
-        fi
+        patch_generic "$SRC_ROOT/invidious/$D_FILE"
+        sed -i 's|^FROM crystallang/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/invidious/$D_FILE"
     fi
 fi
 
@@ -6331,31 +6483,7 @@ if [ "$SERVICE" = "odido-booster" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Odido..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/odido-bundle-booster")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/odido-bundle-booster/$D_FILE"; then log "Odido already patched."; else
-        cat > "$SRC_ROOT/odido-bundle-booster/$D_FILE" <<'ODIDOEOF'
-FROM dhi.io/python:3.11-alpine3.22-dev
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    APP_DIR=/app \
-    APP_DATA_DIR=/data \
-    PORT=8080
-
-RUN apk add --no-cache su-exec sqlite-libs sqlite-dev build-base
-
-WORKDIR $APP_DIR
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app ./app
-COPY entrypoint.sh /entrypoint.sh
-
-EXPOSE 8080
-
-ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]
-CMD ["python", "-m", "app.main"]
-ODIDOEOF
-        fi
+        patch_generic "$SRC_ROOT/odido-bundle-booster/$D_FILE"
     fi
 fi
 
@@ -6363,66 +6491,35 @@ if [ "$SERVICE" = "vert" ] || [ "$SERVICE" = "all" ]; then
     log "Patching VERT..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/vert")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/vert/$D_FILE"; then log "VERT already patched."; else
-            sed -i '/[Aa][Ss] build/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/vert/$D_FILE"
-            sed -i '/[Aa][Ss] runtime/ s|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|' "$SRC_ROOT/vert/$D_FILE"
-            sed -i 's|^FROM oven/bun[^ ]*|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
-            sed -i 's|^FROM oven/bun[[:space:]][[:space:]]*AS|FROM dhi.io/bun:1-alpine3.22-dev AS|g' "$SRC_ROOT/vert/$D_FILE"
-            sed -i 's|^FROM oven/bun$|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
-            sed -i 's|^FROM oven/bun[[:space:]]|FROM dhi.io/bun:1-alpine3.22-dev |g' "$SRC_ROOT/vert/$D_FILE"
-            sed -i 's|^RUN apt-get update.*|RUN apk add --no-cache git|g' "$SRC_ROOT/vert/$D_FILE"
-            sed -i '/apt-get install -y --no-install-recommends git/d' "$SRC_ROOT/vert/$D_FILE"
-            sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_ROOT/vert/$D_FILE"
-            sed -i 's|^FROM nginx:stable-alpine|FROM dhi.io/nginx:1.28-alpine3.21-dev|g' "$SRC_ROOT/vert/$D_FILE"
-            sed -i 's@CMD curl --fail --silent --output /dev/null http://localhost || exit 1@CMD nginx -t || exit 1@' "$SRC_ROOT/vert/$D_FILE"
-            
-            # Build args patches
-            if ! grep -q "ARG PUB_DISABLE_FAILURE_BLOCKS" "$SRC_ROOT/vert/$D_FILE"; then
-                if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_ROOT/vert/$D_FILE"; then
-                    sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_FAILURE_BLOCKS' "$SRC_ROOT/vert/$D_FILE"
-                    sed -i '/^ENV PUB_STRIPE_KEY=${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_FAILURE_BLOCKS=${PUB_DISABLE_FAILURE_BLOCKS}' "$SRC_ROOT/vert/$D_FILE"
-                fi
-            fi
-        fi
-        if ! grep -q "ARG PUB_DISABLE_DONATIONS" "$SRC_ROOT/vert/$D_FILE"; then
-            if grep -q "^ARG PUB_STRIPE_KEY$" "$SRC_ROOT/vert/$D_FILE"; then
-                sed -i '/^ARG PUB_STRIPE_KEY$/a ARG PUB_DISABLE_DONATIONS' "$SRC_ROOT/vert/$D_FILE"
-                sed -i '/^ENV PUB_STRIPE_KEY=${PUB_STRIPE_KEY}$/a ENV PUB_DISABLE_DONATIONS=${PUB_DISABLE_DONATIONS}' "$SRC_ROOT/vert/$D_FILE"
-            fi
-        fi
+        patch_generic "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun:[^ ]*|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's|^FROM oven/bun$|FROM dhi.io/bun:1-alpine3.22-dev|g' "$SRC_ROOT/vert/$D_FILE"
+        # Fix apt-get usage in original Dockerfile
+        sed -i '/RUN apt-get update/c\RUN apk add --no-cache git' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/apt-get install/d' "$SRC_ROOT/vert/$D_FILE"
+        sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$SRC_ROOT/vert/$D_FILE"
+        sed -i 's@CMD curl .*@CMD nginx -t || exit 1@' "$SRC_ROOT/vert/$D_FILE"
     fi
 fi
 
 if [ "$SERVICE" = "breezewiki" ] || [ "$SERVICE" = "all" ]; then
-    log "Recreating BreezeWiki Dockerfile.alpine..."
-    cat > "$SRC_ROOT/breezewiki/Dockerfile.alpine" <<'BWEOF'
-FROM dhi.io/alpine-base:3.22-dev
-WORKDIR /app
-RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango
-COPY . .
-RUN raco pkg config --set default-scope installation
-RUN raco pkg install --batch --auto --no-docs --skip-installed \
-    rackunit-lib \
-    web-server-lib \
-    http-easy-lib \
-    html-parsing \
-    html-writing \
-    json-pointer \
-    typed-ini-lib \
-    memo \
-    net-cookies-lib \
-    db \
-    sequence-tools-lib
-EXPOSE 10416
-CMD ["racket", "dist.rkt"]
-BWEOF
+    log "Patching BreezeWiki..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/breezewiki" "Dockerfile.alpine")
+    if [ -n "$D_FILE" ]; then
+        patch_generic "$SRC_ROOT/breezewiki/$D_FILE"
+        if ! grep -q "apk add.*racket" "$SRC_ROOT/breezewiki/$D_FILE"; then
+            sed -i '/FROM dhi.io\/alpine-base/a RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango' "$SRC_ROOT/breezewiki/$D_FILE"
+        fi
+        sed -i '/RUN raco pkg install/c\RUN raco pkg install --batch --auto --no-docs --skip-installed req-lib && raco req -d' "$SRC_ROOT/breezewiki/$D_FILE"
+    fi
 fi
 
 if [ "$SERVICE" = "adguard" ] || [ "$SERVICE" = "all" ]; then
-    log "Recreating AdGuard Home Dockerfile..."
-    # AdGuard's .dockerignore is too restrictive for our source build
-    rm -f "$SRC_ROOT/adguardhome/.dockerignore"
-    cat > "$SRC_ROOT/adguardhome/Dockerfile.dhi" <<'ADGEOF'
+    log "Patching AdGuard Home..."
+    D_FILE="$SRC_ROOT/adguardhome/docker/Dockerfile"
+    if [ -f "$D_FILE" ]; then
+        if ! grep -q "dhi.io" "$SRC_ROOT/adguardhome/Dockerfile.dhi" 2>/dev/null; then
+            cat > "$SRC_ROOT/adguardhome/Dockerfile.dhi" <<'ADGBUILD'
 # Build Stage - Frontend
 FROM dhi.io/node:20-alpine3.22-dev AS fe-builder
 WORKDIR /app
@@ -6435,60 +6532,53 @@ RUN apk add --no-cache git make gcc musl-dev
 WORKDIR /app
 COPY . .
 COPY --from=fe-builder /app/build /app/build
-# AdGuard Home official build steps for the binary
 RUN GOTOOLCHAIN=auto go build -trimpath -ldflags="-s -w" -o AdGuardHome_bin main.go
 
-# Runtime Stage - Hardened DHI Alpine
-FROM dhi.io/alpine-base:3.22-dev
-RUN apk --no-cache add ca-certificates libcap tzdata && \
-    mkdir -p /opt/adguardhome/conf /opt/adguardhome/work && \
-    chown -R nobody: /opt/adguardhome
-COPY --from=builder /app/AdGuardHome_bin /opt/adguardhome/AdGuardHome
-RUN chown nobody:nogroup /opt/adguardhome/AdGuardHome && \
-    chmod +x /opt/adguardhome/AdGuardHome && \
-    setcap 'cap_net_bind_service=+eip' /opt/adguardhome/AdGuardHome
-EXPOSE 53/tcp 53/udp 67/udp 68/udp 80/tcp 443/tcp 443/udp 853/tcp 853/udp 3000/tcp 3000/udp 5443/tcp 5443/udp 6060/tcp
-WORKDIR /opt/adguardhome/work
-ENTRYPOINT ["/opt/adguardhome/AdGuardHome"]
-CMD ["--no-check-update", "-c", "/opt/adguardhome/conf/AdGuardHome.yaml", "-w", "/opt/adguardhome/work"]
-ADGEOF
+ADGBUILD
+            START_LINE=$(grep -n "^FROM alpine" "$D_FILE" | head -n 1 | cut -d: -f1)
+            if [ -n "$START_LINE" ]; then
+                tail -n "+$START_LINE" "$D_FILE" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
+                patch_generic "$SRC_ROOT/adguardhome/Dockerfile.dhi"
+                awk '/COPY --chown=nobody:nogroup/,/\/opt\/adguardhome\/AdGuardHome/ { if (!done) { print "COPY --from=builder /app/AdGuardHome_bin /opt/adguardhome/AdGuardHome"; done=1 } next } { print }' "$SRC_ROOT/adguardhome/Dockerfile.dhi" > "$SRC_ROOT/adguardhome/Dockerfile.dhi.tmp" && mv "$SRC_ROOT/adguardhome/Dockerfile.dhi.tmp" "$SRC_ROOT/adguardhome/Dockerfile.dhi"
+            else
+                echo "FROM dhi.io/alpine-base:3.22-dev" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
+                echo "COPY --from=builder /app/AdGuardHome_bin /opt/adguardhome/AdGuardHome" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
+                grep "^ENTRYPOINT" "$D_FILE" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi" || echo 'ENTRYPOINT ["/opt/adguardhome/AdGuardHome"]' >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
+                grep "^CMD" "$D_FILE" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi" || echo 'CMD ["--no-check-update", "-c", "/opt/adguardhome/conf/AdGuardHome.yaml", "-w", "/opt/adguardhome/work"]' >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
+            fi
+            rm -f "$SRC_ROOT/adguardhome/.dockerignore"
+        fi
+    fi
 fi
 
 if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
-    log "Recreating Gluetun Dockerfile..."
-    cat > "$SRC_ROOT/gluetun/Dockerfile.dhi" <<'GLUEOF'
-# Build Stage
-FROM golang:1.23-alpine3.21 AS builder
-RUN apk add --no-cache git gcc musl-dev
-WORKDIR /app
-COPY . .
-RUN GOTOOLCHAIN=auto go build -trimpath -ldflags="-s -w" -o entrypoint cmd/gluetun/main.go
-
-# Runtime Stage - Hardened DHI Alpine
-FROM dhi.io/alpine-base:3.22-dev
-RUN apk add --no-cache ca-certificates iptables ip6tables iproute2
-COPY --from=builder /app/entrypoint /app/entrypoint
-ENTRYPOINT ["/app/entrypoint"]
-GLUEOF
+    log "Patching Gluetun..."
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/gluetun" "Dockerfile")
+    if [ -n "$D_FILE" ]; then
+        if ! grep -q "dhi.io" "$SRC_ROOT/gluetun/Dockerfile.dhi" 2>/dev/null; then
+            cp "$SRC_ROOT/gluetun/$D_FILE" "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            # Surgical replacements for ARG versions
+            sed -i 's/ARG ALPINE_VERSION=.*/ARG ALPINE_VERSION=3.22/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's/ARG GO_ALPINE_VERSION=.*/ARG GO_ALPINE_VERSION=3.22/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's/ARG GO_VERSION=.*/ARG GO_VERSION=1.23/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            # Base image replacement
+            sed -i 's|^FROM alpine:${ALPINE_VERSION}|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's|^FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION}-alpine${GO_ALPINE_VERSION}|FROM --platform=${BUILDPLATFORM} golang:1.23-alpine3.21|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            # Link openvpn for consistency
+            sed -i '/mkdir \/gluetun/a RUN ln -s /usr/sbin/openvpn /usr/sbin/openvpn2.6 && ln -s /usr/sbin/openvpn /usr/sbin/openvpn2.5' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+        fi
+    fi
 fi
 
 if [ "$SERVICE" = "unbound" ] || [ "$SERVICE" = "all" ]; then
-    log "Patching Unbound (klutchell)..."
+    log "Patching Unbound..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/unbound")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/unbound/$D_FILE"; then log "Unbound already patched."; else
-            # Replace all Alpine bases with DHI Alpine
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/unbound/$D_FILE"
-            # Replace final scratch stage with hardened DHI Alpine to maintain DHI identity
-            sed -i 's|^FROM scratch AS final|FROM dhi.io/alpine-base:3.22-dev AS final|g' "$SRC_ROOT/unbound/$D_FILE"
-            # Remove redundant copies from build-base that are now in dhi.io base
-            sed -i '/COPY --from=build-base \/lib\/ld-musl/d' "$SRC_ROOT/unbound/$D_FILE"
-            sed -i '/COPY --from=build-base \/usr\/lib\/libgcc_s/d' "$SRC_ROOT/unbound/$D_FILE"
-            sed -i '/COPY --from=build-base \/usr\/lib\/libcrypto.so.3/d' "$SRC_ROOT/unbound/$D_FILE"
-            sed -i '/COPY --from=build-base \/usr\/lib\/libssl.so.3/d' "$SRC_ROOT/unbound/$D_FILE"
-            sed -i '/COPY --from=build-base \/etc\/ssl\//d' "$SRC_ROOT/unbound/$D_FILE"
-            sed -i '/COPY --from=build-base \/etc\/passwd/d' "$SRC_ROOT/unbound/$D_FILE"
-        fi
+        # Switch build to hardened
+        sed -i 's|^FROM alpine:[^ ]* as build|FROM dhi.io/alpine-base:3.22-dev as build|g' "$SRC_ROOT/unbound/$D_FILE"
+        # Keep scratch final stage as originally intended
+        # But ensure we patch any intermediate FROM alpine
+        sed -i '/^FROM \(scratch\|distroless\)/! s|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/unbound/$D_FILE"
     fi
 fi
 
@@ -6496,10 +6586,7 @@ if [ "$SERVICE" = "memos" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Memos..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/memos")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/memos/$D_FILE"; then log "Memos already patched."; else
-            sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/memos/$D_FILE"
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/memos/$D_FILE"
-        fi
+        patch_generic "$SRC_ROOT/memos/$D_FILE"
     fi
 fi
 
@@ -6507,9 +6594,7 @@ if [ "$SERVICE" = "redlib" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Redlib..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/redlib")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/redlib/$D_FILE"; then log "Redlib already patched."; else
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/redlib/$D_FILE"
-        fi
+        patch_generic "$SRC_ROOT/redlib/$D_FILE"
     fi
 fi
 
@@ -6517,9 +6602,9 @@ if [ "$SERVICE" = "rimgo" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Rimgo..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/rimgo")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/rimgo/$D_FILE"; then log "Rimgo already patched."; else
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/rimgo/$D_FILE"
-        fi
+        # Switch build stage
+        sed -i 's|^FROM --platform=$BUILDPLATFORM golang:alpine AS build|FROM --platform=$BUILDPLATFORM golang:1.23-alpine3.21 AS build|g' "$SRC_ROOT/rimgo/$D_FILE"
+        # Keep scratch final stage
     fi
 fi
 
@@ -6527,10 +6612,9 @@ if [ "$SERVICE" = "anonymousoverflow" ] || [ "$SERVICE" = "all" ]; then
     log "Patching AnonymousOverflow..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/anonymousoverflow")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/anonymousoverflow/$D_FILE"; then log "AnonymousOverflow already patched."; else
-            sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/anonymousoverflow/$D_FILE"
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/anonymousoverflow/$D_FILE"
-        fi
+        # Switch build stage
+        sed -i 's|^FROM golang:[^ ]* AS build|FROM golang:1.23-alpine3.21 AS build|g' "$SRC_ROOT/anonymousoverflow/$D_FILE"
+        # Keep scratch final stage
     fi
 fi
 
@@ -6538,20 +6622,15 @@ if [ "$SERVICE" = "vertd" ] || [ "$SERVICE" = "all" ]; then
     log "Patching VERTd..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/vertd")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/vertd/$D_FILE"; then log "VERTd already patched."; else
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/vertd/$D_FILE"
-        fi
+        patch_generic "$SRC_ROOT/vertd/$D_FILE"
     fi
 fi
 
 if [ "$SERVICE" = "companion" ] || [ "$SERVICE" = "all" ]; then
-    log "Patching Invidious Companion..."
+    log "Patching Companion..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/invidious-companion")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/invidious-companion/$D_FILE"; then log "Companion already patched."; else
-            sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/invidious-companion/$D_FILE"
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/invidious-companion/$D_FILE"
-        fi
+        patch_generic "$SRC_ROOT/invidious-companion/$D_FILE"
     fi
 fi
 
@@ -6559,10 +6638,7 @@ if [ "$SERVICE" = "wg-easy" ] || [ "$SERVICE" = "all" ]; then
     log "Patching WG-Easy..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/wg-easy")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/wg-easy/$D_FILE"; then log "WG-Easy already patched."; else
-            sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$SRC_ROOT/wg-easy/$D_FILE"
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/wg-easy/$D_FILE"
-        fi
+        patch_generic "$SRC_ROOT/wg-easy/$D_FILE"
     fi
 fi
 
@@ -6570,248 +6646,27 @@ if [ "$SERVICE" = "portainer" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Portainer..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/portainer")
     if [ -n "$D_FILE" ]; then
-        if grep -q "dhi.io" "$SRC_ROOT/portainer/$D_FILE"; then log "Portainer already patched."; else
-            sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/portainer/$D_FILE"
-        fi
+        patch_generic "$SRC_ROOT/portainer/$D_FILE"
+        sed -i 's|^FROM portainer/base|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/portainer/$D_FILE"
     fi
 fi
 
 PATCHEOF
 chmod +x "$PATCHES_SCRIPT"
-# Helper for parallel sync and patch
-sync_and_patch() {
-    local url=$1
-    local dir=$2
-    local service=$3
-    clone_repo "$url" "$dir"
-    bash "$PATCHES_SCRIPT" "$service" "$(dirname "$dir")"
-}
-export -f sync_and_patch
-export -f clone_repo
-export PATCHES_SCRIPT
-
-log_info "Synchronizing and patching source repositories in parallel..."
-PIDS=""
-sync_and_patch "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless" "wikiless" & PIDS="$PIDS $!"
-sync_and_patch "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe" "scribe" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious" "invidious" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster" "odido-booster" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert" "vert" & PIDS="$PIDS $!"
-sync_and_patch "https://gitdab.com/cadence/breezewiki" "$SRC_DIR/breezewiki" "breezewiki" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/qdm12/gluetun.git" "$SRC_DIR/gluetun" "gluetun" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/AdguardTeam/AdGuardHome.git" "$SRC_DIR/adguardhome" "adguard" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/klutchell/unbound-docker.git" "$SRC_DIR/unbound" "unbound" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/wg-easy/wg-easy.git" "$SRC_DIR/wg-easy" "wg-easy" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/usememos/memos.git" "$SRC_DIR/memos" "memos" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/redlib-org/redlib.git" "$SRC_DIR/redlib" "redlib" & PIDS="$PIDS $!"
-sync_and_patch "https://codeberg.org/rimgo/rimgo.git" "$SRC_DIR/rimgo" "rimgo" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/httpjamesm/anonymousoverflow.git" "$SRC_DIR/anonymousoverflow" "anonymousoverflow" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/iv-org/invidious-companion.git" "$SRC_DIR/invidious-companion" "companion" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/VERT-sh/vertd.git" "$SRC_DIR/vertd" "vertd" & PIDS="$PIDS $!"
-sync_and_patch "https://github.com/portainer/portainer.git" "$SRC_DIR/portainer" "portainer" & PIDS="$PIDS $!"
-
-SUCCESS=true
-for pid in $PIDS; do
-    if ! wait "$pid"; then
-        SUCCESS=false
-    fi
-done
-
-if [ "$SUCCESS" = false ]; then
-    log_crit "One or more source repositories failed to synchronize. Build may fail."
-    # We don't exit here because some repositories might have existing files we can use
-fi
-
-WIKILESS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wikiless" || true)
-ADGUARD_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/adguardhome" || true)
-GLUETUN_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/gluetun" || true)
-UNBOUND_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/unbound" || true)
-WG_EASY_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wg-easy" || true)
-MEMOS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/memos" || true)
-REDLIB_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/redlib" || true)
-RIMGO_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/rimgo" || true)
-ANONYMOUS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/anonymousoverflow" || true)
-COMPANION_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/invidious-companion" || true)
-VERTD_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/vertd" || true)
-PORTAINER_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/portainer" || true)
-
-if [ -z "$WIKILESS_DOCKERFILE" ]; then
-    log_warn "Wikiless Dockerfile not found - build may fail."
-    WIKILESS_DOCKERFILE="Dockerfile"
-fi
-
-cat > "$SRC_DIR/wikiless/wikiless.config" <<'EOF'
-const config = {
-  /**
-  * Set these configs below to suite your environment.
-  */
-  domain: process.env.DOMAIN || '', // Set to your own domain
-  default_lang: process.env.DEFAULT_LANG || 'en', // Set your own language by default
-  theme: process.env.THEME || 'dark', // Set to 'white' or 'dark' by default
-  http_addr: process.env.HTTP_ADDR || '0.0.0.0', // don't touch, unless you know what your doing
-  nonssl_port: process.env.NONSSL_PORT || 8080, // don't touch, unless you know what your doing
-  
-  /**
-  * You can configure redis below if needed.
-  * By default Wikiless uses 'redis://127.0.0.1:6379' as the Redis URL.
-  * Versions before 0.1.1 Wikiless used redis_host and redis_port properties,
-  * but they are not supported anymore.
-  * process.env.REDIS_HOST is still here for backwards compatibility.
-  */
-  redis_url: process.env.REDIS_URL || process.env.REDIS_HOST || 'redis://127.0.0.1:6379',
-  redis_password: process.env.REDIS_PASSWORD,
-  
-  /**
-  * You might need to change these configs below if you host through a reverse
-  * proxy like nginx.
-  */
-  trust_proxy: process.env.TRUST_PROXY === 'true' || true,
-  trust_proxy_address: process.env.TRUST_PROXY_ADDRESS || '127.0.0.1',
-
-  /**
-  * Redis cache expiration values (in seconds).
-  * When the cache expires, new content is fetched from Wikipedia (when the
-  * given URL is revisited).
-  */
-  setexs: {
-    wikipage: process.env.WIKIPAGE_CACHE_EXPIRATION || (60 * 60 * 1), // 1 hour
-  },
-
-  /**
-  * Wikimedia requires a HTTP User-agent header for all Wikimedia related
-  * requests. It's a good idea to change this to something unique.
-  * Read more: https://useragents.me/
-  */
-  wikimedia_useragent: process.env.wikimedia_useragent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
-
-  /**
-  * Cache control. Wikiless can automatically remove the cached media files from
-  * the server. Cache control is on by default.
-  * 'cache_control_interval' sets the interval for often the cache directory
-  * is emptied (in hours). Default is every 24 hours.
-  */
-  cache_control: process.env.CACHE_CONTROL !== 'true' || true,
-  cache_control_interval: process.env.CACHE_CONTROL_INTERVAL || 24,
-}
-
-module.exports = config
-EOF
-SCRIBE_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/scribe" || true)
-if [ -z "$SCRIBE_DOCKERFILE" ]; then
-    log_warn "Scribe Dockerfile not found - build may fail."
-    SCRIBE_DOCKERFILE="Dockerfile"
-fi
-
-INVIDIOUS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/invidious" "docker/Dockerfile" || true)
-if [ -z "$INVIDIOUS_DOCKERFILE" ]; then
-    log_warn "Invidious Dockerfile not found - build may fail."
-    INVIDIOUS_DOCKERFILE="Dockerfile"
-fi
-ODIDO_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/odido-bundle-booster" || true)
-if [ -z "$ODIDO_DOCKERFILE" ]; then
-    log_warn "Odido Booster Dockerfile not found - build may fail."
-    ODIDO_DOCKERFILE="Dockerfile"
-fi
-
-mkdir -p "$SRC_DIR/hub-api"
-cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
-FROM dhi.io/python:3.11-alpine3.22-dev
-RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git sqlite grep kmod
-RUN pip install --no-cache-dir psutil
-WORKDIR /app
-CMD ["python", "server.py"]
-EOF
-HUB_API_DOCKERFILE="Dockerfile"
-
-VERT_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/vert" || true)
-if [ -z "$VERT_DOCKERFILE" ]; then
-    log_warn "VERT Dockerfile not found - build may fail."
-    VERT_DOCKERFILE="Dockerfile"
-fi
-
-BREEZEWIKI_DOCKERFILE="Dockerfile.alpine"
-if [ -f "$SRC_DIR/breezewiki/$BREEZEWIKI_DOCKERFILE" ]; then
-    log_info "BreezeWiki Dockerfile.alpine is ready."
-else
-    log_warn "BreezeWiki Dockerfile.alpine missing - build may fail."
-fi
-
-
-chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$SRC_DIR/breezewiki" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
-
-# --- SECTION 12: ADMINISTRATIVE CONTROL ARTIFACTS ---
-
-# Generate administrative scripts for profile management and internal health monitoring.
-
+sh "$PATCHES_SCRIPT" "all" "$SRC_DIR"
 cat > "$MIGRATE_SCRIPT" <<'EOF'
 #!/bin/sh
-# 🛡️ FOOLPROOF DATABASE MIGRATION SCRIPT
-# This script handles automated database schema updates and backups.
-
 SERVICE=$1
 ACTION=$2
-BACKUP=$3 # "yes" or "no"
-DATA_DIR="/app/data"
-BACKUP_DIR="$DATA_DIR/backups"
+BACKUP=${3:-yes}
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="/app/data/backups"
+DATA_DIR="/app/data"
 
-log() { echo "{\"timestamp\":\"$(date +'%Y-%m-%d %H:%M:%S')\",\"level\":\"DATABASE\",\"category\":\"MAINTENANCE\",\"message\":\"$1\"}"; }
-
+log() { echo "[MIGRATE] $1"; }
 mkdir -p "$BACKUP_DIR"
 
-        if [ "$ACTION" = "backup-all" ]; then
-
-            log "Starting full system backup (pre-update safety)..."
-
-            tar -czf "$BACKUP_DIR/full_backup_$TIMESTAMP.tar.gz" -C "$DATA_DIR" . 2>/dev/null || true
-
-            log "Full system backup completed: full_backup_$TIMESTAMP.tar.gz"
-
-            exit 0
-
-        fi
-
-    
-
-        if [ "$ACTION" = "restore" ]; then
-
-            log "Attempting to restore latest backup for $SERVICE..."
-
-            LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/${SERVICE}_*.sql 2>/dev/null | head -n1)
-
-            if [ -n "$LATEST_BACKUP" ]; then
-
-                log "Restoring from $LATEST_BACKUP..."
-
-                                if [ "$SERVICE" = "invidious" ]; then
-
-                                    docker exec invidious-db dropdb -U kemal invidious
-
-                                    docker exec invidious-db createdb -U kemal invidious
-
-                                    cat "$LATEST_BACKUP" | docker exec -i invidious-db psql -U kemal invidious
-
-                                    log "Restore complete."
-
-                else
-
-                    log "Restore not fully automated for $SERVICE yet. Check $BACKUP_DIR."
-
-                fi
-
-            else
-
-                log "No sql backup found for $SERVICE."
-
-            fi
-
-            exit 0
-
-        fi
-
-    
-
-        if [ "$SERVICE" = "invidious" ]; then
+if [ "$SERVICE" = "invidious" ]; then
 
             if [ "$ACTION" = "clear" ]; then
             log "CLEARING Invidious database (resetting to defaults)..."
@@ -8352,6 +8207,22 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             try:
                                 log_structured("INFO", f"[Update Engine] Processing {name}...", "MAINTENANCE")
                                 
+                                # A/B Image Slot Management
+                                env_file = "/app/.env"
+                                env_vars = {}
+                                if os.path.exists(env_file):
+                                    with open(env_file, 'r') as f:
+                                        for line in f:
+                                            if '=' in line:
+                                                k, v = line.strip().split('=', 1)
+                                                env_vars[k.strip()] = v.strip()
+                                
+                                var_name = f"{name.replace('-', '_').upper()}_IMAGE_TAG"
+                                current_slot = env_vars.get(var_name, "latest")
+                                next_slot = "b" if current_slot == "a" else "a"
+                                
+                                log_structured("INFO", f"[Update Engine] Switching {name} from slot {current_slot} to {next_slot}...", "MAINTENANCE")
+
                                 # 1. Backup
                                 subprocess.run(["/usr/local/bin/migrate.sh", name, "backup", "yes"], timeout=120)
                                 
@@ -8360,26 +8231,36 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                 if os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, ".git")):
                                     log_structured("INFO", f"[Update Engine] Pulling latest source for {name}...", "MAINTENANCE")
                                     subprocess.run(["git", "fetch", "--all"], cwd=repo_path, check=True, timeout=60)
-                                    subprocess.run(["git", "reset", "--hard", "origin/master"], cwd=repo_path, timeout=30) # Try master
-                                    subprocess.run(["git", "reset", "--hard", "origin/main"], cwd=repo_path, timeout=30)   # Try main
+                                    subprocess.run(["git", "reset", "--hard", "origin/master"], cwd=repo_path, timeout=30)
+                                    subprocess.run(["git", "reset", "--hard", "origin/main"], cwd=repo_path, timeout=30)
                                     subprocess.run(["git", "pull"], cwd=repo_path, check=True, timeout=60)
                                     if os.path.exists("/app/patches.sh"):
                                         subprocess.run(["/app/patches.sh", name], check=True, timeout=30)
                                 
-                                # 3. Rebuild and restart
-                                log_structured("INFO", f"[Update Engine] Rebuilding {name}...", "MAINTENANCE")
-                                subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'pull', name], timeout=300)
-                                subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', name], timeout=600)
+                                # 3. Rebuild and restart in NEW slot
+                                log_structured("INFO", f"[Update Engine] Rebuilding {name} in slot {next_slot}...", "MAINTENANCE")
+                                
+                                new_env = os.environ.copy()
+                                new_env[var_name] = next_slot
+                                
+                                # Update .env file permanently
+                                env_vars[var_name] = next_slot
+                                with open(env_file, 'w') as f:
+                                    for k, v in env_vars.items():
+                                        f.write(f"{k}={v}\n")
+
+                                subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'pull', name], env=new_env, timeout=300)
+                                subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', name], env=new_env, timeout=600)
                                 
                                 # 4. Migrate
                                 log_structured("INFO", f"[Update Engine] Running migrations for {name}...", "MAINTENANCE")
-                                subprocess.run(["/usr/local/bin/migrate.sh", name, "migrate", "no"], timeout=120) # No backup needed, just done
+                                subprocess.run(["/usr/local/bin/migrate.sh", name, "migrate", "no"], env=new_env, timeout=120)
                                 
                                 # 5. Vacuum
                                 log_structured("INFO", f"[Update Engine] Optimizing database for {name}...", "MAINTENANCE")
-                                subprocess.run(["/usr/local/bin/migrate.sh", name, "vacuum"], timeout=60)
+                                subprocess.run(["/usr/local/bin/migrate.sh", name, "vacuum"], env=new_env, timeout=60)
                                 
-                                log_structured("INFO", f"[Update Engine] {name} update complete.", "MAINTENANCE")
+                                log_structured("INFO", f"[Update Engine] {name} update complete. Now on slot {next_slot}.", "MAINTENANCE")
                             except Exception as ex:
                                 log_structured("ERROR", f"[Update Engine] Failed to update {name}: {str(ex)}", "MAINTENANCE")
                         
@@ -8404,6 +8285,23 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 def run_service_update(name):
                     try:
                         log_structured("INFO", f"[Update Engine] Starting update for {name}...", "MAINTENANCE")
+                        
+                        # A/B Image Slot Management
+                        env_file = "/app/.env"
+                        env_vars = {}
+                        if os.path.exists(env_file):
+                            with open(env_file, 'r') as f:
+                                for line in f:
+                                    if '=' in line:
+                                        k, v = line.strip().split('=', 1)
+                                        env_vars[k.strip()] = v.strip()
+                        
+                        var_name = f"{name.replace('-', '_').upper()}_IMAGE_TAG"
+                        current_slot = env_vars.get(var_name, "latest")
+                        next_slot = "b" if current_slot == "a" else "a"
+                        
+                        log_structured("INFO", f"[Update Engine] Switching {name} from slot {current_slot} to {next_slot}...", "MAINTENANCE")
+
                         # 1. Pre-update Backup
                         log_structured("INFO", f"[Update Engine] Creating safety backup for {name}...", "MAINTENANCE")
                         subprocess.run(["/usr/local/bin/migrate.sh", name, "backup"], timeout=120)
@@ -8416,11 +8314,21 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             if os.path.exists("/app/patches.sh"):
                                 subprocess.run(["/app/patches.sh", name], check=True, timeout=30)
                         
-                        # 3. Rebuild and restart
-                        log_structured("INFO", f"[Update Engine] Build process for {name} initiated (Expect increased resource usage).", "MAINTENANCE")
-                        subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'pull', name], timeout=300)
-                        subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', name], timeout=600)
-                        log_structured("INFO", f"[Update Engine] {name} update completed successfully.", "MAINTENANCE")
+                        # 3. Rebuild and restart in NEW slot
+                        log_structured("INFO", f"[Update Engine] Build process for {name} initiated in slot {next_slot}.", "MAINTENANCE")
+                        
+                        new_env = os.environ.copy()
+                        new_env[var_name] = next_slot
+                        
+                        # Update .env file permanently
+                        env_vars[var_name] = next_slot
+                        with open(env_file, 'w') as f:
+                            for k, v in env_vars.items():
+                                f.write(f"{k}={v}\n")
+
+                        subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'pull', name], env=new_env, timeout=300)
+                        subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', name], env=new_env, timeout=600)
+                        log_structured("INFO", f"[Update Engine] {name} update completed successfully. Now running on slot {next_slot}.", "MAINTENANCE")
                     except Exception as ex:
                         log_structured("ERROR", f"[Update Engine] {name} update failed: {str(ex)}", "MAINTENANCE")
 
@@ -8770,11 +8678,13 @@ services:
 EOF
 
 if should_deploy "hub-api"; then
+    HUB_API_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/hub-api" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   hub-api:
     build:
       context: $SRC_DIR/hub-api
       dockerfile: $HUB_API_DOCKERFILE
+    image: dhi.io/hub-api:\${HUB_API_IMAGE_TAG:-latest}
     container_name: hub-api
     labels:
       - "casaos.skip=true"
@@ -8806,6 +8716,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     environment:
       - HUB_API_KEY=$ODIDO_API_KEY
       - ADMIN_PASS_RAW=$ADMIN_PASS_RAW
+      - UPDATE_STRATEGY=$UPDATE_STRATEGY
       - DOCKER_CONFIG=/root/.docker
     entrypoint: ["/bin/sh", "-c", "mkdir -p /app && touch /app/deployment.log /app/.data_usage /app/.wge_data_usage && python3 -u /app/server.py"]
     healthcheck:
@@ -8823,11 +8734,13 @@ EOF
 fi
 
 if should_deploy "odido-booster"; then
+    ODIDO_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/odido-bundle-booster" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   odido-booster:
     build:
       context: $SRC_DIR/odido-bundle-booster
       dockerfile: $ODIDO_DOCKERFILE
+    image: dhi.io/odido-booster:\${ODIDO_BOOSTER_IMAGE_TAG:-latest}
     container_name: odido-booster
     labels:
       - "io.dhi.hardened=true"
@@ -8853,11 +8766,13 @@ EOF
 fi
 
 if should_deploy "memos"; then
+    MEMOS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/memos" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   memos:
     build:
       context: $SRC_DIR/memos
       dockerfile: ${MEMOS_DOCKERFILE:-Dockerfile}
+    image: dhi.io/memos:\${MEMOS_IMAGE_TAG:-latest}
     container_name: memos
     labels:
       - "io.dhi.hardened=true"
@@ -8877,11 +8792,13 @@ EOF
 fi
 
 if should_deploy "gluetun"; then
+    GLUETUN_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/gluetun" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   gluetun:
     build:
       context: $SRC_DIR/gluetun
       dockerfile: ${GLUETUN_DOCKERFILE:-Dockerfile}
+    image: dhi.io/gluetun:\${GLUETUN_IMAGE_TAG:-latest}
     container_name: gluetun
     labels:
       - "casaos.skip=true"
@@ -8920,7 +8837,7 @@ fi
 if should_deploy "dashboard"; then
 cat >> "$COMPOSE_FILE" <<EOF
   dashboard:
-    image: dhi.io/nginx:1.28-alpine3.21
+    image: dhi.io/nginx:\${DASHBOARD_IMAGE_TAG:-1.28-alpine3.21}
     container_name: dashboard
     networks: [frontnet]
     ports:
@@ -8953,11 +8870,13 @@ EOF
 fi
 
 if should_deploy "portainer"; then
+    PORTAINER_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/portainer" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   portainer:
     build:
       context: $SRC_DIR/portainer
       dockerfile: ${PORTAINER_DOCKERFILE:-Dockerfile}
+    image: dhi.io/portainer:\${PORTAINER_IMAGE_TAG:-latest}
     container_name: portainer
     command: ["-H", "unix:///var/run/docker.sock", "--admin-password", "$PORTAINER_HASH_COMPOSE", "--no-analytics"]
     networks: [frontnet]
@@ -8977,11 +8896,13 @@ EOF
 fi
 
 if should_deploy "adguard"; then
+    ADGUARD_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/adguardhome" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   adguard:
     build:
       context: $SRC_DIR/adguardhome
       dockerfile: ${ADGUARD_DOCKERFILE:-Dockerfile}
+    image: dhi.io/adguard:\${ADGUARD_IMAGE_TAG:-latest}
     container_name: adguard
     labels:
       - "io.dhi.hardened=true"
@@ -9010,11 +8931,13 @@ EOF
 fi
 
 if should_deploy "unbound"; then
+    UNBOUND_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/unbound" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   unbound:
     build:
       context: $SRC_DIR/unbound
       dockerfile: ${UNBOUND_DOCKERFILE:-Dockerfile}
+    image: dhi.io/unbound:\${UNBOUND_IMAGE_TAG:-latest}
     container_name: unbound
     labels:
       - "io.dhi.hardened=true"
@@ -9036,12 +8959,14 @@ EOF
 fi
 
 if should_deploy "wg-easy"; then
+    WG_EASY_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wg-easy" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   # WG-Easy: Remote access VPN server (only 51820/UDP exposed to internet)
   wg-easy:
     build:
       context: $SRC_DIR/wg-easy
       dockerfile: ${WG_EASY_DOCKERFILE:-Dockerfile}
+    image: dhi.io/wg-easy:\${WG_EASY_IMAGE_TAG:-latest}
     container_name: wg-easy
     network_mode: "host"
     environment:
@@ -9064,11 +8989,13 @@ EOF
 fi
 
 if should_deploy "redlib"; then
+    REDLIB_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/redlib" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   redlib:
     build:
       context: $SRC_DIR/redlib
       dockerfile: ${REDLIB_DOCKERFILE:-Dockerfile}
+    image: dhi.io/redlib:\${REDLIB_IMAGE_TAG:-latest}
     container_name: redlib
     labels:
       - "io.dhi.hardened=true"
@@ -9092,11 +9019,13 @@ EOF
 fi
 
 if should_deploy "wikiless"; then
+    WIKILESS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wikiless" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   wikiless:
     build:
-      context: "$SRC_DIR/wikiless"
-      dockerfile: $WIKILESS_DOCKERFILE
+      context: $SRC_DIR/wikiless
+      dockerfile: ${WIKILESS_DOCKERFILE:-Dockerfile}
+    image: dhi.io/wikiless:\${WIKILESS_IMAGE_TAG:-latest}
     container_name: wikiless
     labels:
       - "io.dhi.hardened=true"
@@ -9110,7 +9039,7 @@ cat >> "$COMPOSE_FILE" <<EOF
         limits: {cpus: '0.5', memory: 256M}
 
   wikiless_redis:
-    image: dhi.io/redis:7.2-debian
+    image: dhi.io/redis:\${REDIS_IMAGE_TAG:-7.2-debian}
     container_name: wikiless_redis
     labels:
       - "casaos.skip=true"
@@ -9126,11 +9055,14 @@ EOF
 fi
 
 if should_deploy "invidious"; then
+    INVIDIOUS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/invidious" || echo "Dockerfile")
+    COMPANION_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/invidious-companion" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   invidious:
     build:
-      context: "$SRC_DIR/invidious"
-      dockerfile: $INVIDIOUS_DOCKERFILE
+      context: $SRC_DIR/invidious
+      dockerfile: ${INVIDIOUS_DOCKERFILE:-Dockerfile}
+    image: dhi.io/invidious:\${INVIDIOUS_IMAGE_TAG:-latest}
     container_name: invidious
     labels:
       - "io.dhi.hardened=true"
@@ -9162,7 +9094,7 @@ cat >> "$COMPOSE_FILE" <<EOF
         limits: {cpus: '1.5', memory: 1024M}
 
   invidious-db:
-    image: dhi.io/postgres:14-alpine3.22
+    image: dhi.io/postgres:\${INVIDIOUS_DB_IMAGE_TAG:-14-alpine3.22}
     container_name: invidious-db
     labels:
       - "casaos.skip=true"
@@ -9180,10 +9112,11 @@ cat >> "$COMPOSE_FILE" <<EOF
         limits: {cpus: '1.0', memory: 512M}
 
   companion:
+    container_name: invidious-companion
     build:
       context: $SRC_DIR/invidious-companion
       dockerfile: ${COMPANION_DOCKERFILE:-Dockerfile}
-    container_name: companion
+    image: dhi.io/invidious-companion:\${COMPANION_IMAGE_TAG:-latest}
     labels:
       - "casaos.skip=true"
     network_mode: "service:gluetun"
@@ -9206,11 +9139,13 @@ EOF
 fi
 
 if should_deploy "rimgo"; then
+    RIMGO_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/rimgo" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   rimgo:
     build:
       context: $SRC_DIR/rimgo
       dockerfile: ${RIMGO_DOCKERFILE:-Dockerfile}
+    image: dhi.io/rimgo:\${RIMGO_IMAGE_TAG:-latest}
     pull_policy: if_not_present
     container_name: rimgo
     labels:
@@ -9236,6 +9171,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     build:
       context: $SRC_DIR/breezewiki
       dockerfile: Dockerfile.alpine
+    image: dhi.io/breezewiki:\${BREEZEWIKI_IMAGE_TAG:-latest}
     container_name: breezewiki
     labels:
       - "io.dhi.hardened=true"
@@ -9261,11 +9197,13 @@ EOF
 fi
 
 if should_deploy "anonymousoverflow"; then
+    ANONYMOUS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/anonymousoverflow" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   anonymousoverflow:
     build:
       context: $SRC_DIR/anonymousoverflow
       dockerfile: ${ANONYMOUS_DOCKERFILE:-Dockerfile}
+    image: dhi.io/anonymousoverflow:\${ANONYMOUSOVERFLOW_IMAGE_TAG:-latest}
     container_name: anonymousoverflow
     labels:
       - "io.dhi.hardened=true"
@@ -9286,11 +9224,13 @@ EOF
 fi
 
 if should_deploy "scribe"; then
+    SCRIBE_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/scribe" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   scribe:
     build:
       context: "$SRC_DIR/scribe"
       dockerfile: $SCRIBE_DOCKERFILE
+    image: dhi.io/scribe:\${SCRIBE_IMAGE_TAG:-latest}
     container_name: scribe
     labels:
       - "io.dhi.hardened=true"
@@ -9310,6 +9250,8 @@ EOF
 fi
 
 if should_deploy "vert"; then
+    VERT_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/vert" || echo "Dockerfile")
+    VERTD_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/vertd" || echo "Dockerfile")
 cat >> "$COMPOSE_FILE" <<EOF
   # VERT: Local file conversion service
   vertd:
@@ -9317,6 +9259,7 @@ cat >> "$COMPOSE_FILE" <<EOF
     build:
       context: $SRC_DIR/vertd
       dockerfile: ${VERTD_DOCKERFILE:-Dockerfile}
+    image: dhi.io/vertd:\${VERTD_IMAGE_TAG:-latest}
     networks: [frontnet]
     ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
     healthcheck:
@@ -9346,6 +9289,7 @@ $(if [ -n "$VERTD_NVIDIA" ]; then echo "        reservations:
     build:
       context: "$SRC_DIR/vert"
       dockerfile: $VERT_DOCKERFILE
+    image: dhi.io/vert:\${VERT_IMAGE_TAG:-latest}
     labels:
       - "casaos.skip=true"
       - "io.dhi.hardened=true"
