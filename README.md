@@ -294,12 +294,18 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 This stack utilizes **Digital Independence (DHI)** images (`dhi.io`) to ensure maximum security. These images follow the principle of least privilege by stripping unnecessary binaries and telemetry.
 
 **Transparent Hardening**:
-To ensure transparency, the deployment script [dynamically patches](https://github.com/Lyceris-chan/selfhost-stack/blob/main/zima.sh#L6229) upstream Dockerfiles during build to replace standard base images with hardened alternatives:
-*   **Node.js**: Replaced with `dhi.io/node:20-alpine3.22-dev`
-*   **Bun**: Replaced with `dhi.io/bun:1-alpine3.22-dev`
-*   **Python**: Replaced with `dhi.io/python:3.11-alpine3.22-dev`
+To ensure transparency and compatibility, the deployment script [dynamically patches](zima.sh) upstream Dockerfiles during build. This **surgical hardening** replaces standard base images with hardened alternatives while preserving all original multi-stage structures (including `scratch` and `distroless` runtimes):
+*   **Node.js**: Replaced with `dhi.io/node:20-alpine3.22-dev` (Build stage)
+*   **Bun**: Replaced with `dhi.io/bun:1-alpine3.22-dev` (Build/Runtime)
+*   **Python**: Replaced with `dhi.io/python:3.11-alpine3.22-dev` (Build/Runtime)
+*   **Go**: Replaced with `dhi.io/golang:1-alpine3.22-dev` (Build stage)
 *   **Alpine Base**: All Alpine-based services are repinned to `dhi.io/alpine-base:3.22-dev`
 *   **Nginx**: The dashboard uses `dhi.io/nginx:1.28-alpine3.21`
+
+**Automatic Version Pinning (Update Strategy)**:
+The system supports two deployment strategies, configurable via the Management Dashboard:
+*   **Stable (Default)**: Automatically identifies the latest semantic version tag (e.g., `v1.2.3`) across all git sources. This ensures a production-ready stack while still utilizing local hardened builds.
+*   **Latest**: Tracks the default upstream branch (e.g., `main` or `master`) for bleeding-edge updates and immediate fixes.
 
 ### 🛡️ Self-Healing & High Availability
 *   **VPN Monitoring**: Gluetun is continuously monitored. Docker restarts the gateway if the tunnel stalls.

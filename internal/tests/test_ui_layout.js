@@ -57,7 +57,7 @@ const path = require('path');
             console.log(`✅ PASS: No overlaps detected in ${viewName}.`);
         }
         
-        await page.screenshot({ path: `tests/screenshot_${viewName}.png` });
+        await page.screenshot({ path: `screenshot_${viewName}.png` });
         return overlaps.length === 0;
     };
 
