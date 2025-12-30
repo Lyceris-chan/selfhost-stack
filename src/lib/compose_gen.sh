@@ -11,8 +11,12 @@ generate_compose() {
         return 1
     }
 
+    # Set defaults for VERT variables
+    VERTD_PUB_URL=${VERTD_PUB_URL:-http://$LAN_IP:$PORT_VERTD}
+    VERT_PUB_HOSTNAME=${VERT_PUB_HOSTNAME:-$LAN_IP}
+
     # Ensure required directories exist
-    mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR"
+    $SUDO mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR"
 
     cat > "$COMPOSE_FILE" <<EOF
 name: ${APP_NAME}
@@ -34,7 +38,7 @@ EOF
     build:
       context: $SRC_DIR/hub-api
       dockerfile: $HUB_API_DOCKERFILE
-    image: dhi.io/hub-api:${HUB_API_IMAGE_TAG:-latest}
+    image: python:3.11-alpine3.21
     container_name: ${CONTAINER_PREFIX}hub-api
     labels:
       - "casaos.skip=true"
@@ -91,7 +95,7 @@ EOF
     build:
       context: $SRC_DIR/odido-bundle-booster
       dockerfile: $ODIDO_DOCKERFILE
-    image: dhi.io/odido-booster:${ODIDO_BOOSTER_IMAGE_TAG:-latest}
+    image: node:20-alpine3.21
     container_name: ${CONTAINER_PREFIX}odido-booster
     labels:
       - "io.dhi.hardened=true"
@@ -124,7 +128,7 @@ EOF
     build:
       context: $SRC_DIR/memos
       dockerfile: ${MEMOS_DOCKERFILE:-Dockerfile}
-    image: dhi.io/memos:${MEMOS_IMAGE_TAG:-latest}
+    image: neosmemo/memos:stable
     container_name: ${CONTAINER_PREFIX}memos
     labels:
       - "io.dhi.hardened=true"
@@ -151,7 +155,7 @@ EOF
     build:
       context: $SRC_DIR/gluetun
       dockerfile: ${GLUETUN_DOCKERFILE:-Dockerfile}
-    image: dhi.io/gluetun:${GLUETUN_IMAGE_TAG:-latest}
+    image: qmcgaw/gluetun:latest
     container_name: ${CONTAINER_PREFIX}gluetun
     labels:
       - "casaos.skip=true"
@@ -190,7 +194,7 @@ EOF
     if should_deploy "dashboard"; then
     cat >> "$COMPOSE_FILE" <<EOF
   dashboard:
-    image: dhi.io/nginx:${DASHBOARD_IMAGE_TAG:-1.28-alpine3.21}
+    image: nginx:1.27-alpine
     container_name: ${CONTAINER_PREFIX}dashboard
     networks: [dhi-frontnet]
     ports:
@@ -230,7 +234,7 @@ EOF
     build:
       context: $SRC_DIR/portainer
       dockerfile: ${PORTAINER_DOCKERFILE:-Dockerfile}
-    image: dhi.io/portainer:${PORTAINER_IMAGE_TAG:-latest}
+    image: portainer/portainer-ce:latest
     container_name: ${CONTAINER_PREFIX}portainer
     command: ["-H", "unix:///var/run/docker.sock", "--admin-password", "$PORTAINER_HASH_COMPOSE", "--no-analytics"]
     networks: [dhi-frontnet]
@@ -257,7 +261,7 @@ EOF
     build:
       context: $SRC_DIR/adguardhome
       dockerfile: ${ADGUARD_DOCKERFILE:-Dockerfile}
-    image: dhi.io/adguard:${ADGUARD_IMAGE_TAG:-latest}
+    image: adguard/adguardhome:latest
     container_name: ${CONTAINER_PREFIX}adguard
     labels:
       - "io.dhi.hardened=true"
@@ -293,7 +297,7 @@ EOF
     build:
       context: $SRC_DIR/unbound
       dockerfile: ${UNBOUND_DOCKERFILE:-Dockerfile}
-    image: dhi.io/unbound:${UNBOUND_IMAGE_TAG:-latest}
+    image: klutchell/unbound:latest
     container_name: ${CONTAINER_PREFIX}unbound
     labels:
       - "io.dhi.hardened=true"
@@ -323,7 +327,7 @@ EOF
     build:
       context: $SRC_DIR/wg-easy
       dockerfile: ${WG_EASY_DOCKERFILE:-Dockerfile}
-    image: dhi.io/wg-easy:${WG_EASY_IMAGE_TAG:-latest}
+    image: ghcr.io/wg-easy/wg-easy:latest
     container_name: ${CONTAINER_PREFIX}wg-easy
     network_mode: "host"
     environment:
@@ -353,7 +357,7 @@ EOF
     build:
       context: $SRC_DIR/redlib
       dockerfile: ${REDLIB_DOCKERFILE:-Dockerfile}
-    image: dhi.io/redlib:${REDLIB_IMAGE_TAG:-latest}
+    image: quay.io/redlib/redlib:latest
     container_name: ${CONTAINER_PREFIX}redlib
     labels:
       - "io.dhi.hardened=true"
@@ -384,7 +388,7 @@ EOF
     build:
       context: $SRC_DIR/wikiless
       dockerfile: ${WIKILESS_DOCKERFILE:-Dockerfile}
-    image: dhi.io/wikiless:${WIKILESS_IMAGE_TAG:-latest}
+    image: wikiless:latest
     container_name: ${CONTAINER_PREFIX}wikiless
     labels:
       - "io.dhi.hardened=true"
@@ -398,7 +402,7 @@ EOF
         limits: {cpus: '0.5', memory: 256M}
 
   wikiless_redis:
-    image: dhi.io/redis:${REDIS_IMAGE_TAG:-7.2-debian}
+    image: redis:7.2-alpine
     container_name: ${CONTAINER_PREFIX}wikiless_redis
     labels:
       - "casaos.skip=true"
@@ -422,7 +426,7 @@ EOF
     build:
       context: $SRC_DIR/invidious
       dockerfile: ${INVIDIOUS_DOCKERFILE:-Dockerfile}
-    image: dhi.io/invidious:${INVIDIOUS_IMAGE_TAG:-latest}
+    image: invidious:latest
     container_name: ${CONTAINER_PREFIX}invidious
     labels:
       - "io.dhi.hardened=true"
@@ -454,7 +458,7 @@ EOF
         limits: {cpus: '1.5', memory: 1024M}
 
   invidious-db:
-    image: dhi.io/postgres:${INVIDIOUS_DB_IMAGE_TAG:-14-alpine3.22}
+    image: postgres:14-alpine3.21
     container_name: ${CONTAINER_PREFIX}invidious-db
     labels:
       - "casaos.skip=true"
@@ -477,7 +481,7 @@ EOF
     build:
       context: $SRC_DIR/invidious-companion
       dockerfile: ${COMPANION_DOCKERFILE:-Dockerfile}
-    image: dhi.io/invidious-companion:${COMPANION_IMAGE_TAG:-latest}
+    image: quay.io/invidious/invidious-companion:latest
     labels:
       - "casaos.skip=true"
     network_mode: "service:gluetun"
@@ -507,7 +511,7 @@ EOF
     build:
       context: $SRC_DIR/rimgo
       dockerfile: ${RIMGO_DOCKERFILE:-Dockerfile}
-    image: dhi.io/rimgo:${RIMGO_IMAGE_TAG:-latest}
+    image: codeberg.org/rimgo/rimgo:latest
     container_name: ${CONTAINER_PREFIX}rimgo
     labels:
       - "io.dhi.hardened=true"
@@ -534,7 +538,7 @@ EOF
     build:
       context: $SRC_DIR/breezewiki
       dockerfile: ${BREEZEWIKI_DOCKERFILE:-Dockerfile.alpine}
-    image: dhi.io/breezewiki:${BREEZEWIKI_IMAGE_TAG:-latest}
+    image: breezewiki:latest
     container_name: ${CONTAINER_PREFIX}breezewiki
     labels:
       - "io.dhi.hardened=true"
@@ -567,7 +571,7 @@ EOF
     build:
       context: $SRC_DIR/anonymousoverflow
       dockerfile: ${ANONYMOUS_DOCKERFILE:-Dockerfile}
-    image: dhi.io/anonymousoverflow:${ANONYMOUSOVERFLOW_IMAGE_TAG:-latest}
+    image: ghcr.io/httpjamesm/anonymousoverflow:release
     container_name: ${CONTAINER_PREFIX}anonymousoverflow
     labels:
       - "io.dhi.hardened=true"
@@ -595,7 +599,7 @@ EOF
     build:
       context: "$SRC_DIR/scribe"
       dockerfile: $SCRIBE_DOCKERFILE
-    image: dhi.io/scribe:${SCRIBE_IMAGE_TAG:-latest}
+    image: scribe:latest
     container_name: ${CONTAINER_PREFIX}scribe
     labels:
       - "io.dhi.hardened=true"
@@ -625,7 +629,7 @@ EOF
     build:
       context: $SRC_DIR/vertd
       dockerfile: ${VERTD_DOCKERFILE:-Dockerfile}
-    image: dhi.io/vertd:${VERTD_IMAGE_TAG:-latest}
+    image: ghcr.io/vert-sh/vertd:latest
     networks: [dhi-frontnet]
     ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
     healthcheck:
@@ -656,7 +660,7 @@ $(if [ -n "$VERTD_NVIDIA" ]; then echo "        reservations:
     build:
       context: "$SRC_DIR/vert"
       dockerfile: $VERT_DOCKERFILE
-    image: dhi.io/vert:${VERT_IMAGE_TAG:-latest}
+    image: vert:latest
     labels:
       - "casaos.skip=true"
       - "io.dhi.hardened=true"

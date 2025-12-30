@@ -3,13 +3,26 @@
 # --- SECTION 9: INFRASTRUCTURE CONFIGURATION ---
 # Generate configuration files for core system services (DNS, SSL, Nginx).
 
-setup_assets() {
-    log_info "Downloading local assets to ensure dashboard privacy and eliminate third-party dependencies."
-    mkdir -p "$ASSETS_DIR"
+setup_static_assets() {
+    log_info "Initializing local asset directories and icons..."
+    $SUDO mkdir -p "$ASSETS_DIR"
+    
+    # Create local SVG icon for CasaOS/ZimaOS dashboard
+    log_info "Creating local SVG icon for the dashboard..."
+    cat > "$ASSETS_DIR/$APP_NAME.svg" <<EOF
+<svg xmlns="http://www.w3.org/2000/svg" height="128" viewBox="0 -960 960 960" width="128" fill="#D0BCFF">
+    <path d="M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z"/>
+</svg>
+EOF
+}
+
+download_remote_assets() {
+    log_info "Downloading remote assets to ensure dashboard privacy and eliminate third-party dependencies."
+    $SUDO mkdir -p "$ASSETS_DIR"
     
     # Check if assets are already set up
     if [ -f "$ASSETS_DIR/gs.css" ] && [ -f "$ASSETS_DIR/cc.css" ] && [ -f "$ASSETS_DIR/ms.css" ]; then
-        log_info "Local assets are present."
+        log_info "Remote assets are already present. Skipping download."
         return 0
     fi
 
@@ -21,38 +34,40 @@ setup_assets() {
     download_css() {
         local dest="$1"
         local url="$2"
-        local varname="$3"
-        if ! curl -fsSL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$url" -o "$dest"; then
-            log_warn "Asset source failed: $url"
+        local proxy="http://172.${FOUND_OCTET}.0.254:8888" # Gluetun proxy in frontnet
+        if ! curl --proxy "$proxy" -fsSL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$url" -o "$dest"; then
+            log_warn "Asset source failed: $url (via $proxy). Retrying without proxy..."
+            if ! curl -fsSL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$url" -o "$dest"; then
+                log_warn "Asset source failed again: $url"
+            fi
         fi
-        printf -v "$varname" '%s' "$url"
     }
 
     css_origin() {
         echo "$1" | sed -E 's#(https?://[^/]+).*#\1#'
     }
 
-    download_css "$ASSETS_DIR/gs.css" "$URL_GS" GS_CSS_URL &
-    download_css "$ASSETS_DIR/cc.css" "$URL_CC" CC_CSS_URL &
-    download_css "$ASSETS_DIR/ms.css" "$URL_MS" MS_CSS_URL &
+    download_css "$ASSETS_DIR/gs.css" "$URL_GS" &
+    download_css "$ASSETS_DIR/cc.css" "$URL_CC" &
+    download_css "$ASSETS_DIR/ms.css" "$URL_MS" &
     wait
-
-    GS_CSS_URL="$URL_GS"
-    CC_CSS_URL="$URL_CC"
-    MS_CSS_URL="$URL_MS"
 
     # Material Color Utilities (Local for privacy)
     log_info "Downloading Material Color Utilities..."
-    if ! curl -fsSL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/dist/material-color-utilities.min.js" -o "$ASSETS_DIR/mcu.js"; then
-        log_warn "Failed to download Material Color Utilities. Using fallback logic."
+    local proxy="http://172.${FOUND_OCTET}.0.254:8888"
+    if ! curl --proxy "$proxy" -fsSL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/dist/material-color-utilities.min.js" -o "$ASSETS_DIR/mcu.js"; then
+        log_warn "Failed to download Material Color Utilities via proxy. Retrying direct..."
+        if ! curl -fsSL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/dist/material-color-utilities.min.js" -o "$ASSETS_DIR/mcu.js"; then
+            log_warn "Failed to download Material Color Utilities."
+        fi
     fi
 
     # Parse and download woff2 files for each CSS file
     cd "$ASSETS_DIR"
     declare -A CSS_ORIGINS
-    CSS_ORIGINS[gs.css]="$(css_origin "$GS_CSS_URL")"
-    CSS_ORIGINS[cc.css]="$(css_origin "$CC_CSS_URL")"
-    CSS_ORIGINS[ms.css]="$(css_origin "$MS_CSS_URL")"
+    CSS_ORIGINS[gs.css]="$(css_origin "$URL_GS")"
+    CSS_ORIGINS[cc.css]="$(css_origin "$URL_CC")"
+    CSS_ORIGINS[ms.css]="$(css_origin "$URL_MS")"
 
     log_info "Localizing font assets in parallel..."
     for css_file in gs.css cc.css ms.css; do
@@ -77,7 +92,10 @@ setup_assets() {
                 fi
                 
                 if [ ! -f "$clean_name" ]; then
-                    curl -sL --max-time 15 "$fetch_url" -o "$clean_name"
+                    if ! curl --proxy "$proxy" -sL --max-time 15 "$fetch_url" -o "$clean_name"; then
+                        log_warn "Font asset download failed via proxy: $fetch_url. Retrying direct..."
+                        curl -sL --max-time 15 "$fetch_url" -o "$clean_name"
+                    fi
                 fi
                 
                 escaped_url=$(echo "$url" | sed 's/[\/&|]/\\&/g')
@@ -88,15 +106,7 @@ setup_assets() {
     done
     cd - >/dev/null
     
-    log_info "Assets setup complete (Separate files retained for reliability)."
-
-    # Create local SVG icon for CasaOS/ZimaOS dashboard
-    log_info "Creating local SVG icon for the dashboard..."
-    cat > "$ASSETS_DIR/$APP_NAME.svg" <<EOF
-<svg xmlns="http://www.w3.org/2000/svg" height="128" viewBox="0 -960 960 960" width="128" fill="#D0BCFF">
-    <path d="M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z"/>
-</svg>
-EOF
+    log_info "Remote assets download and localization complete."
 }
 
 setup_configs() {
@@ -244,8 +254,13 @@ setup_configs() {
     UNBOUND_STATIC_IP="172.${FOUND_OCTET}.0.250"
     log_info "Unbound will use static IP: $UNBOUND_STATIC_IP"
 
+    # Ensure config directories exist
+    $SUDO mkdir -p "$(dirname "$UNBOUND_CONF")"
+    $SUDO mkdir -p "$(dirname "$NGINX_CONF")"
+    $SUDO mkdir -p "$AGH_CONF_DIR"
+
     # Unbound recursive DNS configuration
-    cat > "$UNBOUND_CONF" <<'UNBOUNDEOF'
+    cat <<'UNBOUNDEOF' | $SUDO tee "$UNBOUND_CONF" >/dev/null
 server:
   interface: 0.0.0.0
   port: 53
@@ -266,7 +281,7 @@ server:
   auto-trust-anchor-file: "/var/lib/unbound/root.key"
 UNBOUNDEOF
 
-    cat > "$AGH_YAML" <<EOF
+    cat <<EOF | $SUDO tee "$AGH_YAML" >/dev/null
 schema_version: 29
 bind_host: 0.0.0.0
 bind_port: $PORT_ADGUARD_WEB
@@ -351,7 +366,7 @@ EOF
     WG_HASH_COMPOSE="${WG_HASH_CLEAN//\$/\$\$}"
     PORTAINER_HASH_COMPOSE="${PORTAINER_PASS_HASH//\$/\$\$}"
 
-    cat > "$NGINX_CONF" <<EOF
+    cat <<EOF | $SUDO tee "$NGINX_CONF" >/dev/null
 error_log /dev/stderr info;
 access_log /dev/stdout;
 
@@ -444,11 +459,12 @@ server {
 EOF
 
     # Generate environment variables for specialized privacy frontends.
-    cat > "$ENV_DIR/anonymousoverflow.env" <<EOF
+    $SUDO mkdir -p "$ENV_DIR"
+    cat <<EOF | $SUDO tee "$ENV_DIR/anonymousoverflow.env" >/dev/null
 APP_URL=http://$LAN_IP:$PORT_ANONYMOUS
 JWT_SIGNING_SECRET=$ANONYMOUS_SECRET
 EOF
-    cat > "$ENV_DIR/scribe.env" <<EOF
+    cat <<EOF | $SUDO tee "$ENV_DIR/scribe.env" >/dev/null
 SCRIBE_HOST=0.0.0.0
 PORT=$PORT_SCRIBE
 SECRET_KEY_BASE=$SCRIBE_SECRET

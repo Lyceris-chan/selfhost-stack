@@ -10,7 +10,7 @@ const path = require('path');
     const page = await browser.newPage();
 
     // Use the generated dashboard.html
-    const dashboardPath = process.env.DASHBOARD_URL || ('file://' + path.resolve('/DATA/AppData/privacy-hub/dashboard.html'));
+    const dashboardPath = process.env.DASHBOARD_URL || ('file://' + path.resolve('../data/AppData/privacy-hub/dashboard.html'));
     
     const checkLayout = async (viewName, width, height) => {
         console.log(`Checking layout for ${viewName} (${width}x${height})...`);

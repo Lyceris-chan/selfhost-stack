@@ -371,7 +371,7 @@ Opening a port for WireGuard does **not** expose your home to scanning.
 *   **Backup**:
     ```bash
     # Manual backup of critical data (Secrets, Configs, Databases)
-    cp -r /DATA/AppData/privacy-hub /backup/location/
+    cp -r /data/AppData/privacy-hub /backup/location/
     ```
 *   **Uninstall**:
     ```bash

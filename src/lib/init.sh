@@ -7,7 +7,7 @@ LAN_IP_OVERRIDE="${LAN_IP_OVERRIDE:-}"
 WG_CONF_B64="${WG_CONF_B64:-}"
 
 usage() {
-    echo "Usage: $0 [-c (reset environment)] [-x (cleanup and exit)] [-p (auto-passwords)] [-y (auto-confirm)] [-a (allow Proton VPN)] [-s services)] [-D (dashboard only)] [-P (personal mode)] [-j (parallel deploy)] [-X (enable xray)] [-S (swap slots/update)] [-h]"
+    echo "Usage: $0 [-c (reset environment)] [-x (cleanup and exit)] [-p (auto-passwords)] [-y (auto-confirm)] [-a (allow Proton VPN)] [-s services)] [-D (dashboard only)] [-P (personal mode)] [-j (parallel deploy)] [-S (swap slots/update)] [-h]"
 }
 
 FORCE_CLEAN=false
@@ -21,10 +21,9 @@ SELECTED_SERVICES=""
 DASHBOARD_ONLY=false
 PERSONAL_MODE=false
 PARALLEL_DEPLOY=false
-ENABLE_XRAY="false"
 SWAP_SLOTS=false
 
-while getopts "cxpyas:DPjXSh" opt; do
+while getopts "cxpyas:DPjSh" opt; do
     case ${opt} in
         c) RESET_ENV=true; FORCE_CLEAN=true ;;
         x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
@@ -35,7 +34,6 @@ while getopts "cxpyas:DPjXSh" opt; do
         D) DASHBOARD_ONLY=true ;;
         P) PERSONAL_MODE=true; AUTO_PASSWORD=true; AUTO_CONFIRM=true; PARALLEL_DEPLOY=true ;;
         j) PARALLEL_DEPLOY=true ;;
-        X) ENABLE_XRAY="true" ;;
         S) SWAP_SLOTS=true ;;
         h) 
             usage
@@ -86,23 +84,51 @@ else
 fi
 
 APP_NAME="privacy-hub"
+# Use absolute path for BASE_DIR to ensure it stays in the project root's data folder
+PROJECT_ROOT="/workspaces/selfhost-stack"
+BASE_DIR="$PROJECT_ROOT/data/AppData/$APP_NAME"
+
+# Paths
+SRC_DIR="$BASE_DIR/sources"
+ENV_DIR="$BASE_DIR/env"
+CONFIG_DIR="$BASE_DIR/config"
+DATA_DIR="$BASE_DIR/data"
+COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
+DASHBOARD_FILE="$BASE_DIR/dashboard.html"
+GLUETUN_ENV_FILE="$BASE_DIR/gluetun.env"
+SECRETS_FILE="$BASE_DIR/.secrets"
+ACTIVE_SLOT_FILE="$BASE_DIR/.active_slot"
+BACKUP_DIR="$BASE_DIR/backups"
+ASSETS_DIR="$BASE_DIR/assets"
+HISTORY_LOG="$BASE_DIR/deployment.log"
+CERT_BACKUP_DIR="/tmp/${APP_NAME}-cert-backup"
+CERT_RESTORE=false
+CERT_PROTECT=false
+
+# Memos storage
+MEMOS_HOST_DIR="$PROJECT_ROOT/data/AppData/memos"
+
+$SUDO mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR"
+BASE_DIR="$(cd "$BASE_DIR" && pwd)"
+WG_PROFILES_DIR="$BASE_DIR/wg-profiles"
+ACTIVE_WG_CONF="$BASE_DIR/active-wg.conf"
+ACTIVE_PROFILE_NAME_FILE="$BASE_DIR/.active_profile_name"
+$SUDO mkdir -p "$WG_PROFILES_DIR"
+
 # Slot Management (A/B)
 if [ ! -f "$ACTIVE_SLOT_FILE" ]; then
-    echo "a" > "$ACTIVE_SLOT_FILE"
+    echo "a" | $SUDO tee "$ACTIVE_SLOT_FILE" >/dev/null
 fi
 CURRENT_SLOT=$(cat "$ACTIVE_SLOT_FILE" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
 if [[ "$CURRENT_SLOT" != "a" && "$CURRENT_SLOT" != "b" ]]; then
     CURRENT_SLOT="a"
-    echo "a" > "$ACTIVE_SLOT_FILE"
+    echo "a" | $SUDO tee "$ACTIVE_SLOT_FILE" >/dev/null
 fi
 
 CONTAINER_PREFIX="dhi-${CURRENT_SLOT}-"
 export CURRENT_SLOT
-BASE_DIR="./DATA/AppData/$APP_NAME"
 UPDATE_STRATEGY="stable"
 export UPDATE_STRATEGY
-mkdir -p "$BASE_DIR"
-BASE_DIR="$(cd "$BASE_DIR" && pwd)"
 
 # Docker Auth Config (stored in /tmp to survive -c cleanup)
 DOCKER_AUTH_DIR="/tmp/$APP_NAME-docker-auth"
@@ -126,23 +152,6 @@ fi
 DOCKER_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" GOTOOLCHAIN=auto docker"
 DOCKER_COMPOSE_FINAL_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" GOTOOLCHAIN=auto $DOCKER_COMPOSE_CMD"
 
-# Paths
-SRC_DIR="$BASE_DIR/sources"
-ENV_DIR="$BASE_DIR/env"
-CONFIG_DIR="$BASE_DIR/config"
-DATA_DIR="$BASE_DIR/data"
-COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
-DASHBOARD_FILE="$BASE_DIR/dashboard.html"
-GLUETUN_ENV_FILE="$BASE_DIR/gluetun.env"
-SECRETS_FILE="$BASE_DIR/.secrets"
-ACTIVE_SLOT_FILE="$BASE_DIR/.active_slot"
-BACKUP_DIR="$BASE_DIR/backups"
-ASSETS_DIR="$BASE_DIR/assets"
-HISTORY_LOG="$BASE_DIR/deployment.log"
-CERT_BACKUP_DIR="/tmp/${APP_NAME}-cert-backup"
-CERT_RESTORE=false
-CERT_PROTECT=false
-
 # Initialize deSEC variables to prevent unbound variable errors
 DESEC_DOMAIN=""
 DESEC_TOKEN=""
@@ -153,17 +162,21 @@ SCRIBE_GH_TOKEN=""
 ODIDO_USER_ID=""
 ODIDO_TOKEN=""
 ODIDO_API_KEY=""
-ENABLE_XRAY="false"
-XRAY_DOMAIN=""
-XRAY_UUID=""
+VERTD_PUB_URL=""
+VERT_PUB_HOSTNAME=""
 WG_HASH_CLEAN=""
 FOUND_OCTET=""
-
-# WireGuard Profiles
-WG_PROFILES_DIR="$BASE_DIR/wg-profiles"
-ACTIVE_WG_CONF="$BASE_DIR/active-wg.conf"
-ACTIVE_PROFILE_NAME_FILE="$BASE_DIR/.active_profile_name"
-mkdir -p "$WG_PROFILES_DIR"
+AGH_USER="adguard"
+AGH_PASS_HASH=""
+PORTAINER_PASS_HASH=""
+PORTAINER_HASH_COMPOSE=""
+WG_HASH_COMPOSE=""
+ADMIN_PASS_RAW=""
+VPN_PASS_RAW=""
+PORTAINER_PASS_RAW=""
+AGH_PASS_RAW=""
+ANONYMOUS_SECRET=""
+SCRIBE_SECRET=""
 
 # Service Configurations
 NGINX_CONF_DIR="$CONFIG_DIR/nginx"
@@ -181,7 +194,28 @@ WG_API_SCRIPT="$BASE_DIR/wg-api.py"
 CERT_MONITOR_SCRIPT="$BASE_DIR/cert-monitor.sh"
 MIGRATE_SCRIPT="$BASE_DIR/migrate.sh"
 
-# Memos storage
-MEMOS_HOST_DIR="./DATA/AppData/memos"
-mkdir -p "$MEMOS_HOST_DIR"
-MEMOS_HOST_DIR="$(cd "$MEMOS_HOST_DIR" && pwd)"
+# Port Definitions
+PORT_DASHBOARD_WEB=8081
+PORT_ADGUARD_WEB=8083
+PORT_PORTAINER=9000
+PORT_WG_WEB=51821
+PORT_INVIDIOUS=3000
+PORT_REDLIB=8080
+PORT_WIKILESS=8180
+PORT_RIMGO=3002
+PORT_BREEZEWIKI=8380
+PORT_ANONYMOUS=8480
+PORT_SCRIBE=8280
+PORT_MEMOS=5230
+PORT_VERT=5555
+PORT_VERTD=24153
+
+# Internal Ports
+PORT_INT_REDLIB=8080
+PORT_INT_WIKILESS=8180
+PORT_INT_INVIDIOUS=3000
+PORT_INT_RIMGO=3002
+PORT_INT_BREEZEWIKI=10416
+PORT_INT_ANONYMOUS=8480
+PORT_INT_VERT=80
+PORT_INT_VERTD=24153

@@ -519,26 +519,7 @@
                         </div>
                         <input type="number" id="session-timeout-input" class="text-field" style="width: 80px;" value="30" onchange="syncSettings()">
                     </div>
-                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--md-sys-color-outline-variant);">
-                        <div style="display: flex; align-items: center; gap: 16px;">
-                            <div style="flex: 1;">
-                                <span class="label-large">Global VLESS Tunnel (Xray)</span>
-                                <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Allow external VLESS connections routed through your VPN.</p>
-                            </div>
-                            <div class="switch-container" id="xray-switch" onclick="toggleXray()" data-tooltip="Toggle Xray VLESS Service">
-                                <div class="switch-track">
-                                    <div class="switch-thumb"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div id="xray-settings" style="display: none; flex-direction: column; gap: 8px; border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: 12px;">
-                            <div class="code-label">Xray Domain</div>
-                            <input type="text" id="xray-domain-input" class="text-field" placeholder="e.g. xray.example.com" value="$XRAY_DOMAIN" onchange="syncSettings()">
-                            <div class="code-label">Client UUID</div>
-                            <div class="code-block" style="font-size: 11px;">$XRAY_UUID</div>
-                            <p class="body-small" style="opacity: 0.7;">Note: Requires Port 443 forwarding. Traffic is routed via Gluetun.</p>
-                        </div>
-                    </div>
+
                 </div>
             </div>
             <div class="card">

@@ -2054,10 +2054,6 @@
             const sessionTimeout = document.getElementById('session-timeout-input') ? document.getElementById('session-timeout-input').value : 30;
             const updateStrategy = document.getElementById('update-strategy-select') ? document.getElementById('update-strategy-select').value : 'stable';
             
-            // Xray settings
-            const xrayEnabled = document.getElementById('xray-switch').classList.contains('active');
-            const xrayDomain = document.getElementById('xray-domain-input') ? document.getElementById('xray-domain-input').value : '';
-
             const settings = {
                 seed,
                 theme: isLight ? 'light' : 'dark',
@@ -2066,8 +2062,6 @@
                 is_admin: isAdmin,
                 session_timeout: parseInt(sessionTimeout),
                 update_strategy: updateStrategy,
-                enable_xray: xrayEnabled,
-                xray_domain: xrayDomain,
                 timestamp: Date.now()
             };
 
@@ -2079,19 +2073,7 @@
             } catch (e) { console.error("Settings sync failed", e); }
         }
 
-        function toggleXray() {
-            const btn = document.getElementById('xray-switch');
-            const settings = document.getElementById('xray-settings');
-            const isActive = btn.classList.toggle('active');
-            settings.style.display = isActive ? 'flex' : 'none';
-            syncSettings();
-            
-            if (isActive) {
-                showSnackbar("Xray VLESS enabled. Restart stack to apply changes.", "RESTART", () => restartStack());
-            } else {
-                showSnackbar("Xray VLESS disabled. Restart stack to apply changes.", "RESTART", () => restartStack());
-            }
-        }
+
 
         async function saveThemeSettings() {
             await syncSettings();
@@ -2720,14 +2702,7 @@
                 if (badge) badge.style.display = 'inline-flex';
             }
 
-            // Initialize Xray UI state
-            const xrayEnabled = "$ENABLE_XRAY" === "true";
-            if (xrayEnabled) {
-                const btn = document.getElementById('xray-switch');
-                if (btn) btn.classList.add('active');
-                const settings = document.getElementById('xray-settings');
-                if (settings) settings.style.display = 'flex';
-            }
+
 
             initPrivacyMode();
             initTheme();

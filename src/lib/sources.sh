@@ -8,7 +8,8 @@ sync_sources() {
     
     clone_repo() { 
         if [ ! -d "$2/.git" ]; then 
-            mkdir -p "$2"
+            $SUDO mkdir -p "$2"
+            $SUDO chown "$(whoami)" "$2"
             git clone --depth 1 "$1" "$2"
         else 
             (cd "$2" && git fetch --all && git reset --hard "origin/$(git rev-parse --abbrev-ref HEAD)" && git pull)
@@ -24,19 +25,33 @@ SRC_ROOT=${2:-/app/sources}
 
 log() { echo "[PATCH] $1"; }
 
+detect_dockerfile() {
+    local repo_dir="$1"
+    local preferred="${2:-}"
+    local found=""
+    if [ -n "$preferred" ] && [ -f "$repo_dir/$preferred" ]; then echo "$preferred"; return 0; fi
+    if [ -f "$repo_dir/Dockerfile.dhi" ]; then echo "Dockerfile.dhi"; return 0; fi
+    if [ -f "$repo_dir/Dockerfile" ]; then echo "Dockerfile"; return 0; fi
+    if [ -f "$repo_dir/docker/Dockerfile" ]; then echo "docker/Dockerfile"; return 0; fi
+    # Search deeper
+    found=$(find "$repo_dir" -maxdepth 3 -type f -name 'Dockerfile*' -not -path '*/.*' 2>/dev/null | head -n 1 || true)
+    if [ -n "$found" ]; then echo "${found#"$repo_dir/"}"; return 0; fi
+    return 1
+}
+
 patch_generic() {
     local file="$1"
     [ ! -f "$file" ] && return
     log "  Applying generic patches to $(basename "$file")..."
     # Base OS (only if it's a FROM line and not FROM scratch/distroless)
-    sed -i '/^FROM [^ ]*\(scratch\|distroless\)/! s|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$file"
-    sed -i '/^FROM [^ ]*\(scratch\|distroless\)/! s|^FROM debian:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$file"
+    sed -i '/^FROM [^ ]*\(scratch\|distroless\)/! s|^FROM alpine:[^ ]*|FROM alpine:3.21|g' "$file"
+    sed -i '/^FROM [^ ]*\(scratch\|distroless\)/! s|^FROM debian:[^ ]*|FROM alpine:3.21|g' "$file"
     # Node.js (build stages)
-    sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$file"
+    sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine3.21|g' "$file"
     # Go (build stages)
-    sed -i 's|^FROM golang:[^ ]*|FROM dhi.io/golang:1-alpine3.22-dev|g' "$file"
+    sed -i 's|^FROM golang:[^ ]*|FROM golang:1.23-alpine3.21|g' "$file"
     # Python (build stages)
-    sed -i 's|^FROM python:[^ ]*|FROM dhi.io/python:3.11-alpine3.22-dev|g' "$file"
+    sed -i 's|^FROM python:[^ ]*|FROM python:3.11-alpine3.21|g' "$file"
     # Strip apk version pins (e.g., package=1.2.3 -> package) to ensure compatibility with modern base images
     # We restrict this to lines that look like apk add commands
     sed -i '/apk add/ s/=[0-9][^[:space:]]*//g' "$file"
@@ -68,7 +83,7 @@ RUN shards install --production
 RUN yarn install && yarn build:prod
 RUN crystal build src/scribe.cr --release --static
 
-FROM dhi.io/alpine-base:3.22-dev
+FROM alpine:3.21
 RUN apk add --no-cache libevent gc
 WORKDIR /app
 COPY --from=build /app/scribe /app/scribe
@@ -82,8 +97,8 @@ SCRIBEOF
     # Scribe needs crystal 1.14+ for modern versions
     sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
     # Ensure root for entrypoint execution if using alpine base
-    if grep -q "FROM dhi.io/alpine-base" "$SRC_ROOT/scribe/$D_FILE"; then
-         sed -i '/FROM dhi.io\/alpine-base:3.22-dev/a USER root' "$SRC_ROOT/scribe/$D_FILE"
+    if grep -q "FROM alpine" "$SRC_ROOT/scribe/$D_FILE"; then
+         sed -i '/FROM alpine:3.21/a USER root' "$SRC_ROOT/scribe/$D_FILE"
     fi
     sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_ROOT/scribe/$D_FILE"
 fi
@@ -129,14 +144,14 @@ if [ "$SERVICE" = "breezewiki" ] || [ "$SERVICE" = "all" ]; then
     if [ "$D_FILE" = "1" ] || [ ! -f "$SRC_ROOT/breezewiki/$D_FILE" ]; then
         log "  Creating missing Dockerfile.alpine for BreezeWiki..."
         cat > "$SRC_ROOT/breezewiki/Dockerfile.alpine" <<'BWEOF'
-FROM dhi.io/alpine-base:3.22-dev AS build
+FROM alpine:3.21 AS build
 RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango
 WORKDIR /app
 COPY . .
 RUN raco pkg install --batch --auto --no-docs --skip-installed req-lib && raco req -d
 RUN racket dist.rkt
 
-FROM dhi.io/alpine-base:3.22-dev
+FROM alpine:3.21
 RUN apk add --no-cache racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango
 WORKDIR /app
 COPY --from=build /app/dist /app
@@ -147,7 +162,7 @@ BWEOF
     fi
     patch_generic "$SRC_ROOT/breezewiki/$D_FILE"
     if ! grep -q "apk add.*racket" "$SRC_ROOT/breezewiki/$D_FILE"; then
-        sed -i '/FROM dhi.io\/alpine-base/a RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango' "$SRC_ROOT/breezewiki/$D_FILE"
+        sed -i '/FROM alpine/a RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango' "$SRC_ROOT/breezewiki/$D_FILE"
     fi
     sed -i '/RUN raco pkg install/c\RUN raco pkg install --batch --auto --no-docs --skip-installed req-lib && raco req -d' "$SRC_ROOT/breezewiki/$D_FILE"
 fi
@@ -159,13 +174,13 @@ if [ "$SERVICE" = "adguard" ] || [ "$SERVICE" = "all" ]; then
         if ! grep -q "dhi.io" "$SRC_ROOT/adguardhome/Dockerfile.dhi" 2>/dev/null; then
             cat > "$SRC_ROOT/adguardhome/Dockerfile.dhi" <<'ADGBUILD'
 # Build Stage - Frontend
-FROM dhi.io/node:20-alpine3.22-dev AS fe-builder
+FROM node:20-alpine3.21 AS fe-builder
 WORKDIR /app
 COPY . .
 RUN npm install --prefix client && npm run --prefix client build-prod
 
 # Build Stage - Backend
-FROM dhi.io/golang:1-alpine3.22-dev AS builder
+FROM golang:1.23-alpine3.21 AS builder
 RUN apk add --no-cache git make gcc musl-dev
 WORKDIR /app
 COPY . .
@@ -179,7 +194,7 @@ ADGBUILD
                 patch_generic "$SRC_ROOT/adguardhome/Dockerfile.dhi"
                 awk '/COPY --chown=nobody:nogroup/,/\/opt\/adguardhome\/AdGuardHome/ { if (!done) { print "COPY --from=builder /app/AdGuardHome_bin /opt/adguardhome/AdGuardHome"; done=1 } next } { print }' "$SRC_ROOT/adguardhome/Dockerfile.dhi" > "$SRC_ROOT/adguardhome/Dockerfile.dhi.tmp" && mv "$SRC_ROOT/adguardhome/Dockerfile.dhi.tmp" "$SRC_ROOT/adguardhome/Dockerfile.dhi"
             else
-                echo "FROM dhi.io/alpine-base:3.22-dev" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
+                echo "FROM alpine:3.21" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
                 echo "COPY --from=builder /app/AdGuardHome_bin /opt/adguardhome/AdGuardHome" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
                 grep "^ENTRYPOINT" "$D_FILE" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi" || echo 'ENTRYPOINT ["/opt/adguardhome/AdGuardHome"]' >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
                 grep "^CMD" "$D_FILE" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi" || echo 'CMD ["--no-check-update", "-c", "/opt/adguardhome/conf/AdGuardHome.yaml", "-w", "/opt/adguardhome/work"]' >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
@@ -196,15 +211,15 @@ if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
         if ! grep -q "dhi.io" "$SRC_ROOT/gluetun/Dockerfile.dhi" 2>/dev/null; then
             cp "$SRC_ROOT/gluetun/$D_FILE" "$SRC_ROOT/gluetun/Dockerfile.dhi"
             # Surgical replacements for ARG versions
-            sed -i 's/ARG ALPINE_VERSION=.*/ARG ALPINE_VERSION=3.22/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
-            sed -i 's/ARG GO_ALPINE_VERSION=.*/ARG GO_ALPINE_VERSION=3.22/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's/ARG ALPINE_VERSION=.*/ARG ALPINE_VERSION=3.21/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's/ARG GO_ALPINE_VERSION=.*/ARG GO_ALPINE_VERSION=3.21/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
             sed -i 's/ARG GO_VERSION=.*/ARG GO_VERSION=1.23/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
             # Base image replacement
-            sed -i 's|^FROM alpine:${ALPINE_VERSION}|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
-            sed -i 's|^FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION}-alpine${GO_ALPINE_VERSION}|FROM --platform=${BUILDPLATFORM} dhi.io/golang:1-alpine3.22-dev|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's|^FROM alpine:${ALPINE_VERSION}|FROM alpine:3.21|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's|^FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION}-alpine${GO_ALPINE_VERSION}|FROM --platform=${BUILDPLATFORM} golang:1.23-alpine3.21|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
             
             # Replace complex apk add/del block with a single clean install
-            sed -i '/RUN apk add --no-cache --update -l wget/,/mkdir \/gluetun/c\RUN apk add --no-cache --update wget openvpn ca-certificates iptables iptables-legacy tzdata && echo "3.22.0" > /etc/alpine-release && mkdir /gluetun' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i '/RUN apk add --no-cache --update -l wget/,/mkdir \/gluetun/c\RUN apk add --no-cache --update wget openvpn ca-certificates iptables iptables-legacy tzdata && echo "3.21.0" > /etc/alpine-release && mkdir /gluetun' "$SRC_ROOT/gluetun/Dockerfile.dhi"
             
             # Link openvpn for consistency (gluetun expects 2.5/2.6 variants)
             sed -i '/mkdir \/gluetun/a RUN ln -s /usr/sbin/openvpn /usr/sbin/openvpn2.6 && ln -s /usr/sbin/openvpn /usr/sbin/openvpn2.5' "$SRC_ROOT/gluetun/Dockerfile.dhi"
@@ -218,7 +233,7 @@ if [ "$SERVICE" = "unbound" ] || [ "$SERVICE" = "all" ]; then
     if [ -n "$D_FILE" ]; then
         patch_generic "$SRC_ROOT/unbound/$D_FILE"
         # Ensure build stage uses dev base
-        sed -i 's|^FROM dhi.io/alpine-base:[^ ]* as build|FROM dhi.io/alpine-base:3.22-dev as build|g' "$SRC_ROOT/unbound/$D_FILE"
+        sed -i 's|^FROM alpine:[^ ]* as build|FROM alpine:3.21 as build|g' "$SRC_ROOT/unbound/$D_FILE"
     fi
 fi
 
@@ -311,7 +326,6 @@ fi
 
 PATCHEOF
     chmod +x "$PATCHES_SCRIPT"
-    sh "$PATCHES_SCRIPT" "all" "$SRC_DIR"
 
     # Clone repos
     clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless"
@@ -321,7 +335,7 @@ PATCHEOF
     clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert"
     clone_repo "https://github.com/VERT-sh/vertd.git" "$SRC_DIR/vertd"
     clone_repo "https://codeberg.org/rimgo/rimgo.git" "$SRC_DIR/rimgo"
-    clone_repo "https://github.com/breezewiki/breezewiki.git" "$SRC_DIR/breezewiki"
+    clone_repo "https://gitdab.com/cadence/breezewiki.git" "$SRC_DIR/breezewiki"
     clone_repo "https://github.com/httpjamesm/AnonymousOverflow.git" "$SRC_DIR/anonymousoverflow"
     clone_repo "https://github.com/qdm12/gluetun.git" "$SRC_DIR/gluetun"
     clone_repo "https://github.com/AdguardTeam/AdGuardHome.git" "$SRC_DIR/adguardhome"
@@ -333,9 +347,9 @@ PATCHEOF
     clone_repo "https://github.com/portainer/portainer.git" "$SRC_DIR/portainer"
 
     # Setup Hub API
-    mkdir -p "$SRC_DIR/hub-api"
+    $SUDO mkdir -p "$SRC_DIR/hub-api"
     cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
-FROM dhi.io/python:3.11-alpine3.22-dev
+FROM python:3.11-alpine3.21
 RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git
 WORKDIR /app
 CMD ["python", "server.py"]
@@ -363,6 +377,12 @@ const config = {
 module.exports = config
 EOF
 
-    chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
+    # Apply patches after cloning
+    if [ -f "$PATCHES_SCRIPT" ]; then
+        log_info "Applying patches to source code..."
+        sh "$PATCHES_SCRIPT" "all" "$SRC_DIR"
+    fi
+
+    $SUDO chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
 }
 

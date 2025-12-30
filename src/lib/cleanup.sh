@@ -162,31 +162,31 @@ clean_environment() {
             if ! check_cert_risk; then log_info "Data wipe aborted by user (Certificate Protection)."; return 1; fi
             log_info "Clearing BASE_DIR data..."
             if [ -d "$BASE_DIR" ]; then
-                rm -f "$BASE_DIR/.secrets" 2>/dev/null || true
-                rm -f "$BASE_DIR/.current_public_ip" 2>/dev/null || true
-                rm -f "$BASE_DIR/.active_profile_name" 2>/dev/null || true
-                rm -f "$BASE_DIR/.data_usage" 2>/dev/null || true
-                rm -f "$BASE_DIR/.wge_data_usage" 2>/dev/null || true
-                rm -rf "$BASE_DIR/config" 2>/dev/null || true
-                rm -rf "$BASE_DIR/env" 2>/dev/null || true
-                rm -rf "$BASE_DIR/sources" 2>/dev/null || true
-                rm -rf "$BASE_DIR/data" 2>/dev/null || true
-                rm -rf "$BASE_DIR/assets" 2>/dev/null || true
-                rm -rf "$BASE_DIR/wg-profiles" 2>/dev/null || true
-                rm -f "$BASE_DIR/active-wg.conf" 2>/dev/null || true
-                rm -f "$BASE_DIR/wg-ip-monitor.sh" 2>/dev/null || true
-                rm -f "$BASE_DIR/wg-control.sh" 2>/dev/null || true
-                rm -f "$BASE_DIR/wg-api.py" 2>/dev/null || true
-                rm -f "$BASE_DIR/cert-monitor.sh" 2>/dev/null || true
-                rm -f "$BASE_DIR/migrate.sh" 2>/dev/null || true
-                rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
-                rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
-                rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
-                rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/.secrets" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/.current_public_ip" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/.active_profile_name" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/.data_usage" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/.wge_data_usage" 2>/dev/null || true
+                $SUDO rm -rf "$BASE_DIR/config" 2>/dev/null || true
+                $SUDO rm -rf "$BASE_DIR/env" 2>/dev/null || true
+                $SUDO rm -rf "$BASE_DIR/sources" 2>/dev/null || true
+                $SUDO rm -rf "$BASE_DIR/data" 2>/dev/null || true
+                $SUDO rm -rf "$BASE_DIR/assets" 2>/dev/null || true
+                $SUDO rm -rf "$BASE_DIR/wg-profiles" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/active-wg.conf" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/wg-ip-monitor.sh" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/wg-control.sh" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/wg-api.py" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/cert-monitor.sh" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/migrate.sh" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/deployment.log" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/docker-compose.yml" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/dashboard.html" 2>/dev/null || true
+                $SUDO rm -f "$BASE_DIR/gluetun.env" 2>/dev/null || true
                 $SUDO rm -rf "$BASE_DIR" 2>/dev/null || true
             fi
             if [ -d "$MEMOS_HOST_DIR" ]; then
-                rm -rf "$MEMOS_HOST_DIR" 2>/dev/null || true
+                $SUDO rm -rf "$MEMOS_HOST_DIR" 2>/dev/null || true
             fi
             # Remove volumes - try both unprefixed and prefixed names (sudo docker compose uses project prefix)
             for vol in portainer-data adguard-work redis-data postgresdata wg-config companioncache odido-data; do
@@ -295,7 +295,7 @@ clean_environment() {
         log_info "Phase 5: Removing images..."
         REMOVED_IMAGES=""
         # Remove images by known names
-        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome dhi.io/nginx:1.28-alpine3.21-dev dhi.io/nginx:1.28-alpine3.21 portainer/portainer-ce dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/node:20-alpine3.22 dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22-dev dhi.io/alpine-base:3.22 ghcr.io/wg-easy/wg-easy dhi.io/redis:7.2-debian quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion dhi.io/postgres:14-alpine3.22 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine dhi.io/alpine-base:3.22-dev neilpang/acme.sh"
+        KNOWN_IMAGES="qmcgaw/gluetun adguard/adguardhome nginx:1.27-alpine python:3.11-alpine3.21 node:20-alpine3.21 golang:1.23-alpine3.21 oven/bun:1-alpine ghcr.io/wg-easy/wg-easy redis:7.2-alpine quay.io/redlib/redlib:latest quay.io/invidious/invidious-companion postgres:14-alpine3.21 neosmemo/memos:stable codeberg.org/rimgo/rimgo ghcr.io/httpjamesm/anonymousoverflow:release klutchell/unbound ghcr.io/vert-sh/vertd 84codes/crystal:1.8.1-alpine 84codes/crystal:1.16.3-alpine neilpang/acme.sh"
         for img in $KNOWN_IMAGES; do
             if $DOCKER_CMD images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -q "$img"; then
                 log_info "  Removing: $img"
@@ -359,9 +359,9 @@ clean_environment() {
         fi
         
         # Alternative locations that might have been created
-        if [ -d "./DATA/AppData/$APP_NAME" ]; then
-            log_info "  Removing directory: ./DATA/AppData/$APP_NAME"
-            rm -rf "./DATA/AppData/$APP_NAME"
+        if [ -d "$BASE_DIR" ]; then
+            log_info "  Removing directory: $BASE_DIR"
+            $SUDO rm -rf "$BASE_DIR"
         fi
         
         # ============================================================

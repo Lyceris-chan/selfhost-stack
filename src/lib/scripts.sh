@@ -4,27 +4,27 @@
 
 generate_scripts() {
     # 1. Migrate Script
-    if [ -f "templates/migrate.sh" ]; then
-        sed "s/__CONTAINER_PREFIX__/${CONTAINER_PREFIX}/g" "templates/migrate.sh" > "$MIGRATE_SCRIPT"
+    if [ -f "$SCRIPT_DIR/templates/migrate.sh" ]; then
+        sed "s/__CONTAINER_PREFIX__/${CONTAINER_PREFIX}/g" "$SCRIPT_DIR/templates/migrate.sh" > "$MIGRATE_SCRIPT"
         chmod +x "$MIGRATE_SCRIPT"
     else
-        echo "[WARN] templates/migrate.sh not found."
+        echo "[WARN] templates/migrate.sh not found at $SCRIPT_DIR/templates/migrate.sh"
     fi
 
     # 2. WG Control Script
-    if [ -f "templates/wg_control.sh" ]; then
-        sed "s/__CONTAINER_PREFIX__/${CONTAINER_PREFIX}/g; s/__ADMIN_PASS_RAW__/${ADMIN_PASS_RAW}/g" "templates/wg_control.sh" > "$WG_CONTROL_SCRIPT"
+    if [ -f "$SCRIPT_DIR/templates/wg_control.sh" ]; then
+        sed "s/__CONTAINER_PREFIX__/${CONTAINER_PREFIX}/g; s/__ADMIN_PASS_RAW__/${ADMIN_PASS_RAW}/g" "$SCRIPT_DIR/templates/wg_control.sh" > "$WG_CONTROL_SCRIPT"
         chmod +x "$WG_CONTROL_SCRIPT"
     else
-        echo "[WARN] templates/wg_control.sh not found."
+        echo "[WARN] templates/wg_control.sh not found at $SCRIPT_DIR/templates/wg_control.sh"
     fi
 
     # 3. WG API Script
-    if [ -f "templates/wg_api.py" ]; then
-        sed "s/__CONTAINER_PREFIX__/${CONTAINER_PREFIX}/g; s/__APP_NAME__/${APP_NAME}/g" "templates/wg_api.py" > "$WG_API_SCRIPT"
-        chmod +x "$WG_API_SCRIPT"
+    if [ -f "$SCRIPT_DIR/templates/wg_api.py" ]; then
+        $SUDO sed "s/__CONTAINER_PREFIX__/${CONTAINER_PREFIX}/g; s/__APP_NAME__/${APP_NAME}/g" "$SCRIPT_DIR/templates/wg_api.py" | $SUDO tee "$WG_API_SCRIPT" >/dev/null
+        $SUDO chmod +x "$WG_API_SCRIPT"
     else
-        echo "[WARN] templates/wg_api.py not found."
+        echo "[WARN] templates/wg_api.py not found at $SCRIPT_DIR/templates/wg_api.py"
     fi
 
     # 5. Hardware & Services Configuration

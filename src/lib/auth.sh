@@ -10,33 +10,27 @@ authenticate_registries() {
         elif [ "$PERSONAL_MODE" = true ]; then
              log_info "Personal Mode: Using pre-configured registry credentials."
              REG_USER="laciachan"
-             REG_TOKEN="${REG_TOKEN:-DOCKER_TOKEN_PLACEHOLDER}"
+             REG_TOKEN="${REG_TOKEN:-DOCKER_HUB_TOKEN_PLACEHOLDER}"
         else
              log_info "Auto-confirm enabled: Using default/placeholder credentials."
              REG_USER="laciachan"
-             REG_TOKEN="DOCKER_TOKEN_PLACEHOLDER"
+             REG_TOKEN="DOCKER_HUB_TOKEN_PLACEHOLDER"
         fi
         
-        # DHI Login
-        log_info "Attempting dhi.io login for $REG_USER..."
-        if echo "$REG_TOKEN" | $DOCKER_CMD login dhi.io -u "$REG_USER" --password-stdin; then
-            log_info "dhi.io: Authentication successful."
-        else
-            log_warn "dhi.io: Authentication failed. This is required to access the free DHI hardened images."
-        fi
-
         # Docker Hub Login
-        if echo "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-             log_info "Docker Hub: Authentication successful."
-        else
-             log_warn "Docker Hub: Authentication failed."
+        if [ "$REG_TOKEN" != "DOCKER_HUB_TOKEN_PLACEHOLDER" ] || [ "$AUTO_CONFIRM" = true ]; then
+            if echo "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+                 log_info "Docker Hub: Authentication successful."
+            else
+                 log_warn "Docker Hub: Authentication failed."
+            fi
         fi
         return 0
     fi
 
     echo ""
     echo "--- REGISTRY AUTHENTICATION ---"
-    echo "Please provide your credentials for dhi.io and Docker Hub."
+    echo "Please provide your credentials for Docker Hub."
     echo ""
 
     while true; do
@@ -44,26 +38,12 @@ authenticate_registries() {
         read -rs -p "Token: " REG_TOKEN
         echo ""
         
-        # DHI Login
-        DHI_LOGIN_OK=false
-        if echo "$REG_TOKEN" | $DOCKER_CMD login dhi.io -u "$REG_USER" --password-stdin; then
-            log_info "dhi.io: Authentication successful."
-            DHI_LOGIN_OK=true
-        else
-            log_crit "dhi.io: Authentication failed."
-        fi
-
         # Docker Hub Login
-        HUB_LOGIN_OK=false
         if echo "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
              log_info "Docker Hub: Authentication successful."
-             HUB_LOGIN_OK=true
+             return 0
         else
              log_warn "Docker Hub: Authentication failed."
-        fi
-
-        if [ "$DHI_LOGIN_OK" = true ]; then
-            return 0
         fi
 
         if ! ask_confirm "Authentication failed. Want to try again?"; then return 1; fi
@@ -71,7 +51,13 @@ authenticate_registries() {
 }
 
 setup_secrets() {
-    # Initialize or retrieve system secrets and administrative passwords.
+    export PORTAINER_PASS_HASH="${PORTAINER_PASS_HASH:-}"
+    export AGH_PASS_HASH="${AGH_PASS_HASH:-}"
+    export WG_HASH_COMPOSE="${WG_HASH_COMPOSE:-}"
+    export ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-}"
+    export VPN_PASS_RAW="${VPN_PASS_RAW:-}"
+    export PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-}"
+    export AGH_PASS_RAW="${AGH_PASS_RAW:-}"
     if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo "========================================"
         echo " CREDENTIAL CONFIGURATION"
@@ -219,21 +205,25 @@ setup_secrets() {
         fi
         WG_HASH_CLEAN=$(echo "$HASH_OUTPUT" | grep -oP "(?<=PASSWORD_HASH=')[^']+")
         WG_HASH_ESCAPED="${WG_HASH_CLEAN//\\\$/\\\\\$\\$}"
+        export WG_HASH_COMPOSE="$WG_HASH_ESCAPED"
 
         AGH_USER="adguard"
         # Safely generate AGH hash
-        AGH_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/alpine-base:3.22-dev sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$AGH_USER" "$AGH_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+        AGH_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$AGH_USER" "$AGH_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
         if [[ "$AGH_PASS_HASH" == "FAILED" ]]; then
             log_crit "Failed to generate AdGuard password hash. Check Docker status."
             exit 1
         fi
+        export AGH_USER AGH_PASS_HASH
 
         # Safely generate Portainer hash (bcrypt)
-        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/alpine-base:3.22-dev sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
         if [[ "$PORTAINER_PASS_HASH" == "FAILED" ]]; then
             log_crit "Failed to generate Portainer password hash. Check Docker status."
             exit 1
         fi
+        export PORTAINER_PASS_HASH
+        export PORTAINER_HASH_COMPOSE="$PORTAINER_PASS_HASH"
         
         # Cryptographic Secrets
         SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64)
@@ -253,9 +243,6 @@ SCRIBE_GH_TOKEN="$SCRIBE_GH_TOKEN"
 ODIDO_TOKEN="$ODIDO_TOKEN"
 ODIDO_USER_ID="$ODIDO_USER_ID"
 HUB_API_KEY="$HUB_API_KEY"
-ENABLE_XRAY="$ENABLE_XRAY"
-XRAY_DOMAIN="$XRAY_DOMAIN"
-XRAY_UUID="$XRAY_UUID"
 UPDATE_STRATEGY="stable"
 EOF
     else
@@ -265,10 +252,6 @@ EOF
         if [ -z "${ANONYMOUS_SECRET:-}" ]; then ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32); echo "ANONYMOUS_SECRET=$ANONYMOUS_SECRET" >> "$BASE_DIR/.secrets"; fi
         if [ -z "${IV_HMAC:-}" ]; then IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16); echo "IV_HMAC=$IV_HMAC" >> "$BASE_DIR/.secrets"; fi
         if [ -z "${IV_COMPANION:-}" ]; then IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16); echo "IV_COMPANION=$IV_COMPANION" >> "$BASE_DIR/.secrets"; fi
-
-        if [ -z "${ENABLE_XRAY:-}" ]; then ENABLE_XRAY="false"; echo "ENABLE_XRAY=false" >> "$BASE_DIR/.secrets"; fi
-        if [ -z "${XRAY_DOMAIN:-}" ]; then XRAY_DOMAIN=""; echo "XRAY_DOMAIN=" >> "$BASE_DIR/.secrets"; fi
-        if [ -z "${XRAY_UUID:-}" ]; then XRAY_UUID=""; echo "XRAY_UUID=" >> "$BASE_DIR/.secrets"; fi
 
         if [ -z "${ADMIN_PASS_RAW:-}" ]; then
             ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
@@ -281,7 +264,7 @@ EOF
         # Generate Portainer hash if missing from existing .secrets
         if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
             log_info "Generating missing Portainer hash..."
-            PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm dhi.io/alpine-base:3.22-dev sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+            PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
             echo "PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'" >> "$BASE_DIR/.secrets"
         fi
         if [ -z "${ODIDO_API_KEY:-}" ]; then
@@ -294,10 +277,9 @@ EOF
         fi
         export UPDATE_STRATEGY
         # If using an old .secrets file that has WG_HASH_ESCAPED but not WG_HASH_CLEAN
-        if [ -z "${WG_HASH_CLEAN:-}" ] && [ -n "${WG_HASH_ESCAPED:-}" ]; then
-            WG_HASH_CLEAN="${WG_HASH_ESCAPED//\\$\\\$/\$}"
-        fi
+        export WG_HASH_COMPOSE="${WG_HASH_ESCAPED:-}"
         AGH_USER="adguard"
+        export AGH_USER AGH_PASS_HASH PORTAINER_PASS_HASH PORTAINER_HASH_COMPOSE
     fi
 }
 

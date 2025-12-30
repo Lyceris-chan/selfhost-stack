@@ -11,9 +11,9 @@ log() {
 
 mkdir -p "$ASSETS_DIR"
 
-if [ -d "/DATA/AppData/privacy-hub/assets" ] && [ ! -s "$ASSETS_DIR/ms.css" ]; then
-  log "Copying assets from /DATA/AppData/privacy-hub/assets"
-  cp -a /DATA/AppData/privacy-hub/assets/. "$ASSETS_DIR/" || true
+if [ -d "../data/AppData/privacy-hub/assets" ] && [ ! -s "$ASSETS_DIR/ms.css" ]; then
+  log "Copying assets from ../data/AppData/privacy-hub/assets"
+  cp -a ../data/AppData/privacy-hub/assets/. "$ASSETS_DIR/" || true
 fi
 
 URL_GS_PRIMARY="https://fontlay.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"

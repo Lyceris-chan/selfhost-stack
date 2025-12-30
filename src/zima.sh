@@ -19,19 +19,19 @@ set -euo pipefail
 # ==============================================================================
 
 # Source libraries
-source lib/utils.sh
-source lib/init.sh
-source lib/cleanup.sh
-source lib/network.sh
-source lib/auth.sh
-source lib/config_gen.sh
-source lib/dashboard_gen.sh
-source lib/sources.sh
-source lib/scripts.sh
-source lib/compose_gen.sh
-source lib/deploy.sh
-source lib/xray.sh
-source lib/backup.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/utils.sh"
+source "$SCRIPT_DIR/lib/init.sh"
+source "$SCRIPT_DIR/lib/cleanup.sh"
+source "$SCRIPT_DIR/lib/network.sh"
+source "$SCRIPT_DIR/lib/auth.sh"
+source "$SCRIPT_DIR/lib/config_gen.sh"
+source "$SCRIPT_DIR/lib/dashboard_gen.sh"
+source "$SCRIPT_DIR/lib/sources.sh"
+source "$SCRIPT_DIR/lib/scripts.sh"
+source "$SCRIPT_DIR/lib/compose_gen.sh"
+source "$SCRIPT_DIR/lib/deploy.sh"
+source "$SCRIPT_DIR/lib/backup.sh"
 
 # --- Main Execution Flow ---
 
@@ -50,9 +50,10 @@ clean_environment
 
 # 4. Pre-pull Critical Images
 log_info "Pre-pulling core infrastructure images in parallel..."
-mkdir -p "$BASE_DIR"
+$SUDO mkdir -p "$BASE_DIR"
 DOTENV_FILE="$BASE_DIR/.env"
-if [ ! -f "$DOTENV_FILE" ]; then touch "$DOTENV_FILE"; fi
+if [ ! -f "$DOTENV_FILE" ]; then $SUDO touch "$DOTENV_FILE"; fi
+$SUDO chmod 666 "$DOTENV_FILE"
 
 # Define all services that use the A/B scheme
 AB_SERVICES="hub-api odido-booster memos gluetun portainer adguard unbound wg-easy redlib wikiless invidious rimgo breezewiki anonymousoverflow scribe vert vertd companion"
@@ -61,13 +62,13 @@ for srv in $AB_SERVICES; do
     VAR_NAME="${srv//-/_}_IMAGE_TAG"
     VAR_NAME=$(echo $VAR_NAME | tr '[:lower:]' '[:upper:]')
     if ! grep -q "^$VAR_NAME=" "$DOTENV_FILE"; then
-        echo "$VAR_NAME=latest" >> "$DOTENV_FILE"
+        echo "$VAR_NAME=latest" | $SUDO tee -a "$DOTENV_FILE" >/dev/null
     fi
     val=$(grep "^$VAR_NAME=" "$DOTENV_FILE" | cut -d'=' -f2)
     export "$VAR_NAME=$val"
 done
 
-CRITICAL_IMAGES="dhi.io/nginx:1.28-alpine3.21 dhi.io/python:3.11-alpine3.22-dev dhi.io/node:20-alpine3.22-dev dhi.io/bun:1-alpine3.22-dev dhi.io/alpine-base:3.22 dhi.io/alpine-base:3.22-dev dhi.io/redis:7.2-debian dhi.io/postgres:14-alpine3.22 neilpang/acme.sh"
+CRITICAL_IMAGES="nginx:1.27-alpine python:3.11-alpine3.21 node:20-alpine3.21 oven/bun:1-alpine alpine:3.21 redis:7.2-alpine postgres:14-alpine3.21 neilpang/acme.sh"
 
 PIDS=""
 for img in $CRITICAL_IMAGES; do
@@ -88,10 +89,15 @@ if [ "$SUCCESS" = false ]; then
 fi
 log_info "All critical images pulled successfully."
 
-# 5. Network & Directories
-allocate_subnet
-detECT_NETWORK
-setup_assets
+  # 5. Network & Directories
+
+  allocate_subnet
+
+  detect_network
+
+  setup_static_assets
+
+
 setup_configs # Includes DNS/SSL config
 
 # 6. Auth & Secrets
@@ -123,18 +129,37 @@ else
 
     if [ -n "${WG_CONF_B64:-}" ]; then
         log_info "WireGuard configuration provided in environment. Decoding..."
-        echo "$WG_CONF_B64" | base64 -d > "$ACTIVE_WG_CONF"
+        echo "$WG_CONF_B64" | base64 -d | $SUDO tee "$ACTIVE_WG_CONF" >/dev/null
+    elif [ "$AUTO_CONFIRM" = true ]; then
+        log_warn "Auto-confirm active: Using specific WireGuard configuration."
+        cat <<EOF | $SUDO tee "$ACTIVE_WG_CONF" >/dev/null
+[Interface]
+# Bouncing = 1
+# NAT-PMP (Port Forwarding) = off
+# VPN Accelerator = on
+PrivateKey = UHKgB2Jp++nyH56z8sGnMhyhhdVZAeM6s5uq5+HInGQ=
+Address = 10.2.0.2/32
+DNS = 10.2.0.1
+
+[Peer]
+# NL-FREE#157
+PublicKey = V0F3qTpofzp/VUXX8hhmBksXcKJV9hNMOe3D2i3A9lk=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = 185.107.56.106:51820
+EOF
     else
         echo "PASTE YOUR WIREGUARD .CONF CONTENT BELOW."
         echo "Make sure to include the [Interface] block with PrivateKey."
         echo "Press ENTER, then Ctrl+D (Linux/Mac) or Ctrl+Z (Windows) to save."
         echo "----------------------------------------------------------"
-        cat > "$ACTIVE_WG_CONF"
-        echo "" >> "$ACTIVE_WG_CONF" 
+        cat | $SUDO tee "$ACTIVE_WG_CONF" >/dev/null
+        echo "" | $SUDO tee -a "$ACTIVE_WG_CONF" >/dev/null
         echo "----------------------------------------------------------"
     fi
     
-    $PYTHON_CMD lib/format_wg.py "$ACTIVE_WG_CONF"
+    $SUDO chmod 666 "$ACTIVE_WG_CONF"
+    
+    $PYTHON_CMD "$SCRIPT_DIR/lib/format_wg.py" "$ACTIVE_WG_CONF"
 
     if ! validate_wg_config; then
         log_crit "The pasted WireGuard configuration is invalid."
@@ -171,9 +196,10 @@ if [ -z "$INITIAL_PROFILE_NAME" ]; then INITIAL_PROFILE_NAME="Initial-Setup"; fi
 INITIAL_PROFILE_NAME_SAFE=$(echo "$INITIAL_PROFILE_NAME" | tr -cd 'a-zA-Z0-9-_#')
 if [ -z "$INITIAL_PROFILE_NAME_SAFE" ]; then INITIAL_PROFILE_NAME_SAFE="Initial-Setup"; fi
 
-cp "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
-chmod 644 "$GLUETUN_ENV_FILE" "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
-echo "$INITIAL_PROFILE_NAME_SAFE" > "$ACTIVE_PROFILE_NAME_FILE"
+$SUDO mkdir -p "$WG_PROFILES_DIR"
+$SUDO cp "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
+$SUDO chmod 644 "$GLUETUN_ENV_FILE" "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
+echo "$INITIAL_PROFILE_NAME_SAFE" | $SUDO tee "$ACTIVE_PROFILE_NAME_FILE" >/dev/null
 
 # 9. Sync Sources (and patch)
 sync_sources
@@ -185,12 +211,9 @@ fi
 
 generate_scripts
 generate_dashboard
-setup_xray
 
 # 11. Generate Compose
 generate_compose
-patch_compose_xray
-generate_xray_readme
 
 # 12. Setup Proton Pass Export
 generate_protonpass_export

@@ -6,6 +6,8 @@ tests/VERIFICATION_REPORT.md
 tests/deployment_input.txt
 __pycache__/
 DATA/
+data/
+src/data/
 internal/tests/assets/mcu.js
 internal/tests/screenshot_*.png
 internal/tests/VERIFICATION_REPORT.md
