@@ -6,7 +6,7 @@ echo "🤖 CODE AGENT: FINAL VERIFICATION"
 echo "=========================================================="
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ZIMA_SH="${REPO_ROOT}/zima.sh"
 DASHBOARD_HTML="${REPO_ROOT}/templates/dashboard.html"
 DASHBOARD_JS="${REPO_ROOT}/templates/assets/dashboard.js"

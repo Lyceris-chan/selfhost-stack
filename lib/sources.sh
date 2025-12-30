@@ -212,11 +212,11 @@ if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
             cp "$SRC_ROOT/gluetun/$D_FILE" "$SRC_ROOT/gluetun/Dockerfile.dhi"
             # Surgical replacements for ARG versions
             sed -i 's/ARG ALPINE_VERSION=.*/ARG ALPINE_VERSION=3.21/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
-            sed -i 's/ARG GO_ALPINE_VERSION=.*/ARG GO_ALPINE_VERSION=3.21/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
-            sed -i 's/ARG GO_VERSION=.*/ARG GO_VERSION=1.23/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's/ARG GO_ALPINE_VERSION=.*/ARG GO_ALPINE_VERSION=3.22/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's/ARG GO_VERSION=.*/ARG GO_VERSION=1.25/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
             # Base image replacement
             sed -i 's|^FROM alpine:${ALPINE_VERSION}|FROM alpine:3.21|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
-            sed -i 's|^FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION}-alpine${GO_ALPINE_VERSION}|FROM --platform=${BUILDPLATFORM} golang:1.23-alpine3.21|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's|^FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION}-alpine${GO_ALPINE_VERSION}|FROM --platform=${BUILDPLATFORM} dhi.io/golang:1.25-alpine3.22|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
             
             # Replace complex apk add/del block with a single clean install
             sed -i '/RUN apk add --no-cache --update -l wget/,/mkdir \/gluetun/c\RUN apk add --no-cache --update wget openvpn ca-certificates iptables iptables-legacy tzdata && echo "3.21.0" > /etc/alpine-release && mkdir /gluetun' "$SRC_ROOT/gluetun/Dockerfile.dhi"

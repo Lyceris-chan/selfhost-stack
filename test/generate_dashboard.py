@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parent.parent
+REPO_ROOT = SCRIPT_DIR.parent
 TEMPLATE_PATH = REPO_ROOT / "templates/dashboard.html"
 CSS_PATH = REPO_ROOT / "templates/assets/dashboard.css"
 JS_PATH = REPO_ROOT / "templates/assets/dashboard.js"
