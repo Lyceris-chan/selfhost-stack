@@ -267,6 +267,10 @@ server:
   do-ip4: yes
   do-udp: yes
   do-tcp: yes
+  use-syslog: no
+  log-queries: yes
+  verbosity: 1
+  chroot: ""
   access-control: 0.0.0.0/0 refuse
   access-control: 172.16.0.0/12 allow
   access-control: 192.168.0.0/16 allow
@@ -278,7 +282,7 @@ server:
   rrset-cache-size: 100m
   prefetch: yes
   prefetch-key: yes
-  auto-trust-anchor-file: "/var/lib/unbound/root.key"
+  auto-trust-anchor-file: "/etc/unbound/root.key"
 UNBOUNDEOF
 
     cat <<EOF | $SUDO tee "$AGH_YAML" >/dev/null

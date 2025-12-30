@@ -274,7 +274,7 @@ WGEDATAEOF
         # We keep the JSON key as the original name for dashboard compatibility
         s_key=${srv%:*} 
         if [ "$HEALTH" = "healthy" ] || [ "$HEALTH" = "running" ]; then
-            SERVICES_JSON="$SERVICES_JSON""$s_key":"up""
+            SERVICES_JSON="${SERVICES_JSON}\"${s_key}\":\"up\""
         elif [ "$HEALTH" = "unhealthy" ] || [ "$HEALTH" = "starting" ]; then
             # If Docker says unhealthy but port is reachable, count as up
             # For services in gluetun network, we check against gluetun container
@@ -283,9 +283,9 @@ WGEDATAEOF
                 invidious|redlib|wikiless|rimgo|scribe|breezewiki|anonymousoverflow) TARGET_HOST="${CONTAINER_PREFIX}gluetun" ;; 
             esac
             if nc -z -w 2 "$TARGET_HOST" "$s_port" >/dev/null 2>&1; then
-                SERVICES_JSON="$SERVICES_JSON""$s_key":"up""
+                SERVICES_JSON="${SERVICES_JSON}\"${s_key}\":\"up\""
             else
-                SERVICES_JSON="$SERVICES_JSON""$s_key":"$HEALTH""
+                SERVICES_JSON="${SERVICES_JSON}\"${s_key}\":\"${HEALTH}\""
             fi
         else
             # Fallback to network check
@@ -295,12 +295,12 @@ WGEDATAEOF
             esac
             
             if nc -z -w 2 "$TARGET_HOST" "$s_port" >/dev/null 2>&1; then
-                SERVICES_JSON="$SERVICES_JSON""$s_key":"up""
+                SERVICES_JSON="${SERVICES_JSON}\"${s_key}\":\"up\""
             else
-                SERVICES_JSON="$SERVICES_JSON""$s_key":"down""
+                SERVICES_JSON="${SERVICES_JSON}\"${s_key}\":\"down\""
             fi
         fi
-        HEALTH_DETAILS_JSON="$HEALTH_DETAILS_JSON""$s_key":"$(sanitize_json_string "$DETAILS")""
+        HEALTH_DETAILS_JSON="${HEALTH_DETAILS_JSON}\"${s_key}\":\"$(sanitize_json_string "$DETAILS")\""
         FIRST_SRV=0
     done
     SERVICES_JSON="$SERVICES_JSON}"

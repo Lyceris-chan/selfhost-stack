@@ -24,6 +24,13 @@ authenticate_registries() {
             else
                  log_warn "Docker Hub: Authentication failed."
             fi
+            
+            # DHI Registry Login
+            if echo "$REG_TOKEN" | $DOCKER_CMD login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+                 log_info "DHI Registry: Authentication successful."
+            else
+                 log_warn "DHI Registry: Authentication failed (using Docker Hub credentials)."
+            fi
         fi
         return 0
     fi
@@ -41,6 +48,14 @@ authenticate_registries() {
         # Docker Hub Login
         if echo "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
              log_info "Docker Hub: Authentication successful."
+             
+             # DHI Registry Login
+             if echo "$REG_TOKEN" | $DOCKER_CMD login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+                 log_info "DHI Registry: Authentication successful."
+             else
+                 log_warn "DHI Registry: Authentication failed."
+             fi
+             
              return 0
         else
              log_warn "Docker Hub: Authentication failed."

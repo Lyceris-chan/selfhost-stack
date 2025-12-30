@@ -41,6 +41,7 @@ This **Automated Mode**:
 7.  [System Requirements](#system-requirements)
 8.  [Troubleshooting](#troubleshooting)
 9.  [Maintenance](#maintenance)
+10. [External Services & Privacy Policies](#external-services--privacy-policies)
 
 ---
 
@@ -451,27 +452,43 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
 </details>
 
 <details>
-<summary><strong>External Services & Privacy Policies</strong></summary>
+<summary><strong>🌍 External Services & Privacy Policies</strong> (What connects where?)</summary>
+
+We believe in radical transparency. Here is every external connection this stack makes.
+
+### Connection Exposure Map
+
+| Service / Domain | Purpose | Exposure |
+| :--- | :--- | :--- |
+| **Frontends (YouTube/Reddit)** | Privacy content retrieval | **🔒 VPN IP** (Gluetun) |
+| **Dashboard Assets** | Fonts (Fontlay) & Icons (JSDelivr) | **🔒 VPN IP** (Proxied) |
+| **Health Checks** | VPN Connectivity Verification | **🔒 VPN IP** (Gluetun) |
+| **Container Registries** | Pulling Docker images (Docker/GHCR) | **🏠 Home IP** (Direct) |
+| **Git Repositories** | Cloning source code (GitHub/Codeberg) | **🏠 Home IP** (Direct) |
+| **DNS Blocklists** | AdGuard filter updates | **🏠 Home IP** (Direct) |
+| **deSEC.io** | SSL DNS Challenges | **🏠 Home IP** (Direct) |
+| **Odido API** | Mobile Data fetching | **🏠 Home IP** (Direct) |
+
+### Detailed Privacy Policies
 
 - **Public IP Detection & Health**:
-  - [ipify.org](https://www.ipify.org/) (IP retrieval)
-  - [ip-api.com](https://ip-api.com/docs/legal) (IP retrieval)
-  - [connectivity-check.ubuntu.com](https://ubuntu.com/legal/data-privacy) (VPN health check)
-- **Infrastructure & Automation**:
-  - [deSEC.io](https://desec.io/privacy-policy) (DNS & SSL automation)
-  - [fontlay.com](https://github.com/miroocloud/fontlay) (Google Fonts proxy)
-  - [cdn.jsdelivr.net](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net) (MCU library hosting)
-- **Container Registries & Sources**:
-  - [Docker Hub / dhi.io](https://www.docker.com/legal/docker-privacy-policy/) (Hardened images)
-  - [GitHub / GHCR](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) (Sources & Images)
-  - [Codeberg](https://codeberg.org/privacy) (Sources & Images)
-  - [Quay.io](https://quay.io/privacy) (Images)
-  - [SourceHut](https://man.sr.ht/privacy.md) (Scribe source)
-  - [Gitdab](https://gitdab.com/) (BreezeWiki source)
-- **DNS blocklist compiler ([sleepy list](https://github.com/Lyceris-chan/dns-blocklist-generator))**:
-  - [Blocklist Retrieval](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) (Combines and filters out duplicates every 6 hours using the set of default lists provided by AdGuard, using **Hagezi Pro ++** as the anchor. Merges additional lists for broad coverage without false positives. *Note: This list is for personal usage and won't be updated to allow specific lists or for the usage of others.*)
-- **Optional Service APIs**:
-  - [Odido API](https://www.odido.nl/privacy) (Data bundle management)
+  - [ipify.org](https://www.ipify.org/)
+  - [ip-api.com](https://ip-api.com/docs/legal)
+  - [connectivity-check.ubuntu.com](https://ubuntu.com/legal/data-privacy)
+- **Infrastructure & Assets**:
+  - [deSEC.io](https://desec.io/privacy-policy)
+  - [fontlay.com](https://github.com/miroocloud/fontlay)
+  - [cdn.jsdelivr.net](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net)
+- **Registries & Source Code**:
+  - [Docker Hub / dhi.io](https://www.docker.com/legal/docker-privacy-policy/)
+  - [GitHub / GHCR](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement)
+  - [Codeberg](https://codeberg.org/privacy)
+  - [Quay.io](https://quay.io/privacy)
+  - [SourceHut](https://man.sr.ht/privacy.md)
+  - [Gitdab](https://gitdab.com/)
+- **Data Providers**:
+  - [DNS Blocklists (GitHub)](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement)
+  - [Odido API](https://www.odido.nl/privacy)
 
 </details>
 

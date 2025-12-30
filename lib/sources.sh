@@ -43,15 +43,17 @@ patch_generic() {
     local file="$1"
     [ ! -f "$file" ] && return
     log "  Applying generic patches to $(basename "$file")..."
+    # Ensure /usr/local/bin exists if we are switching to alpine-base
+    sed -i '/^FROM \(alpine\|debian\)/a RUN mkdir -p /usr/local/bin' "$file"
     # Base OS (only if it's a FROM line and not FROM scratch/distroless)
-    sed -i '/^FROM [^ ]*\(scratch\|distroless\)/! s|^FROM alpine:[^ ]*|FROM alpine:3.21|g' "$file"
-    sed -i '/^FROM [^ ]*\(scratch\|distroless\)/! s|^FROM debian:[^ ]*|FROM alpine:3.21|g' "$file"
+    sed -i '/^FROM [^ ]*\(scratch\|distroless\)/! s|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$file"
+    sed -i '/^FROM [^ ]*\(scratch\|distroless\)/! s|^FROM debian:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$file"
     # Node.js (build stages)
-    sed -i 's|^FROM node:[^ ]*|FROM node:20-alpine3.21|g' "$file"
+    sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$file"
     # Go (build stages)
-    sed -i 's|^FROM golang:[^ ]*|FROM golang:1.23-alpine3.21|g' "$file"
+    sed -i 's|^FROM golang:[^ ]*|FROM dhi.io/golang:1-alpine3.22-dev|g' "$file"
     # Python (build stages)
-    sed -i 's|^FROM python:[^ ]*|FROM python:3.11-alpine3.21|g' "$file"
+    sed -i 's|^FROM python:[^ ]*|FROM dhi.io/python:3.11-alpine3.22-dev|g' "$file"
     # Strip apk version pins (e.g., package=1.2.3 -> package) to ensure compatibility with modern base images
     # We restrict this to lines that look like apk add commands
     sed -i '/apk add/ s/=[0-9][^[:space:]]*//g' "$file"
@@ -83,7 +85,7 @@ RUN shards install --production
 RUN yarn install && yarn build:prod
 RUN crystal build src/scribe.cr --release --static
 
-FROM alpine:3.21
+FROM dhi.io/alpine-base:3.22-dev
 RUN apk add --no-cache libevent gc
 WORKDIR /app
 COPY --from=build /app/scribe /app/scribe
@@ -97,8 +99,8 @@ SCRIBEOF
     # Scribe needs crystal 1.14+ for modern versions
     sed -i 's|^FROM 84codes/crystal:[^ ]*|FROM 84codes/crystal:1.16.3-alpine|g' "$SRC_ROOT/scribe/$D_FILE"
     # Ensure root for entrypoint execution if using alpine base
-    if grep -q "FROM alpine" "$SRC_ROOT/scribe/$D_FILE"; then
-         sed -i '/FROM alpine:3.21/a USER root' "$SRC_ROOT/scribe/$D_FILE"
+    if grep -q "FROM dhi.io/alpine-base" "$SRC_ROOT/scribe/$D_FILE"; then
+         sed -i '/FROM dhi.io\/alpine-base:3.22-dev/a USER root' "$SRC_ROOT/scribe/$D_FILE"
     fi
     sed -i 's|CMD \["/home/lucky/app/docker_entrypoint"\]|CMD ["/bin/sh", "/home/lucky/app/docker_entrypoint"]|g' "$SRC_ROOT/scribe/$D_FILE"
 fi
@@ -117,6 +119,10 @@ if [ "$SERVICE" = "odido-booster" ] || [ "$SERVICE" = "all" ]; then
     D_FILE=$(detect_dockerfile "$SRC_ROOT/odido-bundle-booster")
     if [ -n "$D_FILE" ]; then
         patch_generic "$SRC_ROOT/odido-bundle-booster/$D_FILE"
+        # Remove setcap as it's not needed for port 8080 and fails in some environments
+        sed -i 's/.*setcap.*//g' "$SRC_ROOT/odido-bundle-booster/$D_FILE"
+        # Ensure it uses the PORT env var correctly
+        sed -i 's/EXPOSE 80/EXPOSE 8080/g' "$SRC_ROOT/odido-bundle-booster/$D_FILE"
     fi
 fi
 
@@ -144,14 +150,14 @@ if [ "$SERVICE" = "breezewiki" ] || [ "$SERVICE" = "all" ]; then
     if [ "$D_FILE" = "1" ] || [ ! -f "$SRC_ROOT/breezewiki/$D_FILE" ]; then
         log "  Creating missing Dockerfile.alpine for BreezeWiki..."
         cat > "$SRC_ROOT/breezewiki/Dockerfile.alpine" <<'BWEOF'
-FROM alpine:3.21 AS build
+FROM dhi.io/alpine-base:3.22-dev AS build
 RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango
 WORKDIR /app
 COPY . .
 RUN raco pkg install --batch --auto --no-docs --skip-installed req-lib && raco req -d
 RUN racket dist.rkt
 
-FROM alpine:3.21
+FROM dhi.io/alpine-base:3.22-dev
 RUN apk add --no-cache racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango
 WORKDIR /app
 COPY --from=build /app/dist /app
@@ -162,7 +168,7 @@ BWEOF
     fi
     patch_generic "$SRC_ROOT/breezewiki/$D_FILE"
     if ! grep -q "apk add.*racket" "$SRC_ROOT/breezewiki/$D_FILE"; then
-        sed -i '/FROM alpine/a RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango' "$SRC_ROOT/breezewiki/$D_FILE"
+        sed -i '/FROM dhi.io\/alpine-base/a RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango' "$SRC_ROOT/breezewiki/$D_FILE"
     fi
     sed -i '/RUN raco pkg install/c\RUN raco pkg install --batch --auto --no-docs --skip-installed req-lib && raco req -d' "$SRC_ROOT/breezewiki/$D_FILE"
 fi
@@ -174,13 +180,13 @@ if [ "$SERVICE" = "adguard" ] || [ "$SERVICE" = "all" ]; then
         if ! grep -q "dhi.io" "$SRC_ROOT/adguardhome/Dockerfile.dhi" 2>/dev/null; then
             cat > "$SRC_ROOT/adguardhome/Dockerfile.dhi" <<'ADGBUILD'
 # Build Stage - Frontend
-FROM node:20-alpine3.21 AS fe-builder
+FROM dhi.io/node:20-alpine3.22-dev AS fe-builder
 WORKDIR /app
 COPY . .
 RUN npm install --prefix client && npm run --prefix client build-prod
 
 # Build Stage - Backend
-FROM golang:1.23-alpine3.21 AS builder
+FROM dhi.io/golang:1-alpine3.22-dev AS builder
 RUN apk add --no-cache git make gcc musl-dev
 WORKDIR /app
 COPY . .
@@ -194,7 +200,7 @@ ADGBUILD
                 patch_generic "$SRC_ROOT/adguardhome/Dockerfile.dhi"
                 awk '/COPY --chown=nobody:nogroup/,/\/opt\/adguardhome\/AdGuardHome/ { if (!done) { print "COPY --from=builder /app/AdGuardHome_bin /opt/adguardhome/AdGuardHome"; done=1 } next } { print }' "$SRC_ROOT/adguardhome/Dockerfile.dhi" > "$SRC_ROOT/adguardhome/Dockerfile.dhi.tmp" && mv "$SRC_ROOT/adguardhome/Dockerfile.dhi.tmp" "$SRC_ROOT/adguardhome/Dockerfile.dhi"
             else
-                echo "FROM alpine:3.21" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
+                echo "FROM dhi.io/alpine-base:3.22-dev" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
                 echo "COPY --from=builder /app/AdGuardHome_bin /opt/adguardhome/AdGuardHome" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
                 grep "^ENTRYPOINT" "$D_FILE" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi" || echo 'ENTRYPOINT ["/opt/adguardhome/AdGuardHome"]' >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
                 grep "^CMD" "$D_FILE" >> "$SRC_ROOT/adguardhome/Dockerfile.dhi" || echo 'CMD ["--no-check-update", "-c", "/opt/adguardhome/conf/AdGuardHome.yaml", "-w", "/opt/adguardhome/work"]' >> "$SRC_ROOT/adguardhome/Dockerfile.dhi"
@@ -211,15 +217,15 @@ if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
         if ! grep -q "dhi.io" "$SRC_ROOT/gluetun/Dockerfile.dhi" 2>/dev/null; then
             cp "$SRC_ROOT/gluetun/$D_FILE" "$SRC_ROOT/gluetun/Dockerfile.dhi"
             # Surgical replacements for ARG versions
-            sed -i 's/ARG ALPINE_VERSION=.*/ARG ALPINE_VERSION=3.21/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's/ARG ALPINE_VERSION=.*/ARG ALPINE_VERSION=3.22/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
             sed -i 's/ARG GO_ALPINE_VERSION=.*/ARG GO_ALPINE_VERSION=3.22/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
             sed -i 's/ARG GO_VERSION=.*/ARG GO_VERSION=1.25/g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
             # Base image replacement
-            sed -i 's|^FROM alpine:${ALPINE_VERSION}|FROM alpine:3.21|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
-            sed -i 's|^FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION}-alpine${GO_ALPINE_VERSION}|FROM --platform=${BUILDPLATFORM} dhi.io/golang:1.25-alpine3.22|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's|^FROM alpine:${ALPINE_VERSION}|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i 's|^FROM --platform=${BUILDPLATFORM} golang:${GO_VERSION}-alpine${GO_ALPINE_VERSION}|FROM --platform=${BUILDPLATFORM} dhi.io/golang:1-alpine3.22-dev|g' "$SRC_ROOT/gluetun/Dockerfile.dhi"
             
             # Replace complex apk add/del block with a single clean install
-            sed -i '/RUN apk add --no-cache --update -l wget/,/mkdir \/gluetun/c\RUN apk add --no-cache --update wget openvpn ca-certificates iptables iptables-legacy tzdata && echo "3.21.0" > /etc/alpine-release && mkdir /gluetun' "$SRC_ROOT/gluetun/Dockerfile.dhi"
+            sed -i '/RUN apk add --no-cache --update -l wget/,/mkdir \/gluetun/c\RUN apk add --no-cache --update wget openvpn ca-certificates iptables iptables-legacy tzdata && echo "3.22.0" > /etc/alpine-release && mkdir /gluetun' "$SRC_ROOT/gluetun/Dockerfile.dhi"
             
             # Link openvpn for consistency (gluetun expects 2.5/2.6 variants)
             sed -i '/mkdir \/gluetun/a RUN ln -s /usr/sbin/openvpn /usr/sbin/openvpn2.6 && ln -s /usr/sbin/openvpn /usr/sbin/openvpn2.5' "$SRC_ROOT/gluetun/Dockerfile.dhi"
@@ -230,11 +236,28 @@ fi
 if [ "$SERVICE" = "unbound" ] || [ "$SERVICE" = "all" ]; then
     log "Patching Unbound..."
     D_FILE=$(detect_dockerfile "$SRC_ROOT/unbound")
-    if [ -n "$D_FILE" ]; then
-        patch_generic "$SRC_ROOT/unbound/$D_FILE"
-        # Ensure build stage uses dev base
-        sed -i 's|^FROM alpine:[^ ]* as build|FROM alpine:3.21 as build|g' "$SRC_ROOT/unbound/$D_FILE"
+    # Create a proper hardened Dockerfile if the one found is just for tests or missing
+    if [ "$D_FILE" = "1" ] || echo "$D_FILE" | grep -q "tests"; then
+        log "  Creating proper Dockerfile.dhi for Unbound..."
+        cat > "$SRC_ROOT/unbound/Dockerfile.dhi" <<'UNBOUNDEOF'
+FROM dhi.io/alpine-base:3.22-dev AS builder
+RUN apk add --no-cache build-base openssl-dev expat-dev libevent-dev flex bison
+WORKDIR /src
+COPY . .
+RUN ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var --with-libevent && make -j$(nproc)
+
+FROM dhi.io/alpine-base:3.22-dev
+RUN apk add --no-cache openssl expat libevent ca-certificates unbound
+RUN mkdir -p /etc/unbound && chown -R unbound:unbound /etc/unbound
+# Generate root trust anchor and ensure permissions
+RUN /usr/sbin/unbound-anchor -a /etc/unbound/root.key || true
+RUN chown unbound:unbound /etc/unbound/root.key
+EXPOSE 53/udp 53/tcp
+ENTRYPOINT ["unbound", "-d", "-vvv", "-c", "/etc/unbound/unbound.conf"]
+UNBOUNDEOF
+        D_FILE="Dockerfile.dhi"
     fi
+    patch_generic "$SRC_ROOT/unbound/$D_FILE"
 fi
 
 if [ "$SERVICE" = "memos" ] || [ "$SERVICE" = "all" ]; then
@@ -252,6 +275,8 @@ if [ "$SERVICE" = "redlib" ] || [ "$SERVICE" = "all" ]; then
         patch_generic "$SRC_ROOT/redlib/$D_FILE"
         # Redlib original uses debian, fix apt usage if generic patch missed it
         sed -i 's/apt-get update && apt-get install -y libcurl4/apk add --no-cache curl/g' "$SRC_ROOT/redlib/$D_FILE"
+        # Fix adduser for alpine
+        sed -i 's/adduser --home \/nonexistent --no-create-home --disabled-password redlib/adduser -h \/nonexistent -H -D redlib/g' "$SRC_ROOT/redlib/$D_FILE"
     fi
 fi
 
@@ -349,8 +374,9 @@ PATCHEOF
     # Setup Hub API
     $SUDO mkdir -p "$SRC_DIR/hub-api"
     cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
-FROM python:3.11-alpine3.21
-RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git
+FROM dhi.io/python:3.11-alpine3.22-dev
+RUN apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git gcc musl-dev linux-headers python3-dev
+RUN pip install psutil
 WORKDIR /app
 CMD ["python", "server.py"]
 EOF
@@ -385,4 +411,3 @@ EOF
 
     $SUDO chmod -R 777 "$SRC_DIR/invidious" "$SRC_DIR/vert" "$ENV_DIR" "$CONFIG_DIR" "$WG_PROFILES_DIR"
 }
-
