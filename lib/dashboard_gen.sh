@@ -2,9 +2,9 @@
 generate_dashboard() {
     log_info "Generating Dashboard UI from template..."
 
-    local template="$SCRIPT_DIR/templates/dashboard.html"
-    local css_file="$SCRIPT_DIR/templates/assets/dashboard.css"
-    local js_file="$SCRIPT_DIR/templates/assets/dashboard.js"
+    local template="$SCRIPT_DIR/lib/templates/dashboard.html"
+    local css_file="$SCRIPT_DIR/lib/templates/assets/dashboard.css"
+    local js_file="$SCRIPT_DIR/lib/templates/assets/dashboard.js"
 
     if [ ! -f "$template" ]; then
         log_crit "Dashboard template not found at $template"

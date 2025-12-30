@@ -5,9 +5,9 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
-TEMPLATE_PATH = REPO_ROOT / "templates/dashboard.html"
-CSS_PATH = REPO_ROOT / "templates/assets/dashboard.css"
-JS_PATH = REPO_ROOT / "templates/assets/dashboard.js"
+TEMPLATE_PATH = REPO_ROOT / "lib/templates/dashboard.html"
+CSS_PATH = REPO_ROOT / "lib/templates/assets/dashboard.css"
+JS_PATH = REPO_ROOT / "lib/templates/assets/dashboard.js"
 OUTPUT_PATH = Path(os.environ.get("DASHBOARD_OUTPUT", SCRIPT_DIR / "dashboard.html"))
 
 replacements = {

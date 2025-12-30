@@ -66,7 +66,7 @@ detect_network() {
     log_info "Detecting public IP address (for VPN endpoint)..."
     # Use a privacy-conscious IP check service as requested, via proxy if possible
     local proxy="http://172.${FOUND_OCTET}.0.254:8888"
-    PUBLIC_IP=$(curl --proxy "$proxy" -s --max-time 10 https://checkip.amazonaws.com || curl -s --max-time 10 https://checkip.amazonaws.com || curl -s --max-time 10 https://ifconfig.me || echo "FAILED")
+    PUBLIC_IP=$(curl --proxy "$proxy" -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 http://ip-api.com/line?fields=query || echo "FAILED")
     if [ "$PUBLIC_IP" = "FAILED" ]; then
         log_warn "Failed to detect public IP. VPN may not be reachable from external networks."
         PUBLIC_IP="$LAN_IP"
