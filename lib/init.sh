@@ -16,7 +16,7 @@ usage() {
     echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
     echo "  -g <1-4>    Group Selection:"
     echo "                1: Essentials (Dashboard, Hub-API, AdGuard, Unbound, Gluetun, Memos, Cobalt, Odido)"
-    echo "                2: Search & Video (Essentials + Invidious, SearXNG)"
+    echo "                2: Search & Video (Essentials + Invidious, Companion, SearXNG)"
     echo "                3: Media & Heavy (Essentials + VERT, VERTd, Immich)"
     echo "                4: Full Stack (Every service in the repository)"
     echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
