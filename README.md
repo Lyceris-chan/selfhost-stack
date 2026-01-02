@@ -65,6 +65,8 @@ You'll need:
 
 > 📝 **What you're getting**: This token lets the installer automatically set up SSL certificates so your connection is encrypted.
 
+> ⚠️ **Why you need this for HTTPS**: Without a domain, your browser will show scary "Your connection is not private" warnings because SSL certificates can only be issued for domain names, not IP addresses. The deSEC domain + token allows the installer to automatically obtain a free **Let's Encrypt** certificate, so your dashboard and services load securely without any browser warnings. If you skip this step, you'll need to click through security warnings every time you access your hub.
+
 ---
 
 ### Step 3: Download and Run the Installer
