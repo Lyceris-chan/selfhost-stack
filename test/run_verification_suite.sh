@@ -34,6 +34,7 @@ cleanup() {
     kill "$SERVER_PID"
   fi
   rm -f "${ROOT_DIR}/dashboard.html"
+  rm -rf "${REPO_ROOT}/data"
 }
 
 trap cleanup EXIT

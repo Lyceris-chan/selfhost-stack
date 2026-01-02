@@ -244,7 +244,11 @@ generate_scripts() {
       "order": 110,
       "url": "http://$LAN_IP:$PORT_COBALT",
       "source_url": "https://github.com/imputnet/cobalt",
-      "chips": [{"label": "Local Only", "icon": "lan", "variant": "tertiary"}]
+      "patch_url": "https://github.com/imputnet/cobalt/blob/master/Dockerfile",
+      "chips": [
+        {"label": "Local Only", "icon": "lan", "variant": "tertiary"},
+        {"label": "Upstream Image", "icon": "package", "variant": "secondary"}
+      ]
     },
     "searxng": {
       "name": "SearXNG",
@@ -252,7 +256,9 @@ generate_scripts() {
       "category": "apps",
       "order": 120,
       "url": "http://$LAN_IP:$PORT_SEARXNG",
-      "source_url": "https://github.com/searxng/searxng"
+      "source_url": "https://github.com/searxng/searxng",
+      "patch_url": "https://github.com/searxng/searxng/blob/master/Dockerfile",
+      "chips": [{"label": "Upstream Image", "icon": "package", "variant": "secondary"}]
     },
     "immich": {
       "name": "Immich",
@@ -260,7 +266,9 @@ generate_scripts() {
       "category": "apps",
       "order": 130,
       "url": "http://$LAN_IP:$PORT_IMMICH",
-      "source_url": "https://github.com/immich-app/immich"
+      "source_url": "https://github.com/immich-app/immich",
+      "patch_url": "https://github.com/immich-app/immich/blob/main/Dockerfile",
+      "chips": [{"label": "Upstream Image", "icon": "package", "variant": "secondary"}]
     }
   }
 }
