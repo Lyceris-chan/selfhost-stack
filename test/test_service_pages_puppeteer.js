@@ -14,6 +14,9 @@ const servicesList = [
   'scribe',
   'memos',
   'vert',
+  'cobalt',
+  'searxng',
+  'immich',
   'adguard',
   'portainer',
   'wg-easy'
@@ -28,6 +31,9 @@ const serviceUrls = {
   scribe: 'http://127.0.0.1:8280',
   memos: 'http://127.0.0.1:5230',
   vert: 'http://127.0.0.1:5555',
+  cobalt: 'http://127.0.0.1:9001',
+  searxng: 'http://127.0.0.1:8082',
+  immich: 'http://127.0.0.1:2283',
   adguard: 'http://127.0.0.1:8083',
   portainer: 'http://127.0.0.1:9000',
   'wg-easy': 'http://127.0.0.1:51821'

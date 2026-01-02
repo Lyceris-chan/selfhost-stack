@@ -75,6 +75,9 @@ const path = require('path');
         'scribe',
         'memos',
         'vert',
+        'cobalt',
+        'searxng',
+        'immich',
         'adguard',
         'portainer',
         'wg-easy'
@@ -89,6 +92,9 @@ const path = require('path');
         scribe: 'http://127.0.0.1:8280',
         memos: 'http://127.0.0.1:5230',
         vert: 'http://127.0.0.1:5555',
+        cobalt: 'http://127.0.0.1:9001',
+        searxng: 'http://127.0.0.1:8082',
+        immich: 'http://127.0.0.1:2283',
         adguard: 'http://127.0.0.1:8083',
         portainer: 'http://127.0.0.1:9000',
         'wg-easy': 'http://127.0.0.1:51821'
@@ -113,7 +119,7 @@ const path = require('path');
           servicesList.forEach((service, index) => {
             services[service] = {
               name: service.charAt(0).toUpperCase() + service.slice(1),
-              category: index < 8 ? 'apps' : (index === 8 ? 'tools' : 'system'),
+              category: index < 12 ? 'apps' : (index === 12 ? 'tools' : 'system'),
               order: index * 10,
               url: serviceUrls[service] || ''
             };
@@ -134,6 +140,15 @@ const path = require('path');
               gluetun: { status: 'up', healthy: true },
               services
             })
+          });
+          return;
+        }
+        if (url.includes('/api/wg/clients')) {
+          request.respond({
+            contentType: 'application/json',
+            body: JSON.stringify([
+              { id: 'client-1', name: 'Test Phone', address: '10.8.0.2', enabled: true, transferRx: 1024, transferTx: 2048, handshakeAt: new Date().toISOString() }
+            ])
           });
           return;
         }
@@ -174,6 +189,7 @@ const path = require('path');
     await page.waitForFunction(() => typeof window.toggleTheme === 'function');
     await page.evaluate(() => {
       window.open = () => null;
+      window.QRCode = function() { return {}; }; // Mock QRCode
       const noOps = [
         'restartStack',
         'uninstallStack',
@@ -182,7 +198,10 @@ const path = require('path');
         'uploadProfile',
         'buyOdidoBundle',
         'refreshOdidoRemaining',
-        'requestSslCheck'
+        'requestSslCheck',
+        'fetchWgClients',
+        'createClient',
+        'deleteClient'
       ];
       noOps.forEach((fn) => {
         if (typeof window[fn] === 'function') {
@@ -548,6 +567,48 @@ const path = require('path');
         await new Promise(r => setTimeout(r, 300));
         const strategyDesc = await page.$eval('#strategy-desc', el => el.textContent);
         recordStep('Update Strategy', strategyDesc.includes('Latest'), `Description updated: ${strategyDesc}`);
+    }
+
+    console.log('12.7 Testing WireGuard Client UI...');
+    await page.evaluate(() => {
+        const btn = document.querySelector('button[onclick="openAddClientModal()"]');
+        if (btn) btn.click();
+    });
+    await new Promise(r => setTimeout(r, 500));
+    const addClientModalVisible = await page.evaluate(() => {
+        const modal = document.getElementById('add-client-modal');
+        return modal && modal.style.display === 'flex';
+    });
+    recordStep('Add Client Modal', addClientModalVisible, `Modal opened: ${addClientModalVisible}`);
+    if (addClientModalVisible) {
+        await page.evaluate(() => {
+            const modal = document.getElementById('add-client-modal');
+            if (modal) modal.style.display = 'none';
+        });
+    }
+
+    // Mock rendering a client and clicking QR
+    await page.evaluate(() => {
+        if (typeof window.renderClientList === 'function') {
+            window.renderClientList([{ id: 'mock-id', name: 'Mock Client', address: '10.8.0.2', enabled: true, transferRx: 0, transferTx: 0 }]);
+        }
+    });
+    await new Promise(r => setTimeout(r, 300));
+    const qrBtn = await page.$('button[onclick*="showClientQr"]');
+    if (qrBtn) {
+        await qrBtn.click();
+        await new Promise(r => setTimeout(r, 500));
+        const qrModalVisible = await page.evaluate(() => {
+            const modal = document.getElementById('client-qr-modal');
+            return modal && modal.style.display === 'flex';
+        });
+        recordStep('QR Modal', qrModalVisible, `Modal opened: ${qrModalVisible}`);
+        if (qrModalVisible) {
+            await page.evaluate(() => {
+                const modal = document.getElementById('client-qr-modal');
+                if (modal) modal.style.display = 'none';
+            });
+        }
     }
 
     console.log('12.8 Testing A/B Slot Swap Verification...');

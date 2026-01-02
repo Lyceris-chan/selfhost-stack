@@ -37,6 +37,9 @@ sync_sources() {
     clone_repo "https://github.com/iv-org/invidious-companion.git" "$SRC_DIR/invidious-companion"
     clone_repo "https://github.com/wg-easy/wg-easy.git" "$SRC_DIR/wg-easy"
     clone_repo "https://github.com/portainer/portainer.git" "$SRC_DIR/portainer"
+    clone_repo "https://github.com/imputnet/cobalt.git" "$SRC_DIR/cobalt"
+    clone_repo "https://github.com/searxng/searxng.git" "$SRC_DIR/searxng"
+    clone_repo "https://github.com/immich-app/immich.git" "$SRC_DIR/immich"
 
     PATCHES_SCRIPT="$BASE_DIR/patches.sh"
 
@@ -150,7 +153,7 @@ if [ "$SERVICE" = "companion" ] || [ "$SERVICE" = "all" ]; then
 fi
 
 # Apply generic patches to all others
-for srv in wikiless scribe invidious odido-booster vert rimgo anonymousoverflow gluetun adguard unbound memos redlib wg-easy portainer; do
+for srv in wikiless scribe invidious odido-booster vert rimgo anonymousoverflow gluetun adguard unbound memos redlib wg-easy portainer cobalt searxng immich; do
     if [ "$SERVICE" = "$srv" ] || [ "$SERVICE" = "all" ]; then
         D_PATH="$SRC_ROOT/$srv"
         if [ "$srv" = "adguard" ]; then D_PATH="$SRC_ROOT/adguardhome"; fi

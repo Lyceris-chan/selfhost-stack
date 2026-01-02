@@ -180,6 +180,9 @@ EOF
       - "$LAN_IP:$PORT_BREEZEWIKI:$PORT_INT_BREEZEWIKI/tcp"
       - "$LAN_IP:$PORT_ANONYMOUS:$PORT_INT_ANONYMOUS/tcp"
       - "$LAN_IP:$PORT_COMPANION:$PORT_INT_COMPANION/tcp"
+      - "$LAN_IP:$PORT_COBALT:$PORT_INT_COBALT/tcp"
+      - "$LAN_IP:$PORT_SEARXNG:$PORT_INT_SEARXNG/tcp"
+      - "$LAN_IP:$PORT_IMMICH:$PORT_INT_IMMICH/tcp"
     volumes:
       - "$ACTIVE_WG_CONF:/gluetun/wireguard/wg0.conf:ro"
     env_file:
@@ -681,6 +684,100 @@ $(if [ -n "$VERTD_NVIDIA" ]; then echo "        reservations:
     deploy:
       resources:
         limits: {cpus: '0.5', memory: 256M}
+EOF
+    fi
+
+    if should_deploy "cobalt"; then
+    cat >> "$COMPOSE_FILE" <<EOF
+  # Cobalt: Media downloader
+  cobalt:
+    image: ghcr.io/imputnet/cobalt:7
+    container_name: ${CONTAINER_PREFIX}cobalt
+    network_mode: "service:gluetun"
+    environment:
+      - API_URL=http://$LAN_IP:$PORT_COBALT/
+      - FRONTEND_URL=http://$LAN_IP:$PORT_COBALT/
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '1.0', memory: 512M}
+EOF
+    fi
+
+    if should_deploy "searxng"; then
+    cat >> "$COMPOSE_FILE" <<EOF
+  # SearXNG: Privacy-respecting metasearch engine
+  searxng:
+    image: searxng/searxng:latest
+    container_name: ${CONTAINER_PREFIX}searxng
+    network_mode: "service:gluetun"
+    environment:
+      - SEARXNG_SECRET=$SEARXNG_SECRET
+      - BASE_URL=http://$LAN_IP:$PORT_SEARXNG/
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '1.0', memory: 512M}
+EOF
+    fi
+
+    if should_deploy "immich"; then
+    cat >> "$COMPOSE_FILE" <<EOF
+  # Immich: High-performance self-hosted photo and video management
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:release
+    container_name: ${CONTAINER_PREFIX}immich-server
+    network_mode: "service:gluetun"
+    environment:
+      - DB_HOSTNAME=${CONTAINER_PREFIX}immich-db
+      - DB_USERNAME=immich
+      - DB_PASSWORD=$IMMICH_DB_PASSWORD
+      - DB_DATABASE_NAME=immich
+      - REDIS_HOSTNAME=${CONTAINER_PREFIX}immich-redis
+      - IMMICH_CONFIG_FILE=/config/immich.json
+    volumes:
+      - $DATA_DIR/immich:/usr/src/app/upload
+      - $CONFIG_DIR/immich:/config
+    depends_on:
+      immich-db: {condition: service_healthy}
+      immich-redis: {condition: service_healthy}
+    restart: unless-stopped
+
+  immich-db:
+    image: registry.opensource.zalan.do/acid/spilo-14:2.1-p3
+    container_name: ${CONTAINER_PREFIX}immich-db
+    networks: [dhi-frontnet]
+    environment:
+      - POSTGRES_USER=immich
+      - POSTGRES_PASSWORD=$IMMICH_DB_PASSWORD
+      - POSTGRES_DB=immich
+    volumes:
+      - $DATA_DIR/immich-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d immich -U immich"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  immich-redis:
+    image: redis:6.2-alpine
+    container_name: ${CONTAINER_PREFIX}immich-redis
+    networks: [dhi-frontnet]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    container_name: ${CONTAINER_PREFIX}immich-ml
+    network_mode: "service:gluetun"
+    volumes:
+      - $DATA_DIR/immich-ml-cache:/cache
+    restart: unless-stopped
 EOF
     fi
 

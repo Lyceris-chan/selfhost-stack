@@ -236,6 +236,31 @@ generate_scripts() {
       "url": "http://$LAN_IP:8085",
       "source_url": "https://github.com/Lyceris-chan/odido-bundle-booster",
       "patch_url": "https://github.com/Lyceris-chan/odido-bundle-booster/blob/main/Dockerfile"
+    },
+    "cobalt": {
+      "name": "Cobalt",
+      "description": "Powerful media downloader. Extract content from dozens of platforms with a clean, efficient interface.",
+      "category": "apps",
+      "order": 110,
+      "url": "http://$LAN_IP:$PORT_COBALT",
+      "source_url": "https://github.com/imputnet/cobalt",
+      "chips": [{"label": "Local Only", "icon": "lan", "variant": "tertiary"}]
+    },
+    "searxng": {
+      "name": "SearXNG",
+      "description": "A privacy-respecting, hackable metasearch engine that aggregates results from more than 70 search services.",
+      "category": "apps",
+      "order": 120,
+      "url": "http://$LAN_IP:$PORT_SEARXNG",
+      "source_url": "https://github.com/searxng/searxng"
+    },
+    "immich": {
+      "name": "Immich",
+      "description": "High-performance self-hosted photo and video management solution. Feature-rich alternative to mainstream cloud photo services.",
+      "category": "apps",
+      "order": 130,
+      "url": "http://$LAN_IP:$PORT_IMMICH",
+      "source_url": "https://github.com/immich-app/immich"
     }
   }
 }

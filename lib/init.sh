@@ -7,7 +7,22 @@ LAN_IP_OVERRIDE="${LAN_IP_OVERRIDE:-}"
 WG_CONF_B64="${WG_CONF_B64:-}"
 
 usage() {
-    echo "Usage: $0 [-c (reset environment)] [-x (cleanup and exit)] [-p (auto-passwords)] [-y (auto-confirm)] [-a (allow Proton VPN)] [-s services)] [-D (dashboard only)] [-P (personal mode)] [-j (parallel deploy)] [-S (swap slots/update)] [-h]"
+    echo "Usage: $0 [options]"
+    echo ""
+    echo "Options:"
+    echo "  -c          Reset environment (recreates containers, preserves data)"
+    echo "  -x          Factory Reset (⚠️ WIPES ALL CONTAINERS AND VOLUMES)"
+    echo "  -p          Auto-Passwords (generates random secure credentials)"
+    echo "  -y          Auto-Confirm (non-interactive mode)"
+    echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
+    echo "  -S          Swap Slots (A/B update toggle)"
+    echo "  -g <1-4>    Group Selection:"
+    echo "                1: Essentials (Dashboard, DNS, VPN, Memos, Cobalt)"
+    echo "                2: Search & Video (Essentials + Invidious, SearXNG)"
+    echo "                3: Media & Heavy (Essentials + VERT, Immich)"
+    echo "                4: Full Stack (Every service included in the repo)"
+    echo "  -s <list>   Selective deployment (comma-separated list)"
+    echo "  -h          Show this help message"
 }
 
 FORCE_CLEAN=false
@@ -37,10 +52,22 @@ while getopts "cxpyas:DPjShg:" opt; do
         S) SWAP_SLOTS=true ;;
         g)
             case "${OPTARG}" in
-                1) SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard memos odido-booster" ;;
-                2) SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard invidious" ;;
-                3) SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard vert vertd" ;;
-                4) SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard scribe rimgo wikiless redlib breezewiki anonymousoverflow wg-easy portainer" ;;
+                1) 
+                    SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard memos odido-booster cobalt" 
+                    log_info "Selected Group 1: Essentials & Utilities"
+                    ;;
+                2) 
+                    SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard memos odido-booster cobalt invidious searxng" 
+                    log_info "Selected Group 2: Essentials + Search & Video"
+                    ;;
+                3) 
+                    SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard memos odido-booster cobalt vert vertd immich" 
+                    log_info "Selected Group 3: Essentials + Media & Conversion"
+                    ;;
+                4) 
+                    SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard scribe rimgo wikiless redlib breezewiki anonymousoverflow wg-easy portainer cobalt searxng immich invidious memos vert vertd odido-booster" 
+                    log_info "Selected Group 4: Full Stack (Everything)"
+                    ;;
                 *) echo "Invalid group. Use 1, 2, 3, or 4."; exit 1 ;;
             esac
             ;;
@@ -186,6 +213,8 @@ PORTAINER_PASS_RAW=""
 AGH_PASS_RAW=""
 ANONYMOUS_SECRET=""
 SCRIBE_SECRET=""
+SEARXNG_SECRET=""
+IMMICH_DB_PASSWORD=""
 
 # Service Configurations
 NGINX_CONF_DIR="$CONFIG_DIR/nginx"
@@ -219,6 +248,9 @@ PORT_MEMOS=5230
 PORT_VERT=5555
 PORT_VERTD=24153
 PORT_COMPANION=8282
+PORT_COBALT=9001
+PORT_SEARXNG=8082
+PORT_IMMICH=2283
 
 # Internal Ports
 PORT_INT_REDLIB=8080
@@ -230,3 +262,6 @@ PORT_INT_ANONYMOUS=8480
 PORT_INT_VERT=80
 PORT_INT_VERTD=24153
 PORT_INT_COMPANION=8282
+PORT_INT_COBALT=9000
+PORT_INT_SEARXNG=8080
+PORT_INT_IMMICH=2283

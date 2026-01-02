@@ -73,6 +73,8 @@ setup_secrets() {
     export VPN_PASS_RAW="${VPN_PASS_RAW:-}"
     export PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-}"
     export AGH_PASS_RAW="${AGH_PASS_RAW:-}"
+    export SEARXNG_SECRET="${SEARXNG_SECRET:-}"
+    export IMMICH_DB_PASSWORD="${IMMICH_DB_PASSWORD:-}"
     if [ ! -f "$BASE_DIR/.secrets" ]; then
         echo "========================================"
         echo " CREDENTIAL CONFIGURATION"
@@ -245,6 +247,8 @@ setup_secrets() {
         ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
         IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
         IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
+        SEARXNG_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+        IMMICH_DB_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
 
         cat > "$BASE_DIR/.secrets" <<EOF
 VPN_PASS_RAW="$VPN_PASS_RAW"
@@ -259,6 +263,8 @@ ODIDO_TOKEN="$ODIDO_TOKEN"
 ODIDO_USER_ID="$ODIDO_USER_ID"
 HUB_API_KEY="$HUB_API_KEY"
 UPDATE_STRATEGY="stable"
+SEARXNG_SECRET="$SEARXNG_SECRET"
+IMMICH_DB_PASSWORD="$IMMICH_DB_PASSWORD"
 EOF
     else
         source "$BASE_DIR/.secrets"
@@ -267,6 +273,8 @@ EOF
         if [ -z "${ANONYMOUS_SECRET:-}" ]; then ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32); echo "ANONYMOUS_SECRET=$ANONYMOUS_SECRET" >> "$BASE_DIR/.secrets"; fi
         if [ -z "${IV_HMAC:-}" ]; then IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16); echo "IV_HMAC=$IV_HMAC" >> "$BASE_DIR/.secrets"; fi
         if [ -z "${IV_COMPANION:-}" ]; then IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16); echo "IV_COMPANION=$IV_COMPANION" >> "$BASE_DIR/.secrets"; fi
+        if [ -z "${SEARXNG_SECRET:-}" ]; then SEARXNG_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32); echo "SEARXNG_SECRET=$SEARXNG_SECRET" >> "$BASE_DIR/.secrets"; fi
+        if [ -z "${IMMICH_DB_PASSWORD:-}" ]; then IMMICH_DB_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32); echo "IMMICH_DB_PASSWORD=$IMMICH_DB_PASSWORD" >> "$BASE_DIR/.secrets"; fi
 
         if [ -z "${ADMIN_PASS_RAW:-}" ]; then
             ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)

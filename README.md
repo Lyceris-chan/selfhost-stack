@@ -120,11 +120,13 @@ Gather these essentials before starting the installation. Each token should be c
 | `-P` | **Personal Mode**: Combines `-p`, `-y`, and `-j` for a fast, fully automated deployment intended for single-user setups. |
 | `-j` | **Parallel Deploy**: Builds and pulls all services simultaneously. Faster but CPU intensive. |
 | `-S` | **Swap Slots**: Toggles the active system slot (A/B) for safe updates and rollbacks. |
-| `-g <1-4>` | **Group Select**: Deploys a subset of services (1: Essentials+Memos, 2: Invidious, 3: VERT, 4: Lightweight Frontends). |
+| `-g <1-4>` | **Group Select**: Deploys a targeted subset of services:<br>• **1 (Essentials)**: Dashboard, DNS, VPN, Memos, Cobalt.<br>• **2 (Search/Video)**: Group 1 + Invidious, SearXNG.<br>• **3 (Media/Heavy)**: Group 1 + VERT, Immich.<br>• **4 (Full Stack)**: Every service in the repository. |
 | `-a` | **Allow Proton (Optional)**: Whitelists ProtonVPN domains in AdGuard (useful for Proton extension users). |
-| `-c` | **Maintenance Reset**: Recreates containers/networks without deleting persistent user data. |
-| `-x` | **Factory Reset**: ⚠️ **Destructive**. Wipes all containers, volumes, and configurations created by this stack. |
+| `-c` | **Maintenance Reset**: Recreates all containers and network interfaces to resolve glitches. **This is safe**: it strictly preserves your persistent user data and configuration. |
+| `-x` | **Factory Reset**: ⚠️ **Project-Specific Wipe**. This permanently removes all containers, volumes, and databases associated with this stack. It does **not** touch your OS or files outside the project directory. |
 | `-s` | **Selective**: Deploy specific services by name (e.g., `-s invidious,memos`). |
+
+> 🔑 **Credentials**: When using `-p`, the script will automatically generate and display your passwords. These are also saved to the `.secrets` file for later reference. For services like **Immich**, the first user to register becomes the admin.
 
 > ⚠️ **VPN Access Warning**: When you are connected to a commercial VPN (like ProtonVPN, NordVPN, etc.) directly on your device, you will **not** be able to access your Privacy Hub services. You must be connected to your home **WireGuard (wg-easy)** tunnel to reach them remotely. Using a different VPN will result in a `Connection Timed Out` or `DNS_PROBE_FINISHED_NXDOMAIN` error because your device can no longer "see" your home network.
 
@@ -148,6 +150,19 @@ Connect your devices securely to your home network:
 2.  **Connect Mobile**: Click the **QR Code** icon and scan it with the WireGuard app on your phone.
 3.  **Connect Desktop**: Download the `.conf` file and import it into your WireGuard client.
 
+### 🔐 Credential Management
+When using the `-p` (Auto-Passwords) flag, the system generates secure, unique credentials for all core infrastructure.
+
+| Service | Default Username | Password Type | Note |
+| :--- | :--- | :--- | :--- |
+| **Management Dashboard** | `admin` | Auto-generated | Protects the main control plane. |
+| **AdGuard Home** | `adguard` | Auto-generated | DNS management and filtering rules. |
+| **WireGuard (Web UI)** | `admin` | Auto-generated | Required to manage VPN peers/clients. |
+| **Portainer** | `portainer` | Auto-generated | System-level container orchestration. |
+| **Odido Booster** | `admin` | Auto-generated | API key for mobile data automation. |
+
+> 📁 **Where are they?**: All generated credentials are saved to `data/AppData/privacy-hub/.secrets` and exported to a convenient `protonpass_import.csv` in the root directory for easy importing into your password manager.
+
 ### Included Privacy Services
 
 | Service | Source | Category | Description |
@@ -160,15 +175,16 @@ Connect your devices securely to your home network:
 | **Scribe** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) ⁽[⁶](https://git.sr.ht/~edwardloveall/scribe/tree/master/item/Dockerfile)⁾ | Frontend | Alternative Medium frontend. |
 | **BreezeWiki** | [breezewiki/breezewiki](https://gitdab.com/cadence/breezewiki) ⁽[⁷](https://github.com/PussTheCat-org/docker-breezewiki-quay/blob/master/docker/Dockerfile)⁾ | Frontend | De-fandomized Wiki interface. |
 | **AnonOverflow** | [httpjamesm/anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) ⁽[⁸](https://github.com/httpjamesm/anonymousoverflow/blob/main/Dockerfile)⁾ | Frontend | Private Stack Overflow viewer. |
+| **SearXNG** | [searxng/searxng](https://github.com/searxng/searxng) ⁽[¹⁸](https://github.com/searxng/searxng/blob/master/Dockerfile)⁾ | Frontend | Privacy-respecting search engine. |
+| **Cobalt** | [imputnet/cobalt](https://github.com/imputnet/cobalt) ⁽[¹⁹](https://github.com/imputnet/cobalt/blob/master/Dockerfile)⁾ | Utility | Media downloader (Local-only). |
 | **Memos** | [usememos/memos](https://github.com/usememos/memos) ⁽[⁹](https://github.com/usememos/memos/blob/main/scripts/Dockerfile)⁾ | Utility | Self-hosted notes & knowledge base. |
 | **VERT** | [vert-sh/vert](https://github.com/vert-sh/vert) ⁽[¹⁰](https://github.com/VERT-sh/VERT/blob/main/Dockerfile)⁾ | Utility | Secure local file conversion UI. |
-| **VERTd** | [vert-sh/vertd](https://github.com/VERT-sh/vertd) ⁽[¹¹](https://github.com/VERT-sh/vertd/blob/main/Dockerfile)⁾ | Utility | File conversion daemon. |
+| **Immich** | [immich-app/immich](https://github.com/immich-app/immich) ⁽[²⁰](https://github.com/immich-app/immich/blob/main/Dockerfile)⁾ | Utility | Photo and video management. |
 | **AdGuard Home** | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) ⁽[¹²](https://github.com/AdguardTeam/AdGuardHome/blob/master/docker/Dockerfile)⁾ | Core | Network-wide DNS ad-blocking. |
 | **Unbound** | [NLnetLabs/unbound](https://github.com/NLnetLabs/unbound) ⁽[¹³](https://github.com/klutchell/unbound-docker/blob/main/Dockerfile)⁾ | Core | Recursive DNS resolver. |
 | **WireGuard** | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) ⁽[¹⁴](https://github.com/wg-easy/wg-easy/blob/master/Dockerfile)⁾ | Core | Secure remote access gateway. |
 | **Gluetun** | [qdm12/gluetun](https://github.com/qdm12/gluetun) ⁽[¹⁵](https://github.com/qdm12/gluetun/blob/master/Dockerfile)⁾ | Core | VPN client and port forwarding gateway. |
 | **Portainer** | [portainer/portainer](https://github.com/portainer/portainer) ⁽[¹⁶](https://github.com/portainer/portainer/blob/develop/build/linux/alpine.Dockerfile)⁾ | Core | Container management interface. |
-| **Odido Booster** | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) ⁽[¹⁷](https://github.com/Lyceris-chan/odido-bundle-booster/blob/main/Dockerfile)⁾ | Utility | Mobile data automation tool. |
 | **Hub API** | [Local Source](/hub-api) | Core | Stack orchestration and API. |
 
 > **Note**: All "Frontend" services are routed through the VPN tunnel automatically.
@@ -513,6 +529,9 @@ We believe in radical transparency. Here is every external connection this stack
 - **Data Providers**:
   - [DNS Blocklists (GitHub)](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement)
   - [Odido API](https://www.odido.nl/privacy)
+  - [SearXNG Privacy](https://searxng.github.io/searxng/admin/installation.html)
+  - [Immich Privacy](https://immich.app/docs/features/privacy/)
+  - [Cobalt Privacy](https://github.com/imputnet/cobalt)
 
 </details>
 
@@ -525,3 +544,26 @@ This software is provided "as is". While designed for security, the user is resp
 ---
 
 *Built with ❤️ for digital sovereignty.*
+
+---
+**Build Context Sources:**
+[1]: https://github.com/iv-org/invidious/blob/master/docker/Dockerfile
+[2]: https://github.com/iv-org/invidious-companion/blob/master/Dockerfile
+[3]: https://github.com/redlib-org/redlib/blob/main/Dockerfile.alpine
+[4]: https://codeberg.org/rimgo/rimgo/src/branch/main/Dockerfile
+[5]: https://github.com/Metastem/Wikiless/blob/main/Dockerfile
+[6]: https://git.sr.ht/~edwardloveall/scribe/tree/master/item/Dockerfile
+[7]: https://github.com/PussTheCat-org/docker-breezewiki-quay/blob/master/docker/Dockerfile
+[8]: https://github.com/httpjamesm/anonymousoverflow/blob/main/Dockerfile
+[9]: https://github.com/usememos/memos/blob/main/scripts/Dockerfile
+[10]: https://github.com/VERT-sh/VERT/blob/main/Dockerfile
+[11]: https://github.com/VERT-sh/vertd/blob/main/Dockerfile
+[12]: https://github.com/AdguardTeam/AdGuardHome/blob/master/docker/Dockerfile
+[13]: https://github.com/klutchell/unbound-docker/blob/main/Dockerfile
+[14]: https://github.com/wg-easy/wg-easy/blob/master/Dockerfile
+[15]: https://github.com/qdm12/gluetun/blob/master/Dockerfile
+[16]: https://github.com/portainer/portainer/blob/develop/build/linux/alpine.Dockerfile
+[17]: https://github.com/Lyceris-chan/odido-bundle-booster/blob/main/Dockerfile
+[18]: https://github.com/searxng/searxng/blob/master/Dockerfile
+[19]: https://github.com/imputnet/cobalt/blob/master/Dockerfile
+[20]: https://github.com/immich-app/immich/blob/main/Dockerfile

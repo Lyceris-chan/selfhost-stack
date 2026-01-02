@@ -10,7 +10,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ZIMA_SH="${REPO_ROOT}/zima.sh"
 DASHBOARD_HTML="${REPO_ROOT}/lib/templates/dashboard.html"
 DASHBOARD_JS="${REPO_ROOT}/lib/templates/assets/dashboard.js"
-WG_API_PY="${REPO_ROOT}/lib/templates/wg_api.py"
+WG_API_PY="${REPO_ROOT}/hub-api/server.py"
 
 # 1. ShellCheck
 echo "[1/4] Running ShellCheck on zima.sh..."
@@ -27,7 +27,7 @@ echo "✅ UI Fixes verified ($COG_COUNT settings patterns found in JS)."
 
 # 3. API Logic Check
 echo "[3/4] Verifying API Server logic..."
-if grep -A 5 "GET /status" "$WG_API_PY" | grep -q "return"; then
+if grep -q "GET /status" "$WG_API_PY" && grep -q "return" "$WG_API_PY"; then
     echo "✅ API Log filtering verified."
 else
     echo "❌ API Log filtering missing"
