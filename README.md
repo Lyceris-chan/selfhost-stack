@@ -140,17 +140,24 @@ Access your unified control center at `http://<LAN_IP>:8081`.
 
 | Service | Source | Category | Description |
 | :--- | :--- | :--- | :--- |
-| **Invidious** | [iv-org/invidious](https://github.com/iv-org/invidious) | Frontend | YouTube without ads or tracking. |
-| **Redlib** | [redlib-org/redlib](https://github.com/redlib-org/redlib) | Frontend | Private Reddit viewer. |
-| **Rimgo** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) | Frontend | Anonymous Imgur browser. |
-| **Wikiless** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) | Frontend | Private Wikipedia reader. |
-| **Scribe** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) | Frontend | Alternative Medium frontend. |
-| **BreezeWiki** | [breezewiki/breezewiki](https://gitdab.com/cadence/breezewiki) | Frontend | De-fandomized Wiki interface. |
-| **AnonOverflow** | [httpjamesm/anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) | Frontend | Private Stack Overflow viewer. |
-| **Memos** | [usememos/memos](https://github.com/usememos/memos) | Utility | Self-hosted notes & knowledge base. |
-| **VERT** | [vert-sh/vert](https://github.com/vert-sh/vert) | Utility | Secure local file conversion. |
-| **AdGuard Home** | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) | Core | Network-wide DNS ad-blocking. |
-| **WireGuard** | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) | Core | Secure remote access gateway. |
+| **Invidious** | [iv-org/invidious](https://github.com/iv-org/invidious) ⁽[¹](https://github.com/iv-org/invidious/blob/master/docker/Dockerfile)⁾ | Frontend | YouTube without ads or tracking. |
+| **Invidious Companion** | [iv-org/invidious-companion](https://github.com/iv-org/invidious-companion) ⁽[²](https://github.com/iv-org/invidious-companion/blob/master/Dockerfile)⁾ | Helper | Token generator for Invidious. |
+| **Redlib** | [redlib-org/redlib](https://github.com/redlib-org/redlib) ⁽[³](https://github.com/redlib-org/redlib/blob/main/Dockerfile.alpine)⁾ | Frontend | Private Reddit viewer. |
+| **Rimgo** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) ⁽[⁴](https://codeberg.org/rimgo/rimgo/src/branch/main/Dockerfile)⁾ | Frontend | Anonymous Imgur browser. |
+| **Wikiless** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) ⁽[⁵](https://github.com/Metastem/Wikiless/blob/main/Dockerfile)⁾ | Frontend | Private Wikipedia reader. |
+| **Scribe** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) ⁽[⁶](https://git.sr.ht/~edwardloveall/scribe/tree/master/item/Dockerfile)⁾ | Frontend | Alternative Medium frontend. |
+| **BreezeWiki** | [breezewiki/breezewiki](https://gitdab.com/cadence/breezewiki) ⁽[⁷](https://github.com/PussTheCat-org/docker-breezewiki-quay/blob/master/docker/Dockerfile)⁾ | Frontend | De-fandomized Wiki interface. |
+| **AnonOverflow** | [httpjamesm/anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) ⁽[⁸](https://github.com/httpjamesm/anonymousoverflow/blob/main/Dockerfile)⁾ | Frontend | Private Stack Overflow viewer. |
+| **Memos** | [usememos/memos](https://github.com/usememos/memos) ⁽[⁹](https://github.com/usememos/memos/blob/main/scripts/Dockerfile)⁾ | Utility | Self-hosted notes & knowledge base. |
+| **VERT** | [vert-sh/vert](https://github.com/vert-sh/vert) ⁽[¹⁰](https://github.com/VERT-sh/VERT/blob/main/Dockerfile)⁾ | Utility | Secure local file conversion UI. |
+| **VERTd** | [vert-sh/vertd](https://github.com/VERT-sh/vertd) ⁽[¹¹](https://github.com/VERT-sh/vertd/blob/main/Dockerfile)⁾ | Utility | File conversion daemon. |
+| **AdGuard Home** | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) ⁽[¹²](https://github.com/AdguardTeam/AdGuardHome/blob/master/docker/Dockerfile)⁾ | Core | Network-wide DNS ad-blocking. |
+| **Unbound** | [NLnetLabs/unbound](https://github.com/NLnetLabs/unbound) ⁽[¹³](https://github.com/klutchell/unbound-docker/blob/main/Dockerfile)⁾ | Core | Recursive DNS resolver. |
+| **WireGuard** | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) ⁽[¹⁴](https://github.com/wg-easy/wg-easy/blob/master/Dockerfile)⁾ | Core | Secure remote access gateway. |
+| **Gluetun** | [qdm12/gluetun](https://github.com/qdm12/gluetun) ⁽[¹⁵](https://github.com/qdm12/gluetun/blob/master/Dockerfile)⁾ | Core | VPN client and port forwarding gateway. |
+| **Portainer** | [portainer/portainer](https://github.com/portainer/portainer) ⁽[¹⁶](https://github.com/portainer/portainer/blob/develop/build/linux/alpine.Dockerfile)⁾ | Core | Container management interface. |
+| **Odido Booster** | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) ⁽[¹⁷](https://github.com/Lyceris-chan/odido-bundle-booster/blob/main/Dockerfile)⁾ | Utility | Mobile data automation tool. |
+| **Hub API** | [Local Source](/hub-api) | Core | Stack orchestration and API. |
 
 > **Note**: All "Frontend" services are routed through the VPN tunnel automatically.
 
@@ -387,57 +394,51 @@ Opening a port for WireGuard does **not** expose your home to scanning.
 <details>
 <summary><strong>🔧 Add Your Own Services</strong> (advanced, not needed for new users)</summary>
 
-Everything lives in `zima.sh`, so one run rebuilds Docker Compose and the dashboard. Keep the service name consistent everywhere (Compose, monitoring, and UI IDs).
+The stack uses a modular generation system. To add a new service, you will need to modify the generator scripts in the `lib/` directory.
 
-### 1) Add it to Compose (SECTION 13)
+### 1) Add to Compose (`lib/compose_gen.sh`)
+
+Locate the `generate_compose` function and add your service block:
 
 ```bash
-if should_deploy "myservice"; then
-cat >> "$COMPOSE_FILE" <<EOF
+    if should_deploy "myservice"; then
+    cat >> "$COMPOSE_FILE" <<EOF
   myservice:
     image: my-image:latest
     container_name: myservice
-    networks: [frontnet]
+    networks: [dhi-frontnet]
     restart: unless-stopped
 EOF
-fi
+    fi
 ```
 
-If you want the service to run through the VPN, use `network_mode: "service:gluetun"` and `depends_on: gluetun` like the existing privacy frontends.
+If you want the service to run through the VPN, use `network_mode: "service:gluetun"` and `depends_on: gluetun`.
 
-### 2) Monitoring & Health (status pill)
+### 2) Monitoring & Health (`lib/scripts.sh`)
 
-Update the service status loop inside the `wg-control.sh` heredoc in `zima.sh` (search for `Check individual privacy services status internally`).
+Update the service status loop inside the `generate_scripts` function (specifically the `wg_api.py` generation block or `wg_control.sh` template).
 
-- Add `"myservice:1234"` to the `for srv in ...` list.
-- If the service is routed through Gluetun, add `myservice` to the case that maps `TARGET_HOST="gluetun"`.
-- Optional: add a Docker `healthcheck` to surface `Healthy` rather than just `Online`.
+- Add `"myservice:1234"` to the service list in the API handler.
+- If routed through Gluetun, map it to the `gluetun` target host.
 
-### 3) Dashboard UI (Dynamic Catalog)
-The dashboard renders cards dynamically from a `services.json` file. To add your service to the UI, find the **`SERVICES_JSON`** block in `zima.sh` (Section 13) and add a new entry:
+### 3) Dashboard UI (`lib/scripts.sh`)
+
+The dashboard catalog is generated in `lib/scripts.sh`. Find the `cat > "$SERVICES_JSON"` block and add your entry:
 
 ```json
 "myservice": {
   "name": "My Service",
-  "description": "Short description of what it does.",
+  "description": "Short description.",
   "category": "apps",
   "order": 100,
   "url": "http://\$LAN_IP:1234"
 }
 ```
-*   **Category**: Use `apps`, `system`, or `tools`.
-*   **Order**: Determines the display position in the grid.
-*   **Actions**: (Optional) Add buttons for migrations or maintenance.
 
 ### 4) Watchtower Updates
 
-- Watchtower updates all image-based containers by default.
 - To opt out, add `com.centurylinklabs.watchtower.enable=false` under the service labels.
-- For build-based services, Watchtower won't rebuild; re-run `./zima.sh` or use the dashboard Update flow.
-
-### 5) Dashboard Update Banner (optional)
-
-The Update banner checks git repos under `/app/sources/<service>`. If you want your service to appear there, keep its source repo in that path with a remote configured.
+- For build-based services, the dashboard's "Update" feature handles the rebuild process.
 
 </details>
 
