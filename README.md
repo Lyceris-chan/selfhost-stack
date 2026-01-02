@@ -11,72 +11,116 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
 *   **🔒 Data Independence**: Host your own frontends (Invidious, Redlib, etc.) to stop upstream giants like Google and Reddit from profiling you.
 *   **🚫 Ad-Free by Design**: Network-wide ad blocking via AdGuard Home + native removal of sponsored content in video/social feeds.
 *   **🕵️ VPN-Gated Privacy**: All external requests are routed through a **Gluetun VPN** tunnel. Upstream providers only see your VPN IP, keeping your home identity hidden.
+*   **📺 No Adblock Nags (Invidious)**: Watch YouTube without annoying "please disable your adblocker" popups. Invidious fetches video data server-side, so YouTube never knows you're using an adblocker—because you're not even using their website.
 *   **📱 Frictionless Browsing (Redlib)**: Redlib eliminates aggressive "Open in App" prompts and mobile-web trackers. Enjoy a fast, premium Reddit experience on any device without being forced into the official app's data-harvesting ecosystem.
+*   **🚀 Faster & Safer**: Self-hosted frontends strip out tracking scripts, telemetry, and bloated JavaScript. The result? Pages load faster and your browser isn't executing code designed to spy on you.
 *   **🔑 Easy Remote Access**: Built-in **WireGuard** management. Generate client configs and **QR codes** directly from the dashboard to connect your phone or laptop securely.
 *   **🔄 Atomic A/B Updates**: Safe, zero-downtime updates with automated rollback capability. Switch between "Slot A" and "Slot B" to ensure high availability during service maintenance.
 *   **⚡ Hardware Performance**: Automatically detects and provisions GPU acceleration (Intel QSV, AMD VA-API, or NVIDIA) for media-heavy services like Immich and VERT. Code is built from source locally to ensure compatibility with your host environment.
 *   **🎨 Material Design 3**: A beautiful, responsive dashboard with dynamic theming and real-time health metrics.
 
+> ⚠️ **Heads Up: The Cat-and-Mouse Game**  
+> Companies like Google and Reddit **actively try to break** these privacy frontends. Why? Because every user on Invidious or Redlib is a user they can't track, monetize, or serve ads to. They regularly change their APIs, add new anti-bot measures, and modify their page structures specifically to break these tools. This stack uses **local builds** so we can apply fixes quickly when upstream breaks—but occasional outages are part of the privacy game. It's worth it.
+
 ---
 
 ## 🚀 Deployment
 
-The Privacy Hub can be deployed with a single command, but for the **best** experience, we recommend following the "Pro" steps to ensure your home IP is completely masked and your remote access is secured.
+**Don't worry—this is easier than it looks!** The Privacy Hub guides you through everything. Just follow these steps, and you'll have your own private internet in about 20 minutes.
 
-### Step 1: Secure Your Tunnel (VPN)
-This stack hides your home address from the internet by routing traffic through a secure "tunnel" to a VPN provider.
-1.  Go to [ProtonVPN Downloads](https://account.protonvpn.com/downloads).
-2.  Create a **WireGuard configuration** (Free or Paid).
-3.  **Download** the `.conf` file. You will paste its text during setup.
+### Before You Start (Checklist)
 
-### Step 2: Establish Your Identity (deSEC)
-To access your hub securely via a private name (like `home.dedyn.io`), you need a free, privacy-focused domain.
-1.  Register at [deSEC.io](https://desec.io).
-2.  Create a domain (e.g., `my-privacy-hub.dedyn.io`).
-3.  Generate an **API Token** in your deSEC settings.
-
-### Step 3: Run the Installer
-Open your terminal and paste this:
-```bash
-./zima.sh
-```
-*The script handles the "scary" stuff (passwords, network, security). It will ask for your VPN/deSEC details—just follow the prompts!*
-
-> 💡 **The "I'm in a hurry" Way**: Use `./zima.sh -P` to fast-track setup with automated passwords and parallel builds.
-
-**What happens next?**
-1.  **Privacy Build**: The system clones and builds your private apps (~15-20 mins).
-2.  **Ready to Use**: You get a single link to your dashboard.
-3.  **Credential Export**: Your passwords are saved to `data/AppData/privacy-hub/protonpass_import.csv` for safe keeping.
-4.  **Instant Redirection**: A `libredirect_import.json` is created in the project root. Import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically send YouTube/Reddit links to your new Hub.
-
-> 📁 **Where are my passwords?**: All generated credentials are saved to `data/AppData/privacy-hub/.secrets` and exported to `data/AppData/privacy-hub/protonpass_import.csv` for easy importing.
+You'll need:
+- [ ] A computer running **ZimaOS**, **Ubuntu 22.04+**, or **Debian 12+** (this will be your "hub")
+- [ ] **Docker** installed on that computer ([Get Docker](https://docs.docker.com/get-docker/))
+- [ ] A **ProtonVPN** account (free tier works!) for your VPN tunnel
+- [ ] *(Optional)* A **deSEC** account for a free domain name (for remote access with SSL)
 
 ---
 
-## 🛡️ Privacy Features & Architecture
+### Step 1: Get Your VPN Configuration
 
-*   **🔒 Data Independence**: Host your own frontends (Invidious, Redlib, etc.) to stop upstream giants from profiling you.
-*   **🚫 Ad-Free by Design**: Network-wide ad blocking via AdGuard Home + native removal of sponsored content in video/social feeds (Invidious/SponsorBlock).
-*   **🕵️ VPN-Gated Privacy**: All external requests are routed through a **Gluetun VPN** tunnel. Upstream providers only see your VPN IP, keeping your home identity hidden.
-*   **📱 Frictionless Browsing (Redlib)**: Redlib eliminates aggressive "Open in App" prompts and mobile-web trackers.
-    *   ⚠️ **Upstream Risk**: Services like Reddit frequently change their APIs/layouts to break private frontends. Be aware that these instances may occasionally break due to intentional upstream changes. We use local builds to apply surgical patches as soon as fixes are available.
-*   **🔑 Easy Remote Access**: Built-in **WireGuard** management. Generate client configs and **QR codes** directly from the dashboard to connect your phone or laptop securely.
-*   **🔄 Atomic A/B Updates**: Safe, zero-downtime updates with automated rollback capability.
-*   **🎨 Material Design 3**: A beautiful, responsive dashboard with dynamic theming and real-time health metrics.
+*Think of this as getting the "key" to your secret tunnel.*
+
+1.  **Create a ProtonVPN account** (if you don't have one): [ProtonVPN Signup](https://account.protonvpn.com/signup)
+2.  Go to [ProtonVPN Downloads](https://account.protonvpn.com/downloads)
+3.  Scroll down to **WireGuard configuration**
+4.  Click **Create** and choose any server (Netherlands or Switzerland are good for privacy)
+5.  Click **Download** to save the `.conf` file
+6.  **Open** the downloaded file in a text editor—you'll paste its contents during setup
+
+> 📝 **What you're getting**: This file contains your personal "tunnel key" that lets your hub connect to ProtonVPN's servers. Your real home IP stays hidden!
+
+---
+
+### Step 2: Get Your Domain Token *(Optional but Recommended)*
+
+*This gives your hub a memorable name like `my-home.dedyn.io` instead of an IP address.*
+
+1.  Register at [deSEC.io](https://desec.io) (it's free and privacy-focused)
+2.  Verify your email and log in
+3.  Click **"+ Add Domain"** and create a subdomain (e.g., `my-privacy-hub.dedyn.io`)
+4.  Go to **Token Management** → **"+"** to create a new token
+5.  **Copy and save this token**—you'll need it during setup
+
+> 📝 **What you're getting**: This token lets the installer automatically set up SSL certificates so your connection is encrypted.
+
+---
+
+### Step 3: Download and Run the Installer
+
+Now the fun part! Open a terminal on your hub computer and run:
+
+```bash
+# Clone the repository
+git clone https://github.com/Lyceris-chan/selfhost-stack.git
+
+# Enter the directory
+cd selfhost-stack
+
+# Run the installer
+./zima.sh
+```
+
+The script will ask you a few questions:
+1.  **Paste your WireGuard config** (from Step 1)
+2.  **Enter your deSEC domain and token** (from Step 2, or skip if you didn't set this up)
+3.  **Choose your password preferences** (auto-generate or set your own)
+
+That's it! Sit back and let it build (~15-20 minutes).
+
+> 💡 **The "I'm in a hurry" Way**: Use `./zima.sh -P` to fast-track setup with automated passwords and parallel builds.
+
+---
+
+### What Happens Next?
+
+1.  **🔨 Privacy Build**: The system clones and builds your private apps
+2.  **✅ Ready to Use**: You get a link to your dashboard (e.g., `http://192.168.1.100:8081`)
+3.  **🔐 Credential Export**: Your passwords are saved for safe keeping
+4.  **🔀 Instant Redirection**: A `libredirect_import.json` is created—import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically redirect YouTube/Reddit to your hub
+
+> 📁 **Where are my passwords?**: All generated credentials are saved to `data/AppData/privacy-hub/.secrets` and exported to `data/AppData/privacy-hub/protonpass_import.csv` for easy importing into your password manager.
+
+---
+
+## 🛡️ How It Works (Architecture)
+
+This section explains the technical details behind the privacy features listed above. If you just want to get started, skip to the [Customization Flags](#-customization-flags-optional) section.
 
 ### Recursive DNS Engine (Independent Resolution)
 This stack features a hardened, recursive DNS engine built on **Unbound** and **AdGuard Home**, designed to eliminate upstream reliance and prevent data leakage.
 
 #### 🛡️ Advanced Security & RFC Compliance
-*   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: Dramatically improves privacy by only sending the absolute minimum part of a domain name to upstream authoritative servers. 
-*   **DNSSEC Validation ([RFC 4033](https://datatracker.ietf.org/doc/html/rfc4033))**: Protects against DNS spoofing and cache poisoning by cryptographically verifying records.
-*   **Aggressive Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: Uses NSEC records to generate negative responses locally, reducing traffic and improving performance.
-*   **Recursive Resolution**: talks directly to authoritative root servers, cutting out the corporate "Public" middleman (Google/Cloudflare).
+*   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: Dramatically improves privacy by only sending the absolute minimum part of a domain name to upstream authoritative servers. Instead of asking a root server for `very.private.example.com`, it only asks for the `.com` TLD, keeping your full intent hidden.
+*   **DNSSEC Validation ([RFC 4033](https://datatracker.ietf.org/doc/html/rfc4033))**: Protects against DNS spoofing and cache poisoning by cryptographically verifying the authenticity of DNS records. The resolver strictly rejects responses that have been stripped of security signatures.
+*   **Aggressive Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: Uses NSEC records to generate negative responses locally, reducing traffic to authoritative servers and improving performance while resisting certain types of enumeration.
+*   **Recursive Resolution**: Unlike standard DNS which forwards your queries to a "Public" resolver (Google/Cloudflare), this engine talks directly to authoritative root servers. This cuts out the middleman and prevents corporate profiling of your browsing history.
 *   **Encrypted DNS ([RFC 7858](https://datatracker.ietf.org/doc/html/rfc7858), [RFC 8484](https://datatracker.ietf.org/doc/html/rfc8484), [RFC 9250](https://datatracker.ietf.org/doc/html/rfc9250))**: Supports DNS-over-TLS, DNS-over-HTTPS, and DNS-over-QUIC to prevent local network eavesdropping.
-*   **0x20 Bit Randomization**: Mitigates spoofing attempts by randomly varying capitalization in query names.
+*   **0x20 Bit Randomization**: A security technique that mitigates spoofing attempts by randomly varying the capitalization of query names (e.g., `ExAmPlE.CoM`), which authoritative servers must match in their response.
 *   **Privacy Considerations ([RFC 7626](https://datatracker.ietf.org/doc/html/rfc7626))**: Implements best practices for DNS privacy, minimizing data leakage to third parties.
-*   **Hardened Access Control ([RFC 1918](https://datatracker.ietf.org/doc/html/rfc1918))**: Restricts resolution to private subnets, preventing external misuse.
+*   **Hardened Access Control ([RFC 1918](https://datatracker.ietf.org/doc/html/rfc1918))**: Restricts resolution to private subnets, preventing unauthorized external usage and potential amplification attacks.
+*   **Fingerprint Resistance**: Identity and version queries are explicitly hidden to prevent scanners from identifying the specific resolver software.
 
 ### 🔍 Why Self-Host? (The "Trust Gap")
 If you don't own the hardware and the code running your network, you don't own your privacy. 
@@ -176,16 +220,25 @@ To ensure peak performance for media-heavy tasks, this stack supports hardware-a
 *   **Surgical Fixes**: Specific compilation flags and static library injections are applied in [lib/sources.sh](lib/sources.sh) to ensure these drivers function correctly within the hardened Alpine environments.
 *   **Requirements**: Ensure your ZimaOS/host device has the correct drivers installed (e.g., `intel-media-driver` or `nvidia-container-toolkit`).
 
-### 1. Remote Access (VPN)
+### 🌐 Network Configuration
+
+These settings help you get the most out of your Privacy Hub on your local network.
+
+#### 1. Remote Access (VPN)
 **Stop! You probably don't need to do anything here.**
 *   **Default State**: Your hub is invisible to the internet. This is the safest way to live.
 *   **Remote Access**: Forward **UDP Port 51820** on your router *only* if you want to connect to your hub while away from home. 
 *   **Why No Other Ports?**: Every other service (Dashboard, AdGuard, etc.) is reached *through* this WireGuard tunnel once you're connected. Opening more ports is like leaving your back door open when you already have a key to the front door.
 
-### 2. DNS Protection
-...
+#### 2. DNS Protection
+Your hub runs its own **recursive DNS resolver** (Unbound + AdGuard Home). This means:
+*   **No third-party DNS**: Your queries go directly to authoritative root servers, not Google or Cloudflare
+*   **Built-in ad blocking**: Network-wide filtering for all devices on your network
+*   **Encrypted queries**: Supports DNS-over-TLS, DNS-over-HTTPS, and DNS-over-QUIC
 
-### 4. Split Tunnel Configuration & The VPN "Force Field"
+To use it, point your router's DHCP settings to hand out your hub's IP as the DNS server for all devices.
+
+#### 3. The VPN "Force Field" (Split Tunnel Architecture)
 This stack uses a **Dual Split Tunnel** architecture. Think of it as a house with a private tunnel leading to a secret base:
 
 1.  **The Force Field (Gluetun)**: Privacy frontends (Invidious, Redlib, etc.) and specific media tools (SearXNG) are literally "plugged in" to the VPN container. If the VPN tunnel breaks, their internet access instantly dies (Killswitch). They have no physical way to talk to the internet using your real home IP.
@@ -260,19 +313,6 @@ To implement this on your router, refer to the following official guides:
 <a id="privacy--architecture"></a>
 ## 🛡️ Privacy & Architecture
 
-### The "Trust Gap"
-If you don't own the hardware and the code running your network, you don't own your privacy. You're just renting a temporary privilege.
-
-<details>
-<summary>🔍 <strong>Deep Dive: Why Self-Host?</strong> (Click to expand)</summary>
-
-*   **The Google Profile**: Google's DNS (8.8.8.8) turns you into a data source. They build profiles on your health, finances, and interests based on every domain you resolve.
-*   **The Cloudflare Illusion**: Even "neutral" providers can be forced to censor content by local governments.
-*   **ISP Predation**: Your ISP sees everything. They log, monetize, and sell your browsing history to data brokers.
-
-**This stack cuts out the middleman.**
-</details>
-
 ### Zero-Leaks Asset Architecture
 External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN proxy** and served locally. Your public home IP is never exposed to CDNs.
 
@@ -282,18 +322,6 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 3.  **Encapsulated Fetching**: All requests to external CDNs (Fontlay, JSDelivr) occur *inside* the VPN tunnel. Upstream providers only see the VPN IP.
 4.  **Local Persistence**: Assets are saved to a persistent Docker volume (`/assets`).
 5.  **Offline Serving**: The Management Dashboard (Nginx) serves all UI resources exclusively from this local volume.
-
-### Recursive DNS Engine (Independent Resolution)
-This stack features a hardened, recursive DNS engine built on **Unbound** and **AdGuard Home**, designed to eliminate upstream reliance and prevent data leakage.
-
-#### 🛡️ Advanced Security Benefits
-*   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: Dramatically improves privacy by only sending the absolute minimum part of a domain name to upstream authoritative servers. Instead of asking a root server for `very.private.example.com`, it only asks for the `.com` TLD, keeping your full intent hidden.
-*   **DNSSEC Validation ([RFC 4033](https://datatracker.ietf.org/doc/html/rfc4033))**: Protects against DNS spoofing and cache poisoning by cryptographically verifying the authenticity of DNS records. The resolver strictly rejects responses that have been stripped of security signatures.
-*   **Recursive Resolution**: Unlike standard DNS which forwards your queries to a "Public" resolver (Google/Cloudflare), this engine talks directly to authoritative root servers. This cuts out the middleman and prevents corporate profiling of your browsing history.
-*   **0x20 Bit Randomization**: A security technique that mitigates spoofing attempts by randomly varying the capitalization of query names (e.g., `ExAmPlE.CoM`), which authoritative servers must match in their response.
-*   **Aggressive Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: Uses NSEC records to generate negative responses locally, reducing traffic to authoritative servers and improving performance while resisting certain types of enumeration.
-*   **Hardened Access Control**: The resolver is strictly restricted to local RFC1918 subnets, preventing unauthorized external usage and potential amplification attacks.
-*   **Fingerprint Resistance**: Identity and version queries are explicitly hidden to prevent scanners from identifying the specific resolver software.
 
 ---
 
@@ -492,6 +520,9 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
 *   **M3 Compliance Check**: Automated layout audits ensure the dynamic grid and chips adapt to any screen size.
 *   **Log & Metric Integrity**: Container logs audited for 502/504 errors.
 </details>
+
+<details>
+<summary><strong>🌐 Connection Exposure Map & Privacy Policies</strong> (Click to expand)</summary>
 
 ### Connection Exposure Map
 
