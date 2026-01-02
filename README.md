@@ -10,6 +10,8 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
 *   **🔒 Data Independence**: Host your own frontends (Invidious, Redlib, etc.) to stop upstream giants like Google and Reddit from profiling you.
 *   **🚫 Ad-Free by Design**: Network-wide ad blocking via AdGuard Home + native removal of sponsored content in video/social feeds.
 *   **🕵️ VPN-Gated Privacy**: All external requests are routed through a **Gluetun VPN** tunnel. Upstream providers only see your VPN IP, keeping your home identity hidden.
+*   **🔑 Easy Remote Access**: Built-in **WireGuard** management. Generate client configs and **QR codes** directly from the dashboard to connect your phone or laptop securely.
+*   **🔄 A/B Update System**: Safe, atomic updates with rollback capability. Switch between "Slot A" and "Slot B" to ensure high availability.
 *   **📱 No App Prompts**: Premium mobile-web experience without "Install our app" popups.
 *   **🎨 Material Design 3**: A beautiful, responsive dashboard with dynamic theming and real-time health metrics.
 
@@ -113,12 +115,16 @@ Gather these essentials before starting the installation. Each token should be c
 **Custom Flags**:
 | Flag | Description |
 | :--- | :--- |
-| `-p` | **Auto-Passwords**: Generates random secure credentials. |
-| `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless mode). |
-| `-a` | **Allow Proton (Optional)**: **Not required**. Whitelists ProtonVPN domains in AdGuard. (Author uses this for personal usage to enable the **Proton VPN Browser Extension**). |
-| `-c` | **Maintenance Reset**: Removes only the containers and networks created by this stack to resolve glitches. strictly preserves persistent user data. Does not touch unrelated containers. |
-| `-x` | **REVERT (Factory Reset)**: ⚠️ **Targeted Cleanup** - This erases only the software and databases added by this specific project. It does not touch your personal files or other Docker containers you may have running. |
-| `-s` | **Selective**: Deploy only specific services (e.g., `-s invidious,memos`). |
+| `-p` | **Auto-Passwords**: Generates random secure credentials automatically. |
+| `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless/Non-interactive mode). |
+| `-P` | **Personal Mode**: Combines `-p`, `-y`, and `-j` for a fast, fully automated deployment intended for single-user setups. |
+| `-j` | **Parallel Deploy**: Builds and pulls all services simultaneously. Faster but CPU intensive. |
+| `-S` | **Swap Slots**: Toggles the active system slot (A/B) for safe updates and rollbacks. |
+| `-g <1-4>` | **Group Select**: Deploys a specific subset of services (1: Core, 2: Invidious, 3: VERT, 4: All). |
+| `-a` | **Allow Proton (Optional)**: Whitelists ProtonVPN domains in AdGuard (useful for Proton extension users). |
+| `-c` | **Maintenance Reset**: Recreates containers/networks without deleting persistent user data. |
+| `-x` | **Factory Reset**: ⚠️ **Destructive**. Wipes all containers, volumes, and configurations created by this stack. |
+| `-s` | **Selective**: Deploy specific services by name (e.g., `-s invidious,memos`). |
 
 > ⚠️ **VPN Access Warning**: When you are connected to a commercial VPN (like ProtonVPN, NordVPN, etc.) directly on your device, you will **not** be able to access your Privacy Hub services. You must be connected to your home **WireGuard (wg-easy)** tunnel to reach them remotely. Using a different VPN will result in a `Connection Timed Out` or `DNS_PROBE_FINISHED_NXDOMAIN` error because your device can no longer "see" your home network.
 
@@ -135,6 +141,12 @@ After installation, verify your stack:
 ## 🖥️ Dashboard & Services
 
 Access your unified control center at `http://<LAN_IP>:8081`.
+
+### 🔑 WireGuard Client Management
+Connect your devices securely to your home network:
+1.  **Add Client**: Click "New Client" in the dashboard.
+2.  **Connect Mobile**: Click the **QR Code** icon and scan it with the WireGuard app on your phone.
+3.  **Connect Desktop**: Download the `.conf` file and import it into your WireGuard client.
 
 ### Included Privacy Services
 
