@@ -23,7 +23,7 @@ usage() {
     echo "  -S          Swap Slots (A/B update toggle)"
     echo "  -c          Maintenance (recreates containers, preserves data)"
     echo "  -x          Factory Reset (⚠️ WIPES ALL CONTAINERS AND VOLUMES)"
-    echo "  -a          Allow Proton (adds ProtonVPN domains to AdGuard allowlist)"
+    echo "  -a          Allow ProtonVPN (adds ProtonVPN domains to AdGuard allowlist)"
     echo "  -D          Dashboard Only (UI testing, skips service rebuild)"
     echo "  -h          Show this help message"
 }

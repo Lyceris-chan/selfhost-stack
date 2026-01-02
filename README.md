@@ -140,7 +140,7 @@ Before running the installer, you can customize your deployment using these flag
 | `-S` | **Swap Slots**: A/B Update toggle. Deploys the new version to the standby slot before swapping. |
 | `-c` | **Maintenance**: Recreates containers and networks to fix glitches while **preserving** your persistent data. |
 | `-x` | **Factory Reset**: ⚠️ **Deletes everything**. Wipes all containers, volumes, and application data. |
-| `-a` | **Allow Proton**: Adds ProtonVPN domains to the AdGuard allowlist for browser extension users. Entries added: `getproton.me`, `vpn-api.proton.me`, `protonstatus.com`, `protonvpn.ch`, `protonvpn.com`, `protonvpn.net`. This does not affect other privacy services or VPN functionality. |
+| `-a` | **Allow ProtonVPN**: Adds ProtonVPN domains to the AdGuard allowlist for browser extension users. Entries added: `getproton.me`, `vpn-api.proton.me`, `protonstatus.com`, `protonvpn.ch`, `protonvpn.com`, `protonvpn.net`. This does not affect other privacy services or VPN functionality. |
 | `-D` | **Dashboard Only**: Regenerates only the dashboard without rebuilding services. Useful for UI testing and development. |
 | `-h` | **Help**: Displays usage information and available flags. |
 
