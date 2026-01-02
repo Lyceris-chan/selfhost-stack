@@ -464,6 +464,24 @@ EOF
 
     # Generate environment variables for specialized privacy frontends.
     $SUDO mkdir -p "$ENV_DIR"
+    
+    # SearXNG Configuration
+    $SUDO mkdir -p "$CONFIG_DIR/searxng"
+    cat <<EOF | $SUDO tee "$CONFIG_DIR/searxng/settings.yml" >/dev/null
+use_default_settings: true
+server:
+  secret_key: "$SEARXNG_SECRET"
+  limiter: false
+  image_proxy: true
+ui:
+  static_use_hash: true
+  infinite_scroll: true
+search:
+  safe_search: 0
+  autocomplete: google
+  favicons: true
+EOF
+
     cat <<EOF | $SUDO tee "$ENV_DIR/anonymousoverflow.env" >/dev/null
 APP_URL=http://$LAN_IP:$PORT_ANONYMOUS
 JWT_SIGNING_SECRET=$ANONYMOUS_SECRET

@@ -180,7 +180,6 @@ EOF
       - "$LAN_IP:$PORT_BREEZEWIKI:$PORT_INT_BREEZEWIKI/tcp"
       - "$LAN_IP:$PORT_ANONYMOUS:$PORT_INT_ANONYMOUS/tcp"
       - "$LAN_IP:$PORT_COMPANION:$PORT_INT_COMPANION/tcp"
-      - "$LAN_IP:$PORT_COBALT:$PORT_INT_COBALT/tcp"
       - "$LAN_IP:$PORT_SEARXNG:$PORT_INT_SEARXNG/tcp"
       - "$LAN_IP:$PORT_IMMICH:$PORT_INT_IMMICH/tcp"
     volumes:
@@ -689,14 +688,16 @@ EOF
 
     if should_deploy "cobalt"; then
     cat >> "$COMPOSE_FILE" <<EOF
-  # Cobalt: Media downloader
+  # Cobalt: Media downloader (Local access only)
   cobalt:
     image: ghcr.io/imputnet/cobalt:7
     container_name: ${CONTAINER_PREFIX}cobalt
-    network_mode: "service:gluetun"
+    networks: [dhi-frontnet]
+    ports: ["$LAN_IP:$PORT_COBALT:$PORT_INT_COBALT"]
     environment:
       - API_URL=http://$LAN_IP:$PORT_COBALT/
       - FRONTEND_URL=http://$LAN_IP:$PORT_COBALT/
+      - COBALT_AUTO_UPDATE=false
     restart: unless-stopped
     deploy:
       resources:
@@ -711,6 +712,8 @@ EOF
     image: searxng/searxng:latest
     container_name: ${CONTAINER_PREFIX}searxng
     network_mode: "service:gluetun"
+    volumes:
+      - $CONFIG_DIR/searxng:/etc/searxng:ro
     environment:
       - SEARXNG_SECRET=$SEARXNG_SECRET
       - BASE_URL=http://$LAN_IP:$PORT_SEARXNG/
@@ -744,7 +747,7 @@ EOF
     restart: unless-stopped
 
   immich-db:
-    image: registry.opensource.zalan.do/acid/spilo-14:2.1-p3
+    image: postgres:14-alpine
     container_name: ${CONTAINER_PREFIX}immich-db
     networks: [dhi-frontnet]
     environment:
