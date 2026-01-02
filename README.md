@@ -172,12 +172,14 @@ If you want to skip the questions, you can use these flags:
 | `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless mode). |
 | `-P` | **Personal Mode**: Fast-track setup (combines `-p`, `-y`, and `-j`). |
 | `-j` | **Parallel Deploy**: Builds everything at once. Faster, but high CPU usage! |
-| `-g <1-4>` | **Group Select**: Choose how much "privacy armor" to install:<br>• **1 (Essentials)**: Dashboard, DNS, VPN, Hub-API, Memos, Cobalt, Odido.<br>• **2 (Search/Video)**: Group 1 + Invidious, SearXNG.<br>• **3 (Media/Heavy)**: Group 1 + VERT, Immich.<br>• **4 (Full Stack)**: Every single service in the repo. |
+| `-g <1-4>` | **Group Select**: Choose your installation scope:<br>• **1 (Essentials)**: Dashboard, DNS, VPN, Hub-API, Memos, Cobalt, Odido.<br>• **2 (Search/Video)**: Group 1 + Invidious, SearXNG.<br>• **3 (Media/Heavy)**: Group 1 + VERT, Immich.<br>• **4 (Full Stack)**: Every single service in the repo. |
 | `-s` | **Selective**: Install only specific apps (e.g., `-s invidious,memos`). |
 | `-S` | **Swap Slots**: A/B Update toggle. Deploys the new version to the standby slot before swapping. |
 | `-c` | **Maintenance**: Recreates containers and networks to fix glitches while **preserving** your persistent data. |
 | `-x` | **Factory Reset**: ⚠️ **Deletes everything**. Wipes all containers, volumes, and application data. |
 | `-a` | **Allow Proton**: Whitelists ProtonVPN domains in AdGuard (useful for extension users). |
+| `-D` | **Dashboard Only**: Regenerates only the dashboard without rebuilding services. |
+| `-h` | **Help**: Displays usage information and available flags. |
 
 ---
 
