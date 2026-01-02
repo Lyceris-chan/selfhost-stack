@@ -94,6 +94,47 @@ EOF
 
     if should_deploy "odido-booster"; then
         ODIDO_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/odido-bundle-booster" || echo "Dockerfile")
+        # Check if odido should use VPN (default: true for privacy)
+        # Read from theme.json if it exists, otherwise default to VPN mode
+        ODIDO_VPN_MODE="true"
+        if [ -f "$CONFIG_DIR/theme.json" ]; then
+            ODIDO_VPN_MODE=$(grep -o '"odido_use_vpn"[[:space:]]*:[[:space:]]*\(true\|false\)' "$CONFIG_DIR/theme.json" 2>/dev/null | grep -o '\(true\|false\)' || echo "true")
+        fi
+        
+        if [ "$ODIDO_VPN_MODE" = "true" ]; then
+            # VPN mode: route through gluetun for privacy
+    cat >> "$COMPOSE_FILE" <<EOF
+  odido-booster:
+    pull_policy: build
+    build:
+      context: $SRC_DIR/odido-bundle-booster
+      dockerfile: $ODIDO_DOCKERFILE
+    image: selfhost/odido-booster:${ODIDO_BOOSTER_IMAGE_TAG:-latest}
+    container_name: ${CONTAINER_PREFIX}odido-booster
+    labels:
+      - "io.dhi.hardened=true"
+    network_mode: "service:gluetun"
+    environment:
+      - API_KEY=$ODIDO_API_KEY
+      - ODIDO_USER_ID=$ODIDO_USER_ID
+      - ODIDO_TOKEN=$ODIDO_TOKEN
+      - PORT=8080
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - $DATA_DIR/odido:/data
+    depends_on:
+      gluetun: {condition: service_healthy}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.3', memory: 128M}
+EOF
+        else
+            # Direct mode: use home IP (fallback for troubleshooting)
     cat >> "$COMPOSE_FILE" <<EOF
   odido-booster:
     pull_policy: build
@@ -123,6 +164,7 @@ EOF
       resources:
         limits: {cpus: '0.3', memory: 128M}
 EOF
+        fi
     fi
 
     if should_deploy "memos"; then
@@ -182,6 +224,7 @@ EOF
       - "$LAN_IP:$PORT_COMPANION:$PORT_INT_COMPANION/tcp"
       - "$LAN_IP:$PORT_SEARXNG:$PORT_INT_SEARXNG/tcp"
       - "$LAN_IP:$PORT_IMMICH:$PORT_INT_IMMICH/tcp"
+      - "$LAN_IP:8085:8080/tcp"
     volumes:
       - "$ACTIVE_WG_CONF:/gluetun/wireguard/wg0.conf:ro"
     env_file:
