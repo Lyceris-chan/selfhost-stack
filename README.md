@@ -27,7 +27,7 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
 - [Advanced Setup: OpenWrt & Double NAT](#-advanced-setup-openwrt--double-nat)
 - [Privacy & Architecture](#️-privacy--architecture)
   - [A/B Update System](#automatic-version-pinning--ab-system)
-  - [Surgical Patch Registry](#️-surgical-patch-registry-click-to-expand)
+  - [Surgical Patch Registry](#surgical-patch-registry)
 - [Security Standards](#-security-standards)
 - [System Requirements](#️-system-requirements)
 - [Troubleshooting](#-troubleshooting)
@@ -442,7 +442,7 @@ The following modifications are applied automatically to **every** service built
     *   Translates common package names (e.g., `libssl-dev` → `openssl-dev`).
 *   **Telemetry Removal**: All patched runtimes are configured to disable upstream telemetry and phone-home signals by default.
 
-For service-specific modifications (such as memory limits and GPU fallbacks), see the [Surgical Patch Registry](#️-surgical-patch-registry-click-to-expand) below.
+For service-specific modifications (such as memory limits and GPU fallbacks), see the [Surgical Patch Registry](#surgical-patch-registry) below.
 
 ### Automatic Version Pinning & A/B System
 
@@ -478,6 +478,7 @@ The stack implements a robust A/B deployment strategy for safe, zero-downtime up
 - **Safe Testing**: Verify new builds in isolation before exposing them to traffic.
 - **Parallel Builds**: Use `-j` flag to build all services simultaneously for faster deployments.
 
+<a id="surgical-patch-registry"></a>
 <details>
 <summary>🛠️ <strong>Surgical Patch Registry</strong> (Click to expand)</summary>
 
