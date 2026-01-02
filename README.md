@@ -461,13 +461,15 @@ We believe in radical transparency. Here is every external connection this stack
 | Service / Domain | Purpose | Exposure |
 | :--- | :--- | :--- |
 | **Frontends (YouTube/Reddit)** | Privacy content retrieval | **🔒 VPN IP** (Gluetun) |
-| **Dashboard Assets** | Fonts (Fontlay) & Icons (JSDelivr) | **🔒 VPN IP** (Proxied) |
+| **Dashboard Assets** | Fonts (Fontlay) & Icons (JSDelivr) | **🔒 VPN IP** (Proxied via Hub-API) |
+| **VPN Client Management** | Managing WireGuard clients | **🔒 VPN IP** (Proxied via Hub-API) |
+| **VPN Status & IP Check** | Tunnel health monitoring | **🔒 VPN IP** (Proxied via Hub-API) |
 | **Health Checks** | VPN Connectivity Verification | **🔒 VPN IP** (Gluetun) |
 | **Container Registries** | Pulling Docker images (Docker/GHCR) | **🏠 Home IP** (Direct) |
 | **Git Repositories** | Cloning source code (GitHub/Codeberg) | **🏠 Home IP** (Direct) |
 | **DNS Blocklists** | AdGuard filter updates | **🏠 Home IP** (Direct) |
 | **deSEC.io** | SSL DNS Challenges | **🏠 Home IP** (Direct) |
-| **Odido API** | Mobile Data fetching | **🏠 Home IP** (Direct) |
+| **Odido API** | Mobile Data fetching | **🏠 Home IP** (Direct/Proxied) |
 
 ### Detailed Privacy Policies
 

@@ -29,6 +29,13 @@ The **Hub API** is the local control plane for the self-hosted privacy stack. It
 - `POST /update`: Triggers a stack update (git pull + rebuild).
 - `POST /restart`: Restarts specific containers.
 
+## Proxied Connections & Integration
+The Hub API acts as a secure intermediary for several stack components:
+- **WireGuard Client Management**: Proxies requests to the `wg-easy` API (port 51821) for creating, listing, and deleting inbound VPN clients.
+- **VPN Status & Telemetry**: Interfaces with the `gluetun` control server (port 8000) to retrieve real-time tunnel status and public IP information.
+- **Asset Download Proxy**: External resources (fonts, scripts) are fetched via the `gluetun` HTTP proxy (port 8888). This ensures the host's home IP is never exposed to CDNs (Fontlay, JSDelivr); they only see the VPN tunnel IP.
+- **Odido API Integration**: Retrieves Dutch mobile data metrics by proxying authenticated requests to the Odido API using `curl`.
+
 ## Development
 To run locally for testing (outside the stack):
 ```bash
