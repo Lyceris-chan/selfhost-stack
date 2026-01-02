@@ -19,14 +19,6 @@ generate_scripts() {
         echo "[WARN] templates/wg_control.sh not found at $SCRIPT_DIR/lib/templates/wg_control.sh"
     fi
 
-    # 3. WG API Script
-    if [ -f "$SCRIPT_DIR/lib/templates/wg_api.py" ]; then
-        $SUDO sed "s/__CONTAINER_PREFIX__/${CONTAINER_PREFIX}/g; s/__APP_NAME__/${APP_NAME}/g" "$SCRIPT_DIR/lib/templates/wg_api.py" | $SUDO tee "$WG_API_SCRIPT" >/dev/null
-        $SUDO chmod +x "$WG_API_SCRIPT"
-    else
-        echo "[WARN] templates/wg_api.py not found at $SCRIPT_DIR/lib/templates/wg_api.py"
-    fi
-
     # 5. Hardware & Services Configuration
     VERTD_DEVICES=""
     GPU_LABEL="GPU Accelerated"

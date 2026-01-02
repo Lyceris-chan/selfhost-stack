@@ -19,7 +19,7 @@ import uuid
 # Dictionary: {token: expiry_timestamp}
 valid_sessions = {}
 session_cleanup_enabled = True
-CONTAINER_PREFIX = "__CONTAINER_PREFIX__"
+CONTAINER_PREFIX = os.environ.get('CONTAINER_PREFIX', 'dhi-a-')
 
 def cleanup_sessions_thread():
     """Background thread to purge expired auth sessions."""
@@ -370,17 +370,18 @@ def ensure_assets():
             log_fonts(f"Failed to download mcu.js: {e}", "WARN")
 
     # Ensure local SVG icon
-    svg_path = os.path.join(ASSETS_DIR, "__APP_NAME__.svg")
+    app_name = os.environ.get('APP_NAME', 'privacy-hub')
+    svg_path = os.path.join(ASSETS_DIR, f"{app_name}.svg")
     if not os.path.exists(svg_path):
         try:
-            svg = """<svg xmlns="http://www.w3.org/2000/svg" height="128" viewBox="0 -960 960 960" width="128" fill="#D0BCFF">
+            svg = f"""<svg xmlns="http://www.w3.org/2000/svg" height="128" viewBox="0 -960 960 960" width="128" fill="#D0BCFF">
     <path d="M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z"/>
 </svg>"""
             with open(svg_path, "w", encoding="utf-8") as f:
                 f.write(svg)
-            log_fonts("Generated __APP_NAME__.svg")
+            log_fonts(f"Generated {app_name}.svg")
         except Exception as e:
-            log_fonts(f"Failed to generate __APP_NAME__.svg: {e}", "WARN")
+            log_fonts(f"Failed to generate {app_name}.svg: {e}", "WARN")
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True

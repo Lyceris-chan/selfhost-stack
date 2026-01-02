@@ -57,7 +57,6 @@ EOF
       - "$CERT_MONITOR_SCRIPT:/usr/local/bin/cert-monitor.sh"
       - "$MIGRATE_SCRIPT:/usr/local/bin/migrate.sh"
       - "$(realpath "$0"):/app/zima.sh"
-      - "$WG_API_SCRIPT:/app/server.py"
       - "$GLUETUN_ENV_FILE:/app/gluetun.env"
       - "$COMPOSE_FILE:/app/docker-compose.yml"
       - "$HISTORY_LOG:/app/deployment.log"
@@ -74,6 +73,8 @@ EOF
       - HUB_API_KEY=$ODIDO_API_KEY
       - ADMIN_PASS_RAW=$ADMIN_PASS_RAW
       - VPN_PASS_RAW=$VPN_PASS_RAW
+      - CONTAINER_PREFIX=${CONTAINER_PREFIX}
+      - APP_NAME=${APP_NAME}
       - UPDATE_STRATEGY=$UPDATE_STRATEGY
       - DOCKER_CONFIG=/root/.docker
     entrypoint: ["/bin/sh", "-c", "mkdir -p /app && touch /app/deployment.log && touch /app/.data_usage && touch /app/.wge_data_usage && python3 -u /app/server.py"]
