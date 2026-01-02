@@ -14,11 +14,6 @@ usage() {
     echo "  -y          Auto-Confirm (non-interactive mode)"
     echo "  -P          Personal Mode (fast-track: combines -p, -y, and -j)"
     echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
-    echo "  -g <1-4>    Group Selection (useful for testing/limited storage):"
-    echo "                1: Essentials (Dashboard, Hub-API, AdGuard, Unbound, Gluetun, Memos, Cobalt, Odido)"
-    echo "                2: Search & Video (Essentials + Invidious, Companion, SearXNG)"
-    echo "                3: Media & Heavy (Essentials + VERT, VERTd, Immich)"
-    echo "                4: Full Stack (Every service in the repository)"
     echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
     echo "  -S          Swap Slots (A/B update toggle)"
     echo "  -c          Maintenance (recreates containers, preserves data)"
@@ -41,7 +36,7 @@ PERSONAL_MODE=false
 PARALLEL_DEPLOY=false
 SWAP_SLOTS=false
 
-while getopts "cxpyas:DPjShg:" opt; do
+while getopts "cxpyas:DPjSh" opt; do
     case ${opt} in
         c) RESET_ENV=true; FORCE_CLEAN=true ;;
         x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
@@ -53,27 +48,6 @@ while getopts "cxpyas:DPjShg:" opt; do
         P) PERSONAL_MODE=true; AUTO_PASSWORD=true; AUTO_CONFIRM=true; PARALLEL_DEPLOY=true ;;
         j) PARALLEL_DEPLOY=true ;;
         S) SWAP_SLOTS=true ;;
-        g)
-            case "${OPTARG}" in
-                1) 
-                    SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard memos odido-booster cobalt" 
-                    log_info "Selected Group 1: Essentials & Utilities"
-                    ;;
-                2) 
-                    SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard memos odido-booster cobalt invidious companion searxng" 
-                    log_info "Selected Group 2: Essentials + Search & Video"
-                    ;;
-                3) 
-                    SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard memos odido-booster cobalt vert vertd immich" 
-                    log_info "Selected Group 3: Essentials + Media & Conversion"
-                    ;;
-                4) 
-                    SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard scribe rimgo wikiless redlib breezewiki anonymousoverflow wg-easy portainer cobalt searxng immich invidious companion memos vert vertd odido-booster" 
-                    log_info "Selected Group 4: Full Stack (Everything)"
-                    ;;
-                *) echo "Invalid group. Use 1, 2, 3, or 4."; exit 1 ;;
-            esac
-            ;;
         h) 
             usage
             exit 0
@@ -201,6 +175,7 @@ SCRIBE_GH_TOKEN=""
 ODIDO_USER_ID=""
 ODIDO_TOKEN=""
 ODIDO_API_KEY=""
+ODIDO_USE_VPN="true"
 VERTD_PUB_URL=""
 VERT_PUB_HOSTNAME=""
 WG_HASH_CLEAN=""

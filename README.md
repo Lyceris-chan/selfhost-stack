@@ -77,10 +77,22 @@ You'll need:
 2.  Go to [ProtonVPN Downloads](https://account.protonvpn.com/downloads)
 3.  Scroll down to **WireGuard configuration**
 4.  Click **Create** and choose any server (Netherlands or Switzerland are good for privacy)
-5.  Click **Download** to save the `.conf` file
-6.  **Open** the downloaded file in a text editor—you'll paste its contents during setup
+5.  **⚠️ IMPORTANT**: Ensure **NAT-PMP (Port Forwarding)** is set to **OFF** (see warning below)
+6.  Click **Download** to save the `.conf` file
+7.  **Open** the downloaded file in a text editor—you'll paste its contents during setup
 
 > 📝 **What you're getting**: This file contains your personal "tunnel key" that lets your hub connect to ProtonVPN's servers. Your real home IP stays hidden!
+
+> ⚠️ **NAT-PMP WARNING**: Do **NOT** enable NAT-PMP (Port Forwarding) when generating your WireGuard config!
+>
+> **Why?** NAT-PMP opens a port on Proton's VPN server that forwards traffic directly to your Privacy Hub. This means:
+> - Your services become **publicly accessible** on the internet
+> - Anyone scanning Proton's IP ranges could find and attack your hub
+> - Your home IP stays hidden, but your services are exposed to the world
+>
+> **Correct settings:**
+> - ✅ NAT-PMP (Port Forwarding) = **OFF**
+> - ✅ VPN Accelerator = **ON** (recommended for performance)
 
 ---
 
@@ -135,7 +147,6 @@ Before running the installer, you can customize your deployment using these flag
 | `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless mode). |
 | `-P` | **Personal Mode**: Fast-track setup (combines `-p`, `-y`, and `-j`). |
 | `-j` | **Parallel Deploy**: Builds everything at once. Faster, but high CPU usage! |
-| `-g <1-4>` | **Group Select**: Choose your installation scope (see table below). Useful for testing or limited storage environments. |
 | `-s` | **Selective**: Install only specific apps (e.g., `-s invidious,memos`). |
 | `-S` | **Swap Slots**: A/B Update toggle. Deploys the new version to the standby slot before swapping. |
 | `-c` | **Maintenance**: Recreates containers and networks to fix glitches while **preserving** your persistent data. |
@@ -144,28 +155,19 @@ Before running the installer, you can customize your deployment using these flag
 | `-D` | **Dashboard Only**: Regenerates only the dashboard without rebuilding services. Useful for UI testing and development. |
 | `-h` | **Help**: Displays usage information and available flags. |
 
-#### Group Selection (`-g`)
-
-| Group | Name | Services Included |
-| :---: | :--- | :--- |
-| **1** | Essentials | Dashboard, Hub-API, AdGuard Home, Unbound (DNS), Gluetun (VPN), Memos, Cobalt, Odido Booster |
-| **2** | Search & Video | Everything in Group 1 **+** Invidious, Companion, SearXNG |
-| **3** | Media & Heavy | Everything in Group 1 **+** VERT, VERTd, Immich |
-| **4** | Full Stack | Every service in the repository (includes all frontends, WireGuard management, Portainer, etc.) |
-
 **Example usage:**
 ```bash
-# Fast-track with essentials only
-./zima.sh -P -g 1
+# Fast-track personal deployment
+./zima.sh -P
 
-# Full stack with parallel builds
-./zima.sh -p -y -j -g 4
+# Selective deployment with auto-passwords
+./zima.sh -p -y -s invidious,memos,searxng
 
 # Dashboard-only rebuild (development/testing)
 ./zima.sh -D
 ```
 
-> 💡 **Development Tip**: Use `-g 1` or `-g 2` for Codespaces or limited storage environments. Use `-D` when testing UI changes without rebuilding all services.
+> 💡 **Development Tip**: Use `-s` for Codespaces or limited storage environments. Use `-D` when testing UI changes without rebuilding all services.
 
 ---
 
@@ -621,6 +623,34 @@ Opening a port for WireGuard does **not** expose your home to scanning.
 
 <a id="maintenance"></a>
 ## 💾 Maintenance
+
+### ⚠️ IMPORTANT: Back Up Your Data
+
+Before performing any maintenance operations, **always back up your data first**. The Privacy Hub stores valuable personal information:
+
+| Service | Data Stored |
+| :--- | :--- |
+| **Memos** | Personal notes, journal entries, attachments |
+| **Invidious** | YouTube subscriptions, watch history, preferences |
+| **Immich** | Photos, videos, albums, facial recognition data |
+| **AdGuard** | DNS query logs, custom filtering rules |
+| **WireGuard** | VPN client configurations |
+
+> ⚠️ **WARNING**: Using `-x` (Factory Reset) or clearing service databases **permanently deletes all data**. This action **cannot be undone**!
+
+**Backup commands:**
+```bash
+# Full backup of all Privacy Hub data
+tar -czf privacy-hub-backup-$(date +%Y%m%d).tar.gz /data/AppData/privacy-hub
+
+# Backup only secrets and configs (minimal)
+cp /data/AppData/privacy-hub/.secrets ~/privacy-hub-secrets-backup.txt
+cp -r /data/AppData/privacy-hub/config ~/privacy-hub-config-backup/
+
+# Backup specific service data
+tar -czf memos-backup.tar.gz /data/AppData/privacy-hub/memos
+tar -czf immich-backup.tar.gz /data/AppData/privacy-hub/immich
+```
 
 *   **Update**: Click "Check Updates" in the dashboard or run `./zima.sh` again.
 *   **Backup**:

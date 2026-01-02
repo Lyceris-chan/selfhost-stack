@@ -129,6 +129,26 @@ clean_environment() {
 
     if [ "$FORCE_CLEAN" = true ]; then
         log_warn "FORCE CLEAN ENABLED (-c): All existing data, configurations, and volumes will be permanently removed."
+        echo ""
+        echo "┌─────────────────────────────────────────────────────────────────┐"
+        echo "│  ⚠️  CRITICAL DATA LOSS WARNING                                  │"
+        echo "├─────────────────────────────────────────────────────────────────┤"
+        echo "│  The following data will be PERMANENTLY DELETED:                │"
+        echo "│                                                                 │"
+        echo "│  • Memos notes and attachments                                  │"
+        echo "│  • Invidious subscriptions and preferences                      │"
+        echo "│  • AdGuard DNS query logs and custom rules                      │"
+        echo "│  • WireGuard VPN profiles and client configurations             │"
+        echo "│  • Immich photos and albums (if configured)                     │"
+        echo "│  • All service databases and application state                  │"
+        echo "│                                                                 │"
+        echo "│  If you have stored ANYTHING of value in these services,        │"
+        echo "│  STOP NOW and create a backup before proceeding!                │"
+        echo "│                                                                 │"
+        echo "│  Backup command: tar -czf privacy-hub-backup.tar.gz \\           │"
+        echo "│                  /workspaces/selfhost-stack/data/AppData        │"
+        echo "└─────────────────────────────────────────────────────────────────┘"
+        echo ""
     fi
 
     TARGET_CONTAINERS="gluetun adguard dashboard portainer wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd"
@@ -158,6 +178,16 @@ clean_environment() {
     fi
 
     if [ -d "$BASE_DIR" ] || $DOCKER_CMD volume ls -q | grep -q "portainer"; then
+        echo ""
+        echo "┌─────────────────────────────────────────────────────────────────┐"
+        echo "│  ⚠️  DATA DELETION CONFIRMATION                                  │"
+        echo "├─────────────────────────────────────────────────────────────────┤"
+        echo "│  You are about to delete ALL Privacy Hub data including:        │"
+        echo "│  notes, photos, VPN configs, DNS logs, and service databases.   │"
+        echo "│                                                                 │"
+        echo "│  This action CANNOT be undone. Have you backed up your data?    │"
+        echo "└─────────────────────────────────────────────────────────────────┘"
+        echo ""
         if ask_confirm "Wipe ALL application data? This action is irreversible."; then
             if ! check_cert_risk; then log_info "Data wipe aborted by user (Certificate Protection)."; return 1; fi
             log_info "Clearing BASE_DIR data..."
