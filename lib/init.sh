@@ -14,7 +14,7 @@ usage() {
     echo "  -y          Auto-Confirm (non-interactive mode)"
     echo "  -P          Personal Mode (fast-track: combines -p, -y, and -j)"
     echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
-    echo "  -g <1-4>    Group Selection:"
+    echo "  -g <1-4>    Group Selection (useful for testing/limited storage):"
     echo "                1: Essentials (Dashboard, Hub-API, AdGuard, Unbound, Gluetun, Memos, Cobalt, Odido)"
     echo "                2: Search & Video (Essentials + Invidious, Companion, SearXNG)"
     echo "                3: Media & Heavy (Essentials + VERT, VERTd, Immich)"
@@ -24,7 +24,7 @@ usage() {
     echo "  -c          Maintenance (recreates containers, preserves data)"
     echo "  -x          Factory Reset (⚠️ WIPES ALL CONTAINERS AND VOLUMES)"
     echo "  -a          Allow Proton (adds ProtonVPN domains to AdGuard allowlist)"
-    echo "  -D          Dashboard Only (regenerates dashboard without rebuilding services)"
+    echo "  -D          Dashboard Only (UI testing, skips service rebuild)"
     echo "  -h          Show this help message"
 }
 

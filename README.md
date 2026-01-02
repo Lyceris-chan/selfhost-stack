@@ -135,13 +135,13 @@ Before running the installer, you can customize your deployment using these flag
 | `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless mode). |
 | `-P` | **Personal Mode**: Fast-track setup (combines `-p`, `-y`, and `-j`). |
 | `-j` | **Parallel Deploy**: Builds everything at once. Faster, but high CPU usage! |
-| `-g <1-4>` | **Group Select**: Choose your installation scope (see table below). |
+| `-g <1-4>` | **Group Select**: Choose your installation scope (see table below). Useful for testing or limited storage environments. |
 | `-s` | **Selective**: Install only specific apps (e.g., `-s invidious,memos`). |
 | `-S` | **Swap Slots**: A/B Update toggle. Deploys the new version to the standby slot before swapping. |
 | `-c` | **Maintenance**: Recreates containers and networks to fix glitches while **preserving** your persistent data. |
 | `-x` | **Factory Reset**: ⚠️ **Deletes everything**. Wipes all containers, volumes, and application data. |
 | `-a` | **Allow Proton**: Adds ProtonVPN domains to the AdGuard allowlist for browser extension users. Entries added: `getproton.me`, `vpn-api.proton.me`, `protonstatus.com`, `protonvpn.ch`, `protonvpn.com`, `protonvpn.net`. This does not affect other privacy services or VPN functionality. |
-| `-D` | **Dashboard Only**: Regenerates only the dashboard without rebuilding services. |
+| `-D` | **Dashboard Only**: Regenerates only the dashboard without rebuilding services. Useful for UI testing and development. |
 | `-h` | **Help**: Displays usage information and available flags. |
 
 #### Group Selection (`-g`)
@@ -160,7 +160,12 @@ Before running the installer, you can customize your deployment using these flag
 
 # Full stack with parallel builds
 ./zima.sh -p -y -j -g 4
+
+# Dashboard-only rebuild (development/testing)
+./zima.sh -D
 ```
+
+> 💡 **Development Tip**: Use `-g 1` or `-g 2` for Codespaces or limited storage environments. Use `-D` when testing UI changes without rebuilding all services.
 
 ---
 
