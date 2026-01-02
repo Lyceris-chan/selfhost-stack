@@ -177,13 +177,14 @@ PATCHEOF
         $SUDO mkdir -p "$SRC_DIR/hub-api"
         cat > "$SRC_DIR/hub-api/Dockerfile" <<EOF
 FROM dhi.io/python:3.11-alpine3.22-dev
-  },
-  wikimedia_useragent: process.env.wikimedia_useragent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
-  cache_control: process.env.CACHE_CONTROL !== 'true' || true,
-  cache_control_interval: process.env.CACHE_CONTROL_INTERVAL || 24,
-}
-module.exports = config
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 55555
+CMD ["python3", "-u", "server.py"]
 EOF
+    fi
 
     # Apply patches after cloning
     if [ -f "$PATCHES_SCRIPT" ]; then
