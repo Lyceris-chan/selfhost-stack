@@ -74,3 +74,35 @@ detect_network() {
     log_info "Public IP: $PUBLIC_IP"
 }
 
+validate_wg_config() {
+    if [ ! -s "$ACTIVE_WG_CONF" ]; then return 1; fi
+    if ! grep -q "PrivateKey" "$ACTIVE_WG_CONF"; then return 1; fi
+    local PK_VAL
+    PK_VAL=$(grep "PrivateKey" "$ACTIVE_WG_CONF" | cut -d'=' -f2 | tr -d '[:space:]')
+    if [ -z "$PK_VAL" ]; then return 1; fi
+    if [ "${#PK_VAL}" -lt 40 ]; then return 1; fi
+    return 0
+}
+
+extract_wg_profile_name() {
+    local config_file="$1"
+    local in_peer=0
+    local profile_name=""
+    while IFS= read -r line; do
+        stripped=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if echo "$stripped" | grep -qi '^\[peer\]$'; then in_peer=1; continue; fi
+        if [ "$in_peer" -eq 1 ] && echo "$stripped" | grep -q '^#'; then
+            profile_name=$(echo "$stripped" | sed 's/^#[[:space:]]*//')
+            if [ -n "$profile_name" ]; then echo "$profile_name"; return 0; fi
+        fi
+        if [ "$in_peer" -eq 1 ] && echo "$stripped" | grep -q '^\['; then break; fi
+    done < "$config_file"
+    while IFS= read -r line; do
+        stripped=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if echo "$stripped" | grep -q '^#' && ! echo "$stripped" | grep -q '='; then
+            profile_name=$(echo "$stripped" | sed 's/^#[[:space:]]*//')
+            if [ -n "$profile_name" ]; then echo "$profile_name"; return 0; fi
+        fi
+    done < "$config_file"
+    return 1
+}

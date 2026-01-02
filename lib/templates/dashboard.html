@@ -43,6 +43,7 @@
         import * as MaterialColorUtilities from './assets/mcu.js';
         window.MaterialColorUtilities = MaterialColorUtilities;
     </script>
+    <script src="assets/qrcode.min.js"></script>
     <style>
 {{DHI_CSS}}
     </style>
@@ -395,6 +396,57 @@
                         <button type="submit" class="btn btn-tonal">Save Configuration</button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        
+        <div class="section-label admin-only">VPN Client Access (Inbound)</div>
+        <div class="grid admin-only">
+            <div class="card" style="grid-column: span 2;">
+                <div class="card-header">
+                    <h3>Registered Clients</h3>
+                    <div class="card-header-actions">
+                        <button onclick="openAddClientModal()" class="btn btn-filled" data-tooltip="Create a new client configuration">
+                            <span class="material-symbols-rounded">add</span> New Client
+                        </button>
+                    </div>
+                </div>
+                <p class="body-medium description">Manage devices that can connect to this network via WireGuard.</p>
+                
+                <div id="wg-client-list" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="padding: 24px; text-align: center; opacity: 0.6;">
+                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
+                        <span class="body-medium">Loading clients...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Client Modal -->
+        <div id="add-client-modal" class="modal-overlay">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h2>New WireGuard Client</h2>
+                    <button onclick="document.getElementById('add-client-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+                </div>
+                <input type="text" id="new-client-name" class="text-field" placeholder="Client Name (e.g. My Phone)" style="margin-bottom: 24px;">
+                <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                    <button onclick="createClient()" class="btn btn-filled">Create</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Client QR Modal -->
+        <div id="client-qr-modal" class="modal-overlay">
+            <div class="modal-card" style="text-align: center;">
+                <div class="modal-header">
+                    <h2 id="qr-client-name">Client Config</h2>
+                    <button onclick="document.getElementById('client-qr-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+                </div>
+                <div id="qrcode-container" style="background: white; padding: 16px; border-radius: 16px; display: inline-block; margin: 16px 0;"></div>
+                <div style="margin-top: 16px;">
+                    <a id="client-download-link" class="btn btn-tonal" download="wg.conf">Download .conf</a>
+                </div>
             </div>
         </div>
 

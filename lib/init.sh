@@ -23,18 +23,27 @@ PERSONAL_MODE=false
 PARALLEL_DEPLOY=false
 SWAP_SLOTS=false
 
-while getopts "cxpyas:DPjSh" opt; do
+while getopts "cxpyas:DPjShg:" opt; do
     case ${opt} in
         c) RESET_ENV=true; FORCE_CLEAN=true ;;
         x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
         p) AUTO_PASSWORD=true ;;
-        y) AUTO_CONFIRM=true ;;
+        y) AUTO_CONFIRM=true; AUTO_PASSWORD=true ;;
         a) ALLOW_PROTON_VPN=true ;;
         s) SELECTED_SERVICES="${OPTARG}" ;;
         D) DASHBOARD_ONLY=true ;;
         P) PERSONAL_MODE=true; AUTO_PASSWORD=true; AUTO_CONFIRM=true; PARALLEL_DEPLOY=true ;;
         j) PARALLEL_DEPLOY=true ;;
         S) SWAP_SLOTS=true ;;
+        g)
+            case "${OPTARG}" in
+                1) SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard memos odido-booster" ;;
+                2) SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard invidious" ;;
+                3) SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard vert vertd" ;;
+                4) SELECTED_SERVICES="hub-api adguard unbound gluetun dashboard scribe rimgo wikiless redlib breezewiki anonymousoverflow wg-easy portainer" ;;
+                *) echo "Invalid group. Use 1, 2, 3, or 4."; exit 1 ;;
+            esac
+            ;;
         h) 
             usage
             exit 0
@@ -209,6 +218,7 @@ PORT_SCRIBE=8280
 PORT_MEMOS=5230
 PORT_VERT=5555
 PORT_VERTD=24153
+PORT_COMPANION=8282
 
 # Internal Ports
 PORT_INT_REDLIB=8080
@@ -219,3 +229,4 @@ PORT_INT_BREEZEWIKI=10416
 PORT_INT_ANONYMOUS=8480
 PORT_INT_VERT=80
 PORT_INT_VERTD=24153
+PORT_INT_COMPANION=8282

@@ -71,9 +71,13 @@ FONT_SOURCES = {
     "ms.css": [
         "https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap",
     ],
+    "qrcode.js": [
+        "https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js",
+    ],
 }
 FONT_ORIGINS = [
     "https://fontlay.com",
+    "https://cdn.jsdelivr.net",
 ]
 
 def extract_profile_name(config):
@@ -395,6 +399,51 @@ def get_update_strategy():
     return strategy
 
 class APIHandler(http.server.BaseHTTPRequestHandler):
+    def _proxy_wgeasy(self, method, path, body=None):
+        try:
+            password = os.environ.get('VPN_PASS_RAW', '')
+            if not password:
+                # Fallback to ADMIN_PASS_RAW if VPN pass not set (e.g. initial setup)
+                password = os.environ.get('ADMIN_PASS_RAW', '')
+            
+            # Auth flow: 1. Get Session, 2. Execute Request
+            # Note: newer wg-easy versions might use a simple password auth or cookie
+            # We'll try to get a session cookie first
+            
+            opener = urllib.request.build_opener()
+            login_url = f"http://{CONTAINER_PREFIX}wg-easy:51821/api/session"
+            login_data = json.dumps({"password": password}).encode('utf-8')
+            req = urllib.request.Request(login_url, data=login_data, headers={'Content-Type': 'application/json'})
+            
+            cookie = ""
+            try:
+                with opener.open(req, timeout=5) as resp:
+                    headers = resp.info()
+                    # Extract Set-Cookie
+                    if 'Set-Cookie' in headers:
+                        cookie = headers['Set-Cookie'].split(';')[0]
+            except Exception as e:
+                return {"error": f"WG-Easy Login Failed: {str(e)}"}, 500
+
+            # Execute actual request
+            target_url = f"http://{CONTAINER_PREFIX}wg-easy:51821/api/wireguard/client"
+            if path: target_url += path
+            
+            req = urllib.request.Request(target_url, method=method)
+            if cookie:
+                req.add_header('Cookie', cookie)
+            if body:
+                req.add_header('Content-Type', 'application/json')
+                req.data = json.dumps(body).encode('utf-8')
+            
+            with opener.open(req, timeout=10) as resp:
+                if resp.status == 204: return {}, 204
+                return json.loads(resp.read().decode()), resp.status
+        except urllib.error.HTTPError as e:
+            return {"error": str(e)}, e.code
+        except Exception as e:
+            return {"error": str(e)}, 500
+
     def log_message(self, format, *args):
         # Filter out common health check and static asset logs to reduce noise
         msg = format % args
@@ -1065,6 +1114,22 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 pass
 
+    
+    def do_DELETE(self):
+        if not self._check_auth():
+            self._send_json({"error": "Unauthorized"}, 401)
+            return
+
+        if self.path.startswith('/wg/clients/'):
+            client_id = self.path.split('/')[-1]
+            if client_id:
+                resp, code = self._proxy_wgeasy('DELETE', f"/{client_id}")
+                self._send_json(resp, code)
+            else:
+                self._send_json({"error": "Client ID missing"}, 400)
+        else:
+            self._send_json({"error": "Method not allowed"}, 405)
+
     def do_POST(self):
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length).decode('utf-8')
@@ -1358,6 +1423,16 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True, "message": f"Update for {service} started in background"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
+        
+        elif self.path == '/wg/clients':
+            try:
+                l = int(self.headers['Content-Length'])
+                data = json.loads(self.rfile.read(l).decode('utf-8'))
+                # wg-easy expects {name: "..."}
+                resp, code = self._proxy_wgeasy('POST', '', data)
+                self._send_json(resp, code)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         elif self.path == '/rotate-api-key' and self.command == 'POST':
             try:
                 content_length = int(self.headers['Content-Length'])
@@ -1442,6 +1517,51 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         self._send_json({"changelog": f"Failed to fetch release notes: {str(e)}"})
                 else:
                     self._send_json({"changelog": "Changelog not available for this service."})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        
+        elif path_clean == '/wg/clients':
+            resp, code = self._proxy_wgeasy('GET', '')
+            self._send_json(resp, code)
+        
+        elif path_clean.startswith('/wg/clients/') and path_clean.endswith('/configuration'):
+            try:
+                # Extract ID: /wg/clients/UUID/configuration
+                parts = path_clean.split('/')
+                client_id = parts[3]
+                
+                # We need to return text/plain for this one
+                # _proxy_wgeasy returns json decoded, we might need raw for config file if it's not JSON
+                # Let's use a specialized call or modify _proxy_wgeasy to handle non-json?
+                # For simplicity, let's implement a specific proxy call here or adjust _proxy_wgeasy.
+                # Actually _proxy_wgeasy parses JSON. We need raw text.
+                
+                # Let's do it manually here reusing logic:
+                password = os.environ.get('VPN_PASS_RAW', '') or os.environ.get('ADMIN_PASS_RAW', '')
+                import urllib.request
+                opener = urllib.request.build_opener()
+                login_url = f"http://{CONTAINER_PREFIX}wg-easy:51821/api/session"
+                login_data = json.dumps({"password": password}).encode('utf-8')
+                req = urllib.request.Request(login_url, data=login_data, headers={'Content-Type': 'application/json'})
+                
+                cookie = ""
+                try:
+                    with opener.open(req, timeout=5) as resp:
+                        if 'Set-Cookie' in resp.info():
+                            cookie = resp.info()['Set-Cookie'].split(';')[0]
+                except: pass
+
+                target_url = f"http://{CONTAINER_PREFIX}wg-easy:51821/api/wireguard/client/{client_id}/configuration"
+                req = urllib.request.Request(target_url)
+                if cookie: req.add_header('Cookie', cookie)
+                
+                with opener.open(req, timeout=10) as resp:
+                    config_content = resp.read()
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/plain')
+                    self.send_header('Content-Length', str(len(config_content)))
+                    self.end_headers()
+                    self.wfile.write(config_content)
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif path_clean == '/odido-userid':

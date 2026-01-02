@@ -73,6 +73,7 @@ EOF
     environment:
       - HUB_API_KEY=$ODIDO_API_KEY
       - ADMIN_PASS_RAW=$ADMIN_PASS_RAW
+      - VPN_PASS_RAW=$VPN_PASS_RAW
       - UPDATE_STRATEGY=$UPDATE_STRATEGY
       - DOCKER_CONFIG=/root/.docker
     entrypoint: ["/bin/sh", "-c", "mkdir -p /app && touch /app/deployment.log && touch /app/.data_usage && touch /app/.wge_data_usage && python3 -u /app/server.py"]
