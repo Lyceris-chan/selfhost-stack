@@ -185,7 +185,14 @@ def log_structured(level, message, category="SYSTEM"):
         "POST /rotate-api-key": "Dashboard API security key rotated",
         "GET /check-updates": "Update availability check requested",
         "GET /changelog": "Service changelog retrieved",
-        "GET /services": "Service catalog synchronized"
+        "GET /services": "Service catalog synchronized",
+        "GET /wg/clients": "VPN client catalog synchronized",
+        "POST /wg/clients": "New VPN client access authorized",
+        "DELETE /wg/clients": "VPN client access revoked",
+        "configuration": "VPN client configuration retrieved",
+        "POST /toggle-session-cleanup": "Session security policy updated",
+        "POST /verify-admin": "Administrative session authorized",
+        "POST /uninstall": "System uninstallation sequence started"
     }
     
     for k, v in HUMAN_LOGS.items():
@@ -498,8 +505,23 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
         elif "GET /services" in msg:
             log_structured("INFO", "Service catalog synchronized", "NETWORK")
             return
+        elif "GET /wg/clients" in msg:
+            log_structured("INFO", "VPN client catalog synchronized", "NETWORK")
+            return
+        elif "POST /wg/clients" in msg:
+            log_structured("INFO", "New VPN client access authorized", "NETWORK")
+            return
+        elif "DELETE /wg/clients" in msg:
+            log_structured("INFO", "VPN client access revoked", "NETWORK")
+            return
+        elif "configuration" in msg:
+            log_structured("INFO", "VPN client configuration retrieved", "NETWORK")
+            return
+        elif "POST /uninstall" in msg:
+            log_structured("INFO", "System uninstallation sequence started", "MAINTENANCE")
+            return
 
-        if any(x in msg for x in ['GET /status', 'GET /metrics', 'GET /containers', 'GET /services', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /odido-api/api/status', 'HTTP/1.1" 200', 'HTTP/1.1" 304']):
+        if any(x in msg for x in ['GET /status', 'GET /metrics', 'GET /containers', 'GET /services', 'GET /wg/clients', 'GET /updates', 'GET /logs', 'GET /certificate-status', 'GET /odido-api/api/status', 'HTTP/1.1" 200', 'HTTP/1.1" 304']):
             return
         log_structured("INFO", msg, "NETWORK")
     

@@ -92,19 +92,22 @@ setup_secrets() {
             log_info "Credentials generated and will be displayed upon completion."
             echo ""
         else
-            echo -n "1. Enter password for VPN Web UI: "
+            echo "--- MANUAL CREDENTIAL PROVISIONING ---"
+            echo "Security Note: Please use strong, unique passwords for each service."
+            echo ""
+            echo -n "1. VPN Web UI Password (Protecting peer management): "
             read -rs VPN_PASS_RAW
             echo ""
-            echo -n "2. Enter password for AdGuard Home: "
+            echo -n "2. AdGuard Home Password (Protecting DNS filters): "
             read -rs AGH_PASS_RAW
             echo ""
-            echo -n "3. Enter administrative password (for Dashboard): "
+            echo -n "3. Management Dashboard Password (Primary control plane): "
             read -rs ADMIN_PASS_RAW
             echo ""
             if [ "$FORCE_CLEAN" = false ] && [ -d "$DATA_DIR/portainer" ]; then
-                 echo "   [!] NOTICE: Portainer already initialized. Entering a new password here will NOT update Portainer's internal admin credentials."
+                 echo "   [!] NOTICE: Portainer already initialized. New passwords will not affect existing Portainer admin account."
             fi
-            echo -n "4. Enter password for Portainer: "
+            echo -n "4. Portainer Password (Infrastructure orchestration): "
             read -rs PORTAINER_PASS_RAW
             echo ""
         fi
