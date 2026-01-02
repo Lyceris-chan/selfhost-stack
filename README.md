@@ -192,13 +192,20 @@ Point your router's **Primary DNS** to your ZimaOS IP address.
 ### 3. Mobile Private DNS (Android)
 If you configured deSEC:
 *   Set your Android "Private DNS" to: `your-domain.dedyn.io`
-*   You now have ad-blocking and encryption on 4G/5G without a VPN app!
+*   **Requirement**: You must be connected to your home **WireGuard VPN** for this to work, unless you manually forward port 853 (DoT) on your router.
+*   **Benefit**: Encrypts all DNS queries on 4G/5G, preventing mobile carrier tracking.
 
 ### 4. Split Tunnel Configuration & Bandwidth Optimization
 This stack uses a **Dual Split Tunnel** architecture via Gluetun and WG-Easy to ensure performance:
 *   **VPN-Gated Services (Gluetun)**: Privacy frontends (Invidious, Redlib, etc.) are locked inside the VPN container. They cannot access the internet if the VPN disconnects (Killswitch enabled).
 *   **Remote Access Optimization (WG-Easy)**: When connected via the WireGuard app, only your requests to the Hub and DNS queries are sent home. This preserves your mobile data and speed: high-bandwidth streaming services like Netflix or native YouTube apps maintain their full, direct speed on your device rather than being forced to route back through your home upload connection first.
 *   **Local-Direct Services**: Core management tools (Dashboard, Portainer, AdGuard UI) remain accessible directly via your LAN IP. This ensures you never lose control of your hub even if the VPN provider has an outage.
+
+### 5. Advanced: Direct Encrypted DNS (Optional)
+To use "Private DNS" on Android or DoH in browsers **without** connecting to the WireGuard VPN first:
+1.  **Forward Port 853 (TCP)**: Allows Android Private DNS / DoT.
+2.  **Forward Port 443 (TCP)**: Allows DNS-over-HTTPS (DoH).
+*   **Warning**: This exposes your AdGuard instance to the public internet. Ensure you have configured "Allowed clients" in AdGuard Home settings to prevent unauthorized use (DNS Amplification attacks).
 
 ---
 
