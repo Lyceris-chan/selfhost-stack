@@ -6,6 +6,35 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
 
 ---
 
+## 📖 Table of Contents
+
+- [Key Features](#-key-features)
+- [Deployment](#-deployment)
+  - [Before You Start](#before-you-start-checklist)
+  - [Step 1: Get Your VPN Configuration](#step-1-get-your-vpn-configuration)
+  - [Step 2: Get Your Domain Token](#step-2-get-your-domain-token-optional-but-recommended)
+  - [Step 3: Download and Run the Installer](#step-3-download-and-run-the-installer)
+- [How It Works (Architecture)](#️-how-it-works-architecture)
+  - [Recursive DNS Engine](#recursive-dns-engine-independent-resolution)
+  - [Customization Flags](#️-customization-flags-optional)
+- [Dashboard & Services](#️-dashboard--services)
+  - [WireGuard Client Management](#-wireguard-client-management)
+  - [Credential Management](#-credential-management)
+  - [LibRedirect Integration](#-libredirect-integration)
+  - [Included Privacy Services](#included-privacy-services)
+  - [Hardware Acceleration](#-hardware-acceleration-gpuqsv)
+  - [Network Configuration](#-network-configuration)
+- [Advanced Setup: OpenWrt & Double NAT](#-advanced-setup-openwrt--double-nat)
+- [Privacy & Architecture](#️-privacy--architecture)
+  - [A/B Update System](#automatic-version-pinning--ab-system)
+  - [Surgical Patch Registry](#️-surgical-patch-registry-click-to-expand)
+- [Security Standards](#-security-standards)
+- [System Requirements](#️-system-requirements)
+- [Troubleshooting](#-troubleshooting)
+- [Maintenance](#-maintenance)
+
+---
+
 ## 🚀 Key Features
 
 *   **🔒 Data Independence**: Host your own frontends (Invidious, Redlib, etc.) to stop upstream giants like Google and Reddit from profiling you.
@@ -193,7 +222,6 @@ Every service in this stack is either built from source (and hardened) or pulled
 | **Companion** | Helper | **🔒 VPN** | [iv-org/companion](https://github.com/iv-org/invidious-companion) ([Patched](https://github.com/iv-org/invidious-companion/blob/master/Dockerfile)) |
 | **Redlib** | Frontend | **🔒 VPN** | [redlib-org/redlib](https://github.com/redlib-org/redlib) ([Patched](https://github.com/redlib-org/redlib/blob/master/Dockerfile)) |
 | **SearXNG** | Frontend | **🔒 VPN** | [searxng/searxng](https://github.com/searxng/searxng) (Pre-built Image) |
-| **Benefits** | Privacy | **🔒 VPN** | Prevents upstream profiling by routing all queries through a shared VPN IP. |
 | **Scribe** | Frontend | **🔒 VPN** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) ([Patched](https://github.com/edwardloveall/scribe/blob/main/Dockerfile)) |
 | **Rimgo** | Frontend | **🔒 VPN** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) ([Patched](https://codeberg.org/rimgo/rimgo/src/branch/main/Dockerfile)) |
 | **Wikiless** | Frontend | **🔒 VPN** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) ([Patched](https://github.com/Metastem/Wikiless/blob/master/Dockerfile)) |
@@ -208,6 +236,7 @@ Every service in this stack is either built from source (and hardened) or pulled
 | **WireGuard** | Core | **🏠 Local** | [wg-easy](https://github.com/wg-easy/wg-easy) ([Patched](https://github.com/wg-easy/wg-easy/blob/master/Dockerfile)) |
 | **Gluetun** | Core | **🌍 Exit** | [gluetun](https://github.com/qdm12/gluetun) ([Patched](https://github.com/qdm12/gluetun/blob/master/Dockerfile)) |
 | **Portainer** | Core | **🏠 Local** | [portainer](https://github.com/portainer/portainer) (Pre-built Image) |
+| **Dashboard** | Core | **🏠 Local** | [nginx](https://github.com/nginx/nginx) (Pre-built Image) |
 | **Hub API** | Core | **🏠 Local** | [Local Source](/hub-api) ([Custom](/hub-api/Dockerfile)) |
 | **Odido Booster** | Utility | **🏠 Local** | [odido-booster](https://github.com/Lyceris-chan/odido-bundle-booster) ([Patched](https://github.com/Lyceris-chan/odido-bundle-booster/blob/master/Dockerfile)) |
 
@@ -241,12 +270,52 @@ Your hub runs its own **recursive DNS resolver** (Unbound + AdGuard Home). This 
 
 To use it, point your router's DHCP settings to hand out your hub's IP as the DNS server for all devices.
 
-#### 3. The VPN "Force Field" (Split Tunnel Architecture)
-This stack uses a **Dual Split Tunnel** architecture. Think of it as a house with a private tunnel leading to a secret base:
+#### 3. Split Tunnel Architecture
 
-1.  **The Force Field (Gluetun)**: Privacy frontends (Invidious, Redlib, etc.) and specific media tools (SearXNG) are literally "plugged in" to the VPN container. If the VPN tunnel breaks, their internet access instantly dies (Killswitch). They have no physical way to talk to the internet using your real home IP.
-2.  **The Secret Entrance (WireGuard)**: When you use the WireGuard app on your phone, you aren't "routing all internet home." You are only sending requests for your Hub and DNS home. This keeps your phone fast (streaming Netflix doesn't lag) while still giving you ad-blocking and access to your private files.
-3.  **The Safe Zone (Local)**: Core management tools (Dashboard, AdGuard, Portainer) and localized utilities (Memos, Cobalt, VERT) stay on your local network. You can always access them at home, even if your VPN provider is having a bad day.
+This stack uses a **Dual Split Tunnel** architecture to balance privacy, performance, and reliability. Traffic is intelligently routed through three distinct zones:
+
+##### Zone 1: VPN-Isolated Services (Gluetun Tunnel)
+Privacy frontends and external-facing services are routed exclusively through the VPN tunnel:
+
+| Service | Purpose | Benefit |
+| :--- | :--- | :--- |
+| **Invidious** | YouTube frontend | Prevents Google from linking your home IP to video watches |
+| **Companion** | Invidious helper | Enhanced video retrieval through VPN |
+| **Redlib** | Reddit frontend | Stops Reddit tracking and "Open in App" harassment |
+| **SearXNG** | Meta search engine | Search queries anonymized through shared VPN IP |
+| **Wikiless** | Wikipedia frontend | Removes Wikimedia cross-site tracking |
+| **Rimgo** | Imgur frontend | Anonymous image viewing |
+| **BreezeWiki** | Fandom frontend | Blocks aggressive ad networks |
+| **AnonOverflow** | StackOverflow frontend | Developer research without corporate profiling |
+| **Scribe** | Medium frontend | Paywall bypass and tracking removal |
+| **Immich** | Photo management | ML model downloads and metadata fetched via VPN* |
+
+**Kill Switch Protection**: If the VPN tunnel fails, these services lose internet access entirely—they cannot accidentally expose your home IP.
+
+##### Zone 2: Remote Access (WireGuard Tunnel)
+When connecting from outside your home network (phone, laptop), traffic flows through your personal WireGuard tunnel:
+
+- **DNS requests** → Routed to your home AdGuard for ad-blocking everywhere
+- **Hub services** → Direct access to your dashboard and private apps
+- **Other internet traffic** → Exits directly from your device (not routed home)
+
+**Benefit**: Your phone stays fast (Netflix doesn't lag) while you still get network-wide ad-blocking and access to your private services.
+
+##### Zone 3: Local-Only Services
+Management tools and utilities that never touch the internet:
+
+| Service | Purpose | Why Local |
+| :--- | :--- | :--- |
+| **Dashboard** | Unified control center | No external dependencies |
+| **AdGuard Home** | DNS filtering | Must be accessible even if VPN fails |
+| **Portainer** | Container management | Security-critical, no external exposure |
+| **Memos** | Private notes | Your data never leaves your network |
+| **Cobalt** | Media downloader | Runs locally, downloads via your IP |
+| **VERT / VERTd** | File conversion | GPU-accelerated, all processing local |
+| **Unbound** | Recursive DNS | Talks directly to root servers |
+| **WireGuard (wg-easy)** | VPN server | Manages your remote access peers |
+
+*\*Immich uses VPN only for ML model downloads and external metadata; your photos remain strictly local.*
 
 ---
 
@@ -373,12 +442,80 @@ The following modifications are applied automatically to **every** service built
     *   Translates common package names (e.g., `libssl-dev` → `openssl-dev`).
 *   **Telemetry Removal**: All patched runtimes are configured to disable upstream telemetry and phone-home signals by default.
 
-For service-specific modifications (such as memory limits and GPU fallbacks), see the [Surgical Patch Registry](#surgical-patch-registry) below.
+For service-specific modifications (such as memory limits and GPU fallbacks), see the [Surgical Patch Registry](#️-surgical-patch-registry-click-to-expand) below.
 
-**Automatic Version Pinning & A/B System**:
-The system supports two deployment slots (A/B) for safe updates. When you update, the inactive slot is built and verified before traffic is swapped.
-*   **Stable (Default)**: Automatically identifies the latest semantic version tag (e.g., `v1.2.3`) across all git sources. This ensures a production-ready stack while still utilizing local hardened builds.
-*   **Latest**: Tracks the default upstream branch (e.g., `main` or `master`) for bleeding-edge updates and immediate fixes.
+### Automatic Version Pinning & A/B System
+
+The stack implements a robust A/B deployment strategy for safe, zero-downtime updates with automatic rollback capability.
+
+#### How A/B Slots Work
+
+| Concept | Description |
+| :--- | :--- |
+| **Slot A / Slot B** | Two independent deployment environments. Only one is active at a time. |
+| **Active Slot** | The slot currently serving traffic (stored in `.active_slot` file). |
+| **Standby Slot** | The inactive slot used for building and testing new versions. |
+| **Swap Operation** | Atomically switches traffic from one slot to the other. |
+
+#### Update Workflow
+
+1. **Build Phase**: New versions are built in the standby slot while the active slot continues serving traffic.
+2. **Verification**: Health checks validate the new build before any traffic swap.
+3. **Swap**: The `-S` flag triggers the swap, making the standby slot active.
+4. **Rollback**: If issues occur, simply swap back to the previous slot (instant recovery).
+
+#### Version Strategies
+
+| Strategy | Tag | Behavior | Use Case |
+| :--- | :--- | :--- | :--- |
+| **Stable** (Default) | `latest` | Automatically identifies the latest semantic version tag (e.g., `v1.2.3`) from upstream repositories. | Production use—predictable, tested releases. |
+| **Latest** | `latest` | Tracks the default upstream branch (`main` or `master`) for bleeding-edge updates. | Early adopters wanting immediate fixes. |
+
+#### Benefits
+
+- **Zero Downtime**: Users experience no interruption during updates.
+- **Instant Rollback**: If a new version has issues, swap back in seconds.
+- **Safe Testing**: Verify new builds in isolation before exposing them to traffic.
+- **Parallel Builds**: Use `-j` flag to build all services simultaneously for faster deployments.
+
+<details>
+<summary>🛠️ <strong>Surgical Patch Registry</strong> (Click to expand)</summary>
+
+The following modifications are applied to upstream Dockerfiles and source code to ensure security, compatibility, and optimal performance.
+
+#### Service-Specific Patches
+
+| Service | Upstream Source | Modifications Applied | Implementation |
+| :--- | :--- | :--- | :--- |
+| **BreezeWiki** | [PussTheCat-org/docker-breezewiki](https://github.com/PussTheCat-org/docker-breezewiki-quay) | **Native Conversion**: Migrated from Debian to Alpine. Replaced `apt` logic with `apk`. Implemented localized Racket package management. | [lib/sources.sh](lib/sources.sh) |
+| **Invidious Companion** | [iv-org/invidious-companion](https://github.com/iv-org/invidious-companion) | **Build Reliability**: Resolved Rust compilation stack overflow by injecting `ENV RUST_MIN_STACK=16777216`. Forced lockfile regeneration to prevent stale dependency issues. | [lib/sources.sh](lib/sources.sh) |
+| **VERTd** | [VERT-sh/vertd](https://github.com/VERT-sh/vertd) | **Hybrid Optimization**: Implemented NVIDIA GPU detection logic. Added Alpine fallback for non-GPU environments. Fixed static compilation with `openssl-libs-static`. | [lib/sources.sh](lib/sources.sh) |
+| **VERT** | [VERT-sh/vert](https://github.com/VERT-sh/VERT) | **Runtime Hardening**: Replaced Debian Bun/Node layers with DHI hardened Alpine variants. Optimized memory boundaries and disabled external telemetry. | [lib/sources.sh](lib/sources.sh) |
+| **Invidious** | [iv-org/invidious](https://github.com/iv-org/invidious) | **Base Hardening**: Alpine migration with DHI base image. Standard package translation applied. | [lib/sources.sh](lib/sources.sh) |
+| **Redlib** | [redlib-org/redlib](https://github.com/redlib-org/redlib) | **Security Hardening**: Runs as `nobody` user, read-only filesystem, all capabilities dropped. DHI Alpine base. | [lib/sources.sh](lib/sources.sh) |
+| **Wikiless** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) | **Base Hardening**: Alpine migration with DHI base image. Node.js runtime replaced with hardened variant. | [lib/sources.sh](lib/sources.sh) |
+| **Rimgo** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) | **Base Hardening**: Alpine migration with DHI Go runtime. Standard package translation applied. | [lib/sources.sh](lib/sources.sh) |
+| **AnonOverflow** | [httpjamesm/AnonymousOverflow](https://github.com/httpjamesm/AnonymousOverflow) | **Base Hardening**: Alpine migration with DHI base image. Standard package translation applied. | [lib/sources.sh](lib/sources.sh) |
+| **Scribe** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) | **Base Hardening**: Alpine migration with DHI base image. Crystal runtime compatibility fixes. | [lib/sources.sh](lib/sources.sh) |
+| **Memos** | [usememos/memos](https://github.com/usememos/memos) | **Base Hardening**: Alpine migration with DHI base image. Go and Node.js runtimes replaced with hardened variants. | [lib/sources.sh](lib/sources.sh) |
+| **Gluetun** | [qdm12/gluetun](https://github.com/qdm12/gluetun) | **Base Hardening**: DHI Alpine base applied. Standard package translation. | [lib/sources.sh](lib/sources.sh) |
+| **AdGuard Home** | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) | **Base Hardening**: DHI Alpine base applied. Go runtime replaced with hardened variant. | [lib/sources.sh](lib/sources.sh) |
+| **Unbound** | [klutchell/unbound-docker](https://github.com/klutchell/unbound-docker) | **Base Hardening**: DHI Alpine base applied. Recursive resolver configuration hardened. | [lib/sources.sh](lib/sources.sh) |
+| **WG-Easy** | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) | **Base Hardening**: DHI Alpine base applied. Node.js runtime replaced with hardened variant. | [lib/sources.sh](lib/sources.sh) |
+| **Odido Booster** | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) | **Base Hardening**: DHI Alpine base applied. Python runtime replaced with hardened variant. | [lib/sources.sh](lib/sources.sh) |
+| **Hub API** | [Local Source](/hub-api) | **Custom Build**: Purpose-built orchestration API using DHI Python base. Full telemetry isolation. | [hub-api/](hub-api/) |
+
+#### Global Patches (Applied to All Built Services)
+
+| Patch Category | Description | Benefit |
+| :--- | :--- | :--- |
+| **Base Image Migration** | Replaces `FROM alpine`, `FROM debian`, and `FROM ubuntu` with `dhi.io/alpine-base:3.22-dev`. | Minimal attack surface, consistent security baseline. |
+| **Runtime Hardening** | Replaces Node.js, Go, Python, Rust, and Bun images with DHI hardened equivalents (e.g., `dhi.io/node:20-alpine3.22-dev`). | Telemetry disabled, security patches applied, optimized for containers. |
+| **Package Manager Translation** | Converts `apt-get install` to `apk add --no-cache`. Removes Debian-specific cleanup commands. | Cross-distribution compatibility, smaller image sizes. |
+| **Package Name Translation** | Translates common package names (e.g., `libssl-dev` → `openssl-dev`). | Seamless Alpine compatibility. |
+| **Telemetry Removal** | All patched runtimes configured to disable upstream telemetry and analytics by default. | Privacy by design—no "phone home" signals. |
+
+</details>
 
 ### 🛡️ Self-Healing & High Availability
 *   **VPN Monitoring**: Gluetun is continuously monitored. Docker restarts the gateway if the tunnel stalls.
@@ -577,21 +714,3 @@ This software is provided "as is". While designed for security, the user is resp
 ---
 
 *Built with ❤️ for digital sovereignty.*
-
-<details>
-<summary>🛠️ <strong>Surgical Patch Registry</strong> (Click to expand)</summary>
-
-| Service / Layer | Target / Upstream | Specific Modifications & Fixes Applied | Local Logic |
-| :--- | :--- | :--- | :--- |
-| **BreezeWiki** | [PussTheCat-org/docker-breezewiki](https://github.com/PussTheCat-org/docker-breezewiki-quay) | **Native Conversion**: Migrated from Debian to Alpine. Replaced `apt` logic with `apk`. Implemented localized Racket package management. | [lib/sources.sh](lib/sources.sh) |
-| **Invidious Companion** | [iv-org/invidious-companion](https://github.com/iv-org/invidious-companion) | **Build Reliability**: Resolved compilation stack overflow by injecting `ENV RUST_MIN_STACK=16777216`. Forced lockfile regeneration. | [lib/sources.sh](lib/sources.sh) |
-| **VERTd** | [vert-sh/vertd](https://github.com/VERT-sh/vertd) | **Hybrid Optimization**: Implemented NVIDIA GPU detection logic. Added Alpine fallback for non-GPU environments. Fixed static compilation. | [lib/sources.sh](lib/sources.sh) |
-| **VERT** | [vert-sh/vert](https://github.com/VERT-sh/VERT) | **Runtime Hardening**: Replaced Debian Bun/Node layers with DHI hardened Alpine variants. Optimized memory boundaries. | [lib/sources.sh](lib/sources.sh) |
-| **Base Images** | Global (various) | **DHI Hardening**: Surgically replaced all `FROM alpine/debian/ubuntu` instructions with `dhi.io/alpine-base:3.22-dev`. | [lib/sources.sh](lib/sources.sh) |
-| **Runtimes** | Global (various) | **DHI Version Pinning**: Replaced Node, Go, Python, and Bun base images with hardened, telemetry-free DHI equivalents. | [lib/sources.sh](lib/sources.sh) |
-| **Package Logic** | Global (various) | **Cross-Distro Translation**: Automated regex transformation of `apt-get install` commands into `apk add` equivalents. | [lib/sources.sh](lib/sources.sh) |
-
-</details>
-
-
-
