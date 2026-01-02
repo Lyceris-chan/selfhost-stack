@@ -120,7 +120,7 @@ Gather these essentials before starting the installation. Each token should be c
 | `-P` | **Personal Mode**: Combines `-p`, `-y`, and `-j` for a fast, fully automated deployment intended for single-user setups. |
 | `-j` | **Parallel Deploy**: Builds and pulls all services simultaneously. Faster but CPU intensive. |
 | `-S` | **Swap Slots**: Toggles the active system slot (A/B) for safe updates and rollbacks. |
-| `-g <1-4>` | **Group Select**: Deploys a specific subset of services (1: Core, 2: Invidious, 3: VERT, 4: All). |
+| `-g <1-4>` | **Group Select**: Deploys a subset of services (1: Essentials+Memos, 2: Invidious, 3: VERT, 4: Lightweight Frontends). |
 | `-a` | **Allow Proton (Optional)**: Whitelists ProtonVPN domains in AdGuard (useful for Proton extension users). |
 | `-c` | **Maintenance Reset**: Recreates containers/networks without deleting persistent user data. |
 | `-x` | **Factory Reset**: ⚠️ **Destructive**. Wipes all containers, volumes, and configurations created by this stack. |
@@ -205,7 +205,9 @@ This stack uses a **Dual Split Tunnel** architecture via Gluetun and WG-Easy to 
 To use "Private DNS" on Android or DoH in browsers **without** connecting to the WireGuard VPN first:
 1.  **Forward Port 853 (TCP)**: Allows Android Private DNS / DoT.
 2.  **Forward Port 443 (TCP)**: Allows DNS-over-HTTPS (DoH).
-*   **Warning**: This exposes your AdGuard instance to the public internet. Ensure you have configured "Allowed clients" in AdGuard Home settings to prevent unauthorized use (DNS Amplification attacks).
+
+*   **⚠️ Privacy Warning**: While this encrypts your DNS queries, your ISP can still see the **IP address** you connect to and the **SNI** (Server Name) in the initial TLS handshake. For complete privacy from your ISP, use the VPN tunnel.
+*   **Security Warning**: This exposes your AdGuard instance to the public internet. Ensure you have configured "Allowed clients" in AdGuard Home settings to prevent unauthorized use (DNS Amplification attacks).
 
 ---
 
