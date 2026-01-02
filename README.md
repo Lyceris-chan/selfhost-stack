@@ -14,9 +14,11 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
   - [Step 1: Get Your VPN Configuration](#step-1-get-your-vpn-configuration)
   - [Step 2: Get Your Domain Token](#step-2-get-your-domain-token-optional-but-recommended)
   - [Step 3: Download and Run the Installer](#step-3-download-and-run-the-installer)
+  - [Customization Flags](#️-customization-flags-optional)
+  - [What Happens Next?](#what-happens-next)
 - [How It Works (Architecture)](#️-how-it-works-architecture)
   - [Recursive DNS Engine](#recursive-dns-engine-independent-resolution)
-  - [Customization Flags](#️-customization-flags-optional)
+  - [Why Self-Host?](#-why-self-host-the-trust-gap)
 - [Dashboard & Services](#️-dashboard--services)
   - [WireGuard Client Management](#-wireguard-client-management)
   - [Credential Management](#-credential-management)
@@ -122,6 +124,44 @@ That's it! Sit back and let it build (~15-20 minutes).
 
 > 💡 **The "I'm in a hurry" Way**: Use `./zima.sh -P` to fast-track setup with automated passwords and parallel builds.
 
+<a id="customization-flags"></a>
+### 🛠️ Customization Flags (Optional)
+
+Before running the installer, you can customize your deployment using these flags:
+
+| Flag | Description |
+| :--- | :--- |
+| `-p` | **Auto-Passwords**: Generates random secure credentials automatically. |
+| `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless mode). |
+| `-P` | **Personal Mode**: Fast-track setup (combines `-p`, `-y`, and `-j`). |
+| `-j` | **Parallel Deploy**: Builds everything at once. Faster, but high CPU usage! |
+| `-g <1-4>` | **Group Select**: Choose your installation scope (see table below). |
+| `-s` | **Selective**: Install only specific apps (e.g., `-s invidious,memos`). |
+| `-S` | **Swap Slots**: A/B Update toggle. Deploys the new version to the standby slot before swapping. |
+| `-c` | **Maintenance**: Recreates containers and networks to fix glitches while **preserving** your persistent data. |
+| `-x` | **Factory Reset**: ⚠️ **Deletes everything**. Wipes all containers, volumes, and application data. |
+| `-a` | **Allow Proton**: Adds ProtonVPN domains to the AdGuard allowlist for browser extension users. Entries added: `getproton.me`, `vpn-api.proton.me`, `protonstatus.com`, `protonvpn.ch`, `protonvpn.com`, `protonvpn.net`. This does not affect other privacy services or VPN functionality. |
+| `-D` | **Dashboard Only**: Regenerates only the dashboard without rebuilding services. |
+| `-h` | **Help**: Displays usage information and available flags. |
+
+#### Group Selection (`-g`)
+
+| Group | Name | Services Included |
+| :---: | :--- | :--- |
+| **1** | Essentials | Dashboard, Hub-API, AdGuard Home, Unbound (DNS), Gluetun (VPN), Memos, Cobalt, Odido Booster |
+| **2** | Search & Video | Everything in Group 1 **+** Invidious, Companion, SearXNG |
+| **3** | Media & Heavy | Everything in Group 1 **+** VERT, VERTd, Immich |
+| **4** | Full Stack | Every service in the repository (includes all frontends, WireGuard management, Portainer, etc.) |
+
+**Example usage:**
+```bash
+# Fast-track with essentials only
+./zima.sh -P -g 1
+
+# Full stack with parallel builds
+./zima.sh -p -y -j -g 4
+```
+
 ---
 
 ### What Happens Next?
@@ -131,13 +171,13 @@ That's it! Sit back and let it build (~15-20 minutes).
 3.  **🔐 Credential Export**: Your passwords are saved for safe keeping
 4.  **🔀 Instant Redirection**: A `libredirect_import.json` is created—import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically redirect YouTube/Reddit to your hub
 
-> 📁 **Where are my passwords?**: All generated credentials are saved to `data/AppData/privacy-hub/.secrets` and exported to `data/AppData/privacy-hub/protonpass_import.csv` for easy importing into your password manager.
+> 📁 **Where are my passwords?**: Check the [Credential Management](#-credential-management) section for details on accessing your generated credentials.
 
 ---
 
 ## 🛡️ How It Works (Architecture)
 
-This section explains the technical details behind the privacy features listed above. If you just want to get started, skip to the [Customization Flags](#customization-flags) section.
+This section explains the technical details behind the privacy features listed above.
 
 ### Recursive DNS Engine (Independent Resolution)
 This stack features a hardened, recursive DNS engine built on **Unbound** and **AdGuard Home**, designed to eliminate upstream reliance and prevent data leakage.
@@ -161,25 +201,6 @@ If you don't own the hardware and the code running your network, you don't own y
 *   **Search Engine Isolation**: By routing **SearXNG** through the VPN tunnel, upstream search engines (Google, Bing) see queries coming from a generic VPN IP shared by thousands, making it impossible to profile your individual search behavior or serve targeted ads.
 
 > 📚 **Trusted Sources**: For more on why these measures matter, see the **EFF's [Surveillance Self-Defense](https://ssd.eff.org/)** and their guide on **[DNS Privacy](https://www.eff.org/deeplinks/2020/12/dns-privacy-all-way-root-your-lan)**.
-
-<a id="customization-flags"></a>
-### 🛠️ Customization Flags (Optional)
-If you want to skip the questions, you can use these flags:
-
-| Flag | Description |
-| :--- | :--- |
-| `-p` | **Auto-Passwords**: Generates random secure credentials automatically. |
-| `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless mode). |
-| `-P` | **Personal Mode**: Fast-track setup (combines `-p`, `-y`, and `-j`). |
-| `-j` | **Parallel Deploy**: Builds everything at once. Faster, but high CPU usage! |
-| `-g <1-4>` | **Group Select**: Choose your installation scope:<br>• **1 (Essentials)**: Dashboard, DNS, VPN, Hub-API, Memos, Cobalt, Odido.<br>• **2 (Search/Video)**: Group 1 + Invidious, SearXNG.<br>• **3 (Media/Heavy)**: Group 1 + VERT, Immich.<br>• **4 (Full Stack)**: Every single service in the repo. |
-| `-s` | **Selective**: Install only specific apps (e.g., `-s invidious,memos`). |
-| `-S` | **Swap Slots**: A/B Update toggle. Deploys the new version to the standby slot before swapping. |
-| `-c` | **Maintenance**: Recreates containers and networks to fix glitches while **preserving** your persistent data. |
-| `-x` | **Factory Reset**: ⚠️ **Deletes everything**. Wipes all containers, volumes, and application data. |
-| `-a` | **Allow Proton**: Whitelists ProtonVPN domains in AdGuard (useful for extension users). |
-| `-D` | **Dashboard Only**: Regenerates only the dashboard without rebuilding services. |
-| `-h` | **Help**: Displays usage information and available flags. |
 
 ---
 
@@ -205,7 +226,7 @@ When using the `-p` (Auto-Passwords) flag, the system generates secure, unique c
 | **Portainer** | `portainer` | Auto-generated | System-level container orchestration. |
 | **Odido Booster** | `admin` | Auto-generated | API key for mobile data automation. |
 
-> 📁 **Where are they?**: All generated credentials are saved to `data/AppData/privacy-hub/.secrets` and exported to a convenient `protonpass_import.csv` in the root directory for easy importing into your password manager.
+> 📁 **Where are they?**: All generated credentials are saved to `data/AppData/privacy-hub/.secrets` and exported to `data/AppData/privacy-hub/protonpass_import.csv` for easy importing into your password manager.
 
 ### 🔀 LibRedirect Integration
 To automatically redirect your browser from big-tech sites to your private Hub:
@@ -490,25 +511,27 @@ The following modifications are applied to upstream Dockerfiles and source code 
 
 | Service | Upstream Source | Modifications Applied | Implementation |
 | :--- | :--- | :--- | :--- |
-| **BreezeWiki** | [PussTheCat-org/docker-breezewiki](https://github.com/PussTheCat-org/docker-breezewiki-quay) | **Native Conversion**: Migrated from Debian to Alpine. Replaced `apt` logic with `apk`. Implemented localized Racket package management. | [lib/sources.sh](lib/sources.sh) |
-| **Invidious Companion** | [iv-org/invidious-companion](https://github.com/iv-org/invidious-companion) | **Build Reliability**: Resolved Rust compilation stack overflow by injecting `ENV RUST_MIN_STACK=16777216`. Forced lockfile regeneration to prevent stale dependency issues. | [lib/sources.sh](lib/sources.sh) |
-| **VERTd** | [VERT-sh/vertd](https://github.com/VERT-sh/vertd) | **Hybrid Optimization**: Implemented NVIDIA GPU detection logic. Added Alpine fallback for non-GPU environments. Fixed static compilation with `openssl-libs-static`. | [lib/sources.sh](lib/sources.sh) |
-| **VERT** | [VERT-sh/vert](https://github.com/VERT-sh/VERT) | **Runtime Hardening**: Replaced Debian Bun/Node layers with DHI hardened Alpine variants. Optimized memory boundaries and disabled external telemetry. | [lib/sources.sh](lib/sources.sh) |
-| **Invidious** | [iv-org/invidious](https://github.com/iv-org/invidious) | **Base Hardening**: Alpine migration with DHI base image. Standard package translation applied. | [lib/sources.sh](lib/sources.sh) |
-| **Redlib** | [redlib-org/redlib](https://github.com/redlib-org/redlib) | **Security Hardening**: Runs as `nobody` user, read-only filesystem, all capabilities dropped. DHI Alpine base. | [lib/sources.sh](lib/sources.sh) |
-| **Wikiless** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) | **Base Hardening**: Alpine migration with DHI base image. Node.js runtime replaced with hardened variant. | [lib/sources.sh](lib/sources.sh) |
-| **Rimgo** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) | **Base Hardening**: Alpine migration with DHI Go runtime. Standard package translation applied. | [lib/sources.sh](lib/sources.sh) |
-| **AnonOverflow** | [httpjamesm/AnonymousOverflow](https://github.com/httpjamesm/AnonymousOverflow) | **Base Hardening**: Alpine migration with DHI base image. Standard package translation applied. | [lib/sources.sh](lib/sources.sh) |
-| **Scribe** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) | **Base Hardening**: Alpine migration with DHI base image. Crystal runtime compatibility fixes. | [lib/sources.sh](lib/sources.sh) |
-| **Memos** | [usememos/memos](https://github.com/usememos/memos) | **Base Hardening**: Alpine migration with DHI base image. Go and Node.js runtimes replaced with hardened variants. | [lib/sources.sh](lib/sources.sh) |
-| **Gluetun** | [qdm12/gluetun](https://github.com/qdm12/gluetun) | **Base Hardening**: DHI Alpine base applied. Standard package translation. | [lib/sources.sh](lib/sources.sh) |
-| **AdGuard Home** | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) | **Base Hardening**: DHI Alpine base applied. Go runtime replaced with hardened variant. | [lib/sources.sh](lib/sources.sh) |
-| **Unbound** | [klutchell/unbound-docker](https://github.com/klutchell/unbound-docker) | **Base Hardening**: DHI Alpine base applied. Recursive resolver configuration hardened. | [lib/sources.sh](lib/sources.sh) |
-| **WG-Easy** | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) | **Base Hardening**: DHI Alpine base applied. Node.js runtime replaced with hardened variant. | [lib/sources.sh](lib/sources.sh) |
-| **Odido Booster** | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) | **Base Hardening**: DHI Alpine base applied. Python runtime replaced with hardened variant. | [lib/sources.sh](lib/sources.sh) |
-| **Hub API** | [Local Source](/hub-api) | **Custom Build**: Purpose-built orchestration API using DHI Python base. Full telemetry isolation. | [hub-api/](hub-api/) |
+| **BreezeWiki** | [PussTheCat-org/docker-breezewiki](https://github.com/PussTheCat-org/docker-breezewiki-quay) | **Native Conversion**: Migrated from Debian to Alpine. Replaced `apt` logic with `apk`. Implemented localized Racket package management. | [lib/sources.sh#L104-L117](lib/sources.sh#L104-L117) |
+| **Invidious Companion** | [iv-org/invidious-companion](https://github.com/iv-org/invidious-companion) | **Build Reliability**: Resolved Rust compilation stack overflow by injecting `ENV RUST_MIN_STACK=16777216`. Forced lockfile regeneration to prevent stale dependency issues. | [lib/sources.sh#L141-L149](lib/sources.sh#L141-L149) |
+| **VERTd** | [VERT-sh/vertd](https://github.com/VERT-sh/vertd) | **Hybrid Optimization**: Implemented NVIDIA GPU detection logic. Added Alpine fallback for non-GPU environments. Fixed static compilation with `openssl-libs-static`. | [lib/sources.sh#L120-L138](lib/sources.sh#L120-L138) |
+| **VERT** | [VERT-sh/vert](https://github.com/VERT-sh/VERT) | **Runtime Hardening**: Replaced Debian Bun/Node layers with DHI hardened Alpine variants. Optimized memory boundaries and disabled external telemetry. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **Invidious** | [iv-org/invidious](https://github.com/iv-org/invidious) | **Base Hardening**: Alpine migration with DHI base image. Standard package translation applied. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **Redlib** | [redlib-org/redlib](https://github.com/redlib-org/redlib) | **Security Hardening**: Runs as `nobody` user, read-only filesystem, all capabilities dropped. DHI Alpine base. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **Wikiless** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) | **Base Hardening**: Alpine migration with DHI base image. Node.js runtime replaced with hardened variant. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **Rimgo** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) | **Base Hardening**: Alpine migration with DHI Go runtime. Standard package translation applied. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **AnonOverflow** | [httpjamesm/AnonymousOverflow](https://github.com/httpjamesm/AnonymousOverflow) | **Base Hardening**: Alpine migration with DHI base image. Standard package translation applied. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **Scribe** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) | **Base Hardening**: Alpine migration with DHI base image. Crystal runtime compatibility fixes. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **Memos** | [usememos/memos](https://github.com/usememos/memos) | **Base Hardening**: Alpine migration with DHI base image. Go and Node.js runtimes replaced with hardened variants. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **Gluetun** | [qdm12/gluetun](https://github.com/qdm12/gluetun) | **Base Hardening**: DHI Alpine base applied. Standard package translation. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **AdGuard Home** | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) | **Base Hardening**: DHI Alpine base applied. Go runtime replaced with hardened variant. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **Unbound** | [klutchell/unbound-docker](https://github.com/klutchell/unbound-docker) | **Base Hardening**: DHI Alpine base applied. Recursive resolver configuration hardened. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **WG-Easy** | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) | **Base Hardening**: DHI Alpine base applied. Node.js runtime replaced with hardened variant. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **Odido Booster** | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) | **Base Hardening**: DHI Alpine base applied. Python runtime replaced with hardened variant. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
+| **Hub API** | [Local Source](/hub-api) | **Custom Build**: Purpose-built orchestration API using DHI Python base. Full telemetry isolation. | [lib/sources.sh#L167-L187](lib/sources.sh#L167-L187) |
 
 #### Global Patches (Applied to All Built Services)
+
+These modifications are defined in the [`patch_bare` function](lib/sources.sh#L62-L100) and applied to every service built from source:
 
 | Patch Category | Description | Benefit |
 | :--- | :--- | :--- |
