@@ -717,10 +717,24 @@ EOF
     environment:
       - SEARXNG_SECRET=$SEARXNG_SECRET
       - BASE_URL=http://$LAN_IP:$PORT_SEARXNG/
+    depends_on:
+      searxng-redis: {condition: service_healthy}
     restart: unless-stopped
     deploy:
       resources:
         limits: {cpus: '1.0', memory: 512M}
+
+  searxng-redis:
+    image: redis:7-alpine
+    container_name: ${CONTAINER_PREFIX}searxng-redis
+    networks: [dhi-frontnet]
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 EOF
     fi
 
@@ -737,6 +751,7 @@ EOF
       - DB_PASSWORD=$IMMICH_DB_PASSWORD
       - DB_DATABASE_NAME=immich
       - REDIS_HOSTNAME=${CONTAINER_PREFIX}immich-redis
+      - IMMICH_MACHINE_LEARNING_URL=http://${CONTAINER_PREFIX}immich-ml:3003
       - IMMICH_CONFIG_FILE=/config/immich.json
     volumes:
       - $DATA_DIR/immich:/usr/src/app/upload

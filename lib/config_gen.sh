@@ -303,6 +303,7 @@ dns:
   protection_enabled: true
   filtering_enabled: true
   blocking_mode: default
+  safesearch_enabled: true
 querylog:
   enabled: true
   file_enabled: true
@@ -353,6 +354,14 @@ filters:
     url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/refs/heads/main/blocklist.txt
     name: "sleepy list"
     id: 1
+  - enabled: true
+    url: https://adaway.org/hosts.txt
+    name: "AdAway Default"
+    id: 2
+  - enabled: true
+    url: https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
+    name: "Steven Black's List"
+    id: 3
 filters_update_interval: 1
 EOF
 
@@ -392,6 +401,9 @@ map \$http_host \$backend {
     portainer.$DESEC_DOMAIN  http://portainer:9000;
     wireguard.$DESEC_DOMAIN  http://$LAN_IP:51821;
     odido.$DESEC_DOMAIN      http://odido-booster:8080;
+    cobalt.$DESEC_DOMAIN     http://cobalt:9000;
+    searxng.$DESEC_DOMAIN    http://gluetun:8080;
+    immich.$DESEC_DOMAIN     http://gluetun:2283;
     
     # Handle the 8443 port in the host header
     "invidious.$DESEC_DOMAIN:8443"  http://gluetun:3000;
@@ -408,6 +420,9 @@ map \$http_host \$backend {
     "portainer.$DESEC_DOMAIN:8443"  http://portainer:9000;
     "wireguard.$DESEC_DOMAIN:8443"  http://$LAN_IP:51821;
     "odido.$DESEC_DOMAIN:8443"      http://odido-booster:8080;
+    "cobalt.$DESEC_DOMAIN:8443"     http://cobalt:9000;
+    "searxng.$DESEC_DOMAIN:8443"    http://gluetun:8080;
+    "immich.$DESEC_DOMAIN:8443"     http://gluetun:2283;
 }
 
 server {
@@ -480,6 +495,8 @@ search:
   safe_search: 0
   autocomplete: google
   favicons: true
+redis:
+  url: redis://${CONTAINER_PREFIX}searxng-redis:6379/0
 EOF
 
     cat <<EOF | $SUDO tee "$ENV_DIR/anonymousoverflow.env" >/dev/null
