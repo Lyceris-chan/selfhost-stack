@@ -377,11 +377,18 @@ Opening a port for WireGuard does **not** expose your home to scanning.
 <a id="system-requirements"></a>
 ## 🖥️ System Requirements
 
-### Verified Environment (ZimaOS)
-*   **CPU**: Intel® Core™ i3-10105T @ 3.00GHz (or better)
-*   **RAM**: 8 GB Recommended (4 GB Minimum)
-*   **Storage**: 64 GB SSD Recommended (32 GB Minimum)
+### Verified Environment (High Performance)
+*   **CPU**: Intel® Core™ i3-10105T (4 Cores / 8 Threads)
+    *   Base: 2.90 GHz, Turbo: 3.00 GHz
+*   **RAM**: 32 GB DDR4 @ 3200 MHz
+*   **GPU**: Intel® UHD Graphics 630 (CometLake-S GT2)
+    *   *Note: Fully compatible with Intel Quick Sync (QSV) for hardware-accelerated media tasks.*
 *   **OS**: ZimaOS, Ubuntu 22.04 LTS, or Debian 12+
+
+### Minimum Requirements
+*   **CPU**: 2 Cores (64-bit)
+*   **RAM**: 4 GB (8 GB+ Recommended for Immich/VERT usage)
+*   **Storage**: 32 GB SSD (64 GB+ Recommended for media storage)
 
 ### Performance Expectations
 *   **Validation**: 1-2 min
@@ -756,23 +763,6 @@ Opening a port for WireGuard does **not** expose your home to scanning.
 *   **Cryptographic Ownership**: You can't "guess" a password. You need a valid 256-bit key.
 
 ---
-
-<a id="system-requirements"></a>
-## 🖥️ System Requirements
-
-### Verified Environment (ZimaOS)
-*   **CPU**: Intel® Core™ i3-10105T @ 3.00GHz (or better)
-*   **RAM**: 8 GB Recommended (4 GB Minimum)
-*   **Storage**: 64 GB SSD Recommended (32 GB Minimum)
-*   **OS**: ZimaOS, Ubuntu 22.04 LTS, or Debian 12+
-
-### Performance Expectations
-*   **Validation**: 1-2 min
-*   **Build & Deploy**: 15-25 min (Source compilation is CPU-intensive)
-
----
-
-<a id="troubleshooting"></a>
 ## 🔧 Troubleshooting
 
 | Issue | Potential Solution |
