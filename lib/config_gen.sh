@@ -282,6 +282,16 @@ server:
   rrset-cache-size: 100m
   prefetch: yes
   prefetch-key: yes
+  qname-minimisation: yes
+  aggressive-nsec: yes
+  rrset-roundrobin: yes
+  minimal-responses: yes
+  use-caps-for-id: yes
+  harden-glue: yes
+  harden-dnssec-stripped: yes
+  harden-algo-downgrade: yes
+  harden-large-queries: yes
+  harden-short-bufsize: yes
   auto-trust-anchor-file: "/etc/unbound/root.key"
 UNBOUNDEOF
 
@@ -317,7 +327,7 @@ statistics:
 tls:
   enabled: true
   server_name: $DNS_SERVER_NAME
-  force_https: false
+  force_https: $([ -n "$DESEC_DOMAIN" ] && echo "true" || echo "false")
   port_https: 443
   port_dns_over_tls: 853
   port_dns_over_quic: 853
@@ -387,42 +397,42 @@ access_log /dev/stdout;
 map \$http_host \$backend {
     hostnames;
     default "";
-    invidious.$DESEC_DOMAIN  http://gluetun:3000;
-    redlib.$DESEC_DOMAIN     http://gluetun:8080;
-    wikiless.$DESEC_DOMAIN   http://gluetun:8180;
+    invidious.$DESEC_DOMAIN  http://${CONTAINER_PREFIX}gluetun:3000;
+    redlib.$DESEC_DOMAIN     http://${CONTAINER_PREFIX}gluetun:8080;
+    wikiless.$DESEC_DOMAIN   http://${CONTAINER_PREFIX}gluetun:8180;
     memos.$DESEC_DOMAIN      http://$LAN_IP:$PORT_MEMOS;
-    rimgo.$DESEC_DOMAIN      http://gluetun:3002;
-    scribe.$DESEC_DOMAIN     http://gluetun:8280;
-    breezewiki.$DESEC_DOMAIN http://gluetun:10416;
-    anonymousoverflow.$DESEC_DOMAIN http://gluetun:8480;
-    vert.$DESEC_DOMAIN       http://vert:80;
-    vertd.$DESEC_DOMAIN      http://vertd:24153;
-    adguard.$DESEC_DOMAIN    http://adguard:8083;
-    portainer.$DESEC_DOMAIN  http://portainer:9000;
+    rimgo.$DESEC_DOMAIN      http://${CONTAINER_PREFIX}gluetun:3002;
+    scribe.$DESEC_DOMAIN     http://${CONTAINER_PREFIX}gluetun:8280;
+    breezewiki.$DESEC_DOMAIN http://${CONTAINER_PREFIX}gluetun:10416;
+    anonymousoverflow.$DESEC_DOMAIN http://${CONTAINER_PREFIX}gluetun:8480;
+    vert.$DESEC_DOMAIN       http://${CONTAINER_PREFIX}vert:80;
+    vertd.$DESEC_DOMAIN      http://${CONTAINER_PREFIX}vertd:24153;
+    adguard.$DESEC_DOMAIN    http://${CONTAINER_PREFIX}adguard:8083;
+    portainer.$DESEC_DOMAIN  http://${CONTAINER_PREFIX}portainer:9000;
     wireguard.$DESEC_DOMAIN  http://$LAN_IP:51821;
-    odido.$DESEC_DOMAIN      http://odido-booster:8080;
-    cobalt.$DESEC_DOMAIN     http://cobalt:9000;
-    searxng.$DESEC_DOMAIN    http://gluetun:8080;
-    immich.$DESEC_DOMAIN     http://gluetun:2283;
+    odido.$DESEC_DOMAIN      http://${CONTAINER_PREFIX}odido-booster:8080;
+    cobalt.$DESEC_DOMAIN     http://${CONTAINER_PREFIX}cobalt:9000;
+    searxng.$DESEC_DOMAIN    http://${CONTAINER_PREFIX}gluetun:8080;
+    immich.$DESEC_DOMAIN     http://${CONTAINER_PREFIX}gluetun:2283;
     
     # Handle the 8443 port in the host header
-    "invidious.$DESEC_DOMAIN:8443"  http://gluetun:3000;
-    "redlib.$DESEC_DOMAIN:8443"     http://gluetun:8080;
-    "wikiless.$DESEC_DOMAIN:8443"   http://gluetun:8180;
+    "invidious.$DESEC_DOMAIN:8443"  http://${CONTAINER_PREFIX}gluetun:3000;
+    "redlib.$DESEC_DOMAIN:8443"     http://${CONTAINER_PREFIX}gluetun:8080;
+    "wikiless.$DESEC_DOMAIN:8443"   http://${CONTAINER_PREFIX}gluetun:8180;
     "memos.$DESEC_DOMAIN:8443"      http://$LAN_IP:$PORT_MEMOS;
-    "rimgo.$DESEC_DOMAIN:8443"      http://gluetun:3002;
-    "scribe.$DESEC_DOMAIN:8443"     http://gluetun:8280;
-    "breezewiki.$DESEC_DOMAIN:8443" http://gluetun:10416;
-    "anonymousoverflow.$DESEC_DOMAIN:8443" http://gluetun:8480;
-    "vert.$DESEC_DOMAIN:8443"       http://vert:80;
-    "vertd.$DESEC_DOMAIN:8443"      http://vertd:24153;
-    "adguard.$DESEC_DOMAIN:8443"    http://adguard:8083;
-    "portainer.$DESEC_DOMAIN:8443"  http://portainer:9000;
+    "rimgo.$DESEC_DOMAIN:8443"      http://${CONTAINER_PREFIX}gluetun:3002;
+    "scribe.$DESEC_DOMAIN:8443"     http://${CONTAINER_PREFIX}gluetun:8280;
+    "breezewiki.$DESEC_DOMAIN:8443" http://${CONTAINER_PREFIX}gluetun:10416;
+    "anonymousoverflow.$DESEC_DOMAIN:8443" http://${CONTAINER_PREFIX}gluetun:8480;
+    "vert.$DESEC_DOMAIN:8443"       http://${CONTAINER_PREFIX}vert:80;
+    "vertd.$DESEC_DOMAIN:8443"      http://${CONTAINER_PREFIX}vertd:24153;
+    "adguard.$DESEC_DOMAIN:8443"    http://${CONTAINER_PREFIX}adguard:8083;
+    "portainer.$DESEC_DOMAIN:8443"  http://${CONTAINER_PREFIX}portainer:9000;
     "wireguard.$DESEC_DOMAIN:8443"  http://$LAN_IP:51821;
-    "odido.$DESEC_DOMAIN:8443"      http://odido-booster:8080;
-    "cobalt.$DESEC_DOMAIN:8443"     http://cobalt:9000;
-    "searxng.$DESEC_DOMAIN:8443"    http://gluetun:8080;
-    "immich.$DESEC_DOMAIN:8443"     http://gluetun:2283;
+    "odido.$DESEC_DOMAIN:8443"      http://${CONTAINER_PREFIX}odido-booster:8080;
+    "cobalt.$DESEC_DOMAIN:8443"     http://${CONTAINER_PREFIX}cobalt:9000;
+    "searxng.$DESEC_DOMAIN:8443"    http://${CONTAINER_PREFIX}gluetun:8080;
+    "immich.$DESEC_DOMAIN:8443"     http://${CONTAINER_PREFIX}gluetun:2283;
 }
 
 server {
@@ -439,6 +449,16 @@ server {
 
     # If the host matches a service subdomain, proxy it
     location / {
+        # Auto-switch to HTTPS if using a domain (not IP) and on port 8081
+        if (\$http_x_forwarded_proto != "https") {
+            set \$should_redirect "";
+            if (\$host ~* "\$DESEC_DOMAIN\$") { set \$should_redirect "Y"; }
+            if (\$server_port = "$PORT_DASHBOARD_WEB") { set \$should_redirect "\${should_redirect}E"; }
+            if (\$should_redirect = "YE") {
+                return 301 https://\$host:8443\$request_uri;
+            }
+        }
+
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;

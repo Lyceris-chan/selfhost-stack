@@ -184,8 +184,9 @@ generate_dashboard
 # 11. Generate Compose
 generate_compose
 
-# 12. Setup Proton Pass Export
+# 12. Setup Exports (Passwords & Redirections)
 generate_protonpass_export
+generate_libredirect_export
 
 # 13. Deploy
 deploy_stack

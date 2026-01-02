@@ -1,6 +1,7 @@
 # 🛡️ ZimaOS Privacy Hub
 
 **Stop being the product.**
+
 A comprehensive, self-hosted privacy infrastructure designed for digital independence. Route your traffic through secure VPNs, eliminate tracking with isolated frontends, and manage everything from a unified **Material Design 3** dashboard.
 
 ---
@@ -10,131 +11,97 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
 *   **🔒 Data Independence**: Host your own frontends (Invidious, Redlib, etc.) to stop upstream giants like Google and Reddit from profiling you.
 *   **🚫 Ad-Free by Design**: Network-wide ad blocking via AdGuard Home + native removal of sponsored content in video/social feeds.
 *   **🕵️ VPN-Gated Privacy**: All external requests are routed through a **Gluetun VPN** tunnel. Upstream providers only see your VPN IP, keeping your home identity hidden.
-*   **📱 No App Prompts (Redlib)**: Say goodbye to obnoxious "Open in App" popups. Using **Redlib**, you get a premium, fast Reddit experience on mobile without being forced to download trackers or the official app. This ensures your mobile browsing remains private and frictionless.
+*   **📱 Frictionless Browsing (Redlib)**: Redlib eliminates aggressive "Open in App" prompts and mobile-web trackers. Enjoy a fast, premium Reddit experience on any device without being forced into the official app's data-harvesting ecosystem.
 *   **🔑 Easy Remote Access**: Built-in **WireGuard** management. Generate client configs and **QR codes** directly from the dashboard to connect your phone or laptop securely.
+*   **🔄 Atomic A/B Updates**: Safe, zero-downtime updates with automated rollback capability. Switch between "Slot A" and "Slot B" to ensure high availability during service maintenance.
+*   **⚡ Hardware Performance**: Automatically detects and provisions GPU acceleration (Intel QSV, AMD VA-API, or NVIDIA) for media-heavy services like Immich and VERT. Code is built from source locally to ensure compatibility with your host environment.
 *   **🎨 Material Design 3**: A beautiful, responsive dashboard with dynamic theming and real-time health metrics.
 
 ---
 
-## ⚡ Quick Start
+## 🚀 Deployment
 
-**Ready to launch?** Run this single command on your ZimaOS terminal:
+The Privacy Hub can be deployed with a single command, but for the **best** experience, we recommend following the "Pro" steps to ensure your home IP is completely masked and your remote access is secured.
 
-```bash
-./zima.sh -p -y
-```
+### Step 1: Secure Your Tunnel (VPN)
+This stack hides your home address from the internet by routing traffic through a secure "tunnel" to a VPN provider.
+1.  Go to [ProtonVPN Downloads](https://account.protonvpn.com/downloads).
+2.  Create a **WireGuard configuration** (Free or Paid).
+3.  **Download** the `.conf` file. You will paste its text during setup.
 
-This **Automated Mode**:
-1.  Generates secure passwords automatically.
-2.  Builds the entire privacy stack (~15 mins).
-3.  Exports credentials to `protonpass_import.csv` for safe keeping.
+### Step 2: Establish Your Identity (deSEC)
+To access your hub securely via a private name (like `home.dedyn.io`), you need a free, privacy-focused domain.
+1.  Register at [deSEC.io](https://desec.io).
+2.  Create a domain (e.g., `my-privacy-hub.dedyn.io`).
+3.  Generate an **API Token** in your deSEC settings.
 
----
-
-## 📚 Contents
-
-1.  [Getting Started](#getting-started)
-2.  [Dashboard & Services](#dashboard--services)
-3.  [Network Configuration](#network-configuration)
-4.  [Advanced Setup (OpenWrt)](#advanced-setup)
-5.  [Privacy & Architecture](#privacy--architecture)
-6.  [Security Standards](#security-standards)
-7.  [System Requirements](#system-requirements)
-8.  [Troubleshooting](#troubleshooting)
-9.  [Maintenance](#maintenance)
-10. [External Services & Privacy Policies](#external-services--privacy-policies)
-
----
-
-<a id="getting-started"></a>
-## 🏗️ Getting Started
-
-### Prerequisites
-
-Gather these essentials before starting the installation. Each token should be created with the **least privilege** required.
-
-#### 🛠️ Essential Tokens
-*   **Docker Hub Account**: Required to pull hardened images and avoid rate limits.
-    *   **Token Rights**: Create a "Personal Access Token" with **Public Read-only** (or Read-only) permissions.
-    *   **Source**: [Docker Hub Security Settings](https://hub.docker.com/settings/security).
-*   **ProtonVPN WireGuard Config**: Critical for the `Gluetun` VPN gateway to mask your IP.
-    *   **Source**: [ProtonVPN Downloads](https://account.protonvpn.com/downloads). (See [ProtonVPN Guide](#-protonvpn-wireguard-setup) below).
-*   **deSEC Domain (Optional)**: For trusted SSL certificates and mobile "Private DNS" support.
-    *   **Source**: [deSEC.io](https://desec.io).
-
-#### 🔧 Service-Specific Secrets (Optional)
-*   **GitHub Token**: Required for the **Scribe** frontend to avoid API rate limits.
-    *   **Token Rights**: "Classic" token with `gist` scope only.
-    *   **Source**: [GitHub Personal Access Tokens](https://github.com/settings/tokens).
-*   **Odido OAuth Token**: For Dutch users utilizing the **Odido Booster**.
-    *   **Source**: [Odido Authenticator](https://github.com/GuusBackup/Odido.Authenticator/releases/latest).
-
----
-
-<details>
-<summary>📥 <strong>ProtonVPN WireGuard Setup</strong> (Click to expand)</summary>
-
-1.  **Login** to your [ProtonVPN Account](https://account.protonvpn.com/downloads).
-2.  Navigate to **Downloads** -> **WireGuard configuration**.
-3.  **Name** your configuration (e.g., `Zima-Privacy-Hub`).
-4.  Select a **Free** (or Paid) server in your preferred region.
-5.  **Toggle ON** "NAT-PMP" (Optional but recommended).
-6.  **Download** the `.conf` file.
-7.  **Usage**: You will be prompted to paste the text content of this file during installation.
-
-> 🛡️ **Privacy Impact**: Without this config, your home IP is exposed to YouTube/Reddit. With it, they only see Proton's commercial IP.
-</details>
-
-<details>
-<summary>🔑 <strong>Token & Secret Guides</strong> (Click to expand)</summary>
-
-*   **Docker Hub PAT**:
-    1. Go to [Security Settings](https://hub.docker.com/settings/security).
-    2. Click **New Access Token**.
-    3. Set Access permissions to **Read-only**.
-*   **GitHub PAT (Scribe)**:
-    1. Go to [Token Settings](https://github.com/settings/tokens).
-    2. Select **Generate new token (classic)**.
-    3. Check **only** the `gist` box.
-*   **deSEC Domain**:
-    1. Register at [deSEC.io](https://desec.io).
-    2. Create a domain (e.g., `your-name.dedyn.io`).
-    3. Generate an API token in the dashboard.
-</details>
-
----
-
-### Installation
-
-**Standard Interactive Install**:
+### Step 3: Run the Installer
+Open your terminal and paste this:
 ```bash
 ./zima.sh
 ```
+*The script handles the "scary" stuff (passwords, network, security). It will ask for your VPN/deSEC details—just follow the prompts!*
 
-**Custom Flags**:
+> 💡 **The "I'm in a hurry" Way**: Use `./zima.sh -P` to fast-track setup with automated passwords and parallel builds.
+
+**What happens next?**
+1.  **Privacy Build**: The system clones and builds your private apps (~15-20 mins).
+2.  **Ready to Use**: You get a single link to your dashboard.
+3.  **Credential Export**: Your passwords are saved to `data/AppData/privacy-hub/protonpass_import.csv` for safe keeping.
+4.  **Instant Redirection**: A `libredirect_import.json` is created in the project root. Import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically send YouTube/Reddit links to your new Hub.
+
+> 📁 **Where are my passwords?**: All generated credentials are saved to `data/AppData/privacy-hub/.secrets` and exported to `data/AppData/privacy-hub/protonpass_import.csv` for easy importing.
+
+---
+
+## 🛡️ Privacy Features & Architecture
+
+*   **🔒 Data Independence**: Host your own frontends (Invidious, Redlib, etc.) to stop upstream giants from profiling you.
+*   **🚫 Ad-Free by Design**: Network-wide ad blocking via AdGuard Home + native removal of sponsored content in video/social feeds (Invidious/SponsorBlock).
+*   **🕵️ VPN-Gated Privacy**: All external requests are routed through a **Gluetun VPN** tunnel. Upstream providers only see your VPN IP, keeping your home identity hidden.
+*   **📱 Frictionless Browsing (Redlib)**: Redlib eliminates aggressive "Open in App" prompts and mobile-web trackers.
+    *   ⚠️ **Upstream Risk**: Services like Reddit frequently change their APIs/layouts to break private frontends. Be aware that these instances may occasionally break due to intentional upstream changes. We use local builds to apply surgical patches as soon as fixes are available.
+*   **🔑 Easy Remote Access**: Built-in **WireGuard** management. Generate client configs and **QR codes** directly from the dashboard to connect your phone or laptop securely.
+*   **🔄 Atomic A/B Updates**: Safe, zero-downtime updates with automated rollback capability.
+*   **🎨 Material Design 3**: A beautiful, responsive dashboard with dynamic theming and real-time health metrics.
+
+### Recursive DNS Engine (Independent Resolution)
+This stack features a hardened, recursive DNS engine built on **Unbound** and **AdGuard Home**, designed to eliminate upstream reliance and prevent data leakage.
+
+#### 🛡️ Advanced Security & RFC Compliance
+*   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: Dramatically improves privacy by only sending the absolute minimum part of a domain name to upstream authoritative servers. 
+*   **DNSSEC Validation ([RFC 4033](https://datatracker.ietf.org/doc/html/rfc4033))**: Protects against DNS spoofing and cache poisoning by cryptographically verifying records.
+*   **Aggressive Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: Uses NSEC records to generate negative responses locally, reducing traffic and improving performance.
+*   **Recursive Resolution**: talks directly to authoritative root servers, cutting out the corporate "Public" middleman (Google/Cloudflare).
+*   **Encrypted DNS ([RFC 7858](https://datatracker.ietf.org/doc/html/rfc7858), [RFC 8484](https://datatracker.ietf.org/doc/html/rfc8484), [RFC 9250](https://datatracker.ietf.org/doc/html/rfc9250))**: Supports DNS-over-TLS, DNS-over-HTTPS, and DNS-over-QUIC to prevent local network eavesdropping.
+*   **0x20 Bit Randomization**: Mitigates spoofing attempts by randomly varying capitalization in query names.
+*   **Privacy Considerations ([RFC 7626](https://datatracker.ietf.org/doc/html/rfc7626))**: Implements best practices for DNS privacy, minimizing data leakage to third parties.
+*   **Hardened Access Control ([RFC 1918](https://datatracker.ietf.org/doc/html/rfc1918))**: Restricts resolution to private subnets, preventing external misuse.
+
+### 🔍 Why Self-Host? (The "Trust Gap")
+If you don't own the hardware and the code running your network, you don't own your privacy. 
+*   **The Google Profile**: Google's DNS (8.8.8.8) turns you into a data source for profiling your health, finances, and interests.
+*   **The Cloudflare Illusion**: Even "neutral" providers can be forced to censor or log content.
+*   **ISP Predation**: ISPs log and sell your browsing history to data brokers.
+*   **Search Engine Isolation**: By routing **SearXNG** through the VPN tunnel, upstream search engines (Google, Bing) see queries coming from a generic VPN IP shared by thousands, making it impossible to profile your individual search behavior or serve targeted ads.
+
+> 📚 **Trusted Sources**: For more on why these measures matter, see the **EFF's [Surveillance Self-Defense](https://ssd.eff.org/)** and their guide on **[DNS Privacy](https://www.eff.org/deeplinks/2020/12/dns-privacy-all-way-root-your-lan)**.
+
+### 🛠️ Customization Flags (Optional)
+If you want to skip the questions, you can use these flags:
+
 | Flag | Description |
 | :--- | :--- |
 | `-p` | **Auto-Passwords**: Generates random secure credentials automatically. |
-| `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless/Non-interactive mode). |
-| `-P` | **Personal Mode**: Combines `-p`, `-y`, and `-j` for a fast, fully automated deployment intended for single-user setups. |
-| `-j` | **Parallel Deploy**: Builds and pulls all services simultaneously. Faster but CPU intensive. |
-| `-S` | **Swap Slots**: Toggles the active system slot (A/B) for safe updates and rollbacks. |
-| `-g <1-4>` | **Group Select**: Deploys a targeted subset of services:<br>• **1 (Essentials)**: Dashboard, DNS, VPN, Memos, Cobalt.<br>• **2 (Search/Video)**: Group 1 + Invidious, SearXNG.<br>• **3 (Media/Heavy)**: Group 1 + VERT, Immich.<br>• **4 (Full Stack)**: Every service in the repository. |
-| `-a` | **Allow Proton (Optional)**: Whitelists ProtonVPN domains in AdGuard (useful for Proton extension users). |
-| `-c` | **Maintenance Reset**: Recreates all containers and network interfaces to resolve glitches. **This is safe**: it strictly preserves your persistent user data and configuration. |
-| `-x` | **Factory Reset**: ⚠️ **Project-Specific Wipe**. This permanently removes all containers, volumes, and databases associated with this stack. It does **not** touch your OS or files outside the project directory. |
-| `-s` | **Selective**: Deploy specific services by name (e.g., `-s invidious,memos`). |
-
-> 🔑 **Credentials**: When using `-p`, the script will automatically generate and display your passwords. These are also saved to the `.secrets` file for later reference. For services like **Immich**, the first user to register becomes the admin.
-
-> ⚠️ **VPN Access Warning**: When you are connected to a commercial VPN (like ProtonVPN, NordVPN, etc.) directly on your device, you will **not** be able to access your Privacy Hub services. You must be connected to your home **WireGuard (wg-easy)** tunnel to reach them remotely. Using a different VPN will result in a `Connection Timed Out` or `DNS_PROBE_FINISHED_NXDOMAIN` error because your device can no longer "see" your home network.
-
-### ✅ Verification
-
-After installation, verify your stack:
-1.  **Dashboard**: `http://<LAN_IP>:8081` (Should be accessible).
-2.  **VPN Check**: `docker exec gluetun wget -qO- http://ifconfig.me` (Should show VPN IP).
-3.  **DNS Check**: `dig @localhost example.com` (Should resolve).
+| `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless mode). |
+| `-P` | **Personal Mode**: Fast-track setup (combines `-p`, `-y`, and `-j`). |
+| `-j` | **Parallel Deploy**: Builds everything at once. Faster, but high CPU usage! |
+| `-g <1-4>` | **Group Select**: Choose how much "privacy armor" to install:<br>• **1 (Essentials)**: Dashboard, DNS, VPN, Hub-API, Memos, Cobalt, Odido.<br>• **2 (Search/Video)**: Group 1 + Invidious, SearXNG.<br>• **3 (Media/Heavy)**: Group 1 + VERT, Immich.<br>• **4 (Full Stack)**: Every single service in the repo. |
+| `-s` | **Selective**: Install only specific apps (e.g., `-s invidious,memos`). |
+| `-S` | **Swap Slots**: A/B Update toggle. Deploys the new version to the standby slot before swapping. |
+| `-c` | **Maintenance**: Recreates containers and networks to fix glitches while **preserving** your persistent data. |
+| `-x` | **Factory Reset**: ⚠️ **Deletes everything**. Wipes all containers, volumes, and application data. |
+| `-a` | **Allow Proton**: Whitelists ProtonVPN domains in AdGuard (useful for extension users). |
 
 ---
 
@@ -162,62 +129,68 @@ When using the `-p` (Auto-Passwords) flag, the system generates secure, unique c
 
 > 📁 **Where are they?**: All generated credentials are saved to `data/AppData/privacy-hub/.secrets` and exported to a convenient `protonpass_import.csv` in the root directory for easy importing into your password manager.
 
+### 🔀 LibRedirect Integration
+To automatically redirect your browser from big-tech sites to your private Hub:
+1.  Install the **LibRedirect** extension ([Firefox](https://addons.mozilla.org/en-US/firefox/addon/libredirect/) / [Chrome](https://chromewebstore.google.com/detail/libredirect/pobhoodpcdojmedmielocclicpfbednh)).
+2.  Open the extension settings and go to **Backup/Restore**.
+3.  Click **Import Settings** and select the `libredirect_import.json` file found in your project root.
+4.  Your browser will now automatically use your local instances for YouTube, Reddit, Wikipedia, and more.
+
 ### Included Privacy Services
 
-| Service | Source | Category | Description |
+Every service in this stack is either built from source (and hardened) or pulled from a trusted minimal image. All services marked with **🔒 VPN** are locked inside the VPN tunnel—they cannot "see" the real internet, and the real internet cannot "see" them.
+
+| Service | Category | 🛡️ Routing | Source & Patched Dockerfile |
 | :--- | :--- | :--- | :--- |
-| **Invidious** | [iv-org/invidious](https://github.com/iv-org/invidious) ⁽[¹](https://github.com/iv-org/invidious/blob/master/docker/Dockerfile)⁾ | Frontend | YouTube without ads or tracking. |
-| **Redlib** | [redlib-org/redlib](https://github.com/redlib-org/redlib) ⁽[³](https://github.com/redlib-org/redlib/blob/main/Dockerfile.alpine)⁾ | Frontend | Private Reddit viewer. |
-| **SearXNG** | [searxng/searxng](https://github.com/searxng/searxng) ⁽[¹⁸](https://github.com/searxng/searxng/blob/master/Dockerfile)⁾ | Frontend | Privacy-respecting search engine. |
-| **Cobalt** | [imputnet/cobalt](https://github.com/imputnet/cobalt) ⁽[¹⁹](https://github.com/imputnet/cobalt/blob/master/Dockerfile)⁾ | Utility | Media downloader (Local-only UI). |
-| **Memos** | [usememos/memos](https://github.com/usememos/memos) ⁽[⁹](https://github.com/usememos/memos/blob/main/scripts/Dockerfile)⁾ | Utility | Self-hosted notes & knowledge base. |
-| **VERT** | [vert-sh/vert](https://github.com/vert-sh/vert) ⁽[¹⁰](https://github.com/VERT-sh/VERT/blob/main/Dockerfile)⁾ | Utility | Secure local file conversion UI. |
-| **Immich** | [immich-app/immich](https://github.com/immich-app/immich) ⁽[²⁰](https://github.com/immich-app/immich/blob/main/Dockerfile)⁾ | Utility | Photo and video management. |
+| **Invidious** | Frontend | **🔒 VPN** | [iv-org/invidious](https://github.com/iv-org/invidious) ([Patched](https://github.com/iv-org/invidious/blob/master/Dockerfile)) |
+| **Companion** | Helper | **🔒 VPN** | [iv-org/companion](https://github.com/iv-org/invidious-companion) ([Patched](https://github.com/iv-org/invidious-companion/blob/master/Dockerfile)) |
+| **Redlib** | Frontend | **🔒 VPN** | [redlib-org/redlib](https://github.com/redlib-org/redlib) ([Patched](https://github.com/redlib-org/redlib/blob/master/Dockerfile)) |
+| **SearXNG** | Frontend | **🔒 VPN** | [searxng/searxng](https://github.com/searxng/searxng) (Pre-built Image) |
+| **Benefits** | Privacy | **🔒 VPN** | Prevents upstream profiling by routing all queries through a shared VPN IP. |
+| **Scribe** | Frontend | **🔒 VPN** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) ([Patched](https://github.com/edwardloveall/scribe/blob/main/Dockerfile)) |
+| **Rimgo** | Frontend | **🔒 VPN** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) ([Patched](https://codeberg.org/rimgo/rimgo/src/branch/main/Dockerfile)) |
+| **Wikiless** | Frontend | **🔒 VPN** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) ([Patched](https://github.com/Metastem/Wikiless/blob/master/Dockerfile)) |
+| **BreezeWiki** | Frontend | **🔒 VPN** | [breezewiki](https://gitdab.com/cadence/breezewiki) ([Patched](https://github.com/PussTheCat-org/docker-breezewiki-quay/blob/master/docker/Dockerfile)) |
+| **AnonOverflow** | Frontend | **🔒 VPN** | [anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) ([Patched](https://github.com/httpjamesm/anonymousoverflow/blob/master/Dockerfile)) |
+| **Cobalt** | Utility | **🏠 Local** | [imputnet/cobalt](https://github.com/imputnet/cobalt) (Pre-built Image) |
+| **Memos** | Utility | **🏠 Local** | [usememos/memos](https://github.com/usememos/memos) ([Patched](https://github.com/usememos/memos/blob/main/Dockerfile)) |
+| **Immich** | Utility | **🔒 VPN*** | [immich-app/immich](https://github.com/immich-app/immich) (Pre-built Image) |
+| **VERT / VERTd** | Utility | **🏠 Local** | [vert-sh/vert](https://github.com/vert-sh/vert) ([Patched](https://github.com/vert-sh/vert/blob/main/Dockerfile)) |
+| **AdGuard Home** | Core | **🏠 Local** | [AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) ([Patched](https://github.com/AdguardTeam/AdGuardHome/blob/master/Dockerfile)) |
+| **Unbound** | Core | **🏠 Local** | [unbound](https://github.com/klutchell/unbound-docker) ([Patched](https://github.com/klutchell/unbound-docker/blob/master/Dockerfile)) |
+| **WireGuard** | Core | **🏠 Local** | [wg-easy](https://github.com/wg-easy/wg-easy) ([Patched](https://github.com/wg-easy/wg-easy/blob/master/Dockerfile)) |
+| **Gluetun** | Core | **🌍 Exit** | [gluetun](https://github.com/qdm12/gluetun) ([Patched](https://github.com/qdm12/gluetun/blob/master/Dockerfile)) |
+| **Portainer** | Core | **🏠 Local** | [portainer](https://github.com/portainer/portainer) (Pre-built Image) |
+| **Hub API** | Core | **🏠 Local** | [Local Source](/hub-api) ([Custom](/hub-api/Dockerfile)) |
+| **Odido Booster** | Utility | **🏠 Local** | [odido-booster](https://github.com/Lyceris-chan/odido-bundle-booster) ([Patched](https://github.com/Lyceris-chan/odido-bundle-booster/blob/master/Dockerfile)) |
 
-> **Note**: All "Frontend" services (and Immich) are routed through the VPN tunnel automatically. Cobalt UI is strictly local-only.
+*\*Immich uses the VPN only for specific machine learning model downloads and metadata fetching. Your photos stay local.
 
-### 🔗 Browser Integration & Redirects
-To fully automate your privacy experience, use the **LibRedirect** browser extension ([Firefox](https://addons.mozilla.org/en-US/firefox/addon/libredirect/) / [Chrome](https://chromewebstore.google.com/detail/libredirect/pidepfhccicebebmleihobgoegmpodic)).
+> **Note**: All "Frontend" services (and Immich/SearXNG) are routed through the VPN tunnel automatically. VERT, Cobalt UI, and core management tools are strictly local-only.
 
-1.  **Install LibRedirect** in your preferred browser.
-2.  **Import Settings**: Use the `libredirect_import.json` file generated in your project root after deployment.
-3.  **Automatic Redirection**: Standard links (YouTube, Reddit, Wikipedia, etc.) will now automatically open in your local private instances.
-
----
-
-<a id="network-configuration"></a>
-## 🌐 Network Configuration
-
-To fully utilize the stack, configure your network:
+### ⚡ Hardware Acceleration (GPU/QSV)
+To ensure peak performance for media-heavy tasks, this stack supports hardware-accelerated transcoding and machine learning:
+*   **Immich**: Utilizes Intel Quick Sync (QSV), VA-API, or NVIDIA GPUs for localized image auto-tagging and video transcoding.
+*   **VERT / VERTd**: Optimized for high-speed local file conversion using hardware encoders to minimize CPU load.
+*   **Detection & Provisioning**: The stack automatically identifies your hardware vendor (Intel, AMD, or NVIDIA) during deployment via [lib/scripts.sh](lib/scripts.sh) and provisions the necessary devices (`/dev/dri`, `/dev/vulkan`) or container reservations.
+*   **Surgical Fixes**: Specific compilation flags and static library injections are applied in [lib/sources.sh](lib/sources.sh) to ensure these drivers function correctly within the hardened Alpine environments.
+*   **Requirements**: Ensure your ZimaOS/host device has the correct drivers installed (e.g., `intel-media-driver` or `nvidia-container-toolkit`).
 
 ### 1. Remote Access (VPN)
-Forward **UDP Port 51820** on your router to your ZimaOS device.
-*   This allows you to connect *back* to your home securely from anywhere using the WireGuard app.
+**Stop! You probably don't need to do anything here.**
+*   **Default State**: Your hub is invisible to the internet. This is the safest way to live.
+*   **Remote Access**: Forward **UDP Port 51820** on your router *only* if you want to connect to your hub while away from home. 
+*   **Why No Other Ports?**: Every other service (Dashboard, AdGuard, etc.) is reached *through* this WireGuard tunnel once you're connected. Opening more ports is like leaving your back door open when you already have a key to the front door.
 
 ### 2. DNS Protection
-Point your router's **Primary DNS** to your ZimaOS IP address.
-*   This forces all devices on your WiFi to use AdGuard Home for ad-blocking.
-*   **Important**: Disable "Random MAC Address" on your devices for persistent protection.
+...
 
-### 3. Mobile Private DNS (Android)
-If you configured deSEC:
-*   Set your Android "Private DNS" to: `your-domain.dedyn.io`
-*   **Requirement**: You must be connected to your home **WireGuard VPN** for this to work, unless you manually forward port 853 (DoT) on your router.
-*   **Benefit**: Encrypts all DNS queries on 4G/5G, preventing mobile carrier tracking.
+### 4. Split Tunnel Configuration & The VPN "Force Field"
+This stack uses a **Dual Split Tunnel** architecture. Think of it as a house with a private tunnel leading to a secret base:
 
-### 4. Split Tunnel Configuration & Bandwidth Optimization
-This stack uses a **Dual Split Tunnel** architecture via Gluetun and WG-Easy to ensure performance:
-*   **VPN-Gated Services (Gluetun)**: Privacy frontends (Invidious, Redlib, etc.) and heavy media tools (Immich, SearXNG) are locked inside the VPN container. They cannot access the internet if the VPN disconnects (Killswitch enabled).
-*   **Remote Access Optimization (WG-Easy)**: When connected via the WireGuard app, only your requests to the Hub and DNS queries are sent home. This preserves your mobile data and speed: high-bandwidth streaming services like Netflix or native YouTube apps maintain their full, direct speed on your device rather than being forced to route back through your home upload connection first.
-*   **Local-Direct Services**: Core management tools (Dashboard, Portainer, AdGuard UI) and Cobalt UI remain accessible directly via your LAN IP. This ensures you never lose control of your hub even if the VPN provider has an outage.
-
-### 5. Advanced: Direct Encrypted DNS (Optional)
-To use "Private DNS" on Android or DoH in browsers **without** connecting to the WireGuard VPN first:
-1.  **Forward Port 853 (TCP)**: Allows Android Private DNS / DoT.
-2.  **Forward Port 443 (TCP)**: Allows DNS-over-HTTPS (DoH).
-
-*   **⚠️ Privacy Warning**: While this encrypts your DNS queries, your ISP can still see the **IP address** you connect to and the **SNI** (Server Name) in the initial TLS handshake. For complete privacy from your ISP, use the VPN tunnel.
-*   **Security Warning**: This exposes your AdGuard instance to the public internet. Ensure you have configured "Allowed clients" in AdGuard Home settings to prevent unauthorized use (DNS Amplification attacks).
+1.  **The Force Field (Gluetun)**: Privacy frontends (Invidious, Redlib, etc.) and specific media tools (SearXNG) are literally "plugged in" to the VPN container. If the VPN tunnel breaks, their internet access instantly dies (Killswitch). They have no physical way to talk to the internet using your real home IP.
+2.  **The Secret Entrance (WireGuard)**: When you use the WireGuard app on your phone, you aren't "routing all internet home." You are only sending requests for your Hub and DNS home. This keeps your phone fast (streaming Netflix doesn't lag) while still giving you ad-blocking and access to your private files.
+3.  **The Safe Zone (Local)**: Core management tools (Dashboard, AdGuard, Portainer) and localized utilities (Memos, Cobalt, VERT) stay on your local network. You can always access them at home, even if your VPN provider is having a bad day.
 
 ---
 
@@ -226,18 +199,19 @@ To use "Private DNS" on Android or DoH in browsers **without** connecting to the
 
 If you are running a real router like **OpenWrt** behind your ISP modem, you are in a **Double NAT** situation. You need to fix the routing so your packets actually arrive.
 
-### 1. Static IP Assignment (DHCP Lease)
-Assign a static lease so your Privacy Hub doesn't wander off to a different IP every time the power cycles.
+### 1. Static IP & WAN Configuration
+*   **Static Hub Lease**: Assign a static lease on your **OpenWrt** router so your Privacy Hub remains at a fixed internal IP (e.g., `192.168.69.206`).
+*   **Static Router WAN**: In a Double NAT setup (ISP Modem -> OpenWrt -> Hub), ensure your OpenWrt router has a **Static IP** (e.g., `192.168.1.209`) assigned by the ISP modem on its WAN interface. This ensures the port forwarding rule on the ISP modem remains stable.
 
 <details>
 <summary>💻 <strong>CLI: UCI Commands for Static Lease</strong> (Click to expand)</summary>
 
 ```bash
-# Add the static lease (Replace MAC and IP with your own hardware's values)
+# Add the static lease on OpenWrt (Replace MAC with your hardware's values)
 uci add dhcp host
 uci set dhcp.@host[-1].name='ZimaOS-Privacy-Hub'
 uci set dhcp.@host[-1].mac='00:11:22:33:44:55' # <--- REPLACE THIS WITH YOUR MAC
-uci set dhcp.@host[-1].ip='192.168.1.100'      # <--- REPLACE THIS WITH YOUR DESIRED IP
+uci set dhcp.@host[-1].ip='192.168.69.206'     # <--- HUB LAN IP
 uci commit dhcp
 /etc/init.d/dnsmasq restart
 ```
@@ -256,7 +230,7 @@ uci set firewall.@redirect[-1].name='Forward-WireGuard'
 uci set firewall.@redirect[-1].src='wan'
 uci set firewall.@redirect[-1].proto='udp'
 uci set firewall.@redirect[-1].src_dport='51820'
-uci set firewall.@redirect[-1].dest_ip='192.168.1.100' # <--- REPLACE THIS WITH YOUR IP
+uci set firewall.@redirect[-1].dest_ip='192.168.69.206' # <--- HUB LAN IP
 uci set firewall.@redirect[-1].dest_port='51820'
 uci set firewall.@redirect[-1].target='DNAT'
 
@@ -310,39 +284,68 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 5.  **Offline Serving**: The Management Dashboard (Nginx) serves all UI resources exclusively from this local volume.
 
 ### Recursive DNS Engine (Independent Resolution)
-*   **Zero Third-Parties**: We bypass "public" resolvers like **Google** and **Cloudflare**.
-*   **QNAME Minimization**: Only sends absolute minimum metadata upstream (RFC 7816).
-*   **Encrypted Local Path**: Native support for **DoH** (RFC 8484) and **DoQ** (RFC 9250).
-*   **Hardened Security**:
-    *   **DNSSEC Stripping Protection**: Rejects responses that have been stripped of security signatures.
-    *   **Access Control**: Resolver strictly restricted to local RFC1918 subnets only.
-    *   **Fingerprint Resistance**: Identity and version queries are explicitly hidden.
-    *   **0x20 Bit Randomization**: Mitigates spoofing attempts through query casing.
-    *   **Glue Hardening**: Strictly verifies delegation records to prevent cache poisoning.
-*   **Optimized Performance**: 
-    *   **Intelligent Caching**: Large message (50MB) and RRset (100MB) caches.
-    *   **Proactive Prefetching**: Automatically renews popular records before they expire.
-    *   **Minimal Responses**: Reduces packet size and amplification risks.
+This stack features a hardened, recursive DNS engine built on **Unbound** and **AdGuard Home**, designed to eliminate upstream reliance and prevent data leakage.
+
+#### 🛡️ Advanced Security Benefits
+*   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: Dramatically improves privacy by only sending the absolute minimum part of a domain name to upstream authoritative servers. Instead of asking a root server for `very.private.example.com`, it only asks for the `.com` TLD, keeping your full intent hidden.
+*   **DNSSEC Validation ([RFC 4033](https://datatracker.ietf.org/doc/html/rfc4033))**: Protects against DNS spoofing and cache poisoning by cryptographically verifying the authenticity of DNS records. The resolver strictly rejects responses that have been stripped of security signatures.
+*   **Recursive Resolution**: Unlike standard DNS which forwards your queries to a "Public" resolver (Google/Cloudflare), this engine talks directly to authoritative root servers. This cuts out the middleman and prevents corporate profiling of your browsing history.
+*   **0x20 Bit Randomization**: A security technique that mitigates spoofing attempts by randomly varying the capitalization of query names (e.g., `ExAmPlE.CoM`), which authoritative servers must match in their response.
+*   **Aggressive Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: Uses NSEC records to generate negative responses locally, reducing traffic to authoritative servers and improving performance while resisting certain types of enumeration.
+*   **Hardened Access Control**: The resolver is strictly restricted to local RFC1918 subnets, preventing unauthorized external usage and potential amplification attacks.
+*   **Fingerprint Resistance**: Identity and version queries are explicitly hidden to prevent scanners from identifying the specific resolver software.
+
+---
 
 ### 🛡️ Blocklist Information & DNS Filtering
 *   **Source**: Blocklists are generated using the [Lyceris-chan DNS Blocklist Generator](https://github.com/Lyceris-chan/dns-blocklist-generator/).
 *   **Composition**: Based on **Hagezi Pro++**, curated for performance and dutch users.
 *   **Note**: This blocklist is **aggressive** by design.
 
-### 📦 Docker Hardened Images (DHI)
-This stack utilizes **Digital Independence (DHI)** images (`dhi.io`) to ensure maximum security. These images follow the principle of least privilege by stripping unnecessary binaries and telemetry.
+### 📦 Docker Hardened Images (DHI) & Source Strategy
+This stack uses a hybrid deployment model to balance extreme privacy with system stability. We don't just "run" apps; we surgically improve them.
 
-**Transparent Hardening**:
-To ensure transparency and compatibility, the deployment script [dynamically patches](zima.sh) upstream Dockerfiles during build. This **surgical hardening** replaces standard base images with hardened alternatives while preserving all original multi-stage structures (including `scratch` and `distroless` runtimes):
-*   **Node.js**: Replaced with `dhi.io/node:20-alpine3.22-dev` (Build stage)
-*   **Bun**: Replaced with `dhi.io/bun:1-alpine3.22-dev` (Build/Runtime)
-*   **Python**: Replaced with `dhi.io/python:3.11-alpine3.22-dev` (Build/Runtime)
-*   **Go**: Replaced with `dhi.io/golang:1-alpine3.22-dev` (Build stage)
-*   **Alpine Base**: All Alpine-based services are repinned to `dhi.io/alpine-base:3.22-dev`
-*   **Nginx**: The dashboard uses `dhi.io/nginx:1.28-alpine3.21`
+#### 🔨 Services Built from Source
+The following services are cloned from their official repositories and compiled locally on your machine:
+*   **Infrastructure**: `hub-api`, `gluetun`, `adguard-home`, `unbound`, `wg-easy`.
+*   **Frontends**: `invidious`, `redlib`, `wikiless`, `rimgo`, `breezewiki`, `scribe`, `anonymousoverflow`.
+*   **Utilities**: `memos`, `vert`, `vertd`, `odido-booster`, `invidious-companion`.
 
-**Automatic Version Pinning (Update Strategy)**:
-The system supports two deployment strategies, configurable via the Management Dashboard:
+**Why build from source?**
+1.  **Transparent Hardening**: We replace standard base images (Debian/Ubuntu) with our own minimal, hardened Alpine variants.
+2.  **Telemetry Stripping**: We remove "phone home" signals and tracking scripts at the build level.
+3.  **Surgical Patches**: We apply critical fixes (like the VERT stack-size fix or BreezeWiki native conversion) that aren't available in upstream Docker images.
+4.  **Hardware Optimization**: Code is compiled specifically for your CPU architecture, ensuring better performance.
+
+#### 📦 Services using Pre-built Images
+The following services use trusted upstream images:
+*   **`Immich`**, **`SearXNG`**, **`Cobalt`**, **`Portainer`**, **`Nginx` (Dashboard)**.
+
+**Why use images?**
+*   **Complexity**: Some apps (like Immich) have extremely complex build pipelines that would take hours to compile on home hardware.
+*   **Security by Design**: These specific upstreams already provide excellent, minimal images that meet our standards without further surgical modification.
+
+---
+
+#### 🛡️ Global Hardening Logic
+The following modifications are applied automatically to **every** service built from source:
+*   **Base Image Migration**: Surgically replaces `FROM alpine`, `FROM debian`, and `FROM ubuntu` with `dhi.io/alpine-base:3.22-dev`.
+*   **Runtime Hardening**: 
+    *   **Node.js**: Replaced with `dhi.io/node:20-alpine3.22-dev`
+    *   **Bun**: Replaced with `dhi.io/bun:1-alpine3.22-dev`
+    *   **Python**: Replaced with `dhi.io/python:3.11-alpine3.22-dev`
+    *   **Go**: Replaced with `dhi.io/golang:1-alpine3.22-dev`
+    *   **Rust**: Replaced with `dhi.io/rust:1-alpine3.22-dev`
+*   **Package Manager Translation**: 
+    *   Converts `apt-get install` to `apk add --no-cache`.
+    *   Removes `apt-get update`, `apt-get clean`, and `/var/lib/apt/lists` cleanup blocks.
+    *   Translates common package names (e.g., `libssl-dev` → `openssl-dev`).
+*   **Telemetry Removal**: All patched runtimes are configured to disable upstream telemetry and phone-home signals by default.
+
+For service-specific modifications (such as memory limits and GPU fallbacks), see the [Surgical Patch Registry](#surgical-patch-registry) below.
+
+**Automatic Version Pinning & A/B System**:
+The system supports two deployment slots (A/B) for safe updates. When you update, the inactive slot is built and verified before traffic is swapped.
 *   **Stable (Default)**: Automatically identifies the latest semantic version tag (e.g., `v1.2.3`) across all git sources. This ensures a production-ready stack while still utilizing local hardened builds.
 *   **Latest**: Tracks the default upstream branch (e.g., `main` or `master`) for bleeding-edge updates and immediate fixes.
 
@@ -490,51 +493,44 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
 *   **Log & Metric Integrity**: Container logs audited for 502/504 errors.
 </details>
 
-<details>
-<summary><strong>🌍 External Services & Privacy Policies</strong> (What connects where?)</summary>
-
-We believe in radical transparency. Here is every external connection this stack makes.
-
 ### Connection Exposure Map
 
 | Service / Domain | Purpose | Exposure |
 | :--- | :--- | :--- |
 | **Frontends (YouTube/Reddit)** | Privacy content retrieval | **🔒 VPN IP** (Gluetun) |
-| **Dashboard Assets** | Fonts (Fontlay) & Icons (JSDelivr) | **🔒 VPN IP** (Proxied via Hub-API) |
-| **VPN Client Management** | Managing WireGuard clients | **🔒 VPN IP** (Proxied via Hub-API) |
-| **VPN Status & IP Check** | Tunnel health monitoring | **🔒 VPN IP** (Proxied via Hub-API) |
+| **Dashboard Assets** | Fonts (Fontlay) & Icons (JSDelivr) | **🔒 VPN IP** (Gluetun) |
+| **VPN Client Management** | Managing WireGuard clients | **🔒 VPN IP** (Gluetun) |
+| **VPN Status & IP Check** | Tunnel health monitoring | **🔒 VPN IP** (Gluetun) |
 | **Health Checks** | VPN Connectivity Verification | **🔒 VPN IP** (Gluetun) |
 | **Container Registries** | Pulling Docker images (Docker/GHCR) | **🏠 Home IP** (Direct) |
 | **Git Repositories** | Cloning source code (GitHub/Codeberg) | **🏠 Home IP** (Direct) |
-| **DNS Blocklists** | AdGuard filter updates | **🏠 Home IP** (Direct) |
+| **DNS Blocklists** | AdGuard filter updates | **🔒 VPN IP** (Gluetun) |
 | **deSEC.io** | SSL DNS Challenges | **🏠 Home IP** (Direct) |
-| **Odido API** | Mobile Data fetching | **🏠 Home IP** (Direct/Proxied) |
+| **Odido API** | Mobile Data fetching | **🏠 Home IP** (Direct) |
 | **SearXNG / Immich** | Search & Media sync | **🔒 VPN IP** (Gluetun) |
 | **Cobalt** | Media downloads | **🏠 Home IP** (Direct) |
 
 ### Detailed Privacy Policies
 
 - **Public IP Detection & Health**:
-  - [ipify.org](https://www.ipify.org/)
-  - [ip-api.com](https://ip-api.com/docs/legal)
-  - [connectivity-check.ubuntu.com](https://ubuntu.com/legal/data-privacy)
+  - [ipify.org](https://www.ipify.org/) (Used to display VPN status; exposes **🔒 VPN IP**)
+  - [ip-api.com](https://ip-api.com/docs/legal) (Used for geolocation health; exposes **🔒 VPN IP**)
+  - [connectivity-check.ubuntu.com](https://ubuntu.com/legal/data-privacy) (Used for VPN tunnel verification; exposes **🔒 VPN IP**)
 - **Infrastructure & Assets**:
-  - [deSEC.io](https://desec.io/privacy-policy)
-  - [fontlay.com](https://github.com/miroocloud/fontlay)
-  - [cdn.jsdelivr.net](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net)
+  - [deSEC.io](https://desec.io/privacy-policy) (SSL challenges via **🏠 Home IP**)
+  - [fontlay.com](https://github.com/miroocloud/fontlay) (Fetched via **🔒 VPN IP**)
+  - [cdn.jsdelivr.net](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net) (Fetched via **🔒 VPN IP**)
 - **Registries & Source Code**:
-  - [Docker Hub / dhi.io](https://www.docker.com/legal/docker-privacy-policy/)
-  - [GitHub / GHCR](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement)
-  - [Codeberg](https://codeberg.org/privacy)
-  - [Quay.io](https://quay.io/privacy)
-  - [SourceHut](https://man.sr.ht/privacy.md)
-  - [Gitdab](https://gitdab.com/)
+  - [Docker Hub / dhi.io](https://www.docker.com/legal/docker-privacy-policy/) (Image pulls via **🏠 Home IP**)
+  - [GitHub / GHCR](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) (Source cloning via **🏠 Home IP**)
+  - [Codeberg](https://codeberg.org/privacy) (Source cloning via **🏠 Home IP**)
+  - [Quay.io](https://quay.io/privacy) (Image pulls via **🏠 Home IP**)
+  - [SourceHut](https://man.sr.ht/privacy.md) (Source cloning via **🏠 Home IP**)
+  - [Gitdab](https://gitdab.com/) (Source cloning via **🏠 Home IP**)
 - **Data Providers**:
-  - [DNS Blocklists (GitHub)](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement)
-  - [Odido API](https://www.odido.nl/privacy)
-  - [SearXNG Privacy](https://searxng.github.io/searxng/admin/installation.html)
-  - [Immich Privacy](https://immich.app/docs/features/privacy/)
-  - [Cobalt Privacy](https://github.com/imputnet/cobalt)
+  - [DNS Blocklists (GitHub)](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) (Fetched via **🔒 VPN IP**)
+  - [Odido API](https://www.odido.nl/privacy) (Automated data via **🏠 Home IP**)
+  - [Immich Privacy Policy](https://docs.immich.app/privacy-policy)
 
 </details>
 
@@ -548,389 +544,20 @@ This software is provided "as is". While designed for security, the user is resp
 
 *Built with ❤️ for digital sovereignty.*
 
----
-**Build Context Sources:**
-[1]: https://github.com/iv-org/invidious/blob/master/docker/Dockerfile
-[2]: https://github.com/iv-org/invidious-companion/blob/master/Dockerfile
-[3]: https://github.com/redlib-org/redlib/blob/main/Dockerfile.alpine
-[4]: https://codeberg.org/rimgo/rimgo/src/branch/main/Dockerfile
-[5]: https://github.com/Metastem/Wikiless/blob/main/Dockerfile
-[6]: https://git.sr.ht/~edwardloveall/scribe/tree/master/item/Dockerfile
-[7]: https://github.com/PussTheCat-org/docker-breezewiki-quay/blob/master/docker/Dockerfile
-[8]: https://github.com/httpjamesm/anonymousoverflow/blob/main/Dockerfile
-[9]: https://github.com/usememos/memos/blob/main/scripts/Dockerfile
-[10]: https://github.com/VERT-sh/VERT/blob/main/Dockerfile
-[11]: https://github.com/VERT-sh/vertd/blob/main/Dockerfile
-[12]: https://github.com/AdguardTeam/AdGuardHome/blob/master/docker/Dockerfile
-[13]: https://github.com/klutchell/unbound-docker/blob/main/Dockerfile
-[14]: https://github.com/wg-easy/wg-easy/blob/master/Dockerfile
-[15]: https://github.com/qdm12/gluetun/blob/master/Dockerfile
-[16]: https://github.com/portainer/portainer/blob/develop/build/linux/alpine.Dockerfile
-[17]: https://github.com/Lyceris-chan/odido-bundle-booster/blob/main/Dockerfile
-[18]: https://github.com/searxng/searxng/blob/master/Dockerfile
-[19]: https://github.com/imputnet/cobalt/blob/master/Dockerfile
-[20]: https://github.com/immich-app/immich/blob/main/Dockerfile
-
-> **Note**: All "Frontend" services are routed through the VPN tunnel automatically.
-
----
-
-<a id="network-configuration"></a>
-## 🌐 Network Configuration
-
-To fully utilize the stack, configure your network:
-
-### 1. Remote Access (VPN)
-Forward **UDP Port 51820** on your router to your ZimaOS device.
-*   This allows you to connect *back* to your home securely from anywhere using the WireGuard app.
-
-### 2. DNS Protection
-Point your router's **Primary DNS** to your ZimaOS IP address.
-*   This forces all devices on your WiFi to use AdGuard Home for ad-blocking.
-*   **Important**: Disable "Random MAC Address" on your devices for persistent protection.
-
-### 3. Mobile Private DNS (Android)
-If you configured deSEC:
-*   Set your Android "Private DNS" to: `your-domain.dedyn.io`
-*   **Requirement**: You must be connected to your home **WireGuard VPN** for this to work, unless you manually forward port 853 (DoT) on your router.
-*   **Benefit**: Encrypts all DNS queries on 4G/5G, preventing mobile carrier tracking.
-
-### 4. Split Tunnel Configuration & Bandwidth Optimization
-This stack uses a **Dual Split Tunnel** architecture via Gluetun and WG-Easy to ensure performance:
-*   **VPN-Gated Services (Gluetun)**: Privacy frontends (Invidious, Redlib, etc.) are locked inside the VPN container. They cannot access the internet if the VPN disconnects (Killswitch enabled).
-*   **Remote Access Optimization (WG-Easy)**: When connected via the WireGuard app, only your requests to the Hub and DNS queries are sent home. This preserves your mobile data and speed: high-bandwidth streaming services like Netflix or native YouTube apps maintain their full, direct speed on your device rather than being forced to route back through your home upload connection first.
-*   **Local-Direct Services**: Core management tools (Dashboard, Portainer, AdGuard UI) remain accessible directly via your LAN IP. This ensures you never lose control of your hub even if the VPN provider has an outage.
-
-### 5. Advanced: Direct Encrypted DNS (Optional)
-To use "Private DNS" on Android or DoH in browsers **without** connecting to the WireGuard VPN first:
-1.  **Forward Port 853 (TCP)**: Allows Android Private DNS / DoT.
-2.  **Forward Port 443 (TCP)**: Allows DNS-over-HTTPS (DoH).
-
-*   **⚠️ Privacy Warning**: While this encrypts your DNS queries, your ISP can still see the **IP address** you connect to and the **SNI** (Server Name) in the initial TLS handshake. For complete privacy from your ISP, use the VPN tunnel.
-*   **Security Warning**: This exposes your AdGuard instance to the public internet. Ensure you have configured "Allowed clients" in AdGuard Home settings to prevent unauthorized use (DNS Amplification attacks).
-
----
-
-<a id="advanced-setup"></a>
-## 📡 Advanced Setup: OpenWrt & Double NAT
-
-If you are running a real router like **OpenWrt** behind your ISP modem, you are in a **Double NAT** situation. You need to fix the routing so your packets actually arrive.
-
-### 1. Static IP Assignment (DHCP Lease)
-Assign a static lease so your Privacy Hub doesn't wander off to a different IP every time the power cycles.
-
 <details>
-<summary>💻 <strong>CLI: UCI Commands for Static Lease</strong> (Click to expand)</summary>
+<summary>🛠️ <strong>Surgical Patch Registry</strong> (Click to expand)</summary>
 
-```bash
-# Add the static lease (Replace MAC and IP with your own hardware's values)
-uci add dhcp host
-uci set dhcp.@host[-1].name='ZimaOS-Privacy-Hub'
-uci set dhcp.@host[-1].mac='00:11:22:33:44:55' # <--- REPLACE THIS WITH YOUR MAC
-uci set dhcp.@host[-1].ip='192.168.1.100'      # <--- REPLACE THIS WITH YOUR DESIRED IP
-uci commit dhcp
-/etc/init.d/dnsmasq restart
-```
-</details>
-
-### 2. Port Forwarding & Firewall
-OpenWrt is the gatekeeper. Point the traffic to your machine and then actually open the door.
-
-<details>
-<summary>💻 <strong>CLI: UCI Commands for Firewall</strong> (Click to expand)</summary>
-
-```bash
-# 1. Add Port Forwarding (Replace dest_ip with your ZimaOS machine's IP)
-uci add firewall redirect
-uci set firewall.@redirect[-1].name='Forward-WireGuard'
-uci set firewall.@redirect[-1].src='wan'
-uci set firewall.@redirect[-1].proto='udp'
-uci set firewall.@redirect[-1].src_dport='51820'
-uci set firewall.@redirect[-1].dest_ip='192.168.1.100' # <--- REPLACE THIS WITH YOUR IP
-uci set firewall.@redirect[-1].dest_port='51820'
-uci set firewall.@redirect[-1].target='DNAT'
-
-# 2. Add Traffic Rule (Allowance)
-uci add firewall rule
-uci set firewall.@rule[-1].name='Allow-WireGuard-Inbound'
-uci set firewall.@rule[-1].src='wan'
-uci set firewall.@rule[-1].proto='udp'
-uci set firewall.@rule[-1].dest_port='51820'
-uci set firewall.@rule[-1].target='ACCEPT'
-
-# Apply the changes
-uci commit firewall
-/etc/init.d/firewall restart
-```
-</details>
-
-### 3. DNS Hijacking (Force Compliance)
-Some devices (IoT, Smart TVs) hardcode DNS servers (like `8.8.8.8`) to bypass your filters. You can force them to comply using a **NAT Redirect** rule.
-
-To implement this on your router, refer to the following official guides:
-*   [OpenWrt Guide: Intercepting DNS](https://openwrt.org/docs/guide-user/firewall/fw3_configurations/intercept_dns) (Step-by-step NAT Redirection)
-*   [OpenWrt Guide: Blocking DoH (banIP)](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/ban_ip) (Preventing filter bypass via encrypted DNS)
-
----
-
-<a id="privacy--architecture"></a>
-## 🛡️ Privacy & Architecture
-
-### The "Trust Gap"
-If you don't own the hardware and the code running your network, you don't own your privacy. You're just renting a temporary privilege.
-
-<details>
-<summary>🔍 <strong>Deep Dive: Why Self-Host?</strong> (Click to expand)</summary>
-
-*   **The Google Profile**: Google's DNS (8.8.8.8) turns you into a data source. They build profiles on your health, finances, and interests based on every domain you resolve.
-*   **The Cloudflare Illusion**: Even "neutral" providers can be forced to censor content by local governments.
-*   **ISP Predation**: Your ISP sees everything. They log, monetize, and sell your browsing history to data brokers.
-
-**This stack cuts out the middleman.**
-</details>
-
-### Zero-Leaks Asset Architecture
-External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN proxy** and served locally. Your public home IP is never exposed to CDNs.
-
-**Privacy Enforcement Logic:**
-1.  **Container Initiation**: When the Hub API container starts, it initiates an asset verification check.
-2.  **Proxy Routing**: If assets are missing, the Hub API routes download requests through the Gluetun VPN container (acting as an HTTP proxy on port 8888).
-3.  **Encapsulated Fetching**: All requests to external CDNs (Fontlay, JSDelivr) occur *inside* the VPN tunnel. Upstream providers only see the VPN IP.
-4.  **Local Persistence**: Assets are saved to a persistent Docker volume (`/assets`).
-5.  **Offline Serving**: The Management Dashboard (Nginx) serves all UI resources exclusively from this local volume.
-
-### Recursive DNS Engine (Independent Resolution)
-*   **Zero Third-Parties**: We bypass "public" resolvers like **Google** and **Cloudflare**.
-*   **QNAME Minimization**: Only sends absolute minimum metadata upstream (RFC 7816).
-*   **Encrypted Local Path**: Native support for **DoH** (RFC 8484) and **DoQ** (RFC 9250).
-*   **Hardened Security**:
-    *   **DNSSEC Stripping Protection**: Rejects responses that have been stripped of security signatures.
-    *   **Access Control**: Resolver strictly restricted to local RFC1918 subnets only.
-    *   **Fingerprint Resistance**: Identity and version queries are explicitly hidden.
-    *   **0x20 Bit Randomization**: Mitigates spoofing attempts through query casing.
-    *   **Glue Hardening**: Strictly verifies delegation records to prevent cache poisoning.
-*   **Optimized Performance**: 
-    *   **Intelligent Caching**: Large message (50MB) and RRset (100MB) caches.
-    *   **Proactive Prefetching**: Automatically renews popular records before they expire.
-    *   **Minimal Responses**: Reduces packet size and amplification risks.
-
-### 🛡️ Blocklist Information & DNS Filtering
-*   **Source**: Blocklists are generated using the [Lyceris-chan DNS Blocklist Generator](https://github.com/Lyceris-chan/dns-blocklist-generator/).
-*   **Composition**: Based on **Hagezi Pro++**, curated for performance and dutch users.
-*   **Note**: This blocklist is **aggressive** by design.
-
-### 📦 Docker Hardened Images (DHI)
-This stack utilizes **Digital Independence (DHI)** images (`dhi.io`) to ensure maximum security. These images follow the principle of least privilege by stripping unnecessary binaries and telemetry.
-
-**Transparent Hardening**:
-To ensure transparency and compatibility, the deployment script [dynamically patches](zima.sh) upstream Dockerfiles during build. This **surgical hardening** replaces standard base images with hardened alternatives while preserving all original multi-stage structures (including `scratch` and `distroless` runtimes):
-*   **Node.js**: Replaced with `dhi.io/node:20-alpine3.22-dev` (Build stage)
-*   **Bun**: Replaced with `dhi.io/bun:1-alpine3.22-dev` (Build/Runtime)
-*   **Python**: Replaced with `dhi.io/python:3.11-alpine3.22-dev` (Build/Runtime)
-*   **Go**: Replaced with `dhi.io/golang:1-alpine3.22-dev` (Build stage)
-*   **Alpine Base**: All Alpine-based services are repinned to `dhi.io/alpine-base:3.22-dev`
-*   **Nginx**: The dashboard uses `dhi.io/nginx:1.28-alpine3.21`
-
-**Automatic Version Pinning (Update Strategy)**:
-The system supports two deployment strategies, configurable via the Management Dashboard:
-*   **Stable (Default)**: Automatically identifies the latest semantic version tag (e.g., `v1.2.3`) across all git sources. This ensures a production-ready stack while still utilizing local hardened builds.
-*   **Latest**: Tracks the default upstream branch (e.g., `main` or `master`) for bleeding-edge updates and immediate fixes.
-
-### 🛡️ Self-Healing & High Availability
-*   **VPN Monitoring**: Gluetun is continuously monitored. Docker restarts the gateway if the tunnel stalls.
-*   **Frontend Auto-Recovery**: Privacy frontends utilize `restart: always`.
-*   **Health-Gated Launch**: Infrastructure services must be `healthy` before frontends start.
-
-### Data Minimization & Anonymity
-*   **Specific User-Agent Signatures**: Requests use industry-standard signatures to blend in.
-*   **Zero Personal Data**: No API keys or hardware IDs are transmitted during checks.
-*   **Isolated Environment**: Requests execute from within containers without host-level access.
-
----
-
-<a id="security-standards"></a>
-## 🔒 Security Standards
-
-### DHI Hardened Images
-We don't use standard "official" images where we can avoid it. We use **DHI hardened images** (`dhi.io`).
-*   **Why?**: Standard images are often packed with "convenience" tools that are security liabilities.
-*   **The Benefit**: Hardened images minimize the attack surface by removing unnecessary binaries and libraries, following the principle of least privilege. (Concept based on [CIS Benchmarks](https://www.cisecurity.org/benchmark/docker) and minimal base image best practices).
-
-### The "Silent" Security Model
-Opening a port for WireGuard does **not** expose your home to scanning.
-*   **Silent Drop**: WireGuard does not respond to packets it doesn't recognize. To a scanner, the port looks closed.
-*   **DDoS Mitigation**: Because it's silent to unauthenticated packets, it is inherently resistant to flooding attacks.
-*   **Cryptographic Ownership**: You can't "guess" a password. You need a valid 256-bit key.
-
----
-## 🔧 Troubleshooting
-
-| Issue | Potential Solution |
-| :--- | :--- |
-| **"My internet broke!"** | DNS resolution failed. Temporarily set your router DNS to **Quad9** (`9.9.9.9`) or **Mullvad** (`194.242.2.2`) to restore access, then check the Hub status. |
-| **"I can't connect remotely"** | **1.** Verify Port 51820 (UDP) is forwarded. **2.** If using OpenWrt, ensure "Double NAT" is handled (ISP -> OpenWrt -> Hub). **3.** Check if your ISP uses CGNAT. |
-| **"Services are slow"** | **1.** Check VPN throughput in the dashboard. **2.** Try a different ProtonVPN server config. **3.** Ensure your host has sufficient CPU/RAM for compilation tasks. |
-| **"SSL is invalid"** | Check `certbot/monitor.log` via dashboard. Ensure ports 80/443 are reachable for validation. Verify your deSEC token. |
-
-> 💡 **Pro-Tip**: Use `docker ps` to verify all containers are `Up (healthy)`. If a container is stuck, use `docker logs <name>` to see why.
-
----
-
-<a id="maintenance"></a>
-## 💾 Maintenance
-
-*   **Update**: Click "Check Updates" in the dashboard or run `./zima.sh` again.
-*   **Backup**:
-    ```bash
-    # Manual backup of critical data (Secrets, Configs, Databases)
-    cp -r /data/AppData/privacy-hub /backup/location/
-    ```
-*   **Uninstall**:
-    ```bash
-    ./zima.sh -x
-    ```
-    *(Note: This **only** removes the containers and volumes created by this specific privacy stack. Your personal documents, photos, and unrelated Docker containers are **never** touched.)*
-
----
-
-## 🧩 Advanced Usage: Add Your Own Services
-
-<details>
-<summary><strong>🔧 Add Your Own Services</strong> (advanced, not needed for new users)</summary>
-
-The stack uses a modular generation system. To add a new service, you will need to modify the generator scripts in the `lib/` directory.
-
-### 1) Add to Compose (`lib/compose_gen.sh`)
-
-Locate the `generate_compose` function and add your service block:
-
-```bash
-    if should_deploy "myservice"; then
-    cat >> "$COMPOSE_FILE" <<EOF
-  myservice:
-    image: my-image:latest
-    container_name: myservice
-    networks: [dhi-frontnet]
-    restart: unless-stopped
-EOF
-    fi
-```
-
-If you want the service to run through the VPN, use `network_mode: "service:gluetun"` and `depends_on: gluetun`.
-
-### 2) Monitoring & Health (`lib/scripts.sh`)
-
-Update the service status loop inside the `generate_scripts` function (specifically the `wg_api.py` generation block or `wg_control.sh` template).
-
-- Add `"myservice:1234"` to the service list in the API handler.
-- If routed through Gluetun, map it to the `gluetun` target host.
-
-### 3) Dashboard UI (`lib/scripts.sh`)
-
-The dashboard catalog is generated in `lib/scripts.sh`. Find the `cat > "$SERVICES_JSON"` block and add your entry:
-
-```json
-"myservice": {
-  "name": "My Service",
-  "description": "Short description.",
-  "category": "apps",
-  "order": 100,
-  "url": "http://\$LAN_IP:1234"
-}
-```
-
-### 4) Watchtower Updates
-
-- To opt out, add `com.centurylinklabs.watchtower.enable=false` under the service labels.
-- For build-based services, the dashboard's "Update" feature handles the rebuild process.
+| Service / Layer | Target / Upstream | Specific Modifications & Fixes Applied | Local Logic |
+| :--- | :--- | :--- | :--- |
+| **BreezeWiki** | [PussTheCat-org/docker-breezewiki](https://github.com/PussTheCat-org/docker-breezewiki-quay) | **Native Conversion**: Migrated from Debian to Alpine. Replaced `apt` logic with `apk`. Implemented localized Racket package management. | [lib/sources.sh](lib/sources.sh) |
+| **Invidious Companion** | [iv-org/invidious-companion](https://github.com/iv-org/invidious-companion) | **Build Reliability**: Resolved compilation stack overflow by injecting `ENV RUST_MIN_STACK=16777216`. Forced lockfile regeneration. | [lib/sources.sh](lib/sources.sh) |
+| **VERTd** | [vert-sh/vertd](https://github.com/VERT-sh/vertd) | **Hybrid Optimization**: Implemented NVIDIA GPU detection logic. Added Alpine fallback for non-GPU environments. Fixed static compilation. | [lib/sources.sh](lib/sources.sh) |
+| **VERT** | [vert-sh/vert](https://github.com/VERT-sh/VERT) | **Runtime Hardening**: Replaced Debian Bun/Node layers with DHI hardened Alpine variants. Optimized memory boundaries. | [lib/sources.sh](lib/sources.sh) |
+| **Base Images** | Global (various) | **DHI Hardening**: Surgically replaced all `FROM alpine/debian/ubuntu` instructions with `dhi.io/alpine-base:3.22-dev`. | [lib/sources.sh](lib/sources.sh) |
+| **Runtimes** | Global (various) | **DHI Version Pinning**: Replaced Node, Go, Python, and Bun base images with hardened, telemetry-free DHI equivalents. | [lib/sources.sh](lib/sources.sh) |
+| **Package Logic** | Global (various) | **Cross-Distro Translation**: Automated regex transformation of `apt-get install` commands into `apk add` equivalents. | [lib/sources.sh](lib/sources.sh) |
 
 </details>
 
-<details>
-<summary><strong>🧪 Automated Verification</strong> (Click to expand)</summary>
 
-To ensure a "set and forget" experience, every release undergoes a rigorous automated verification pipeline:
-*   **Interaction Audit**: Puppeteer-based suite simulates real user behavior.
-*   **Non-Interactive Deployment**: verified `-p -y` flow for zero-prompt success.
-*   **M3 Compliance Check**: Automated layout audits ensure the dynamic grid and chips adapt to any screen size.
-*   **Log & Metric Integrity**: Container logs audited for 502/504 errors.
-</details>
 
-<details>
-<summary><strong>🌍 External Services & Privacy Policies</strong> (What connects where?)</summary>
-
-We believe in radical transparency. Here is every external connection this stack makes.
-
-### Connection Exposure Map
-
-| Service / Domain | Purpose | Exposure |
-| :--- | :--- | :--- |
-| **Frontends (YouTube/Reddit)** | Privacy content retrieval | **🔒 VPN IP** (Gluetun) |
-| **Dashboard Assets** | Fonts (Fontlay) & Icons (JSDelivr) | **🔒 VPN IP** (Proxied via Hub-API) |
-| **VPN Client Management** | Managing WireGuard clients | **🔒 VPN IP** (Proxied via Hub-API) |
-| **VPN Status & IP Check** | Tunnel health monitoring | **🔒 VPN IP** (Proxied via Hub-API) |
-| **Health Checks** | VPN Connectivity Verification | **🔒 VPN IP** (Gluetun) |
-| **Container Registries** | Pulling Docker images (Docker/GHCR) | **🏠 Home IP** (Direct) |
-| **Git Repositories** | Cloning source code (GitHub/Codeberg) | **🏠 Home IP** (Direct) |
-| **DNS Blocklists** | AdGuard filter updates | **🏠 Home IP** (Direct) |
-| **deSEC.io** | SSL DNS Challenges | **🏠 Home IP** (Direct) |
-| **Odido API** | Mobile Data fetching | **🏠 Home IP** (Direct/Proxied) |
-
-### Detailed Privacy Policies
-
-- **Public IP Detection & Health**:
-  - [ipify.org](https://www.ipify.org/)
-  - [ip-api.com](https://ip-api.com/docs/legal)
-  - [connectivity-check.ubuntu.com](https://ubuntu.com/legal/data-privacy)
-- **Infrastructure & Assets**:
-  - [deSEC.io](https://desec.io/privacy-policy)
-  - [fontlay.com](https://github.com/miroocloud/fontlay)
-  - [cdn.jsdelivr.net](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net)
-- **Registries & Source Code**:
-  - [Docker Hub / dhi.io](https://www.docker.com/legal/docker-privacy-policy/)
-  - [GitHub / GHCR](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement)
-  - [Codeberg](https://codeberg.org/privacy)
-  - [Quay.io](https://quay.io/privacy)
-  - [SourceHut](https://man.sr.ht/privacy.md)
-  - [Gitdab](https://gitdab.com/)
-- **Data Providers**:
-  - [DNS Blocklists (GitHub)](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement)
-  - [Odido API](https://www.odido.nl/privacy)
-  - [SearXNG Privacy](https://searxng.github.io/searxng/admin/installation.html)
-  - [Immich Privacy](https://immich.app/docs/features/privacy/)
-  - [Cobalt Privacy](https://github.com/imputnet/cobalt)
-
-</details>
-
----
-
-## 🚨 Disclaimer
-
-This software is provided "as is". While designed for security, the user is responsible for ensuring their specific network configuration is safe. **Do not use GitHub Codespaces for production deployment.**
-
----
-
-*Built with ❤️ for digital sovereignty.*
-
----
-**Build Context Sources:**
-[1]: https://github.com/iv-org/invidious/blob/master/docker/Dockerfile
-[2]: https://github.com/iv-org/invidious-companion/blob/master/Dockerfile
-[3]: https://github.com/redlib-org/redlib/blob/main/Dockerfile.alpine
-[4]: https://codeberg.org/rimgo/rimgo/src/branch/main/Dockerfile
-[5]: https://github.com/Metastem/Wikiless/blob/main/Dockerfile
-[6]: https://git.sr.ht/~edwardloveall/scribe/tree/master/item/Dockerfile
-[7]: https://github.com/PussTheCat-org/docker-breezewiki-quay/blob/master/docker/Dockerfile
-[8]: https://github.com/httpjamesm/anonymousoverflow/blob/main/Dockerfile
-[9]: https://github.com/usememos/memos/blob/main/scripts/Dockerfile
-[10]: https://github.com/VERT-sh/VERT/blob/main/Dockerfile
-[11]: https://github.com/VERT-sh/vertd/blob/main/Dockerfile
-[12]: https://github.com/AdguardTeam/AdGuardHome/blob/master/docker/Dockerfile
-[13]: https://github.com/klutchell/unbound-docker/blob/main/Dockerfile
-[14]: https://github.com/wg-easy/wg-easy/blob/master/Dockerfile
-[15]: https://github.com/qdm12/gluetun/blob/master/Dockerfile
-[16]: https://github.com/portainer/portainer/blob/develop/build/linux/alpine.Dockerfile
-[17]: https://github.com/Lyceris-chan/odido-bundle-booster/blob/main/Dockerfile
-[18]: https://github.com/searxng/searxng/blob/master/Dockerfile
-[19]: https://github.com/imputnet/cobalt/blob/master/Dockerfile
-[20]: https://github.com/immich-app/immich/blob/main/Dockerfile

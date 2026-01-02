@@ -123,7 +123,8 @@ deploy_stack() {
     fi
     echo ""
     echo "   📁 Credentials saved to: $BASE_DIR/.secrets"
-    echo "   📄 Importable CSV: $BASE_DIR/protonpass_import.csv"
+    echo "   📄 Importable CSV:      $BASE_DIR/protonpass_import.csv"
+    echo "   📄 LibRedirect JSON:    $PROJECT_ROOT/libredirect_import.json"
     echo "=========================================================="
     
     if [ "$CLEAN_EXIT" = true ]; then

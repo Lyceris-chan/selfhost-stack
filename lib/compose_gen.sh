@@ -637,7 +637,7 @@ EOF
       - "casaos.skip=true"
       - "io.dhi.hardened=true"
     environment:
-      - PUBLIC_URL=$VERTD_PUB_URL
+      - PUBLIC_URL=http://${CONTAINER_PREFIX}vertd:$PORT_INT_VERTD
     # Hardware Acceleration (Intel Quick Sync, AMD VA-API, NVIDIA)
 $VERTD_DEVICES
     restart: always
@@ -666,7 +666,7 @@ $(if [ -n "$VERTD_NVIDIA" ]; then echo "        reservations:
       - PUB_ENV=production
       - PUB_DISABLE_ALL_EXTERNAL_REQUESTS=true
       - PUB_DISABLE_FAILURE_BLOCKS=true
-      - PUB_VERTD_URL=$VERTD_PUB_URL
+      - PUB_VERTD_URL=http://${CONTAINER_PREFIX}vertd:$PORT_INT_VERTD
       - PUB_DONATION_URL=
       - PUB_STRIPE_KEY=
       - PUB_DISABLE_DONATIONS=true
