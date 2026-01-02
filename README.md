@@ -514,20 +514,27 @@ The following modifications are applied to upstream Dockerfiles and source code 
 | **BreezeWiki** | [PussTheCat-org/docker-breezewiki](https://github.com/PussTheCat-org/docker-breezewiki-quay) | **Native Conversion**: Migrated from Debian to Alpine. Replaced `apt` logic with `apk`. Implemented localized Racket package management. | [lib/sources.sh#L104-L117](lib/sources.sh#L104-L117) |
 | **Invidious Companion** | [iv-org/invidious-companion](https://github.com/iv-org/invidious-companion) | **Build Reliability**: Resolved Rust compilation stack overflow by injecting `ENV RUST_MIN_STACK=16777216`. Forced lockfile regeneration to prevent stale dependency issues. | [lib/sources.sh#L141-L149](lib/sources.sh#L141-L149) |
 | **VERTd** | [VERT-sh/vertd](https://github.com/VERT-sh/vertd) | **Hybrid Optimization**: Implemented NVIDIA GPU detection logic. Added Alpine fallback for non-GPU environments. Fixed static compilation with `openssl-libs-static`. | [lib/sources.sh#L120-L138](lib/sources.sh#L120-L138) |
-| **VERT** | [VERT-sh/vert](https://github.com/VERT-sh/VERT) | **Runtime Hardening**: Replaced Debian Bun/Node layers with DHI hardened Alpine variants. Optimized memory boundaries and disabled external telemetry. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
-| **Invidious** | [iv-org/invidious](https://github.com/iv-org/invidious) | **Base Hardening**: Alpine migration with DHI base image. Standard package translation applied. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
-| **Redlib** | [redlib-org/redlib](https://github.com/redlib-org/redlib) | **Security Hardening**: Runs as `nobody` user, read-only filesystem, all capabilities dropped. DHI Alpine base. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
-| **Wikiless** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) | **Base Hardening**: Alpine migration with DHI base image. Node.js runtime replaced with hardened variant. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
-| **Rimgo** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) | **Base Hardening**: Alpine migration with DHI Go runtime. Standard package translation applied. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
-| **AnonOverflow** | [httpjamesm/AnonymousOverflow](https://github.com/httpjamesm/AnonymousOverflow) | **Base Hardening**: Alpine migration with DHI base image. Standard package translation applied. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
-| **Scribe** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) | **Base Hardening**: Alpine migration with DHI base image. Crystal runtime compatibility fixes. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
-| **Memos** | [usememos/memos](https://github.com/usememos/memos) | **Base Hardening**: Alpine migration with DHI base image. Go and Node.js runtimes replaced with hardened variants. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
-| **Gluetun** | [qdm12/gluetun](https://github.com/qdm12/gluetun) | **Base Hardening**: DHI Alpine base applied. Standard package translation. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
-| **AdGuard Home** | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) | **Base Hardening**: DHI Alpine base applied. Go runtime replaced with hardened variant. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
-| **Unbound** | [klutchell/unbound-docker](https://github.com/klutchell/unbound-docker) | **Base Hardening**: DHI Alpine base applied. Recursive resolver configuration hardened. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
-| **WG-Easy** | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) | **Base Hardening**: DHI Alpine base applied. Node.js runtime replaced with hardened variant. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
-| **Odido Booster** | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) | **Base Hardening**: DHI Alpine base applied. Python runtime replaced with hardened variant. | [lib/sources.sh#L153-L162](lib/sources.sh#L153-L162) |
 | **Hub API** | [Local Source](/hub-api) | **Custom Build**: Purpose-built orchestration API using DHI Python base. Full telemetry isolation. | [lib/sources.sh#L167-L187](lib/sources.sh#L167-L187) |
+
+#### Standard Hardening (Generic Patch Loop)
+
+The following services receive standard DHI hardening via the [`patch_bare` function](lib/sources.sh#L62-L100), applied through the [generic patch loop](lib/sources.sh#L153-L162):
+
+| Service | Upstream Source | Hardening Applied |
+| :--- | :--- | :--- |
+| **VERT** | [VERT-sh/vert](https://github.com/VERT-sh/VERT) | DHI Alpine base, Bun/Node runtime hardening, telemetry disabled |
+| **Invidious** | [iv-org/invidious](https://github.com/iv-org/invidious) | DHI Alpine base, standard package translation |
+| **Redlib** | [redlib-org/redlib](https://github.com/redlib-org/redlib) | DHI Alpine base, runs as `nobody` user, read-only filesystem |
+| **Wikiless** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) | DHI Alpine base, Node.js runtime hardening |
+| **Rimgo** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) | DHI Alpine base, Go runtime hardening |
+| **AnonOverflow** | [httpjamesm/AnonymousOverflow](https://github.com/httpjamesm/AnonymousOverflow) | DHI Alpine base, standard package translation |
+| **Scribe** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) | DHI Alpine base, Crystal runtime compatibility fixes |
+| **Memos** | [usememos/memos](https://github.com/usememos/memos) | DHI Alpine base, Go and Node.js runtime hardening |
+| **Gluetun** | [qdm12/gluetun](https://github.com/qdm12/gluetun) | DHI Alpine base, standard package translation |
+| **AdGuard Home** | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) | DHI Alpine base, Go runtime hardening |
+| **Unbound** | [klutchell/unbound-docker](https://github.com/klutchell/unbound-docker) | DHI Alpine base, recursive resolver hardening |
+| **WG-Easy** | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) | DHI Alpine base, Node.js runtime hardening |
+| **Odido Booster** | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) | DHI Alpine base, Python runtime hardening |
 
 #### Global Patches (Applied to All Built Services)
 
