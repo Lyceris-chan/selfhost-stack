@@ -499,6 +499,28 @@ redis:
   url: redis://${CONTAINER_PREFIX}searxng-redis:6379/0
 EOF
 
+    # Immich Configuration
+    $SUDO mkdir -p "$CONFIG_DIR/immich"
+    cat <<EOF | $SUDO tee "$CONFIG_DIR/immich/immich.json" >/dev/null
+{
+  "database": {
+    "host": "${CONTAINER_PREFIX}immich-db",
+    "port": 5432,
+    "user": "immich",
+    "password": "$IMMICH_DB_PASSWORD",
+    "database": "immich"
+  },
+  "redis": {
+    "host": "${CONTAINER_PREFIX}immich-redis",
+    "port": 6379
+  },
+  "machineLearning": {
+    "enabled": true,
+    "url": "http://${CONTAINER_PREFIX}immich-ml:3003"
+  }
+}
+EOF
+
     cat <<EOF | $SUDO tee "$ENV_DIR/anonymousoverflow.env" >/dev/null
 APP_URL=http://$LAN_IP:$PORT_ANONYMOUS
 JWT_SIGNING_SECRET=$ANONYMOUS_SECRET
