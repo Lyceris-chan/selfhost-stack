@@ -639,8 +639,12 @@ Before performing any maintenance operations, **always back up your data first**
 > ⚠️ **WARNING**: Using `-x` (Factory Reset) or clearing service databases **permanently deletes all data**. This action **cannot be undone**!
 
 **Backup commands:**
+
+> 💡 **Note**: Replace `/data/AppData/privacy-hub` with your actual installation path. The default path is shown below, but yours may differ based on your system configuration.
+
 ```bash
 # Full backup of all Privacy Hub data
+# Adjust the path to match your installation (check your BASE_DIR)
 tar -czf privacy-hub-backup-$(date +%Y%m%d).tar.gz /data/AppData/privacy-hub
 
 # Backup only secrets and configs (minimal)
@@ -656,6 +660,7 @@ tar -czf immich-backup.tar.gz /data/AppData/privacy-hub/immich
 *   **Backup**:
     ```bash
     # Manual backup of critical data (Secrets, Configs, Databases)
+    # Adjust path to match your installation
     cp -r /data/AppData/privacy-hub /backup/location/
     ```
 *   **Uninstall**:

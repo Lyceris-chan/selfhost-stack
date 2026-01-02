@@ -145,8 +145,7 @@ clean_environment() {
         echo "│  If you have stored ANYTHING of value in these services,        │"
         echo "│  STOP NOW and create a backup before proceeding!                │"
         echo "│                                                                 │"
-        echo "│  Backup command: tar -czf privacy-hub-backup.tar.gz \\           │"
-        echo "│                  /workspaces/selfhost-stack/data/AppData        │"
+        echo "│  Backup command: tar -czf privacy-hub-backup.tar.gz $DATA_DIR   │"
         echo "└─────────────────────────────────────────────────────────────────┘"
         echo ""
     fi
