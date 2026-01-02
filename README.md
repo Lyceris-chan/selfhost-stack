@@ -10,9 +10,8 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
 *   **🔒 Data Independence**: Host your own frontends (Invidious, Redlib, etc.) to stop upstream giants like Google and Reddit from profiling you.
 *   **🚫 Ad-Free by Design**: Network-wide ad blocking via AdGuard Home + native removal of sponsored content in video/social feeds.
 *   **🕵️ VPN-Gated Privacy**: All external requests are routed through a **Gluetun VPN** tunnel. Upstream providers only see your VPN IP, keeping your home identity hidden.
+*   **📱 No App Prompts (Redlib)**: Say goodbye to obnoxious "Open in App" popups. Using **Redlib**, you get a premium, fast Reddit experience on mobile without being forced to download trackers or the official app. This ensures your mobile browsing remains private and frictionless.
 *   **🔑 Easy Remote Access**: Built-in **WireGuard** management. Generate client configs and **QR codes** directly from the dashboard to connect your phone or laptop securely.
-*   **🔄 A/B Update System**: Safe, atomic updates with rollback capability. Switch between "Slot A" and "Slot B" to ensure high availability.
-*   **📱 No App Prompts**: Premium mobile-web experience without "Install our app" popups.
 *   **🎨 Material Design 3**: A beautiful, responsive dashboard with dynamic theming and real-time health metrics.
 
 ---
@@ -168,13 +167,7 @@ When using the `-p` (Auto-Passwords) flag, the system generates secure, unique c
 | Service | Source | Category | Description |
 | :--- | :--- | :--- | :--- |
 | **Invidious** | [iv-org/invidious](https://github.com/iv-org/invidious) ⁽[¹](https://github.com/iv-org/invidious/blob/master/docker/Dockerfile)⁾ | Frontend | YouTube without ads or tracking. |
-| **Invidious Companion** | [iv-org/invidious-companion](https://github.com/iv-org/invidious-companion) ⁽[²](https://github.com/iv-org/invidious-companion/blob/master/Dockerfile)⁾ | Helper | Token generator for Invidious. |
 | **Redlib** | [redlib-org/redlib](https://github.com/redlib-org/redlib) ⁽[³](https://github.com/redlib-org/redlib/blob/main/Dockerfile.alpine)⁾ | Frontend | Private Reddit viewer. |
-| **Rimgo** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) ⁽[⁴](https://codeberg.org/rimgo/rimgo/src/branch/main/Dockerfile)⁾ | Frontend | Anonymous Imgur browser. |
-| **Wikiless** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) ⁽[⁵](https://github.com/Metastem/Wikiless/blob/main/Dockerfile)⁾ | Frontend | Private Wikipedia reader. |
-| **Scribe** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) ⁽[⁶](https://git.sr.ht/~edwardloveall/scribe/tree/master/item/Dockerfile)⁾ | Frontend | Alternative Medium frontend. |
-| **BreezeWiki** | [breezewiki/breezewiki](https://gitdab.com/cadence/breezewiki) ⁽[⁷](https://github.com/PussTheCat-org/docker-breezewiki-quay/blob/master/docker/Dockerfile)⁾ | Frontend | De-fandomized Wiki interface. |
-| **AnonOverflow** | [httpjamesm/anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) ⁽[⁸](https://github.com/httpjamesm/anonymousoverflow/blob/main/Dockerfile)⁾ | Frontend | Private Stack Overflow viewer. |
 | **SearXNG** | [searxng/searxng](https://github.com/searxng/searxng) ⁽[¹⁸](https://github.com/searxng/searxng/blob/master/Dockerfile)⁾ | Frontend | Privacy-respecting search engine. |
 | **Cobalt** | [imputnet/cobalt](https://github.com/imputnet/cobalt) ⁽[¹⁹](https://github.com/imputnet/cobalt/blob/master/Dockerfile)⁾ | Utility | Media downloader (Local-only UI). |
 | **Memos** | [usememos/memos](https://github.com/usememos/memos) ⁽[⁹](https://github.com/usememos/memos/blob/main/scripts/Dockerfile)⁾ | Utility | Self-hosted notes & knowledge base. |
@@ -182,6 +175,13 @@ When using the `-p` (Auto-Passwords) flag, the system generates secure, unique c
 | **Immich** | [immich-app/immich](https://github.com/immich-app/immich) ⁽[²⁰](https://github.com/immich-app/immich/blob/main/Dockerfile)⁾ | Utility | Photo and video management. |
 
 > **Note**: All "Frontend" services (and Immich) are routed through the VPN tunnel automatically. Cobalt UI is strictly local-only.
+
+### 🔗 Browser Integration & Redirects
+To fully automate your privacy experience, use the **LibRedirect** browser extension ([Firefox](https://addons.mozilla.org/en-US/firefox/addon/libredirect/) / [Chrome](https://chromewebstore.google.com/detail/libredirect/pidepfhccicebebmleihobgoegmpodic)).
+
+1.  **Install LibRedirect** in your preferred browser.
+2.  **Import Settings**: Use the `libredirect_import.json` file generated in your project root after deployment.
+3.  **Automatic Redirection**: Standard links (YouTube, Reddit, Wikipedia, etc.) will now automatically open in your local private instances.
 
 ---
 
