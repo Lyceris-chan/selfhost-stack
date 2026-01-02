@@ -106,7 +106,7 @@ That's it! Sit back and let it build (~15-20 minutes).
 
 ## 🛡️ How It Works (Architecture)
 
-This section explains the technical details behind the privacy features listed above. If you just want to get started, skip to the [Customization Flags](#-customization-flags-optional) section.
+This section explains the technical details behind the privacy features listed above. If you just want to get started, skip to the [Customization Flags](#customization-flags) section.
 
 ### Recursive DNS Engine (Independent Resolution)
 This stack features a hardened, recursive DNS engine built on **Unbound** and **AdGuard Home**, designed to eliminate upstream reliance and prevent data leakage.
@@ -131,6 +131,7 @@ If you don't own the hardware and the code running your network, you don't own y
 
 > 📚 **Trusted Sources**: For more on why these measures matter, see the **EFF's [Surveillance Self-Defense](https://ssd.eff.org/)** and their guide on **[DNS Privacy](https://www.eff.org/deeplinks/2020/12/dns-privacy-all-way-root-your-lan)**.
 
+<a id="customization-flags"></a>
 ### 🛠️ Customization Flags (Optional)
 If you want to skip the questions, you can use these flags:
 
