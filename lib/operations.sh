@@ -37,10 +37,19 @@ check_cert_risk() {
         fi
 
         # Extract Certificate Details
-        CERT_SUBJECT=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -subject 2>/dev/null | sed 's/subject=//')
-        CERT_ISSUER=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -issuer 2>/dev/null | sed 's/issuer=//')
+        CERT_CN=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -subject -nameopt RFC2253 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
+        CERT_ISSUER_CN=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -issuer -nameopt RFC2253 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
+        # Fallback for issuer if CN is missing
+        [ -z "$CERT_ISSUER_CN" ] && CERT_ISSUER_CN=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -issuer 2>/dev/null | sed 's/issuer=//')
+
         CERT_DATES=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -dates 2>/dev/null)
         CERT_NOT_AFTER=$(echo "$CERT_DATES" | grep "notAfter=" | cut -d= -f2)
+        CERT_SERIAL=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -serial 2>/dev/null | cut -d= -f2)
+        CERT_FINGERPRINT=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)
+        
+        CERT_KEY_INFO=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -pubkey 2>/dev/null | openssl pkey -pubin -pubout -text -noout 2>/dev/null | grep -i "Public-Key" | sed 's/Public-Key: //')
+        CERT_SIG_ALG=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -text 2>/dev/null | grep "Signature Algorithm" | head -n1 | awk -F: '{print $2}' | xargs)
+        CERT_SAN=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -ext subjectAltName 2>/dev/null | grep -A1 "Subject Alternative Name" | tail -n1 | sed 's/^[[:space:]]*//')
 
         # Check validity (expiration)
         if openssl x509 -checkend 0 -noout -in "$BASE_DIR/config/adguard/ssl.crt" >/dev/null 2>&1; then
@@ -49,14 +58,18 @@ check_cert_risk() {
             CERT_VALIDITY="❌ EXPIRED"
         fi
 
-        echo "   • Subject:  $CERT_SUBJECT"
-        echo "   • Issuer:   $CERT_ISSUER"
-        echo "   • Expires:  $CERT_NOT_AFTER"
-        echo "   • Status:   $CERT_VALIDITY"
+        echo "   • Common Name: $CERT_CN"
+        [ -n "$CERT_SAN" ] && echo "   • SAN:         $CERT_SAN"
+        echo "   • Issuer:      $CERT_ISSUER_CN"
+        echo "   • Key/Size:    $CERT_KEY_INFO ($CERT_SIG_ALG)"
+        [ -n "$CERT_FINGERPRINT" ] && echo "   • Fingerprint: $CERT_FINGERPRINT"
+        echo "   • Serial:      $CERT_SERIAL"
+        echo "   • Expires:     $CERT_NOT_AFTER"
+        echo "   • Status:      $CERT_VALIDITY"
 
         if [ -n "$EXISTING_DOMAIN" ]; then
             echo "   • Setup Domain: $EXISTING_DOMAIN"
-            if echo "$CERT_SUBJECT" | grep -q "$EXISTING_DOMAIN"; then
+            if echo "$CERT_CN $CERT_SAN" | grep -q "$EXISTING_DOMAIN"; then
                 echo "   ✅ Certificate MATCHES the configured domain."
             else
                 echo "   ⚠️  Certificate DOES NOT MATCH the configured domain ($EXISTING_DOMAIN)."
