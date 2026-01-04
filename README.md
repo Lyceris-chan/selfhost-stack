@@ -200,13 +200,14 @@ This stack features a hardened, recursive DNS engine built on **Unbound** and **
 *   **Aggressive Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: Uses NSEC records to generate negative responses locally, reducing traffic to authoritative servers and improving performance while resisting certain types of enumeration.
 *   **Recursive Resolution**: Unlike standard DNS which forwards your queries to a "Public" resolver (Google/Cloudflare), this engine talks directly to authoritative root servers. This cuts out the middleman and prevents corporate profiling of your browsing history.
 *   **Encrypted DNS ([RFC 7858](https://datatracker.ietf.org/doc/html/rfc7858), [RFC 8484](https://datatracker.ietf.org/doc/html/rfc8484), [RFC 9250](https://datatracker.ietf.org/doc/html/rfc9250))**: Supports DNS-over-TLS, DNS-over-HTTPS, and DNS-over-QUIC to prevent local network eavesdropping.
-*   **0x20 Bit Randomization**: A security technique that mitigates spoofing attempts by randomly varying the capitalization of query names (e.g., `ExAmPlE.CoM`), which authoritative servers must match in their response.
+*   **0x20 Bit Randomization ([DNS 0x20](https://datatracker.ietf.org/doc/html/draft-vixie-dnsext-dns0x20-00))**: A security technique that mitigates spoofing attempts by randomly varying the capitalization of query names (e.g., `ExAmPlE.CoM`), which authoritative servers must match in their response.
 *   **Privacy Considerations ([RFC 7626](https://datatracker.ietf.org/doc/html/rfc7626))**: Implements best practices for DNS privacy, minimizing data leakage to third parties.
 *   **Hardened Access Control ([RFC 1918](https://datatracker.ietf.org/doc/html/rfc1918))**: Restricts resolution to private subnets, preventing unauthorized external usage and potential amplification attacks.
+*   **RRSET Roundrobin ([RFC 1794](https://datatracker.ietf.org/doc/html/rfc1794))**: Load balances responses for multi-IP domains to ensure optimal traffic distribution and redundancy.
 *   **Fingerprint Resistance**: Identity and version queries are explicitly hidden to prevent scanners from identifying the specific resolver software.
 *   **Cache Prefetching**: Automatically refreshes popular DNS records before they expire, ensuring near-instant resolution for frequently visited sites while maintaining cache integrity.
-*   **Hardened Glue & Downgrade Protection**: Prevents malicious actors from injecting false "glue" records or forcing the resolver to use weaker cryptographic algorithms.
-*   **Minimal Responses**: Reduces the size of DNS responses to only the essential data, mitigating potential DNS amplification attacks and improving network efficiency.
+*   **Hardened Glue ([RFC 1034](https://datatracker.ietf.org/doc/html/rfc1034)) & Downgrade Protection**: Prevents cache poisoning by strictly validating out-of-zone "glue" records and enforcing modern cryptographic algorithms to prevent protocol downgrades.
+*   **Minimal Responses ([RFC 4472](https://datatracker.ietf.org/doc/html/rfc4472))**: Reduces the size of DNS responses to only the essential data, mitigating potential DNS amplification attacks and improving network efficiency.
 
 </details>
 
