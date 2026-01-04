@@ -502,15 +502,17 @@ swap_slots() {
     # 1. Perform safety backup
     perform_backup "pre_swap"
     
-    # 2. Update state for the rest of the script
-    echo "$new_slot" > "$ACTIVE_SLOT_FILE"
+    # 2. Update session state (file persistence happens in finalize_swap)
     export CURRENT_SLOT="$new_slot"
     export CONTAINER_PREFIX="dhi-${new_slot}-"
     
     log_info "Standby slot ($new_slot) initialized. Preparing deployment..."
-    
-    # The rest of the main script (zima.sh) will now use the new prefix
-    # when calling generate_compose and deploy_stack.
+}
+
+finalize_swap() {
+    log_info "Finalizing slot swap to $CURRENT_SLOT..."
+    echo "$CURRENT_SLOT" | $SUDO tee "$ACTIVE_SLOT_FILE" >/dev/null
+    log_info "Active slot persisted: $CURRENT_SLOT"
 }
 
 stop_inactive_slots() {

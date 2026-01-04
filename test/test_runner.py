@@ -10,37 +10,46 @@ import json
 # Define Stages
 STAGES = {
     1: {
-        "name": "Core Infrastructure",
-        "services": "hub-api,dashboard,gluetun,adguard,unbound",
+        "name": "Core Infrastructure & Networking",
+        "services": "hub-api,dashboard,gluetun,adguard,unbound,wg-easy",
         "checks": [
             {"name": "Dashboard", "url": "http://localhost:8081", "code": 200},
             {"name": "Hub API", "url": "http://localhost:55555/status", "code": 200},
-            {"name": "AdGuard", "url": "http://localhost:8083", "code": 200}
+            {"name": "AdGuard", "url": "http://localhost:8083", "code": 200},
+            {"name": "WireGuard UI", "url": "http://localhost:51821", "code": 200}
         ]
     },
     2: {
-        "name": "Redlib & Privacy Frontends A",
-        "services": "redlib,gluetun,wikiless,rimgo",
+        "name": "Standard Privacy Frontends",
+        "services": "redlib,gluetun,wikiless,rimgo,breezewiki,anonymousoverflow,scribe",
         "checks": [
             {"name": "Redlib", "url": "http://localhost:8080/settings", "code": 200},
             {"name": "Wikiless", "url": "http://localhost:8180", "code": 200},
-            {"name": "Rimgo", "url": "http://localhost:3002", "code": 200}
+            {"name": "Rimgo", "url": "http://localhost:3002", "code": 200},
+            {"name": "BreezeWiki", "url": "http://localhost:8380", "code": 200},
+            {"name": "AnonOverflow", "url": "http://localhost:8480", "code": 200},
+            {"name": "Scribe", "url": "http://localhost:8280", "code": 200}
         ]
     },
     3: {
-        "name": "Invidious Stack",
-        "services": "invidious,invidious-db,companion,gluetun",
+        "name": "Invidious & Search Stack",
+        "services": "invidious,invidious-db,companion,gluetun,searxng,searxng-redis",
         "checks": [
-            {"name": "Invidious", "url": "http://localhost:3000/api/v1/stats", "code": 200}
+            {"name": "Invidious", "url": "http://localhost:3000/api/v1/stats", "code": 200},
+            {"name": "SearXNG", "url": "http://localhost:8082", "code": 200}
         ]
     },
     4: {
-        "name": "Management Tools",
-        "services": "portainer,memos,gluetun,cobalt",
+        "name": "Management, Utilities & Media",
+        "services": "portainer,memos,gluetun,cobalt,odido-booster,vert,vertd,immich-server,immich-db,immich-redis,immich-machine-learning",
         "checks": [
              {"name": "Portainer", "url": "http://localhost:9000", "code": 200},
              {"name": "Memos", "url": "http://localhost:5230", "code": 200},
-             {"name": "Cobalt", "url": "http://localhost:9001", "code": 200}
+             {"name": "Cobalt", "url": "http://localhost:9001", "code": 200},
+             {"name": "Odido Booster", "url": "http://localhost:8085", "code": 200},
+             {"name": "VERT", "url": "http://localhost:5555", "code": 200},
+             {"name": "VERTd", "url": "http://localhost:24153/api/v1/health", "code": 200},
+             {"name": "Immich", "url": "http://localhost:2283/api/server-info", "code": 200}
         ]
     }
 }

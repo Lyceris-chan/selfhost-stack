@@ -189,7 +189,7 @@ if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
 fi
 
 # Apply generic patches to all others
-for srv in wikiless scribe invidious odido-booster vert rimgo anonymousoverflow gluetun adguard unbound memos redlib wg-easy portainer; do
+for srv in wikiless scribe invidious odido-booster vert rimgo anonymousoverflow gluetun adguard unbound memos redlib wg-easy portainer dashboard; do
     if [ "$SERVICE" = "$srv" ] || [ "$SERVICE" = "all" ]; then
         D_PATH="$SRC_ROOT/$srv"
         if [ "$srv" = "adguard" ]; then D_PATH="$SRC_ROOT/adguardhome"; fi
@@ -1365,10 +1365,23 @@ EOF
 EOF
     fi
 
+    # Create Dashboard Source Directory and Dockerfile
+    $SUDO mkdir -p "$SRC_DIR/dashboard"
+    cat <<EOF | $SUDO tee "$SRC_DIR/dashboard/Dockerfile" >/dev/null
+FROM dhi.io/alpine-base:3.22-dev
+RUN apk add --no-cache nginx
+RUN mkdir -p /run/nginx
+COPY . /usr/share/nginx/html
+# Nginx default configuration is handled by volume mount for flexibility
+CMD ["nginx", "-g", "daemon off;"]
+EOF
+
     if should_deploy "dashboard"; then
     cat >> "$COMPOSE_FILE" <<EOF
   dashboard:
-    image: nginx:${DASHBOARD_IMAGE_TAG:-1.27-alpine}
+    pull_policy: build
+    build:
+      context: $SRC_DIR/dashboard
     container_name: ${CONTAINER_PREFIX}dashboard
     networks: [dhi-frontnet]
     ports:
@@ -1400,13 +1413,30 @@ EOF
 EOF
     fi
 
+    # Create Portainer Source Directory and DHI Wrapper
+    $SUDO mkdir -p "$SRC_DIR/portainer"
+    cat <<EOF | $SUDO tee "$SRC_DIR/portainer/Dockerfile.dhi" >/dev/null
+FROM dhi.io/alpine-base:3.22-dev
+COPY --from=portainer/portainer-ce:latest /portainer /portainer
+COPY --from=portainer/portainer-ce:latest /public /public
+COPY --from=portainer/portainer-ce:latest /mustache-templates /mustache-templates
+# Portainer expectations
+WORKDIR /
+EXPOSE 9000 9443
+ENTRYPOINT ["/portainer"]
+EOF
+
     if should_deploy "portainer"; then
-        PORTAINER_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/portainer" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   portainer:
-    image: portainer/portainer-ce:latest
+    pull_policy: build
+    build:
+      context: $SRC_DIR/portainer
+      dockerfile: Dockerfile.dhi
     container_name: ${CONTAINER_PREFIX}portainer
     command: ["-H", "unix:///var/run/docker.sock", "--admin-password", "$PORTAINER_HASH_COMPOSE", "--no-analytics"]
+    labels:
+      - "io.dhi.hardened=true"
     networks: [dhi-frontnet]
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
     volumes: ["/var/run/docker.sock:/var/run/docker.sock", "$DATA_DIR/portainer:/data"]
@@ -1575,7 +1605,7 @@ EOF
         limits: {cpus: '0.5', memory: 256M}
 
   wikiless_redis:
-    image: redis:${REDIS_IMAGE_TAG:-7.2-alpine}
+    image: redis:${REDIS_IMAGE_TAG:-7.2.6-alpine}
     container_name: ${CONTAINER_PREFIX}wikiless_redis
     labels:
       - "casaos.skip=true"
@@ -1631,7 +1661,7 @@ EOF
         limits: {cpus: '1.5', memory: 1024M}
 
   invidious-db:
-    image: postgres:${INVIDIOUS_DB_IMAGE_TAG:-14-alpine3.21}
+    image: postgres:${INVIDIOUS_DB_IMAGE_TAG:-14.15-alpine3.21}
     container_name: ${CONTAINER_PREFIX}invidious-db
     labels:
       - "casaos.skip=true"
@@ -1879,7 +1909,7 @@ EOF
     cat >> "$COMPOSE_FILE" <<EOF
   # SearXNG: Privacy-respecting metasearch engine
   searxng:
-    image: searxng/searxng:latest
+    image: searxng/searxng:2025.12.30
     container_name: ${CONTAINER_PREFIX}searxng
     network_mode: "service:gluetun"
     volumes:
@@ -1895,7 +1925,7 @@ EOF
         limits: {cpus: '1.0', memory: 512M}
 
   searxng-redis:
-    image: redis:7-alpine
+    image: redis:7.4.2-alpine
     container_name: ${CONTAINER_PREFIX}searxng-redis
     networks: [dhi-frontnet]
     command: redis-server --save "" --appendonly no
@@ -1912,7 +1942,7 @@ EOF
     cat >> "$COMPOSE_FILE" <<EOF
   # Immich: High-performance self-hosted photo and video management
   immich-server:
-    image: ghcr.io/immich-app/immich-server:release
+    image: ghcr.io/immich-app/immich-server:v1.124.0
     container_name: ${CONTAINER_PREFIX}immich-server
     network_mode: "service:gluetun"
     environment:
@@ -1932,7 +1962,7 @@ EOF
     restart: unless-stopped
 
   immich-db:
-    image: postgres:14-alpine
+    image: postgres:14.15-alpine
     container_name: ${CONTAINER_PREFIX}immich-db
     networks: [dhi-frontnet]
     environment:
@@ -1949,7 +1979,7 @@ EOF
     restart: unless-stopped
 
   immich-redis:
-    image: redis:6.2-alpine
+    image: redis:6.2.17-alpine
     container_name: ${CONTAINER_PREFIX}immich-redis
     networks: [dhi-frontnet]
     healthcheck:
@@ -1960,7 +1990,7 @@ EOF
     restart: unless-stopped
 
   immich-machine-learning:
-    image: ghcr.io/immich-app/immich-machine-learning:release
+    image: ghcr.io/immich-app/immich-machine-learning:v1.124.0
     container_name: ${CONTAINER_PREFIX}immich-ml
     network_mode: "service:gluetun"
     volumes:

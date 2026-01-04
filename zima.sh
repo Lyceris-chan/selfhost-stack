@@ -66,7 +66,7 @@ for srv in $AB_SERVICES; do
     export "$VAR_NAME=$val"
 done
 
-CRITICAL_IMAGES="nginx:1.27-alpine python:3.11-alpine3.21 node:20-alpine3.21 oven/bun:1-alpine alpine:3.21 redis:7.2-alpine postgres:14-alpine3.21 neilpang/acme.sh"
+CRITICAL_IMAGES="nginx:1.27.3-alpine python:3.11.11-alpine3.21 node:20.18.1-alpine3.21 oven/bun:1.1.34-alpine alpine:3.21.0 redis:7.2.6-alpine postgres:14.15-alpine3.21 neilpang/acme.sh:3.1.0"
 
 PIDS=""
 for img in $CRITICAL_IMAGES; do
@@ -202,5 +202,6 @@ deploy_stack
 
 # 14. Cleanup Inactive Slots (post-success)
 if [ "$SWAP_SLOTS" = true ]; then
+    finalize_swap
     stop_inactive_slots
 fi

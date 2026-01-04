@@ -59,7 +59,7 @@ def update_test_config(template_path, output_path, details_data):
             val = details_data.get('WG_CONF_B64', '')
             new_lines.append(f'export WG_CONF_B64="{val}"\n')
         elif line.startswith('export REG_USER='):
-             val = details_data.get('REG_USER', 'laciachan')
+             val = details_data.get('REG_USER', '')
              new_lines.append(f'export REG_USER="{val}"\n')
         elif line.startswith('export REG_TOKEN='):
              val = details_data.get('REG_TOKEN', '')
@@ -77,7 +77,7 @@ def update_test_config(template_path, output_path, details_data):
             
     # Add REG_USER/TOKEN if not in template but in details
     if 'REG_USER' not in [l.split('=')[0].replace('export ', '').strip() for l in new_lines if '=' in l]:
-        new_lines.append(f'export REG_USER="{details_data.get("REG_USER", "laciachan")}"\n')
+        new_lines.append(f'export REG_USER="{details_data.get("REG_USER", "")}"\n')
     if 'REG_TOKEN' not in [l.split('=')[0].replace('export ', '').strip() for l in new_lines if '=' in l]:
         new_lines.append(f'export REG_TOKEN="{details_data.get("REG_TOKEN", "")}"\n')
 

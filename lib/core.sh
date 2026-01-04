@@ -449,11 +449,11 @@ authenticate_registries() {
              log_info "Using provided credentials from environment."
         elif [ "$PERSONAL_MODE" = true ]; then
              log_info "Personal Mode: Using pre-configured registry credentials."
-             REG_USER="laciachan"
+             REG_USER="${REG_USER:-}"
              REG_TOKEN="${REG_TOKEN:-}"
         else
              log_info "Auto-confirm enabled: Skipping registry authentication."
-             REG_USER="laciachan"
+             REG_USER="${REG_USER:-}"
              REG_TOKEN="${REG_TOKEN:-}"
         fi
         
@@ -558,7 +558,7 @@ setup_secrets() {
             log_info "Auto-confirm enabled: Skipping interactive deSEC/GitHub/Odido setup (preserving environment variables)."
             if [ "$PERSONAL_MODE" = true ]; then
                 log_info "Personal Mode: Applying user-specific defaults."
-                REG_USER="laciachan"
+                REG_USER="${REG_USER:-}"
                 DESEC_DOMAIN="${DESEC_DOMAIN:-}" # Keep if set, otherwise maybe prompt once
             fi
             DESEC_DOMAIN="${DESEC_DOMAIN:-}"

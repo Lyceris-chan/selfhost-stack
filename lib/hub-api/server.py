@@ -602,12 +602,13 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 images_size = 0
                 img_res = subprocess.run(['docker', 'images', '--format', '{{.Size}}\t{{.Repository}}'], capture_output=True, text=True, timeout=10)
                 if img_res.returncode == 0:
+                    app_name = os.environ.get('APP_NAME', 'privacy-hub')
                     for line in img_res.stdout.strip().split('\n'):
                         if not line: continue
                         parts = line.split('\t')
                         if len(parts) < 2: continue
                         size_str, repo = parts[0], parts[1]
-                        if any(x in repo for x in ['__APP_NAME__', CONTAINER_PREFIX + 'gluetun', CONTAINER_PREFIX + 'adguard', CONTAINER_PREFIX + 'unbound', CONTAINER_PREFIX + 'redlib', CONTAINER_PREFIX + 'wikiless', CONTAINER_PREFIX + 'invidious', CONTAINER_PREFIX + 'rimgo', CONTAINER_PREFIX + 'breezewiki', CONTAINER_PREFIX + 'memos', CONTAINER_PREFIX + 'vert', CONTAINER_PREFIX + 'scribe', CONTAINER_PREFIX + 'anonymousoverflow', CONTAINER_PREFIX + 'odido-booster', CONTAINER_PREFIX + 'portainer', CONTAINER_PREFIX + 'wg-easy']):
+                        if any(x in repo for x in [app_name, CONTAINER_PREFIX + 'gluetun', CONTAINER_PREFIX + 'adguard', CONTAINER_PREFIX + 'unbound', CONTAINER_PREFIX + 'redlib', CONTAINER_PREFIX + 'wikiless', CONTAINER_PREFIX + 'invidious', CONTAINER_PREFIX + 'rimgo', CONTAINER_PREFIX + 'breezewiki', CONTAINER_PREFIX + 'memos', CONTAINER_PREFIX + 'vert', CONTAINER_PREFIX + 'scribe', CONTAINER_PREFIX + 'anonymousoverflow', CONTAINER_PREFIX + 'odido-booster', CONTAINER_PREFIX + 'portainer', CONTAINER_PREFIX + 'wg-easy']):
                             mult = 1
                             if 'GB' in size_str.upper(): mult = 1024*1024*1024
                             elif 'MB' in size_str.upper(): mult = 1024*1024
@@ -685,10 +686,11 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     # Also include ALL Docker images related to this stack
                     img_res = subprocess.run(['docker', 'images', '--format', '{{.Size}}\t{{.Repository}}'], capture_output=True, text=True, timeout=10)
                     if img_res.returncode == 0:
+                        app_name = os.environ.get('APP_NAME', 'privacy-hub')
                         for line in img_res.stdout.strip().split('\n'):
                             size_str, repo = line.split('\t')
                             # Check if it belongs to our stack
-                            if any(x in repo for x in ['__APP_NAME__', CONTAINER_PREFIX + 'gluetun', CONTAINER_PREFIX + 'adguard', CONTAINER_PREFIX + 'unbound', CONTAINER_PREFIX + 'redlib', CONTAINER_PREFIX + 'wikiless', CONTAINER_PREFIX + 'invidious', CONTAINER_PREFIX + 'rimgo', CONTAINER_PREFIX + 'breezewiki', CONTAINER_PREFIX + 'memos', CONTAINER_PREFIX + 'vert', CONTAINER_PREFIX + 'scribe', CONTAINER_PREFIX + 'anonymousoverflow', CONTAINER_PREFIX + 'odido-booster', CONTAINER_PREFIX + 'portainer', CONTAINER_PREFIX + 'wg-easy']):
+                            if any(x in repo for x in [app_name, CONTAINER_PREFIX + 'gluetun', CONTAINER_PREFIX + 'adguard', CONTAINER_PREFIX + 'unbound', CONTAINER_PREFIX + 'redlib', CONTAINER_PREFIX + 'wikiless', CONTAINER_PREFIX + 'invidious', CONTAINER_PREFIX + 'rimgo', CONTAINER_PREFIX + 'breezewiki', CONTAINER_PREFIX + 'memos', CONTAINER_PREFIX + 'vert', CONTAINER_PREFIX + 'scribe', CONTAINER_PREFIX + 'anonymousoverflow', CONTAINER_PREFIX + 'odido-booster', CONTAINER_PREFIX + 'portainer', CONTAINER_PREFIX + 'wg-easy']):
                                 mult = 1
                                 if 'GB' in size_str.upper(): mult = 1024*1024*1024
                                 elif 'MB' in size_str.upper(): mult = 1024*1024
@@ -1188,7 +1190,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             try:
                 password = data.get('password')
                 expected_admin = os.environ.get('ADMIN_PASS_RAW')
-                if expected_admin and password == expected_admin:
+                if expected_admin and password and secrets.compare_digest(password, expected_admin):
                     # Generate a new session token for this browser session
                     token = secrets.token_hex(24)
                     

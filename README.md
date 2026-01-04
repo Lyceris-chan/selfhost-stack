@@ -42,7 +42,7 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
 *   **🔒 Data Independence**: Host your own frontends (Invidious, Redlib, etc.) to stop upstream giants like Google and Reddit from profiling you.
 *   **🚫 Ad-Free by Design**: Network-wide ad blocking via AdGuard Home + native removal of sponsored content in video/social feeds.
 *   **🕵️ VPN-Gated Privacy**: All external requests are routed through a **Gluetun VPN** tunnel. Upstream providers only see your VPN IP, keeping your home identity hidden.
-*   **📺 No Adblock Nags (Invidious)**: Watch YouTube without annoying "please disable your adblocker" popups. Invidious fetches video data server-side, so YouTube never knows you're using an adblocker—because you're not even using their website.
+*   **📺 No Adblock Nags (Invidious)**: Watch YouTube without annoying "please disable your adblocker" popups. Invidious fetches video data server-side, so YouTube never knows you're using an adblocker-because you're not even using their website.
 *   **📱 Frictionless Browsing (Redlib)**: Redlib eliminates aggressive "Open in App" prompts and mobile-web trackers. Enjoy a fast, premium Reddit experience on any device without being forced into the official app's data-harvesting ecosystem.
 *   **🚀 Faster & Safer**: Self-hosted frontends strip out tracking scripts, telemetry, and bloated JavaScript. The result? Pages load faster and your browser isn't executing code designed to spy on you.
 *   **🔑 Easy Remote Access**: Built-in **WireGuard** management. Generate client configs and **QR codes** directly from the dashboard to connect your phone or laptop securely.
@@ -51,13 +51,16 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
 *   **🎨 Material Design 3**: A beautiful, responsive dashboard with dynamic theming and real-time health metrics.
 
 > ⚠️ **Heads Up: The Cat-and-Mouse Game**  
-> Companies like Google and Reddit **actively try to break** these privacy frontends. Why? Because every user on Invidious or Redlib is a user they can't track, monetize, or serve ads to. They regularly change their APIs, add new anti-bot measures, and modify their page structures specifically to break these tools. This stack uses **local builds** so we can apply fixes quickly when upstream breaks—but occasional outages are part of the privacy game. It's worth it.
+> Companies like Google and Reddit **actively try to break** these privacy frontends. Why? Because every user on Invidious or Redlib is a user they can't track, monetize, or serve ads to. They regularly change their APIs, add new anti-bot measures, and modify their page structures specifically to break these tools. This stack uses **local builds** so we can apply fixes quickly when upstream breaks-but occasional outages are part of the privacy game. It's worth it.
+
+> 🔌 **Service Availability & Redundancy**  
+> These services are **only available** while the device you are hosting on is powered on and network-accessible. In the event of a power outage, network failure, or hardware issue, access to your self-hosted services will be lost. We strongly recommend exploring redundancy options (such as UPS backups or secondary failover nodes) to ensure continuous access to your privacy infrastructure. Be aware that you are your own "cloud provider" now!
 
 ---
 
 ## 🚀 Deployment
 
-**Don't worry—this is easier than it looks!** The Privacy Hub guides you through everything. Just follow these steps, and you'll have your own private internet in about 20 minutes.
+**Don't worry-this is easier than it looks!** The Privacy Hub guides you through everything. Just follow these steps, and you'll have your own private internet in about 20 minutes.
 
 ### Before You Start (Checklist)
 
@@ -79,7 +82,7 @@ You'll need:
 4.  Click **Create** and choose any server (Netherlands or Switzerland are good for privacy)
 5.  **⚠️ IMPORTANT**: Ensure **NAT-PMP (Port Forwarding)** is set to **OFF** (see warning below)
 6.  Click **Download** to save the `.conf` file
-7.  **Open** the downloaded file in a text editor—you'll paste its contents during setup
+7.  **Open** the downloaded file in a text editor-you'll paste its contents during setup
 
 > 📝 **What you're getting**: This file contains your personal "tunnel key" that lets your hub connect to ProtonVPN's servers. Your real home IP stays hidden!
 
@@ -104,7 +107,7 @@ You'll need:
 2.  Verify your email and log in
 3.  Click **"+ Add Domain"** and create a subdomain (e.g., `my-privacy-hub.dedyn.io`)
 4.  Go to **Token Management** → **"+"** to create a new token
-5.  **Copy and save this token**—you'll need it during setup
+5.  **Copy and save this token**-you'll need it during setup
 
 > 📝 **What you're getting**: This token lets the installer automatically set up SSL certificates so your connection is encrypted.
 
@@ -176,7 +179,7 @@ Before running the installer, you can customize your deployment using these flag
 1.  **🔨 Privacy Build**: The system clones and builds your private apps
 2.  **✅ Ready to Use**: You get a link to your dashboard (e.g., `http://192.168.1.100:8081`)
 3.  **🔐 Credential Export**: Your passwords are saved for safe keeping
-4.  **🔀 Instant Redirection**: A `libredirect_import.json` is created—import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically redirect YouTube/Reddit to your hub
+4.  **🔀 Instant Redirection**: A `libredirect_import.json` is created-import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically redirect YouTube/Reddit to your hub
 
 > 📁 **Where are my passwords?**: Check the [Credential Management](#-credential-management) section for details on accessing your generated credentials.
 
@@ -189,7 +192,9 @@ This section explains the technical details behind the privacy features listed a
 ### Recursive DNS Engine (Independent Resolution)
 This stack features a hardened, recursive DNS engine built on **Unbound** and **AdGuard Home**, designed to eliminate upstream reliance and prevent data leakage.
 
-#### 🛡️ Advanced Security & RFC Compliance
+<details>
+<summary>🛡️ <strong>Advanced Security & RFC Compliance</strong> (Click to expand)</summary>
+
 *   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: Dramatically improves privacy by only sending the absolute minimum part of a domain name to upstream authoritative servers. Instead of asking a root server for `very.private.example.com`, it only asks for the `.com` TLD, keeping your full intent hidden.
 *   **DNSSEC Validation ([RFC 4033](https://datatracker.ietf.org/doc/html/rfc4033))**: Protects against DNS spoofing and cache poisoning by cryptographically verifying the authenticity of DNS records. The resolver strictly rejects responses that have been stripped of security signatures.
 *   **Aggressive Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: Uses NSEC records to generate negative responses locally, reducing traffic to authoritative servers and improving performance while resisting certain types of enumeration.
@@ -199,6 +204,11 @@ This stack features a hardened, recursive DNS engine built on **Unbound** and **
 *   **Privacy Considerations ([RFC 7626](https://datatracker.ietf.org/doc/html/rfc7626))**: Implements best practices for DNS privacy, minimizing data leakage to third parties.
 *   **Hardened Access Control ([RFC 1918](https://datatracker.ietf.org/doc/html/rfc1918))**: Restricts resolution to private subnets, preventing unauthorized external usage and potential amplification attacks.
 *   **Fingerprint Resistance**: Identity and version queries are explicitly hidden to prevent scanners from identifying the specific resolver software.
+*   **Cache Prefetching**: Automatically refreshes popular DNS records before they expire, ensuring near-instant resolution for frequently visited sites while maintaining cache integrity.
+*   **Hardened Glue & Downgrade Protection**: Prevents malicious actors from injecting false "glue" records or forcing the resolver to use weaker cryptographic algorithms.
+*   **Minimal Responses**: Reduces the size of DNS responses to only the essential data, mitigating potential DNS amplification attacks and improving network efficiency.
+
+</details>
 
 ### 🔍 Why Self-Host? (The "Trust Gap")
 If you don't own the hardware and the code running your network, you don't own your privacy. 
@@ -244,7 +254,10 @@ To automatically redirect your browser from big-tech sites to your private Hub:
 
 ### Included Privacy Services
 
-Every service in this stack is either built from source (and hardened) or pulled from a trusted minimal image. All services marked with **🔒 VPN** are locked inside the VPN tunnel—they cannot "see" the real internet, and the real internet cannot "see" them.
+Every service in this stack is either built from source (and hardened) or pulled from a trusted minimal image. All services marked with **🔒 VPN** are locked inside the VPN tunnel-they cannot "see" the real internet, and the real internet cannot "see" them.
+
+<details>
+<summary>📋 <strong>View Full Service Catalog & Routing</strong> (Click to expand)</summary>
 
 | Service | Category | 🛡️ Routing | Source & Patched Dockerfile |
 | :--- | :--- | :--- | :--- |
@@ -265,22 +278,30 @@ Every service in this stack is either built from source (and hardened) or pulled
 | **Unbound** | Core | **🏠 Local** | [unbound](https://github.com/klutchell/unbound-docker) ([Patched](https://github.com/klutchell/unbound-docker/blob/master/Dockerfile)) |
 | **WireGuard** | Core | **🏠 Local** | [wg-easy](https://github.com/wg-easy/wg-easy) ([Patched](https://github.com/wg-easy/wg-easy/blob/master/Dockerfile)) |
 | **Gluetun** | Core | **🌍 Exit** | [gluetun](https://github.com/qdm12/gluetun) ([Patched](https://github.com/qdm12/gluetun/blob/master/Dockerfile)) |
-| **Portainer** | Core | **🏠 Local** | [portainer](https://github.com/portainer/portainer) (Pre-built Image) |
-| **Dashboard** | Core | **🏠 Local** | [nginx](https://github.com/nginx/nginx) (Pre-built Image) |
+| **Portainer** | Core | **🏠 Local** | [portainer](https://github.com/portainer/portainer) ([Patched](lib/services.sh)) |
+| **Dashboard** | Core | **🏠 Local** | [Local Source] ([Custom](lib/services.sh)) |
 | **Hub API** | Core | **🏠 Local** | [Local Source](/hub-api) ([Custom](/hub-api/Dockerfile)) |
 | **Odido Booster** | Utility | **🏠 Local** | [odido-booster](https://github.com/Lyceris-chan/odido-bundle-booster) ([Patched](https://github.com/Lyceris-chan/odido-bundle-booster/blob/master/Dockerfile)) |
 
 *\*Immich uses the VPN only for specific machine learning model downloads and metadata fetching. Your photos stay local.
 
+</details>
+
 > **Note**: All "Frontend" services (and Immich/SearXNG) are routed through the VPN tunnel automatically. VERT, Cobalt UI, and core management tools are strictly local-only.
 
 ### ⚡ Hardware Acceleration (GPU/QSV)
 To ensure peak performance for media-heavy tasks, this stack supports hardware-accelerated transcoding and machine learning:
+
+<details>
+<summary>🚀 <strong>View Hardware Acceleration Details</strong> (Click to expand)</summary>
+
 *   **Immich**: Utilizes Intel Quick Sync (QSV), VA-API, or NVIDIA GPUs for localized image auto-tagging and video transcoding.
 *   **VERT / VERTd**: Optimized for high-speed local file conversion using hardware encoders to minimize CPU load.
 *   **Detection & Provisioning**: The stack automatically identifies your hardware vendor (Intel, AMD, or NVIDIA) during deployment via [lib/scripts.sh](lib/scripts.sh) and provisions the necessary devices (`/dev/dri`, `/dev/vulkan`) or container reservations.
-*   **Surgical Fixes**: Specific compilation flags and static library injections are applied in [lib/sources.sh](lib/sources.sh) to ensure these drivers function correctly within the hardened Alpine environments.
+*   **Surgical Fixes**: Specific compilation flags and static library injections are applied in [lib/services.sh](lib/services.sh) to ensure these drivers function correctly within the hardened Alpine environments.
 *   **Requirements**: Ensure your ZimaOS/host device has the correct drivers installed (e.g., `intel-media-driver` or `nvidia-container-toolkit`).
+
+</details>
 
 ### 🌐 Network Configuration
 
@@ -304,6 +325,9 @@ To use it, point your router's DHCP settings to hand out your hub's IP as the DN
 
 This stack uses a **Dual Split Tunnel** architecture to balance privacy, performance, and reliability. Traffic is intelligently routed through three distinct zones:
 
+<details>
+<summary>🗺️ <strong>View Routing Zones & Logic</strong> (Click to expand)</summary>
+
 ##### Zone 1: VPN-Isolated Services (Gluetun Tunnel)
 Privacy frontends and external-facing services are routed exclusively through the VPN tunnel:
 
@@ -320,7 +344,7 @@ Privacy frontends and external-facing services are routed exclusively through th
 | **Scribe** | Medium frontend | Paywall bypass and tracking removal |
 | **Immich** | Photo management | ML model downloads and metadata fetched via VPN* |
 
-**Kill Switch Protection**: If the VPN tunnel fails, these services lose internet access entirely—they cannot accidentally expose your home IP.
+**Kill Switch Protection**: If the VPN tunnel fails, these services lose internet access entirely-they cannot accidentally expose your home IP.
 
 ##### Zone 2: Remote Access (WireGuard Tunnel)
 When connecting from outside your home network (phone, laptop), traffic flows through your personal WireGuard tunnel:
@@ -346,6 +370,8 @@ Management tools and utilities that never touch the internet:
 | **WireGuard (wg-easy)** | VPN server | Manages your remote access peers |
 
 *\*Immich uses VPN only for ML model downloads and external metadata; your photos remain strictly local.*
+
+</details>
 
 ---
 
@@ -435,9 +461,12 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 ### 📦 Docker Hardened Images (DHI) & Source Strategy
 This stack uses a hybrid deployment model to balance extreme privacy with system stability. We don't just "run" apps; we surgically improve them.
 
-#### 🔨 Services Built from Source
+<details>
+<summary>🔨 **View Build & Hardening Strategy** (Click to expand)</summary>
+
+#### Services Built from Source
 The following services are cloned from their official repositories and compiled locally on your machine:
-*   **Infrastructure**: `hub-api`, `gluetun`, `adguard-home`, `unbound`, `wg-easy`.
+*   **Infrastructure**: `hub-api`, `gluetun`, `adguard-home`, `unbound`, `wg-easy`, `portainer`, `dashboard` (nginx).
 *   **Frontends**: `invidious`, `redlib`, `wikiless`, `rimgo`, `breezewiki`, `scribe`, `anonymousoverflow`.
 *   **Utilities**: `memos`, `vert`, `vertd`, `odido-booster`, `invidious-companion`.
 
@@ -449,7 +478,7 @@ The following services are cloned from their official repositories and compiled 
 
 #### 📦 Services using Pre-built Images
 The following services use trusted upstream images:
-*   **`Immich`**, **`SearXNG`**, **`Cobalt`**, **`Portainer`**, **`Nginx` (Dashboard)**.
+*   **`Immich`**, **`SearXNG`**, **`Cobalt`**.
 
 **Why use images?**
 *   **Complexity**: Some apps (like Immich) have extremely complex build pipelines that would take hours to compile on home hardware.
@@ -473,6 +502,8 @@ The following modifications are applied automatically to **every** service built
 *   **Telemetry Removal**: All patched runtimes are configured to disable upstream telemetry and phone-home signals by default.
 
 For service-specific modifications (such as memory limits and GPU fallbacks), see the [Surgical Patch Registry](#surgical-patch-registry) below.
+
+</details>
 
 ### Automatic Version Pinning & A/B System
 
@@ -498,7 +529,7 @@ The stack implements a robust A/B deployment strategy for safe, zero-downtime up
 
 | Strategy | Tag | Behavior | Use Case |
 | :--- | :--- | :--- | :--- |
-| **Stable** (Default) | `latest` | Automatically identifies the latest semantic version tag (e.g., `v1.2.3`) from upstream repositories. | Production use—predictable, tested releases. |
+| **Stable** (Default) | `latest` | Automatically identifies the latest semantic version tag (e.g., `v1.2.3`) from upstream repositories. | Production use-predictable, tested releases. |
 | **Latest** | `latest` | Tracks the default upstream branch (`main` or `master`) for bleeding-edge updates. | Early adopters wanting immediate fixes. |
 
 #### Benefits
@@ -518,14 +549,14 @@ The following modifications are applied to upstream Dockerfiles and source code 
 
 | Service | Upstream Source | Modifications Applied | Implementation |
 | :--- | :--- | :--- | :--- |
-| **BreezeWiki** | [PussTheCat-org/docker-breezewiki](https://github.com/PussTheCat-org/docker-breezewiki-quay) | **Native Conversion**: Migrated from Debian to Alpine. Replaced `apt` logic with `apk`. Implemented localized Racket package management. | [lib/sources.sh#L104-L117](lib/sources.sh#L104-L117) |
-| **Invidious Companion** | [iv-org/invidious-companion](https://github.com/iv-org/invidious-companion) | **Build Reliability**: Resolved Rust compilation stack overflow by injecting `ENV RUST_MIN_STACK=16777216`. Forced lockfile regeneration to prevent stale dependency issues. | [lib/sources.sh#L141-L149](lib/sources.sh#L141-L149) |
-| **VERTd** | [VERT-sh/vertd](https://github.com/VERT-sh/vertd) | **Hybrid Optimization**: Implemented NVIDIA GPU detection logic. Added Alpine fallback for non-GPU environments. Fixed static compilation with `openssl-libs-static`. | [lib/sources.sh#L120-L138](lib/sources.sh#L120-L138) |
-| **Hub API** | [Local Source](/hub-api) | **Custom Build**: Purpose-built orchestration API using DHI Python base. Full telemetry isolation. | [lib/sources.sh#L167-L187](lib/sources.sh#L167-L187) |
+| **BreezeWiki** | [PussTheCat-org/docker-breezewiki](https://github.com/PussTheCat-org/docker-breezewiki-quay) | **Native Conversion**: Migrated from Debian to Alpine. Replaced `apt` logic with `apk`. Implemented localized Racket package management. | [lib/services.sh#L104-L117](lib/services.sh#L104-L117) |
+| **Invidious Companion** | [iv-org/invidious-companion](https://github.com/iv-org/invidious-companion) | **Build Reliability**: Resolved Rust compilation stack overflow by injecting `ENV RUST_MIN_STACK=16777216`. Forced lockfile regeneration to prevent stale dependency issues. | [lib/services.sh#L141-L149](lib/services.sh#L141-L149) |
+| **VERTd** | [VERT-sh/vertd](https://github.com/VERT-sh/vertd) | **Hybrid Optimization**: Implemented NVIDIA GPU detection logic. Added Alpine fallback for non-GPU environments. Fixed static compilation with `openssl-libs-static`. | [lib/services.sh#L120-L138](lib/services.sh#L120-L138) |
+| **Hub API** | [Local Source](/hub-api) | **Custom Build**: Purpose-built orchestration API using DHI Python base. Full telemetry isolation. | [lib/services.sh#L167-L187](lib/services.sh#L167-L187) |
 
 #### Standard Hardening (Generic Patch Loop)
 
-The following services receive standard DHI hardening via the [`patch_bare` function](lib/sources.sh#L62-L100), applied through the [generic patch loop](lib/sources.sh#L153-L162):
+The following services receive standard DHI hardening via the [`patch_bare` function](lib/services.sh#L62-L100), applied through the [generic patch loop](lib/services.sh#L153-L162):
 
 | Service | Upstream Source | Hardening Applied |
 | :--- | :--- | :--- |
@@ -541,11 +572,13 @@ The following services receive standard DHI hardening via the [`patch_bare` func
 | **AdGuard Home** | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) | DHI Alpine base, Go runtime hardening |
 | **Unbound** | [klutchell/unbound-docker](https://github.com/klutchell/unbound-docker) | DHI Alpine base, recursive resolver hardening |
 | **WG-Easy** | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) | DHI Alpine base, Node.js runtime hardening |
+| **Portainer** | [portainer/portainer](https://github.com/portainer/portainer) | DHI Alpine base, telemetry disabled, hardened runtime |
+| **Dashboard** | [nginx/nginx](https://github.com/nginx/nginx) | DHI Alpine base, minimal static server hardening |
 | **Odido Booster** | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) | DHI Alpine base, Python runtime hardening |
 
 #### Global Patches (Applied to All Built Services)
 
-These modifications are defined in the [`patch_bare` function](lib/sources.sh#L62-L100) and applied to every service built from source:
+These modifications are defined in the [`patch_bare` function](lib/services.sh#L62-L100) and applied to every service built from source:
 
 | Patch Category | Description | Benefit |
 | :--- | :--- | :--- |
@@ -553,7 +586,7 @@ These modifications are defined in the [`patch_bare` function](lib/sources.sh#L6
 | **Runtime Hardening** | Replaces Node.js, Go, Python, Rust, and Bun images with DHI hardened equivalents (e.g., `dhi.io/node:20-alpine3.22-dev`). | Telemetry disabled, security patches applied, optimized for containers. |
 | **Package Manager Translation** | Converts `apt-get install` to `apk add --no-cache`. Removes Debian-specific cleanup commands. | Cross-distribution compatibility, smaller image sizes. |
 | **Package Name Translation** | Translates common package names (e.g., `libssl-dev` → `openssl-dev`). | Seamless Alpine compatibility. |
-| **Telemetry Removal** | All patched runtimes configured to disable upstream telemetry and analytics by default. | Privacy by design—no "phone home" signals. |
+| **Telemetry Removal** | All patched runtimes configured to disable upstream telemetry and analytics by default. | Privacy by design-no "phone home" signals. |
 
 </details>
 
@@ -569,8 +602,44 @@ These modifications are defined in the [`patch_bare` function](lib/sources.sh#L6
 
 ---
 
-<a id="security-standards"></a>
-## 🔒 Security Standards
+## 🛠️ Production Deployment & Disaster Recovery
+
+### Production Best Practices
+For a stable, long-term deployment, follow these guidelines:
+
+1.  **Dedicated Hardware**: While it runs on many systems, a dedicated machine (like a ZimaBoard or an old NUC) ensures your privacy hub is always available.
+2.  **Static IP**: Assign a static LAN IP to your hub in your router settings.
+3.  **Uninterruptible Power Supply (UPS)**: Protect against data corruption during power outages.
+4.  **Automatic Backups**: Schedule regular backups of the `data/AppData/privacy-hub` directory.
+
+### Disaster Recovery
+
+#### Scenario 1: The system is slow or glitchy
+Run the maintenance command to recreate containers without losing data:
+```bash
+./zima.sh -c
+```
+
+#### Scenario 2: Service update broke something
+If you used the A/B swap system (`-S`), you can instantly roll back:
+1.  Check which slot is active: `cat data/AppData/privacy-hub/.active_slot`
+2.  Manually swap it back or run `./zima.sh -S` again to move to the other slot.
+
+#### Scenario 3: Total hardware failure
+1.  Set up a new machine with Docker and Git.
+2.  Clone this repository.
+3.  Restore your `data/AppData/privacy-hub` folder from your latest backup.
+4.  Run `./zima.sh`. The script will detect your existing configs and restore the stack.
+
+#### Scenario 4: "I need a fresh start"
+To wipe everything and start over (Warning: IRREVERSIBLE):
+```bash
+./zima.sh -x
+```
+
+---
+
+## 🛡️ Security Standards
 
 ### DHI Hardened Images
 We don't use standard "official" images where we can avoid it. We use **DHI hardened images** (`dhi.io`).
@@ -591,7 +660,7 @@ Opening a port for WireGuard does **not** expose your home to scanning.
 ### Verified Environment (High Performance)
 *   **CPU**: Intel® Core™ i3-10105T (4 Cores / 8 Threads)
     *   Base: 2.90 GHz, Turbo: 3.00 GHz
-*   **RAM**: 32 GB DDR4 @ 3200 MHz
+*   **RAM**: 32 GB DDR4 @ 2666 MHz
 *   **GPU**: Intel® UHD Graphics 630 (CometLake-S GT2)
     *   *Note: Fully compatible with Intel Quick Sync (QSV) for hardware-accelerated media tasks.*
 *   **OS**: ZimaOS, Ubuntu 22.04 LTS, or Debian 12+
@@ -612,8 +681,8 @@ Opening a port for WireGuard does **not** expose your home to scanning.
 
 | Issue | Potential Solution |
 | :--- | :--- |
-| **"My internet broke!"** | DNS resolution failed. Temporarily set your router DNS to **Quad9** (`9.9.9.9`) or **Mullvad** (`194.242.2.2`) to restore access, then check the Hub status. |
-| **"I can't connect remotely"** | **1.** Verify Port 51820 (UDP) is forwarded. **2.** If using OpenWrt, ensure "Double NAT" is handled (ISP -> OpenWrt -> Hub). **3.** Check if your ISP uses CGNAT. |
+| **"My internet broke!"** | DNS resolution failed. Temporarily set your router DNS to **[Quad9](https://www.quad9.net/)** (`9.9.9.9` - [Privacy Policy](https://www.quad9.net/privacy/)) or **[Mullvad](https://mullvad.net/en/help/dns-over-https-and-dns-over-tls/)** (`194.242.2.2` - [Privacy Policy](https://mullvad.net/en/help/privacy-policy/)) to restore access, then check the Hub status. <br><br> **⚠️ CRITICAL**: While we recommend these for their strong privacy focus and "no-logging" policies, **do not** set them as your secondary DNS IP if you want absolute privacy. Most operating systems will query both DNS servers simultaneously; if you have a "fast" public DNS as a secondary, your queries will leak to them even if your self-hosted one is working. Use your self-hosted DNS exclusively once it is stable. |
+| **"I can't connect remotely"** | **1.** Verify Port 51820 (UDP) is forwarded. **2.** If using OpenWrt, ensure "Double NAT" is handled (ISP -> OpenWrt -> Hub). **3.** Check if your ISP uses CGNAT. <details><summary>What is CGNAT?</summary>Carrier-Grade NAT (CGNAT) is a technique used by ISPs to share a single public IP address among multiple customers. This makes port forwarding impossible because you don't have a unique public IP. If you are behind CGNAT, traditional VPN/Port Forwarding won't work without a middleman like Tailscale or a VPS relay.</details> |
 | **"Services are slow"** | **1.** Check VPN throughput in the dashboard. **2.** Try a different ProtonVPN server config. **3.** Ensure your host has sufficient CPU/RAM for compilation tasks. |
 | **"SSL is invalid"** | Check `certbot/monitor.log` via dashboard. Ensure ports 80/443 are reachable for validation. Verify your deSEC token. |
 
@@ -671,7 +740,10 @@ tar -czf immich-backup.tar.gz /data/AppData/privacy-hub/immich
 
 ---
 
-## 🧪 Staged Headless Verification
+## 🧩 Advanced Usage
+
+<details>
+<summary><strong>🧪 Staged Headless Verification</strong> (CI/CD & Automation)</summary>
 
 For developers and advanced users, the Privacy Hub includes a staged, headless verification system designed for rigorous CI/CD environments and automated stability testing. This system utilizes a state-aware orchestrator to manage multi-stage deployments with automatic crash recovery.
 
@@ -692,9 +764,7 @@ To execute the full verification suite in headless mode:
 *   **📊 Comprehensive Logging**: Each stage generates dedicated logs (e.g., `test/stage_1.log`) and a global `test/progress.log` for auditability.
 *   **🎭 UI Audit**: Automatically executes Puppeteer-based interaction tests to ensure the Material Design 3 dashboard remains functional across all supported platforms.
 
----
-
-## 🧩 Advanced Usage: Add Your Own Services
+</details>
 
 <details>
 <summary><strong>🔧 Add Your Own Services</strong> (advanced, not needed for new users)</summary>
@@ -750,7 +820,7 @@ The dashboard catalog is generated in `lib/scripts.sh`. Find the `cat > "$SERVIC
 <details>
 <summary><strong>🧪 Automated Verification</strong> (Click to expand)</summary>
 
-To ensure a "set and forget" experience, every release undergoes a rigorous automated verification pipeline. For more details on running these tests yourself, see the [Staged Headless Verification](#-staged-headless-verification) section.
+To ensure a "set and forget" experience, every release undergoes a rigorous automated verification pipeline.
 *   **Interaction Audit**: Puppeteer-based suite simulates real user behavior.
 *   **Non-Interactive Deployment**: verified `-p -y` flow for zero-prompt success.
 *   **M3 Compliance Check**: Automated layout audits ensure the dynamic grid and chips adapt to any screen size.

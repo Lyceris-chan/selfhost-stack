@@ -1,28 +1,28 @@
 [
     {
         "id": 1,
-        "description": "Stage 1: Core Infrastructure (Hub, AdGuard, Unbound)",
+        "description": "Stage 1: Core Infrastructure & Networking (Hub, AdGuard, Unbound, WireGuard)",
         "command": "python3 test/test_runner.py --stage 1",
         "log_file": "test/stage_1.log",
-        "status": "in_progress"
+        "status": "pending"
     },
     {
         "id": 2,
-        "description": "Stage 2: Redlib & Privacy Frontends A",
+        "description": "Stage 2: Standard Privacy Frontends (Redlib, Wikiless, Rimgo, BreezeWiki, AnonOverflow, Scribe)",
         "command": "python3 test/test_runner.py --stage 2",
         "log_file": "test/stage_2.log",
         "status": "pending"
     },
     {
         "id": 3,
-        "description": "Stage 3: Invidious Stack",
+        "description": "Stage 3: Invidious & Search Stack (Invidious, SearXNG)",
         "command": "python3 test/test_runner.py --stage 3",
         "log_file": "test/stage_3.log",
         "status": "pending"
     },
     {
         "id": 4,
-        "description": "Stage 4: Management Tools",
+        "description": "Stage 4: Management, Utilities & Media (Portainer, Memos, Cobalt, Odido, VERT, Immich)",
         "command": "python3 test/test_runner.py --stage 4",
         "log_file": "test/stage_4.log",
         "status": "pending"
