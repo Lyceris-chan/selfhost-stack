@@ -643,12 +643,13 @@ setup_configs() {
             log_info "Checking validity of existing SSL certificate..."
             if $DOCKER_CMD run --rm -v "$AGH_CONF_DIR:/certs" neilpang/acme.sh:latest /bin/sh -c \
                 "openssl x509 -in /certs/ssl.crt -checkend 2592000 -noout && \
-                 openssl x509 -in /certs/ssl.crt -noout -subject | grep -q '$DESEC_DOMAIN'" >/dev/null 2>&1; then
+                 openssl x509 -in /certs/ssl.crt -noout -subject | grep -q '$DESEC_DOMAIN' && \
+                 openssl x509 -in /certs/ssl.crt -noout -issuer | grep -qE 'Let.s Encrypt|R3|ISRG|ZeroSSL'" >/dev/null 2>&1; then
                 log_info "Existing SSL certificate is valid for $DESEC_DOMAIN and has >30 days remaining."
                 log_info "Skipping new certificate request to conserve rate limits."
                 SKIP_CERT_REQ=true
             else
-                log_info "Existing certificate is invalid, expired, or for a different domain. Requesting new one..."
+                log_info "Existing certificate is invalid, expired, or self-signed. Requesting new one..."
             fi
         fi
 

@@ -249,18 +249,18 @@ DOCKER_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" GOTOOLCHAIN=auto docker
 DOCKER_COMPOSE_FINAL_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" GOTOOLCHAIN=auto $DOCKER_COMPOSE_CMD"
 
 # Initialize deSEC variables to prevent unbound variable errors
-DESEC_DOMAIN=""
-DESEC_TOKEN=""
-DESEC_MONITOR_DOMAIN=""
-DESEC_MONITOR_TOKEN=""
-SCRIBE_GH_USER=""
-SCRIBE_GH_TOKEN=""
-ODIDO_USER_ID=""
-ODIDO_TOKEN=""
-ODIDO_API_KEY=""
+DESEC_DOMAIN="${DESEC_DOMAIN:-}"
+DESEC_TOKEN="${DESEC_TOKEN:-}"
+DESEC_MONITOR_DOMAIN="${DESEC_MONITOR_DOMAIN:-}"
+DESEC_MONITOR_TOKEN="${DESEC_MONITOR_TOKEN:-}"
+SCRIBE_GH_USER="${SCRIBE_GH_USER:-}"
+SCRIBE_GH_TOKEN="${SCRIBE_GH_TOKEN:-}"
+ODIDO_USER_ID="${ODIDO_USER_ID:-}"
+ODIDO_TOKEN="${ODIDO_TOKEN:-}"
+ODIDO_API_KEY="${ODIDO_API_KEY:-}"
 ODIDO_USE_VPN="true"
-VERTD_PUB_URL=""
-VERT_PUB_HOSTNAME=""
+VERTD_PUB_URL="${VERTD_PUB_URL:-}"
+VERT_PUB_HOSTNAME="${VERT_PUB_HOSTNAME:-}"
 WG_HASH_CLEAN=""
 FOUND_OCTET=""
 AGH_USER="adguard"
@@ -592,12 +592,14 @@ setup_secrets() {
             echo "   2. Create a domain (e.g., myhome.dedyn.io)"
             echo "   3. Create a NEW Token in Token Management (if you lost the old one)"
             echo ""
-            echo -n "3. deSEC Domain (e.g., myhome.dedyn.io, or Enter to skip): "
-            read -r DESEC_DOMAIN
+            echo -n "3. deSEC Domain (e.g., myhome.dedyn.io${DESEC_DOMAIN:+; current: $DESEC_DOMAIN}, or Enter to skip): "
+            read -r input_domain
+            DESEC_DOMAIN="${input_domain:-$DESEC_DOMAIN}"
             if [ -n "$DESEC_DOMAIN" ]; then
-                echo -n "4. deSEC API Token: "
-                read -rs DESEC_TOKEN
+                echo -n "4. deSEC API Token${DESEC_TOKEN:+ (current: [HIDDEN])}: "
+                read -rs input_token
                 echo ""
+                DESEC_TOKEN="${input_token:-$DESEC_TOKEN}"
             else
                 DESEC_TOKEN=""
                 echo "   Skipping deSEC (will use self-signed certificates)"

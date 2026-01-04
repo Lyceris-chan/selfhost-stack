@@ -91,10 +91,11 @@ log_info "All critical images pulled successfully."
 allocate_subnet
 detect_network
 setup_static_assets
-setup_configs # Includes DNS/SSL config
 
 # 6. Auth & Secrets
 setup_secrets
+
+setup_configs # Includes DNS/SSL config
 
 # 7. WireGuard Config
 echo ""
