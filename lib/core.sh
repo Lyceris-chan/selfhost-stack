@@ -137,7 +137,7 @@ fi
 export GIT_CONFIG_PARAMETERS="'advice.detachedHead=false'"
 
 # Verify core dependencies before proceeding.
-REQUIRED_COMMANDS="docker curl git crontab iptables flock"
+REQUIRED_COMMANDS="docker curl git crontab iptables flock jq awk sed"
 if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
     echo "[CRIT] sudo is required for non-root users. Please install it."
     exit 1
@@ -378,10 +378,28 @@ detect_network() {
         log_info "Using LAN IP Override: $LAN_IP"
     elif [ -z "${LAN_IP:-}" ]; then
         # Try to find primary interface IP
-        LAN_IP=$(hostname -I | awk '{print $1}')
+        # 1. Try ip route with a neutral destination (routing table lookup only)
+        # Using 10.255.255.255 as a destination to see which interface/source IP would be used
+        LAN_IP=$(ip route get 10.255.255.255 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -n1)
+        
+        # 2. Fallback: Try to find interface with default route
         if [ -z "$LAN_IP" ]; then
-            LAN_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7}')
+            local default_iface=$(ip route show default 2>/dev/null | awk '/default/ {print $5}' | head -n1)
+            if [ -n "$default_iface" ]; then
+                LAN_IP=$(ip -4 addr show "$default_iface" scope global | grep 'inet ' | awk '{print $2}' | cut -d/ -f1 | head -n1)
+            fi
         fi
+
+        # 3. Fallback: hostname -I (if available)
+        if [ -z "$LAN_IP" ]; then
+            LAN_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+        fi
+
+        # 4. Last resort: Any global IPv4 address
+        if [ -z "$LAN_IP" ]; then
+            LAN_IP=$(ip -4 addr show scope global | grep 'inet ' | awk '{print $2}' | cut -d/ -f1 | head -n1)
+        fi
+
         if [ -z "$LAN_IP" ]; then
             log_crit "Failed to detect LAN IP. Please use LAN_IP_OVERRIDE."
             exit 1

@@ -1357,7 +1357,7 @@ EOF
       - "$GLUETUN_ENV_FILE"
     healthcheck:
       # Check both the control server and actual VPN tunnel connectivity
-      test: ["CMD-SHELL", "wget --user=gluetun --password=$ADMIN_PASS_COMPOSE -qO- http://127.0.0.1:8000/v1/vpn/status | grep -q '\"status\":\"running\"' && wget -U \"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\" --spider -q --timeout=5 http://connectivity-check.ubuntu.com || exit 1"]
+      test: ["CMD-SHELL", "wget --user=gluetun --password=$ADMIN_PASS_COMPOSE -qO- http://127.0.0.1:8000/v1/vpn/status | grep -q '\"status\":\"running\"' && wget -U \"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\" --spider -q --timeout=5 http://example.com || exit 1"]
     restart: unless-stopped
     deploy:
       resources:
@@ -1508,7 +1508,7 @@ EOF
     volumes:
       - "$UNBOUND_CONF:/etc/unbound/unbound.conf:ro"
     healthcheck:
-      test: ["CMD", "/usr/bin/drill-hc", "@127.0.0.1", "google.com"]
+      test: ["CMD", "/usr/bin/drill-hc", "@127.0.0.1", "example.com"]
       interval: 30s
       timeout: 5s
       retries: 3

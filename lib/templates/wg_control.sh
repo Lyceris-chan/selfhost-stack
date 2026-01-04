@@ -271,11 +271,10 @@ WGEDATAEOF
         HEALTH="unknown"
         DETAILS=""
         if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${s_name_real}$"; then
-            STATE_JSON=$(docker inspect --format='{{json .State}}' "$s_name_real" 2>/dev/null)
-            HEALTH=$(echo "$STATE_JSON" | grep -oP '"Health":.*"Status":"\K[^"\n]+' || echo "running")
+            HEALTH=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$s_name_real" 2>/dev/null || echo "running")
             # If unhealthy, extract last error
             if [ "$HEALTH" = "unhealthy" ]; then
-                DETAILS=$(echo "$STATE_JSON" | grep -oP '"Log":\[\{.*"Output":"\K[^"\\]+' | tail -1 | sed 's/\\n/ /g' | sed 's/\\//g')
+                DETAILS=$(docker inspect --format='{{range .State.Health.Log}}{{println .Output}}{{end}}' "$s_name_real" 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\\n/ /g' | sed 's/\\//g' | cut -c1-100)
             fi
         fi
 

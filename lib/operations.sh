@@ -626,7 +626,7 @@ deploy_stack() {
             fi
             
             if echo "$AUTH_RESPONSE" | grep -q "jwt"; then
-                PORTAINER_JWT=$(echo "$AUTH_RESPONSE" | grep -oP '"jwt":"\K[^"\'']+')
+                PORTAINER_JWT=$(echo "$AUTH_RESPONSE" | sed -n 's/.*"jwt":"\([^"\'']*\).*/\1/p')
                 
                 # 1. Disable Telemetry/Analytics
                 log_info "Disabling Portainer anonymous telemetry..."
@@ -637,10 +637,10 @@ deploy_stack() {
 
                 # 2. Rename 'admin' user to 'portainer' (Security Best Practice)
                 # First, get user ID of admin (usually 1)
-                ADMIN_ID=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/users/admin/check" 2>/dev/null | grep -oP 'id":\K\d+' || echo "1")
+                ADMIN_ID=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/users/admin/check" 2>/dev/null | sed -n 's/.*"id":\([0-9]*\).*/\1/p' || echo "1")
                 
                 # Only rename if not already named 'portainer'
-                CHECK_USER=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/users/$ADMIN_ID" | grep -oP '"Username":"\K[^"\'']+')
+                CHECK_USER=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/users/$ADMIN_ID" | sed -n 's/.*"Username":"\([^"\'']*\).*/\1/p')
                 if [ "$CHECK_USER" != "portainer" ]; then
                     log_info "Renaming default 'admin' user to 'portainer'..."
                     curl -s --max-time 5 -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/users/$ADMIN_ID" \
