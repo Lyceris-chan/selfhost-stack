@@ -1197,7 +1197,7 @@ EOF
       - "$CONFIG_DIR/theme.json:/app/theme.json"
       - "$CONFIG_DIR/services.json:/app/services.json"
     environment:
-      - HUB_API_KEY=$ODIDO_API_KEY
+      - HUB_API_KEY=$HUB_API_KEY
       - ADMIN_PASS_RAW=$ADMIN_PASS_RAW
       - VPN_PASS_RAW=$VPN_PASS_RAW
       - CONTAINER_PREFIX=${CONTAINER_PREFIX}
@@ -1242,7 +1242,7 @@ EOF
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment:
-      - API_KEY=$ODIDO_API_KEY
+      - API_KEY=$HUB_API_KEY
       - ODIDO_USER_ID=$ODIDO_USER_ID
       - ODIDO_TOKEN=$ODIDO_TOKEN
       - PORT=8080
@@ -1275,7 +1275,7 @@ EOF
     networks: [dhi-frontnet]
     ports: ["$LAN_IP:8085:8080"]
     environment:
-      - API_KEY=$ODIDO_API_KEY
+      - API_KEY=$HUB_API_KEY
       - ODIDO_USER_ID=$ODIDO_USER_ID
       - ODIDO_TOKEN=$ODIDO_TOKEN
       - PORT=8080

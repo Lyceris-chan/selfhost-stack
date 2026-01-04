@@ -1,0 +1,12 @@
+# Progress Log
+- [completed] Remove em-dashes from README.md
+- [completed] Add availability and redundancy warning to README.md
+- [completed] Add collapsed CGNAT explanation to README.md
+- [completed] Update RAM speed to 2666 in README.md
+- [completed] Ensure Portainer and Nginx dashboard are marked as DHI in README.md
+- [completed] Collapse technical/advanced parts of README.md for better UX
+- [completed] Add Unbound and AdGuard configuration details and RFC references to README.md
+- [completed] Add Staged Headless Verification under Advanced Usage in README.md
+- [completed] Update DNS entries (Quad9/Mullvad) with links, policies, and usage warnings in README.md
+- [completed] Implement DHI source builds for Portainer and Dashboard
+- [completed] Verify DHI builds via custom verification run

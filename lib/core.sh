@@ -642,9 +642,11 @@ setup_secrets() {
             if [ -n "$ODIDO_TOKEN" ]; then
                 log_info "Fetching Odido User ID automatically..."
                 # Use curl with -L to follow redirects and capture the effective URL
-                # Note: curl may fail on network issues, so we use || true to prevent script exit
-                ODIDO_REDIRECT_URL=$(curl -sL --max-time 10 -o /dev/null -w '%{url_effective}' 
-                    "https://www.odido.nl/my/bestelling-en-status/overzicht" || echo "FAILED")
+                # We pass the Authorization header and a mobile User-Agent to mimic the app
+                ODIDO_REDIRECT_URL=$(curl -sL --max-time 10 -o /dev/null -w '%{url_effective}' \
+                    -H "Authorization: Bearer $ODIDO_TOKEN" \
+                    -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
+                    "https://capi.odido.nl/account/current" || echo "FAILED")
                 
                 # Extract User ID from URL path - it's a 12-character hex string after capi.odido.nl/ 
                 # Format: https://capi.odido.nl/{12-char-hex-userid}/account/...
@@ -675,8 +677,8 @@ setup_secrets() {
         fi
         
         log_info "Generating Secrets..."
-        ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
         HUB_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+        ODIDO_API_KEY="$HUB_API_KEY"
         
         # Safely generate WG hash (using generic alpine to avoid GHCR pull)
         # wg-easy uses standard bcrypt for its PASSWORD_HASH
@@ -725,6 +727,7 @@ SCRIBE_GH_USER="$SCRIBE_GH_USER"
 SCRIBE_GH_TOKEN="$SCRIBE_GH_TOKEN"
 ODIDO_TOKEN="$ODIDO_TOKEN"
 ODIDO_USER_ID="$ODIDO_USER_ID"
+ODIDO_API_KEY="$ODIDO_API_KEY"
 HUB_API_KEY="$HUB_API_KEY"
 UPDATE_STRATEGY="stable"
 SEARXNG_SECRET="$SEARXNG_SECRET"
@@ -754,10 +757,20 @@ EOF
             PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
             echo "PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'" >> "$BASE_DIR/.secrets"
         fi
-        if [ -z "${ODIDO_API_KEY:-}" ]; then
-            ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+        # Ensure API keys are consistent and present
+        if [ -z "${HUB_API_KEY:-}" ] && [ -n "${ODIDO_API_KEY:-}" ]; then
+            HUB_API_KEY="$ODIDO_API_KEY"
+            echo "HUB_API_KEY=$HUB_API_KEY" >> "$BASE_DIR/.secrets"
+        elif [ -n "${HUB_API_KEY:-}" ] && [ -z "${ODIDO_API_KEY:-}" ]; then
+            ODIDO_API_KEY="$HUB_API_KEY"
+            echo "ODIDO_API_KEY=$ODIDO_API_KEY" >> "$BASE_DIR/.secrets"
+        elif [ -z "${HUB_API_KEY:-}" ] && [ -z "${ODIDO_API_KEY:-}" ]; then
+            HUB_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+            ODIDO_API_KEY="$HUB_API_KEY"
+            echo "HUB_API_KEY=$HUB_API_KEY" >> "$BASE_DIR/.secrets"
             echo "ODIDO_API_KEY=$ODIDO_API_KEY" >> "$BASE_DIR/.secrets"
         fi
+
         if [ -z "${UPDATE_STRATEGY:-}" ]; then
             UPDATE_STRATEGY="stable"
             echo "UPDATE_STRATEGY=stable" >> "$BASE_DIR/.secrets"
