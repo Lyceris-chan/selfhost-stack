@@ -137,7 +137,7 @@ fi
 export GIT_CONFIG_PARAMETERS="'advice.detachedHead=false'"
 
 # Verify core dependencies before proceeding.
-REQUIRED_COMMANDS="docker curl git crontab iptables flock jq awk sed openssl"
+REQUIRED_COMMANDS="docker curl git crontab iptables flock jq awk sed grep find tar ip"
 if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
     echo "[CRIT] sudo is required for non-root users. Please install it."
     exit 1

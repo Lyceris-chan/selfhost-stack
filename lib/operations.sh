@@ -36,23 +36,32 @@ check_cert_risk() {
             EXISTING_DOMAIN=$(grep "DESEC_DOMAIN=" "$BASE_DIR/.secrets" | cut -d'=' -f2 | tr -d '"' | tr -d "'")
         fi
 
-        # Extract Certificate Details
-        CERT_CN=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -subject -nameopt RFC2253 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
-        CERT_ISSUER_CN=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -issuer -nameopt RFC2253 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
-        # Fallback for issuer if CN is missing
-        [ -z "$CERT_ISSUER_CN" ] && CERT_ISSUER_CN=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -issuer 2>/dev/null | sed 's/issuer=//')
+        # Extract Certificate Details using a wrapper to handle missing local openssl
+        if command -v openssl >/dev/null 2>&1; then
+            OSSL_X509() { openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" "$@"; }
+            OSSL_PKEY() { openssl pkey "$@"; }
+        else
+            # Use neilpang/acme.sh as it contains openssl and is already required for LE certs
+            OSSL_X509() { $DOCKER_CMD run --rm --entrypoint openssl -v "$BASE_DIR/config/adguard:/certs:ro" neilpang/acme.sh x509 -in /certs/ssl.crt "$@"; }
+            OSSL_PKEY() { $DOCKER_CMD run --rm -i --entrypoint openssl neilpang/acme.sh pkey "$@"; }
+        fi
 
-        CERT_DATES=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -dates 2>/dev/null)
+        CERT_CN=$(OSSL_X509 -noout -subject -nameopt RFC2253 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
+        CERT_ISSUER_CN=$(OSSL_X509 -noout -issuer -nameopt RFC2253 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
+        # Fallback for issuer if CN is missing
+        [ -z "$CERT_ISSUER_CN" ] && CERT_ISSUER_CN=$(OSSL_X509 -noout -issuer 2>/dev/null | sed 's/issuer=//')
+
+        CERT_DATES=$(OSSL_X509 -noout -dates 2>/dev/null)
         CERT_NOT_AFTER=$(echo "$CERT_DATES" | grep "notAfter=" | cut -d= -f2)
-        CERT_SERIAL=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -serial 2>/dev/null | cut -d= -f2)
-        CERT_FINGERPRINT=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)
+        CERT_SERIAL=$(OSSL_X509 -noout -serial 2>/dev/null | cut -d= -f2)
+        CERT_FINGERPRINT=$(OSSL_X509 -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)
         
-        CERT_KEY_INFO=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -pubkey 2>/dev/null | openssl pkey -pubin -pubout -text -noout 2>/dev/null | grep -i "Public-Key" | sed 's/Public-Key: //')
-        CERT_SIG_ALG=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -text 2>/dev/null | grep "Signature Algorithm" | head -n1 | awk -F: '{print $2}' | xargs)
-        CERT_SAN=$(openssl x509 -in "$BASE_DIR/config/adguard/ssl.crt" -noout -ext subjectAltName 2>/dev/null | grep -A1 "Subject Alternative Name" | tail -n1 | sed 's/^[[:space:]]*//')
+        CERT_KEY_INFO=$(OSSL_X509 -noout -pubkey 2>/dev/null | OSSL_PKEY -pubin -pubout -text -noout 2>/dev/null | grep -i "Public-Key" | sed 's/Public-Key: //')
+        CERT_SIG_ALG=$(OSSL_X509 -noout -text 2>/dev/null | grep "Signature Algorithm" | head -n1 | awk -F: '{print $2}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        CERT_SAN=$(OSSL_X509 -noout -ext subjectAltName 2>/dev/null | grep -A1 "Subject Alternative Name" | tail -n1 | sed 's/^[[:space:]]*//')
 
         # Check validity (expiration)
-        if openssl x509 -checkend 0 -noout -in "$BASE_DIR/config/adguard/ssl.crt" >/dev/null 2>&1; then
+        if OSSL_X509 -checkend 0 -noout >/dev/null 2>&1; then
             CERT_VALIDITY="✅ Valid (Active)"
         else
             CERT_VALIDITY="❌ EXPIRED"
@@ -87,7 +96,7 @@ check_cert_risk() {
         # Check for standard ACME issuers (Let's Encrypt, ZeroSSL, etc)
         IS_ACME=false
         # Use the extracted issuer string for detection rather than grepping the raw file
-        if echo "$CERT_ISSUER" | grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL"; then
+        if echo "$CERT_ISSUER_CN" | grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL"; then
             IS_ACME=true
             log_warn "This appears to be a valid ACME-signed certificate."
             echo "   Deleting this file may trigger rate limits (e.g. Let's Encrypt 5/week)."
@@ -502,7 +511,12 @@ perform_backup() {
     log_info "Backup created successfully at $BACKUP_DIR/$backup_name"
     
     # Keep only last 5 backups
-    ls -t "$BACKUP_DIR"/backup_* | tail -n +6 | xargs rm -f 2>/dev/null || true
+    BACKUP_FILES=$(ls -t "$BACKUP_DIR"/backup_* 2>/dev/null | tail -n +6 || true)
+    if [ -n "$BACKUP_FILES" ]; then
+        for f in $BACKUP_FILES; do
+            rm -f "$f"
+        done
+    fi
 }
 
 swap_slots() {
