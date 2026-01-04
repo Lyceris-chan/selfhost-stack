@@ -22,32 +22,32 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SCRIPT_DIR
 
-# 1. Core Logic (Utils, Init, Network, Auth)
+# 1. Core Logic (Utils, Init, Network, Auth) - Defines: log_info, log_warn, log_crit, ask_confirm, pull_with_retry, detect_dockerfile, allocate_subnet, safe_remove_network, detect_network, validate_wg_config, extract_wg_profile_name, authenticate_registries, setup_secrets, generate_protonpass_export
 source "$SCRIPT_DIR/lib/core.sh"
 
-# 2. Service Logic (Sources, Scripts, Configs, Compose, Dashboard)
+# 2. Service Logic (Sources, Scripts, Configs, Compose, Dashboard) - Defines: sync_sources, generate_scripts, setup_static_assets, download_remote_assets, setup_configs, generate_libredirect_export, generate_compose, generate_dashboard
 source "$SCRIPT_DIR/lib/services.sh"
 
-# 3. Operations Logic (Cleanup, Backup, Deploy)
+# 3. Operations Logic (Cleanup, Backup, Deploy) - Defines: check_docker_rate_limit, check_cert_risk, clean_environment, cleanup_build_artifacts, perform_backup, swap_slots, finalize_swap, stop_inactive_slots, deploy_stack
 source "$SCRIPT_DIR/lib/operations.sh"
 
 # --- Main Execution Flow ---
 
 # 1. Cleanup & Reset
 if [ "$CLEAN_ONLY" = true ]; then
-    clean_environment
-    log_info "Clean-only mode enabled. Deployment skipped."
+    clean_environment # (from lib/operations.sh)
+    log_info "Clean-only mode enabled. Deployment skipped." # (from lib/core.sh)
     exit 0
 fi
 
 # 2. Registry Authentication
-authenticate_registries
+authenticate_registries # (from lib/core.sh)
 
 # 3. Clean Environment (if not clean-only, already handled above if clean-only)
-clean_environment
+clean_environment # (from lib/operations.sh)
 
 # 4. Pre-pull Critical Images
-log_info "Pre-pulling core infrastructure images in parallel..."
+log_info "Pre-pulling core infrastructure images in parallel..." # (from lib/core.sh)
 $SUDO mkdir -p "$BASE_DIR"
 DOTENV_FILE="$BASE_DIR/.env"
 if [ ! -f "$DOTENV_FILE" ]; then $SUDO touch "$DOTENV_FILE"; fi
@@ -70,7 +70,7 @@ CRITICAL_IMAGES="nginx:1.27.3-alpine python:3.11.11-alpine3.21 node:20.18.1-alpi
 
 PIDS=""
 for img in $CRITICAL_IMAGES; do
-    pull_with_retry "$img" &
+    pull_with_retry "$img" & # (from lib/core.sh)
     PIDS="$PIDS $!"
 done
 
@@ -82,20 +82,20 @@ for pid in $PIDS; do
 done
 
 if [ "$SUCCESS" = false ]; then
-    log_crit "One or more critical images failed to pull. Aborting."
+    log_crit "One or more critical images failed to pull. Aborting." # (from lib/core.sh)
     exit 1
 fi
-log_info "All critical images pulled successfully."
+log_info "All critical images pulled successfully." # (from lib/core.sh)
 
 # 5. Network & Directories
-allocate_subnet
-detect_network
-setup_static_assets
+allocate_subnet # (from lib/core.sh)
+detect_network # (from lib/core.sh)
+setup_static_assets # (from lib/services.sh)
 
 # 6. Auth & Secrets
-setup_secrets
+setup_secrets # (from lib/core.sh)
 
-setup_configs # Includes DNS/SSL config
+setup_configs # (from lib/services.sh) Includes DNS/SSL config
 
 # 7. WireGuard Config
 echo ""
@@ -119,19 +119,19 @@ echo "  ✓ VPN Accelerator = ON (recommended for performance)"
 echo "-----------------------------------------------------------"
 echo ""
 
-if validate_wg_config; then
-    log_info "Existing WireGuard config found and validated. Skipping paste."
+if validate_wg_config; then # (from lib/core.sh)
+    log_info "Existing WireGuard config found and validated. Skipping paste." # (from lib/core.sh)
 else
     if [ -f "$ACTIVE_WG_CONF" ] && [ -s "$ACTIVE_WG_CONF" ]; then
-        log_warn "Existing WireGuard config was invalid/empty. Removed."
+        log_warn "Existing WireGuard config was invalid/empty. Removed." # (from lib/core.sh)
         rm "$ACTIVE_WG_CONF"
     fi
 
     if [ -n "${WG_CONF_B64:-}" ]; then
-        log_info "WireGuard configuration provided in environment. Decoding..."
+        log_info "WireGuard configuration provided in environment. Decoding..." # (from lib/core.sh)
         echo "$WG_CONF_B64" | base64 -d | $SUDO tee "$ACTIVE_WG_CONF" >/dev/null
     elif [ "$AUTO_CONFIRM" = true ]; then
-        log_warn "Auto-confirm active: Using specific WireGuard configuration."
+        log_warn "Auto-confirm active: Using specific WireGuard configuration." # (from lib/core.sh)
         cat <<EOF | $SUDO tee "$ACTIVE_WG_CONF" >/dev/null
 [Interface]
 # Bouncing = 1
@@ -161,15 +161,15 @@ EOF
     
     $PYTHON_CMD "$SCRIPT_DIR/lib/format_wg.py" "$ACTIVE_WG_CONF"
 
-    if ! validate_wg_config; then
-        log_crit "The pasted WireGuard configuration is invalid."
+    if ! validate_wg_config; then # (from lib/core.sh)
+        log_crit "The pasted WireGuard configuration is invalid." # (from lib/core.sh)
         exit 1
     fi
 fi
 
 # 8. Extract Profile Name
 
-INITIAL_PROFILE_NAME=$(extract_wg_profile_name "$ACTIVE_WG_CONF" || true)
+INITIAL_PROFILE_NAME=$(extract_wg_profile_name "$ACTIVE_WG_CONF" || true) # (from lib/core.sh)
 if [ -z "$INITIAL_PROFILE_NAME" ]; then INITIAL_PROFILE_NAME="Initial-Setup"; fi
 
 INITIAL_PROFILE_NAME_SAFE=$(echo "$INITIAL_PROFILE_NAME" | tr -cd 'a-zA-Z0-9-_#')
@@ -181,28 +181,28 @@ $SUDO chmod 644 "$GLUETUN_ENV_FILE" "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIA
 echo "$INITIAL_PROFILE_NAME_SAFE" | $SUDO tee "$ACTIVE_PROFILE_NAME_FILE" >/dev/null
 
 # 9. Sync Sources (and patch)
-sync_sources
+sync_sources # (from lib/services.sh)
 
 # 10. Generate Scripts & Dashboard
 if [ "$SWAP_SLOTS" = true ]; then
-    swap_slots
+    swap_slots # (from lib/operations.sh)
 fi
 
-generate_scripts
-generate_dashboard
+generate_scripts # (from lib/services.sh)
+generate_dashboard # (from lib/services.sh)
 
 # 11. Generate Compose
-generate_compose
+generate_compose # (from lib/services.sh)
 
 # 12. Setup Exports (Passwords & Redirections)
-generate_protonpass_export
-generate_libredirect_export
+generate_protonpass_export # (from lib/core.sh)
+generate_libredirect_export # (from lib/services.sh)
 
 # 13. Deploy
-deploy_stack
+deploy_stack # (from lib/operations.sh)
 
 # 14. Cleanup Inactive Slots (post-success)
 if [ "$SWAP_SLOTS" = true ]; then
-    finalize_swap
-    stop_inactive_slots
+    finalize_swap # (from lib/operations.sh)
+    stop_inactive_slots # (from lib/operations.sh)
 fi
