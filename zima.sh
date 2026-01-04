@@ -18,20 +18,18 @@ set -euo pipefail
 # ESTABLISH CONTROL. MAINTAIN PRIVACY.
 # ==============================================================================
 
-# Source libraries
+# Source Consolidated Libraries
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/lib/utils.sh"
-source "$SCRIPT_DIR/lib/init.sh"
-source "$SCRIPT_DIR/lib/cleanup.sh"
-source "$SCRIPT_DIR/lib/network.sh"
-source "$SCRIPT_DIR/lib/auth.sh"
-source "$SCRIPT_DIR/lib/config_gen.sh"
-source "$SCRIPT_DIR/lib/dashboard_gen.sh"
-source "$SCRIPT_DIR/lib/sources.sh"
-source "$SCRIPT_DIR/lib/scripts.sh"
-source "$SCRIPT_DIR/lib/compose_gen.sh"
-source "$SCRIPT_DIR/lib/deploy.sh"
-source "$SCRIPT_DIR/lib/backup.sh"
+export SCRIPT_DIR
+
+# 1. Core Logic (Utils, Init, Network, Auth)
+source "$SCRIPT_DIR/lib/core.sh"
+
+# 2. Service Logic (Sources, Scripts, Configs, Compose, Dashboard)
+source "$SCRIPT_DIR/lib/services.sh"
+
+# 3. Operations Logic (Cleanup, Backup, Deploy)
+source "$SCRIPT_DIR/lib/operations.sh"
 
 # --- Main Execution Flow ---
 
@@ -89,15 +87,10 @@ if [ "$SUCCESS" = false ]; then
 fi
 log_info "All critical images pulled successfully."
 
-  # 5. Network & Directories
-
-  allocate_subnet
-
-  detect_network
-
-  setup_static_assets
-
-
+# 5. Network & Directories
+allocate_subnet
+detect_network
+setup_static_assets
 setup_configs # Includes DNS/SSL config
 
 # 6. Auth & Secrets

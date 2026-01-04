@@ -19,7 +19,9 @@ const servicesList = [
   'immich',
   'adguard',
   'portainer',
-  'wg-easy'
+  'wg-easy',
+  'hub-api',
+  'odido-booster'
 ];
 const serviceUrls = {
   invidious: 'http://127.0.0.1:3000',
@@ -36,7 +38,9 @@ const serviceUrls = {
   immich: 'http://127.0.0.1:2283',
   adguard: 'http://127.0.0.1:8083',
   portainer: 'http://127.0.0.1:9000',
-  'wg-easy': 'http://127.0.0.1:51821'
+  'wg-easy': 'http://127.0.0.1:51821',
+  'hub-api': 'http://127.0.0.1:55555',
+  'odido-booster': 'http://127.0.0.1:8085'
 };
 
 function normalizeBaseUrl(url) {
@@ -148,24 +152,28 @@ async function checkBasicPage(page, name, url, mockServices) {
   }
 }
 
-async function testBreezewiki(page, baseUrl, mockServices) {
-  const url = joinUrl(baseUrl, BREEZEWIKI_PATH);
+async function testSpecialized(page, name, baseUrl, path, pattern, mockServices) {
+  const url = joinUrl(baseUrl, path);
   if (mockServices) {
     const ok = isValidUrl(url);
-    return { name: 'BreezeWiki /paladins/wiki/Talus', url, status: ok ? 200 : null, ok, mocked: true };
+    return { name, url, status: ok ? 200 : null, ok, mocked: true };
   }
   try {
     const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     const status = response ? response.status() : null;
-    const hasTalus = await page.evaluate(() => {
+    const match = await page.evaluate((pat) => {
       const bodyText = document.body ? document.body.innerText : '';
-      return /talus/i.test(bodyText);
-    });
-    const ok = !!response && status < 400 && hasTalus;
-    return { name: 'BreezeWiki /paladins/wiki/Talus', url, status, ok };
+      return new RegExp(pat, 'i').test(bodyText);
+    }, pattern);
+    const ok = !!response && status < 400 && match;
+    return { name, url, status, ok };
   } catch (error) {
-    return { name: 'BreezeWiki /paladins/wiki/Talus', url, status: null, ok: false, error: error.message };
+    return { name, url, status: null, ok: false, error: error.message };
   }
+}
+
+async function testBreezewiki(page, baseUrl, mockServices) {
+  return testSpecialized(page, 'BreezeWiki /paladins/wiki/Talus', baseUrl, BREEZEWIKI_PATH, 'talus', mockServices);
 }
 
 async function testRimgoRandomImage(page, baseUrl, mockServices) {
@@ -266,25 +274,27 @@ async function run() {
     services.map((s) => [s.container, s.url]).filter(([key, val]) => key && val),
   );
 
-  if (serviceMap.breezewiki) {
-    results.push(await withPage(browser, (page) => testBreezewiki(page, serviceMap.breezewiki, MOCK_SERVICE_PAGES)));
-  } else {
-    results.push({ name: 'BreezeWiki /paladins/wiki/Talus', url: 'N/A', ok: false, error: 'BreezeWiki base URL not found' });
-  }
-
-  if (serviceMap.rimgo) {
-    results.push(await withPage(browser, (page) => testRimgoRandomImage(page, serviceMap.rimgo, MOCK_SERVICE_PAGES)));
-  } else {
-    results.push({ name: 'Rimgo random image', url: 'N/A', ok: false, error: 'Rimgo base URL not found' });
-  }
-
-  if (serviceMap.invidious) {
-    results.push(await withPage(browser, (page) => testInvidiousVideo(page, serviceMap.invidious, MOCK_SERVICE_PAGES)));
-  } else {
-    results.push({ name: 'Invidious video playback page', url: 'N/A', ok: false, error: 'Invidious base URL not found' });
-  }
+  if (serviceMap.breezewiki) results.push(await withPage(browser, (page) => testBreezewiki(page, serviceMap.breezewiki, MOCK_SERVICE_PAGES)));
+  if (serviceMap.rimgo) results.push(await withPage(browser, (page) => testRimgoRandomImage(page, serviceMap.rimgo, MOCK_SERVICE_PAGES)));
+  if (serviceMap.invidious) results.push(await withPage(browser, (page) => testInvidiousVideo(page, serviceMap.invidious, MOCK_SERVICE_PAGES)));
+  
+  // New specialized tests
+  if (serviceMap.redlib) results.push(await withPage(browser, (page) => testSpecialized(page, 'Redlib Content', serviceMap.redlib, '/r/all', 'redlib', MOCK_SERVICE_PAGES)));
+  if (serviceMap.wikiless) results.push(await withPage(browser, (page) => testSpecialized(page, 'Wikiless Content', serviceMap.wikiless, '/wiki/Main_Page', 'Wikipedia', MOCK_SERVICE_PAGES)));
+  if (serviceMap.searxng) results.push(await withPage(browser, (page) => testSpecialized(page, 'SearXNG Content', serviceMap.searxng, '/', 'SearXNG', MOCK_SERVICE_PAGES)));
+  if (serviceMap.immich) results.push(await withPage(browser, (page) => testSpecialized(page, 'Immich Login', serviceMap.immich, '/auth/login', 'Immich', MOCK_SERVICE_PAGES)));
+  if (serviceMap.memos) results.push(await withPage(browser, (page) => testSpecialized(page, 'Memos Login', serviceMap.memos, '/auth/login', 'Memos', MOCK_SERVICE_PAGES)));
+  if (serviceMap.vert) results.push(await withPage(browser, (page) => testSpecialized(page, 'VERT Interface', serviceMap.vert, '/', 'Conversion', MOCK_SERVICE_PAGES)));
+  if (serviceMap.cobalt) results.push(await withPage(browser, (page) => testSpecialized(page, 'Cobalt Interface', serviceMap.cobalt, '/', 'cobalt', MOCK_SERVICE_PAGES)));
+  if (serviceMap.scribe) results.push(await withPage(browser, (page) => testSpecialized(page, 'Scribe Interface', serviceMap.scribe, '/', 'scribe', MOCK_SERVICE_PAGES)));
+  if (serviceMap.anonymousoverflow) results.push(await withPage(browser, (page) => testSpecialized(page, 'AnonOverflow Interface', serviceMap.anonymousoverflow, '/', 'overflow', MOCK_SERVICE_PAGES)));
+  if (serviceMap.adguard) results.push(await withPage(browser, (page) => testSpecialized(page, 'AdGuard Login', serviceMap.adguard, '/', 'AdGuard', MOCK_SERVICE_PAGES)));
+  if (serviceMap['wg-easy']) results.push(await withPage(browser, (page) => testSpecialized(page, 'WireGuard Login', serviceMap['wg-easy'], '/', 'WireGuard', MOCK_SERVICE_PAGES)));
+  if (serviceMap['odido-booster']) results.push(await withPage(browser, (page) => testSpecialized(page, 'Odido Booster', serviceMap['odido-booster'], '/', 'Odido', MOCK_SERVICE_PAGES)));
+  if (serviceMap['hub-api']) results.push(await withPage(browser, (page) => testSpecialized(page, 'Hub API Status', serviceMap['hub-api'], '/status', 'healthy', MOCK_SERVICE_PAGES)));
 
   await browser.close();
+
 
   console.log('\n--- SERVICE PAGE RESULTS ---');
   for (const result of results) {

@@ -671,6 +671,29 @@ tar -czf immich-backup.tar.gz /data/AppData/privacy-hub/immich
 
 ---
 
+## 🧪 Staged Headless Verification
+
+For developers and advanced users, the Privacy Hub includes a staged, headless verification system designed for rigorous CI/CD environments and automated stability testing. This system utilizes a state-aware orchestrator to manage multi-stage deployments with automatic crash recovery.
+
+### Running the Verification
+
+To execute the full verification suite in headless mode:
+
+```bash
+# Run the automated orchestrator
+./test/manual_verification.sh
+```
+
+### Key Features
+
+*   **🧱 Multi-Stage Testing**: Tests are divided into logical stages (Core, Frontends, Management, etc.) to isolate failure points.
+*   **🔄 Auto-Resume Logic**: If the verification is interrupted (e.g., system crash, timeout), simply running the script again will automatically resume from the last pending stage.
+*   **⏱️ Timeout Protection**: The orchestrator includes an 18-minute cycle limit to ensure clean state transitions in restricted environments (like GitHub Actions).
+*   **📊 Comprehensive Logging**: Each stage generates dedicated logs (e.g., `test/stage_1.log`) and a global `test/progress.log` for auditability.
+*   **🎭 UI Audit**: Automatically executes Puppeteer-based interaction tests to ensure the Material Design 3 dashboard remains functional across all supported platforms.
+
+---
+
 ## 🧩 Advanced Usage: Add Your Own Services
 
 <details>
@@ -727,7 +750,7 @@ The dashboard catalog is generated in `lib/scripts.sh`. Find the `cat > "$SERVIC
 <details>
 <summary><strong>🧪 Automated Verification</strong> (Click to expand)</summary>
 
-To ensure a "set and forget" experience, every release undergoes a rigorous automated verification pipeline:
+To ensure a "set and forget" experience, every release undergoes a rigorous automated verification pipeline. For more details on running these tests yourself, see the [Staged Headless Verification](#-staged-headless-verification) section.
 *   **Interaction Audit**: Puppeteer-based suite simulates real user behavior.
 *   **Non-Interactive Deployment**: verified `-p -y` flow for zero-prompt success.
 *   **M3 Compliance Check**: Automated layout audits ensure the dynamic grid and chips adapt to any screen size.

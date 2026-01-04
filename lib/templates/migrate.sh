@@ -7,8 +7,18 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR="/app/data/backups"
 DATA_DIR="/app/data"
 
-log() { echo "[MIGRATE] $1"; }
-warn() { echo "[MIGRATE] ⚠️  WARNING: $1"; }
+log() {
+    echo "[MIGRATE] $1"
+    if [ -f "/app/deployment.log" ]; then
+        printf '{"timestamp": "%s", "level": "INFO", "category": "MAINTENANCE", "message": "[MIGRATE] %s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
+    fi
+}
+warn() {
+    echo "[MIGRATE] ⚠️  WARNING: $1"
+    if [ -f "/app/deployment.log" ]; then
+        printf '{"timestamp": "%s", "level": "WARN", "category": "MAINTENANCE", "message": "[MIGRATE] %s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
+    fi
+}
 mkdir -p "$BACKUP_DIR"
 
 # Display warning for destructive actions

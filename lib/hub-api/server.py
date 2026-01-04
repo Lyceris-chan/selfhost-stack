@@ -802,7 +802,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         
                         # 2. Perform Full Backup
                         log_structured("INFO", "[Update Engine] Creating pre-update backup...", "MAINTENANCE")
-                        subprocess.run(["/usr/local/bin/migrate.sh", "all", "backup-all"], timeout=300)
+                        subprocess.run(["/usr/local/bin/migrate.sh", "all", "backup-all"], check=True, timeout=300)
                         
                         # 3. Trigger source updates for all
                         src_root = "/app/sources"
@@ -811,11 +811,11 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             for repo in os.listdir(src_root):
                                 repo_path = os.path.join(src_root, repo)
                                 if os.path.isdir(os.path.join(repo_path, ".git")):
-                                    subprocess.run(["git", "fetch", "--all"], cwd=repo_path)
+                                    subprocess.run(["git", "fetch", "--all"], check=True, cwd=repo_path)
                         
                         # 4. Trigger rebuilds for all services
                         log_structured("INFO", "[Update Engine] Rebuilding all services from source...", "MAINTENANCE")
-                        subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build'], timeout=1200)
+                        subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build'], check=True, timeout=1200)
                         
                         log_structured("INFO", "[Update Engine] Master Update successfully completed.", "MAINTENANCE")
                     except Exception as e:
@@ -877,8 +877,10 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 cmd.append(backup_flag)
             
             try:
-                res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                res = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=120)
                 return {"success": True, "output": res.stdout}
+            except subprocess.CalledProcessError as e:
+                return {"error": f"Operation failed: {e.stderr}"}, 500
             except subprocess.TimeoutExpired:
                 return {"error": "Operation timed out"}, 504
             except Exception as e:
@@ -1351,16 +1353,16 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                 
                                 # 3. Rebuild and restart
                                 log_structured("INFO", f"[Update Engine] Rebuilding {name}...", "MAINTENANCE")
-                                subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'pull', name], timeout=300)
-                                subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', name], timeout=600)
+                                subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'pull', name], check=True, timeout=300)
+                                subprocess.run(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', name], check=True, timeout=600)
                                 
                                 # 4. Migrate
                                 log_structured("INFO", f"[Update Engine] Running migrations for {name}...", "MAINTENANCE")
-                                subprocess.run(["/usr/local/bin/migrate.sh", name, "migrate", "no"], timeout=120)
+                                subprocess.run(["/usr/local/bin/migrate.sh", name, "migrate", "no"], check=True, timeout=120)
                                 
                                 # 5. Vacuum
                                 log_structured("INFO", f"[Update Engine] Optimizing database for {name}...", "MAINTENANCE")
-                                subprocess.run(["/usr/local/bin/migrate.sh", name, "vacuum"], timeout=60)
+                                subprocess.run(["/usr/local/bin/migrate.sh", name, "vacuum"], check=True, timeout=60)
                                 
                                 log_structured("INFO", f"[Update Engine] {name} update complete.", "MAINTENANCE")
                             except Exception as ex:
@@ -1391,7 +1393,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         
                         # 1. Pre-update Backup
                         log_structured("INFO", f"[Update Engine] Creating safety backup for {name}...", "MAINTENANCE")
-                        subprocess.run(["/usr/local/bin/migrate.sh", name, "backup"], timeout=120)
+                        subprocess.run(["/usr/local/bin/migrate.sh", name, "backup"], check=True, timeout=120)
                         
                         # 2. Refresh source
                         repo_path = f"/app/sources/{name}"

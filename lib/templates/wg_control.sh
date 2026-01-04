@@ -13,12 +13,19 @@ sanitize_json_string() {
     printf '%s' "$1" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\"/g' | tr -d '\n\r'
 }
 
+log_maintenance() {
+    if [ -f "/app/deployment.log" ]; then
+        printf '{"timestamp": "%s", "level": "INFO", "category": "MAINTENANCE", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
+    fi
+}
+
 if [ "$ACTION" = "activate" ]; then
     if ! flock -n 9; then
         echo "Error: Another control operation is in progress"
         exit 1
     fi
     if [ -f "$PROFILES_DIR/$PROFILE_NAME.conf" ]; then
+        log_maintenance "Activating VPN profile: $PROFILE_NAME"
         ln -sf "$PROFILES_DIR/$PROFILE_NAME.conf" "$ACTIVE_CONF"
         echo "$PROFILE_NAME" > "$NAME_FILE"
         DEPENDENTS="${CONTAINER_PREFIX}redlib ${CONTAINER_PREFIX}wikiless ${CONTAINER_PREFIX}wikiless_redis ${CONTAINER_PREFIX}invidious ${CONTAINER_PREFIX}invidious-db ${CONTAINER_PREFIX}invidious-companion ${CONTAINER_PREFIX}rimgo ${CONTAINER_PREFIX}breezewiki ${CONTAINER_PREFIX}anonymousoverflow ${CONTAINER_PREFIX}scribe"
@@ -49,6 +56,7 @@ elif [ "$ACTION" = "delete" ]; then
         exit 1
     fi
     if [ -f "$PROFILES_DIR/$PROFILE_NAME.conf" ]; then
+        log_maintenance "Deleting VPN profile: $PROFILE_NAME"
         rm "$PROFILES_DIR/$PROFILE_NAME.conf"
     fi
 elif [ "$ACTION" = "status" ]; then

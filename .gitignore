@@ -2,13 +2,18 @@ node_modules/
 .DS_Store
 *.log
 tmp/
-tests/VERIFICATION_REPORT.md
-tests/deployment_input.txt
+test/VERIFICATION_REPORT.md
+test/USER_INTERACTIONS_REPORT.md
+test/SERVICE_VERIFICATION_REPORT.md
+test/screenshot_*.png
+test/test_data/
+test/test_config.env
 __pycache__/
 DATA/
 data/
 src/data/
-internal/tests/assets/mcu.js
-internal/tests/screenshot_*.png
-internal/tests/VERIFICATION_REPORT.md
-internal/tests/USER_INTERACTIONS_REPORT.md
+lib/hub-api/__pycache__/
+
+# Ignore corrupted directory that cannot be deleted
+"*/
+"

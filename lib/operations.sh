@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 
 # --- SECTION 2: CLEANUP & ENVIRONMENT RESET ---
 # Functions to clear out existing garbage for a clean start.
@@ -152,15 +151,37 @@ clean_environment() {
 
     TARGET_CONTAINERS="gluetun adguard dashboard portainer wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd"
     
+    # If selected services are provided, only clean those
+    if [ -n "$SELECTED_SERVICES" ]; then
+        # Map selected service names to target container names (some might be different)
+        # We'll use a simple approach: if it's in the selected list, we check it.
+        # Note: wikiless_redis is a dependency of wikiless, etc.
+        ACTUAL_TARGETS=""
+        for srv in ${SELECTED_SERVICES//,/ }; do
+            ACTUAL_TARGETS="$ACTUAL_TARGETS $srv"
+            # Add known sub-services/dependencies
+            if [ "$srv" = "wikiless" ]; then ACTUAL_TARGETS="$ACTUAL_TARGETS wikiless_redis"; fi
+            if [ "$srv" = "invidious" ]; then ACTUAL_TARGETS="$ACTUAL_TARGETS invidious-db companion"; fi
+            if [ "$srv" = "vert" ]; then ACTUAL_TARGETS="$ACTUAL_TARGETS vertd"; fi
+            if [ "$srv" = "searxng" ]; then ACTUAL_TARGETS="$ACTUAL_TARGETS searxng-redis"; fi
+            if [ "$srv" = "immich" ]; then ACTUAL_TARGETS="$ACTUAL_TARGETS immich-server immich-db immich-redis immich-machine-learning"; fi
+        done
+        CLEAN_LIST="$ACTUAL_TARGETS"
+    else
+        CLEAN_LIST="$TARGET_CONTAINERS"
+    fi
+
     FOUND_CONTAINERS=""
-    for c in $TARGET_CONTAINERS; do
-        if $DOCKER_CMD ps -a --format '{{.Names}}' | grep -q "^${c}$"; then
-            FOUND_CONTAINERS="$FOUND_CONTAINERS $c"
+    for c in $CLEAN_LIST; do
+        # Check for both prefixed and non-prefixed versions
+        if $DOCKER_CMD ps -a --format '{{.Names}}' | grep -qE "^(${CONTAINER_PREFIX}${c}|${c})$"; then
+            NAME=$($DOCKER_CMD ps -a --format '{{.Names}}' | grep -E "^(${CONTAINER_PREFIX}${c}|${c})$" | head -n 1)
+            FOUND_CONTAINERS="$FOUND_CONTAINERS $NAME"
         fi
     done
 
     if [ -n "$FOUND_CONTAINERS" ]; then
-        if ask_confirm "Existing containers detected. Would you like to remove them to ensure a clean deployment?"; then
+        if ask_confirm "Existing containers detected ($FOUND_CONTAINERS). Would you like to remove them to ensure a clean deployment?"; then
             $DOCKER_CMD rm -f $FOUND_CONTAINERS 2>/dev/null || true
             log_info "Previous containers have been removed."
         fi
@@ -262,10 +283,11 @@ clean_environment() {
         log_info "Phase 2: Removing containers..."
         REMOVED_CONTAINERS=""
         for c in $TARGET_CONTAINERS; do
-            if $DOCKER_CMD ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${c}$"; then
-                log_info "  Removing: $c"
-                $DOCKER_CMD rm -f "$c" 2>/dev/null || true
-                REMOVED_CONTAINERS="${REMOVED_CONTAINERS}$c "
+            if $DOCKER_CMD ps -a --format '{{.Names}}' 2>/dev/null | grep -qE "^(${CONTAINER_PREFIX}${c}|${c})$"; then
+                NAME=$($DOCKER_CMD ps -a --format '{{.Names}}' | grep -E "^(${CONTAINER_PREFIX}${c}|${c})$" | head -n 1)
+                log_info "  Removing: $NAME"
+                $DOCKER_CMD rm -f "$NAME" 2>/dev/null || true
+                REMOVED_CONTAINERS="${REMOVED_CONTAINERS}$NAME "
             fi
         done
         rm -rf "$DOCKER_AUTH_DIR" 2>/dev/null || true
@@ -446,4 +468,222 @@ cleanup_build_artifacts() {
     log_info "Cleaning up build artifacts to save space..."
     $DOCKER_CMD image prune -f >/dev/null 2>&1 || true
     $DOCKER_CMD builder prune -f >/dev/null 2>&1 || true
+}
+
+# --- SECTION 17: BACKUP & SLOT MANAGEMENT ---
+
+perform_backup() {
+    local tag="${1:-manual}"
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_name="backup_${tag}_${timestamp}.tar.gz"
+    
+    mkdir -p "$BACKUP_DIR"
+    log_info "Creating system backup: $backup_name..."
+    
+    # Backup secrets, config and dynamic state
+    # We exclude large source directories and data volumes to keep it fast
+    tar -czf "$BACKUP_DIR/$backup_name" \
+        -C "$BASE_DIR" .secrets .active_slot config env \
+        --exclude="sources" --exclude="data" 2>/dev/null
+    
+    log_info "Backup created successfully at $BACKUP_DIR/$backup_name"
+    
+    # Keep only last 5 backups
+    ls -t "$BACKUP_DIR"/backup_* | tail -n +6 | xargs rm -f 2>/dev/null || true
+}
+
+swap_slots() {
+    local old_slot="$CURRENT_SLOT"
+    local new_slot="a"
+    if [ "$old_slot" = "a" ]; then new_slot="b"; fi
+    
+    log_info "ORCHESTRATING SLOT SWAP: $old_slot -> $new_slot"
+    
+    # 1. Perform safety backup
+    perform_backup "pre_swap"
+    
+    # 2. Update state for the rest of the script
+    echo "$new_slot" > "$ACTIVE_SLOT_FILE"
+    export CURRENT_SLOT="$new_slot"
+    export CONTAINER_PREFIX="dhi-${new_slot}-"
+    
+    log_info "Standby slot ($new_slot) initialized. Preparing deployment..."
+    
+    # The rest of the main script (zima.sh) will now use the new prefix
+    # when calling generate_compose and deploy_stack.
+}
+
+stop_inactive_slots() {
+    local active_slot="$CURRENT_SLOT"
+    local inactive_slot="a"
+    if [ "$active_slot" = "a" ]; then inactive_slot="b"; fi
+    
+    local inactive_prefix="dhi-${inactive_slot}-"
+    
+    log_info "Cleaning up inactive slot ($inactive_slot) containers..."
+    
+    # Find all containers with the inactive prefix and stop/remove them
+    local containers=$($DOCKER_CMD ps -a --format '{{.Names}}' | grep "^${inactive_prefix}" || true)
+    if [ -n "$containers" ]; then
+        $DOCKER_CMD rm -f $containers >/dev/null 2>&1 || true
+        log_info "Inactive slot containers removed."
+    fi
+}
+
+# --- SECTION 16: STACK ORCHESTRATION & DEPLOYMENT ---
+# Execute system deployment and verify global infrastructure integrity.
+
+deploy_stack() {
+    if command -v modprobe >/dev/null 2>&1; then
+        $SUDO modprobe tun || true
+    fi
+
+    if [ "$PARALLEL_DEPLOY" = true ]; then
+        log_info "Parallel Mode Enabled: Launching full stack immediately..."
+        $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d --build --remove-orphans
+    else
+        # Explicitly launch core infrastructure services first if they are present
+        CORE_SERVICES=""
+        for srv in hub-api adguard unbound gluetun; do
+            if grep -q "^  $srv:" "$COMPOSE_FILE"; then
+                CORE_SERVICES="$CORE_SERVICES $srv"
+            fi
+        done
+
+        if [ -n "$CORE_SERVICES" ]; then
+            log_info "Launching core infrastructure services:$CORE_SERVICES..."
+            $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d --build $CORE_SERVICES
+        fi
+
+        # Wait for critical backends to be healthy before starting Nginx (dashboard) if they were launched
+        if echo "$CORE_SERVICES" | grep -q "hub-api" || echo "$CORE_SERVICES" | grep -q "gluetun"; then
+            log_info "Waiting for backend services to stabilize (this may take up to 60s)..."
+            for i in $(seq 1 60); do
+                HUB_HEALTH="healthy"
+                GLU_HEALTH="running"
+                
+                if echo "$CORE_SERVICES" | grep -q "hub-api"; then
+                    HUB_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}hub-api 2>/dev/null || echo "unknown")
+                fi
+                if echo "$CORE_SERVICES" | grep -q "gluetun"; then
+                    GLU_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Status}}' ${CONTAINER_PREFIX}gluetun 2>/dev/null || echo "unknown")
+                fi
+                
+                if [ "$HUB_HEALTH" = "healthy" ] && [ "$GLU_HEALTH" = "running" ]; then
+                    log_info "Backends are stable. Finalizing stack launch..."
+                    break
+                fi
+                [ "$i" -eq 60 ] && log_warn "Backends taking longer than expected to stabilize. Proceeding anyway..."
+                sleep 1
+            done
+        fi
+
+        # Launch the rest of the stack
+        # Use --remove-orphans only if we are doing a full deployment
+        ORPHAN_FLAG="--remove-orphans"
+        if [ -n "$SELECTED_SERVICES" ]; then
+            ORPHAN_FLAG=""
+        fi
+        $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d $ORPHAN_FLAG
+    fi
+
+    log_info "Verifying control plane connectivity..."
+    sleep 5
+    API_TEST=$(curl -s -o /dev/null -w "%{http_code}" "http://$LAN_IP:$PORT_DASHBOARD_WEB/api/status" || echo "FAILED")
+    if [ "$API_TEST" = "200" ]; then
+        log_info "Control plane is reachable."
+    elif [ "$API_TEST" = "401" ]; then
+        log_info "Control plane is reachable (Security handshake verified)."
+    else
+        log_warn "Control plane returned status $API_TEST. The dashboard may show 'Offline (API Error)' initially."
+    fi
+
+    # --- SECTION 16.1: PORTAINER AUTOMATION ---
+    if [ "$AUTO_PASSWORD" = true ] && grep -q "portainer:" "$COMPOSE_FILE"; then
+        log_info "Synchronizing Portainer administrative settings..."
+        PORTAINER_READY=false
+        for _ in {1..12}; do
+            if curl -s --max-time 2 "http://$LAN_IP:$PORT_PORTAINER/api/system/status" > /dev/null; then
+                PORTAINER_READY=true
+                break
+            fi
+            sleep 5
+        done
+
+        if [ "$PORTAINER_READY" = true ]; then
+            # Authenticate to get JWT (user was initialized via --admin-password CLI flag)
+            # Try 'admin' first, then 'portainer' (in case it was already renamed in a previous run)
+            AUTH_RESPONSE=$(curl -s --max-time 5 -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
+                -H "Content-Type: application/json" \
+                -d "{\"Username\":\"admin\",\"Password\":\"$PORTAINER_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
+            
+            if ! echo "$AUTH_RESPONSE" | grep -q "jwt"; then
+                AUTH_RESPONSE=$(curl -s --max-time 5 -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"Username\":\"portainer\",\"Password\":\"$PORTAINER_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
+            fi
+            
+            if echo "$AUTH_RESPONSE" | grep -q "jwt"; then
+                PORTAINER_JWT=$(echo "$AUTH_RESPONSE" | grep -oP '"jwt":"\K[^"\'']+')
+                
+                # 1. Disable Telemetry/Analytics
+                log_info "Disabling Portainer anonymous telemetry..."
+                curl -s --max-time 5 -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/settings" \
+                    -H "Authorization: Bearer $PORTAINER_JWT" \
+                    -H "Content-Type: application/json" \
+                    -d '{"EnableTelemetry":false}' >/dev/null 2>&1 || true
+
+                # 2. Rename 'admin' user to 'portainer' (Security Best Practice)
+                # First, get user ID of admin (usually 1)
+                ADMIN_ID=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/users/admin/check" 2>/dev/null | grep -oP 'id":\K\d+' || echo "1")
+                
+                # Only rename if not already named 'portainer'
+                CHECK_USER=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/users/$ADMIN_ID" | grep -oP '"Username":"\K[^"\'']+')
+                if [ "$CHECK_USER" != "portainer" ]; then
+                    log_info "Renaming default 'admin' user to 'portainer'..."
+                    curl -s --max-time 5 -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/users/$ADMIN_ID" \
+                        -H "Authorization: Bearer $PORTAINER_JWT" \
+                        -H "Content-Type: application/json" \
+                        -d '{"Username":"portainer"}' >/dev/null 2>&1 || true
+                fi
+            else
+                log_warn "Failed to authenticate with Portainer API. Manual telemetry disable may be required."
+            fi
+        else
+            log_warn "Portainer did not become ready in time. Skipping automated configuration."
+        fi
+    fi
+
+    # --- SECTION 16.2: ASSET LOCALIZATION ---
+    # Download remote assets (fonts, utilities) via Gluetun proxy for privacy
+    download_remote_assets
+
+    # Final Summary
+    echo ""
+    echo "=========================================================="
+    echo "✅ DEPLOYMENT COMPLETE"
+    echo "=========================================================="
+    echo "   • Dashboard:    http://$LAN_IP:$PORT_DASHBOARD_WEB"
+    if [ -n "$DESEC_DOMAIN" ]; then
+    echo "   • Secure DNS:   https://$DESEC_DOMAIN/dns-query"
+    fi
+    echo "   • Admin Pass:   $ADMIN_PASS_RAW"
+    echo "   • Portainer:    http://$LAN_IP:$PORT_PORTAINER (User: portainer / Pass: $PORTAINER_PASS_RAW)"
+    echo "   • WireGuard:    http://$LAN_IP:$PORT_WG_WEB (Pass: $VPN_PASS_RAW)"
+    echo "   • AdGuard:      http://$LAN_IP:$PORT_ADGUARD_WEB (User: adguard / Pass: $AGH_PASS_RAW)"
+    if [ -n "$ODIDO_TOKEN" ]; then
+    echo "   • Odido Boost:  Active (Threshold: 100MB)"
+    fi
+    echo ""
+    echo "   📁 Credentials saved to: $BASE_DIR/.secrets"
+    echo "   📄 Importable CSV:      $BASE_DIR/protonpass_import.csv"
+    echo "   📄 LibRedirect JSON:    $PROJECT_ROOT/libredirect_import.json"
+    echo "=========================================================="
+    
+    if [ "$CLEAN_EXIT" = true ]; then
+        exit 0
+    fi
+
+    # Cleanup build artifacts to save space after successful deployment
+    cleanup_build_artifacts
 }

@@ -1,0 +1,30 @@
+[
+    {
+        "id": 1,
+        "description": "Stage 1: Core Infrastructure (Hub, AdGuard, Unbound)",
+        "command": "python3 test/test_runner.py --stage 1",
+        "log_file": "test/stage_1.log",
+        "status": "in_progress"
+    },
+    {
+        "id": 2,
+        "description": "Stage 2: Redlib & Privacy Frontends A",
+        "command": "python3 test/test_runner.py --stage 2",
+        "log_file": "test/stage_2.log",
+        "status": "pending"
+    },
+    {
+        "id": 3,
+        "description": "Stage 3: Invidious Stack",
+        "command": "python3 test/test_runner.py --stage 3",
+        "log_file": "test/stage_3.log",
+        "status": "pending"
+    },
+    {
+        "id": 4,
+        "description": "Stage 4: Management Tools",
+        "command": "python3 test/test_runner.py --stage 4",
+        "log_file": "test/stage_4.log",
+        "status": "pending"
+    }
+]

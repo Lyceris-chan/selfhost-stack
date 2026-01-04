@@ -4,4 +4,5 @@ RUN apk add --no-cache --virtual .build-deps gcc musl-dev linux-headers python3-
     && pip install --no-cache-dir psutil \
     && apk del .build-deps
 WORKDIR /app
+COPY . .
 CMD ["python", "server.py"]

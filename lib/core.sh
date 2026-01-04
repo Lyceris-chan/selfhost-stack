@@ -1,4 +1,444 @@
-#!/usr/bin/env bash
+
+# Core logging functions that output to terminal and persist JSON formatted logs for the dashboard.
+log_info() { 
+    echo -e "\e[34m[INFO]\e[0m $1"
+    if [ -d "$(dirname "$HISTORY_LOG")" ]; then
+        printf '{"timestamp": "%s", "level": "INFO", "category": "SYSTEM", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "$HISTORY_LOG" 2>/dev/null || true
+    fi
+}
+log_warn() { 
+    echo -e "\e[33m[WARN]\e[0m $1"
+    if [ -d "$(dirname "$HISTORY_LOG")" ]; then
+        printf '{"timestamp": "%s", "level": "WARN", "category": "SYSTEM", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "$HISTORY_LOG" 2>/dev/null || true
+    fi
+}
+log_crit() { 
+    echo -e "\e[31m[CRIT]\e[0m $1"
+    if [ -d "$(dirname "$HISTORY_LOG")" ]; then
+        printf '{"timestamp": "%s", "level": "CRIT", "category": "SYSTEM", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "$HISTORY_LOG" 2>/dev/null || true
+    fi
+}
+
+ask_confirm() {
+    if [ "$AUTO_CONFIRM" = true ]; then return 0; fi
+    read -r -p "$1 [y/N]: " response
+    case "$response" in
+        [yY][eE][sS]|[yY]) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+pull_with_retry() {
+    local img=$1
+    local max_retries=3
+    local count=0
+    while [ $count -lt $max_retries ]; do
+        if $DOCKER_CMD pull "$img" >/dev/null 2>&1; then
+            log_info "Successfully pulled $img"
+            return 0
+        fi
+        count=$((count + 1))
+        log_warn "Failed to pull $img. Retrying ($count/$max_retries)..."
+        sleep 1
+    done
+    log_crit "Failed to pull critical image $img after $max_retries attempts."
+    return 1
+}
+
+detect_dockerfile() {
+    local repo_dir="$1"
+    local preferred="${2:-}"
+    local found=""
+    if [ -n "$preferred" ] && [ -f "$repo_dir/$preferred" ]; then echo "$preferred"; return 0; fi
+    if [ -f "$repo_dir/Dockerfile.dhi" ]; then echo "Dockerfile.dhi"; return 0; fi
+    if [ -f "$repo_dir/Dockerfile" ]; then echo "Dockerfile"; return 0; fi
+    if [ -f "$repo_dir/docker/Dockerfile" ]; then echo "docker/Dockerfile"; return 0; fi
+    # Search deeper
+    found=$(find "$repo_dir" -maxdepth 3 -type f -name 'Dockerfile*' -not -path '*/.*' 2>/dev/null | head -n 1 || true)
+    if [ -n "$found" ]; then echo "${found#"$repo_dir/"}"; return 0; fi
+    return 1
+}
+
+
+
+# --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
+REG_USER="${REG_USER:-}"
+REG_TOKEN="${REG_TOKEN:-}"
+LAN_IP_OVERRIDE="${LAN_IP_OVERRIDE:-}"
+WG_CONF_B64="${WG_CONF_B64:-}"
+
+usage() {
+    echo "Usage: $0 [options]"
+    echo ""
+    echo "Options:"
+    echo "  -p          Auto-Passwords (generates random secure credentials)"
+    echo "  -y          Auto-Confirm (non-interactive mode)"
+    echo "  -P          Personal Mode (fast-track: combines -p, -y, and -j)"
+    echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
+    echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
+    echo "  -S          Swap Slots (A/B update toggle)"
+    echo "  -c          Maintenance (recreates containers, preserves data)"
+    echo "  -x          Factory Reset (⚠️ WIPES ALL CONTAINERS AND VOLUMES)"
+    echo "  -a          Allow ProtonVPN (adds ProtonVPN domains to AdGuard allowlist)"
+    echo "  -D          Dashboard Only (UI testing, skips service rebuild)"
+    echo "  -E <file>   Load Environment Variables from file"
+    echo "  -h          Show this help message"
+}
+
+FORCE_CLEAN=false
+CLEAN_ONLY=false
+AUTO_PASSWORD=false
+CLEAN_EXIT=false
+RESET_ENV=false
+AUTO_CONFIRM=false
+ALLOW_PROTON_VPN=false
+SELECTED_SERVICES=""
+DASHBOARD_ONLY=false
+PERSONAL_MODE=false
+PARALLEL_DEPLOY=false
+SWAP_SLOTS=false
+ENV_FILE=""
+
+while getopts "cxpyas:DPjShE:" opt; do
+    case ${opt} in
+        c) RESET_ENV=true; FORCE_CLEAN=true ;;
+        x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
+        p) AUTO_PASSWORD=true ;;
+        y) AUTO_CONFIRM=true; AUTO_PASSWORD=true ;;
+        a) ALLOW_PROTON_VPN=true ;;
+        s) SELECTED_SERVICES="${OPTARG}" ;;
+        D) DASHBOARD_ONLY=true ;;
+        P) PERSONAL_MODE=true; AUTO_PASSWORD=true; AUTO_CONFIRM=true; PARALLEL_DEPLOY=true ;;
+        j) PARALLEL_DEPLOY=true ;;
+        S) SWAP_SLOTS=true ;;
+        E) ENV_FILE="${OPTARG}" ;;
+        h) 
+            usage
+            exit 0
+            ;;
+        *) usage; exit 1 ;;
+    esac
+done
+shift $((OPTIND -1))
+
+# --- LOAD EXTERNAL ENV FILE ---
+if [ -n "$ENV_FILE" ]; then
+    if [ -f "$ENV_FILE" ]; then
+        # shellcheck disable=SC1090
+        source "$ENV_FILE"
+    else
+        echo "[CRIT] Environment file not found: $ENV_FILE"
+        exit 1
+    fi
+fi
+
+# --- SECTION 1: ENVIRONMENT VALIDATION & DIRECTORY SETUP ---
+# Suppress git advice/warnings for cleaner logs during automated clones
+export GIT_CONFIG_PARAMETERS="'advice.detachedHead=false'"
+
+# Verify core dependencies before proceeding.
+REQUIRED_COMMANDS="docker curl git crontab iptables flock"
+if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
+    echo "[CRIT] sudo is required for non-root users. Please install it."
+    exit 1
+fi
+for cmd in $REQUIRED_COMMANDS; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "[CRIT] '$cmd' is required but not installed. Please install it."
+        exit 1
+    fi
+done
+
+# Detect if sudo is available
+if command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo -E"
+else
+    SUDO=""
+fi
+
+# Docker Compose Check (Plugin or Standalone)
+if $SUDO docker compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE_CMD="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+    if $SUDO docker-compose version >/dev/null 2>&1; then
+        DOCKER_COMPOSE_CMD="docker-compose"
+    else
+        echo "[CRIT] Docker Compose is installed but not executable."
+        exit 1
+    fi
+else
+    echo "[CRIT] Docker Compose v2 is required. Please update your environment."
+    exit 1
+fi
+
+APP_NAME="${APP_NAME:-privacy-hub}"
+# Use absolute path for BASE_DIR to ensure it stays in the project root's data folder
+# Detect PROJECT_ROOT dynamically if not already set
+if [ -z "${PROJECT_ROOT:-}" ]; then
+    # SCRIPT_DIR is exported from zima.sh
+    if [ -n "${SCRIPT_DIR:-}" ]; then
+        PROJECT_ROOT="$SCRIPT_DIR"
+    else
+        PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    fi
+fi
+BASE_DIR="$PROJECT_ROOT/data/AppData/$APP_NAME"
+
+# Paths
+SRC_DIR="$BASE_DIR/sources"
+ENV_DIR="$BASE_DIR/env"
+CONFIG_DIR="$BASE_DIR/config"
+DATA_DIR="$BASE_DIR/data"
+COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
+DASHBOARD_FILE="$BASE_DIR/dashboard.html"
+GLUETUN_ENV_FILE="$BASE_DIR/gluetun.env"
+SECRETS_FILE="$BASE_DIR/.secrets"
+ACTIVE_SLOT_FILE="$BASE_DIR/.active_slot"
+BACKUP_DIR="$BASE_DIR/backups"
+ASSETS_DIR="$BASE_DIR/assets"
+HISTORY_LOG="$BASE_DIR/deployment.log"
+CERT_BACKUP_DIR="/tmp/${APP_NAME}-cert-backup"
+CERT_RESTORE=false
+CERT_PROTECT=false
+
+# Memos storage
+MEMOS_HOST_DIR="$PROJECT_ROOT/data/AppData/memos"
+
+$SUDO mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR"
+BASE_DIR="$(cd "$BASE_DIR" && pwd)"
+WG_PROFILES_DIR="$BASE_DIR/wg-profiles"
+ACTIVE_WG_CONF="$BASE_DIR/active-wg.conf"
+ACTIVE_PROFILE_NAME_FILE="$BASE_DIR/.active_profile_name"
+$SUDO mkdir -p "$WG_PROFILES_DIR"
+
+# Slot Management (A/B)
+if [ ! -f "$ACTIVE_SLOT_FILE" ]; then
+    echo "a" | $SUDO tee "$ACTIVE_SLOT_FILE" >/dev/null
+fi
+CURRENT_SLOT=$(cat "$ACTIVE_SLOT_FILE" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+if [[ "$CURRENT_SLOT" != "a" && "$CURRENT_SLOT" != "b" ]]; then
+    CURRENT_SLOT="a"
+    echo "a" | $SUDO tee "$ACTIVE_SLOT_FILE" >/dev/null
+fi
+
+CONTAINER_PREFIX="dhi-${CURRENT_SLOT}-"
+export CURRENT_SLOT
+UPDATE_STRATEGY="stable"
+export UPDATE_STRATEGY
+
+# Docker Auth Config (stored in /tmp to survive -c cleanup)
+DOCKER_AUTH_DIR="/tmp/$APP_NAME-docker-auth"
+# Ensure clean state for auth only if it doesn't already have a config
+if [ ! -f "$DOCKER_AUTH_DIR/config.json" ]; then
+    $SUDO mkdir -p "$DOCKER_AUTH_DIR"
+    $SUDO chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
+fi
+
+# Detect Python interpreter
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON_CMD="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_CMD="python"
+else
+    echo "[CRIT] Python is required but not installed. Please install python3."
+    exit 1
+fi
+
+# Define consistent docker command using custom config for auth
+DOCKER_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" GOTOOLCHAIN=auto docker"
+DOCKER_COMPOSE_FINAL_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" GOTOOLCHAIN=auto $DOCKER_COMPOSE_CMD"
+
+# Initialize deSEC variables to prevent unbound variable errors
+DESEC_DOMAIN=""
+DESEC_TOKEN=""
+DESEC_MONITOR_DOMAIN=""
+DESEC_MONITOR_TOKEN=""
+SCRIBE_GH_USER=""
+SCRIBE_GH_TOKEN=""
+ODIDO_USER_ID=""
+ODIDO_TOKEN=""
+ODIDO_API_KEY=""
+ODIDO_USE_VPN="true"
+VERTD_PUB_URL=""
+VERT_PUB_HOSTNAME=""
+WG_HASH_CLEAN=""
+FOUND_OCTET=""
+AGH_USER="adguard"
+AGH_PASS_HASH=""
+PORTAINER_PASS_HASH=""
+PORTAINER_HASH_COMPOSE=""
+WG_HASH_COMPOSE=""
+ADMIN_PASS_RAW=""
+VPN_PASS_RAW=""
+PORTAINER_PASS_RAW=""
+AGH_PASS_RAW=""
+ANONYMOUS_SECRET=""
+SCRIBE_SECRET=""
+SEARXNG_SECRET=""
+IMMICH_DB_PASSWORD=""
+
+# Service Configurations
+NGINX_CONF_DIR="$CONFIG_DIR/nginx"
+NGINX_CONF="$NGINX_CONF_DIR/default.conf"
+UNBOUND_CONF="$CONFIG_DIR/unbound/unbound.conf"
+AGH_CONF_DIR="$CONFIG_DIR/adguard"
+AGH_YAML="$AGH_CONF_DIR/AdGuardHome.yaml"
+
+# Scripts
+MONITOR_SCRIPT="$BASE_DIR/wg-ip-monitor.sh"
+IP_LOG_FILE="$BASE_DIR/wg-ip-monitor.log"
+CURRENT_IP_FILE="$BASE_DIR/.current_public_ip"
+WG_CONTROL_SCRIPT="$BASE_DIR/wg-control.sh"
+WG_API_SCRIPT="$BASE_DIR/wg-api.py"
+CERT_MONITOR_SCRIPT="$BASE_DIR/cert-monitor.sh"
+MIGRATE_SCRIPT="$BASE_DIR/migrate.sh"
+
+# Port Definitions
+PORT_DASHBOARD_WEB=8081
+PORT_ADGUARD_WEB=8083
+PORT_PORTAINER=9000
+PORT_WG_WEB=51821
+PORT_INVIDIOUS=3000
+PORT_REDLIB=8080
+PORT_WIKILESS=8180
+PORT_RIMGO=3002
+PORT_BREEZEWIKI=8380
+PORT_ANONYMOUS=8480
+PORT_SCRIBE=8280
+PORT_MEMOS=5230
+PORT_VERT=5555
+PORT_VERTD=24153
+PORT_COMPANION=8282
+PORT_COBALT=9001
+PORT_SEARXNG=8082
+PORT_IMMICH=2283
+
+# Internal Ports
+PORT_INT_REDLIB=8080
+PORT_INT_WIKILESS=8180
+PORT_INT_INVIDIOUS=3000
+PORT_INT_RIMGO=3002
+PORT_INT_BREEZEWIKI=10416
+PORT_INT_ANONYMOUS=8480
+PORT_INT_VERT=80
+PORT_INT_VERTD=24153
+PORT_INT_COMPANION=8282
+PORT_INT_COBALT=9000
+PORT_INT_SEARXNG=8080
+PORT_INT_IMMICH=2283
+
+# --- SECTION 3: DYNAMIC SUBNET ALLOCATION ---
+allocate_subnet() {
+    log_info "Allocating private virtual subnet for container isolation."
+
+    FOUND_SUBNET=""
+    FOUND_OCTET=""
+
+    for i in {20..30}; do
+        TEST_SUBNET="172.$i.0.0/16"
+        TEST_NET_NAME="probe_net_$i"
+        if $DOCKER_CMD network create --subnet="$TEST_SUBNET" "$TEST_NET_NAME" >/dev/null 2>&1; then
+            $DOCKER_CMD network rm "$TEST_NET_NAME" >/dev/null 2>&1
+            FOUND_SUBNET="$TEST_SUBNET"
+            FOUND_OCTET="$i"
+            break
+        fi
+    done
+
+    if [ -z "$FOUND_SUBNET" ]; then
+        log_crit "Fatal: No available subnets identified. Please verify host network configuration."
+        exit 1
+    fi
+
+    DOCKER_SUBNET="$FOUND_SUBNET"
+    log_info "Assigned Virtual Subnet: $DOCKER_SUBNET"
+}
+
+safe_remove_network() {
+    local net_name="$1"
+    if $DOCKER_CMD network inspect "$net_name" >/dev/null 2>&1; then
+        # Check if any containers are using it
+        local containers=$($DOCKER_CMD network inspect "$net_name" --format '{{range .Containers}}{{.Name}} {{end}}')
+        if [ -n "$containers" ]; then
+            for c in $containers; do
+                log_info "  Disconnecting container $c from network $net_name..."
+                $DOCKER_CMD network disconnect -f "$net_name" "$c" 2>/dev/null || true
+            done
+        fi
+        $DOCKER_CMD network rm "$net_name" 2>/dev/null || true
+    fi
+}
+
+detect_network() {
+    log_info "Identifying network environment..."
+
+    # 1. LAN IP Detection
+    if [ -n "$LAN_IP_OVERRIDE" ]; then
+        LAN_IP="$LAN_IP_OVERRIDE"
+        log_info "Using LAN IP Override: $LAN_IP"
+    elif [ -z "${LAN_IP:-}" ]; then
+        # Try to find primary interface IP
+        LAN_IP=$(hostname -I | awk '{print $1}')
+        if [ -z "$LAN_IP" ]; then
+            LAN_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7}')
+        fi
+        if [ -z "$LAN_IP" ]; then
+            log_crit "Failed to detect LAN IP. Please use LAN_IP_OVERRIDE."
+            exit 1
+        fi
+        log_info "Detected LAN IP: $LAN_IP"
+    else
+        log_info "Using existing LAN IP: $LAN_IP"
+    fi
+
+    # 2. Public IP Detection
+    if [ -n "${PUBLIC_IP:-}" ] && [ "$PUBLIC_IP" != "FAILED" ]; then
+        log_info "Using existing Public IP: $PUBLIC_IP"
+    else
+        log_info "Detecting public IP address (for VPN endpoint)..."
+        # Use a privacy-conscious IP check service as requested, via proxy if possible
+        local proxy="http://172.${FOUND_OCTET}.0.254:8888"
+        PUBLIC_IP=$(curl --proxy "$proxy" -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 http://ip-api.com/line?fields=query || echo "FAILED")
+        if [ "$PUBLIC_IP" = "FAILED" ]; then
+            log_warn "Failed to detect public IP. VPN may not be reachable from external networks."
+            PUBLIC_IP="$LAN_IP"
+        fi
+        log_info "Public IP: $PUBLIC_IP"
+    fi
+}
+
+validate_wg_config() {
+    if [ ! -s "$ACTIVE_WG_CONF" ]; then return 1; fi
+    if ! grep -q "PrivateKey" "$ACTIVE_WG_CONF"; then return 1; fi
+    local PK_VAL
+    PK_VAL=$(grep "PrivateKey" "$ACTIVE_WG_CONF" | cut -d'=' -f2 | tr -d '[:space:]')
+    if [ -z "$PK_VAL" ]; then return 1; fi
+    if [ "${#PK_VAL}" -lt 40 ]; then return 1; fi
+    return 0
+}
+
+extract_wg_profile_name() {
+    local config_file="$1"
+    local in_peer=0
+    local profile_name=""
+    while IFS= read -r line; do
+        stripped=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if echo "$stripped" | grep -qi '^\[peer\]$'; then in_peer=1; continue; fi
+        if [ "$in_peer" -eq 1 ] && echo "$stripped" | grep -q '^#'; then
+            profile_name=$(echo "$stripped" | sed 's/^#[[:space:]]*//')
+            if [ -n "$profile_name" ]; then echo "$profile_name"; return 0; fi
+        fi
+        if [ "$in_peer" -eq 1 ] && echo "$stripped" | grep -q '^\['; then break; fi
+    done < "$config_file"
+    while IFS= read -r line; do
+        stripped=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if echo "$stripped" | grep -q '^#' && ! echo "$stripped" | grep -q '='; then
+            profile_name=$(echo "$stripped" | sed 's/^#[[:space:]]*//')
+            if [ -n "$profile_name" ]; then echo "$profile_name"; return 0; fi
+        fi
+    done < "$config_file"
+    return 1
+}
 
 authenticate_registries() {
     # Export DOCKER_CONFIG globally
@@ -10,15 +450,15 @@ authenticate_registries() {
         elif [ "$PERSONAL_MODE" = true ]; then
              log_info "Personal Mode: Using pre-configured registry credentials."
              REG_USER="laciachan"
-             REG_TOKEN="${REG_TOKEN:-DOCKER_HUB_TOKEN_PLACEHOLDER}"
+             REG_TOKEN="${REG_TOKEN:-}"
         else
-             log_info "Auto-confirm enabled: Using default/placeholder credentials."
+             log_info "Auto-confirm enabled: Skipping registry authentication."
              REG_USER="laciachan"
-             REG_TOKEN="DOCKER_HUB_TOKEN_PLACEHOLDER"
+             REG_TOKEN="${REG_TOKEN:-}"
         fi
         
         # Docker Hub Login
-        if [ "$REG_TOKEN" != "DOCKER_HUB_TOKEN_PLACEHOLDER" ] || [ "$AUTO_CONFIRM" = true ]; then
+        if [ -n "$REG_TOKEN" ] && [ "$REG_TOKEN" != "DOCKER_HUB_TOKEN_PLACEHOLDER" ]; then
             if echo "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
                  log_info "Docker Hub: Authentication successful."
             else
@@ -31,6 +471,8 @@ authenticate_registries() {
             else
                  log_warn "DHI Registry: Authentication failed (using Docker Hub credentials)."
             fi
+        else
+            log_info "Registry authentication skipped (no token provided)."
         fi
         return 0
     fi
@@ -215,21 +657,20 @@ setup_secrets() {
         log_info "Generating Secrets..."
         ODIDO_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
         HUB_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
-        $DOCKER_CMD pull -q ghcr.io/wg-easy/wg-easy:latest > /dev/null || log_warn "Failed to pull wg-easy image, attempting to use local if available."
         
-        # Safely generate WG hash
-        HASH_OUTPUT=$($DOCKER_CMD run --rm ghcr.io/wg-easy/wg-easy wgpw "$VPN_PASS_RAW" 2>&1 || echo "FAILED")
-        if [[ "$HASH_OUTPUT" == "FAILED" ]]; then
+        # Safely generate WG hash (using generic alpine to avoid GHCR pull)
+        # wg-easy uses standard bcrypt for its PASSWORD_HASH
+        WG_HASH_CLEAN=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$VPN_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
+        if [[ "$WG_HASH_CLEAN" == "FAILED" ]]; then
             log_crit "Failed to generate WireGuard password hash. Check Docker status."
             exit 1
         fi
-        WG_HASH_CLEAN=$(echo "$HASH_OUTPUT" | grep -oP "(?<=PASSWORD_HASH=')[^']+")
         WG_HASH_ESCAPED="${WG_HASH_CLEAN//\\\$/\\\\\$\\$}"
         export WG_HASH_COMPOSE="$WG_HASH_ESCAPED"
 
         AGH_USER="adguard"
         # Safely generate AGH hash
-        AGH_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$AGH_USER" "$AGH_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+        AGH_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$AGH_USER" "$AGH_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
         if [[ "$AGH_PASS_HASH" == "FAILED" ]]; then
             log_crit "Failed to generate AdGuard password hash. Check Docker status."
             exit 1
@@ -237,7 +678,7 @@ setup_secrets() {
         export AGH_USER AGH_PASS_HASH
 
         # Safely generate Portainer hash (bcrypt)
-        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
         if [[ "$PORTAINER_PASS_HASH" == "FAILED" ]]; then
             log_crit "Failed to generate Portainer password hash. Check Docker status."
             exit 1
@@ -290,7 +731,7 @@ EOF
         # Generate Portainer hash if missing from existing .secrets
         if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
             log_info "Generating missing Portainer hash..."
-            PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>&1 | cut -d ":" -f 2 || echo "FAILED")
+            PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
             echo "PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'" >> "$BASE_DIR/.secrets"
         fi
         if [ -z "${ODIDO_API_KEY:-}" ]; then
