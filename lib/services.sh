@@ -2105,7 +2105,7 @@ EOF
     cat >> "$COMPOSE_FILE" <<EOF
   # Cobalt: Media downloader (Local access only)
   cobalt:
-    image: ghcr.io/imputnet/cobalt:10
+    image: ghcr.io/imputnet/cobalt
     container_name: ${CONTAINER_PREFIX}cobalt
     networks: [dhi-frontnet]
     ports: ["$LAN_IP:$PORT_COBALT:$PORT_INT_COBALT"]
@@ -2140,7 +2140,7 @@ EOF
         limits: {cpus: '1.0', memory: 512M}
 
   searxng-redis:
-    image: redis:7.4.2-alpine
+    image: redis:alpine
     container_name: ${CONTAINER_PREFIX}searxng-redis
     networks: [dhi-frontnet]
     command: redis-server --save "" --appendonly no
@@ -2160,7 +2160,7 @@ EOF
     cat >> "$COMPOSE_FILE" <<EOF
   # Immich: High-performance self-hosted photo and video management
   immich-server:
-    image: ghcr.io/immich-app/immich-server:v2.4.0
+    image: ghcr.io/immich-app/immich-server
     container_name: ${CONTAINER_PREFIX}immich-server
     network_mode: "service:gluetun"
     environment:
@@ -2183,7 +2183,7 @@ EOF
         limits: {cpus: '1.0', memory: 1024M}
 
   immich-db:
-    image: tensorchord/pgvector:pg14
+    image: tensorchord/pgvector
     container_name: ${CONTAINER_PREFIX}immich-db
     networks: [dhi-frontnet]
     environment:
@@ -2203,7 +2203,7 @@ EOF
         limits: {cpus: '0.5', memory: 512M}
 
   immich-redis:
-    image: redis:6.2.17-alpine
+    image: redis:alpine
     container_name: ${CONTAINER_PREFIX}immich-redis
     networks: [dhi-frontnet]
     healthcheck:
@@ -2217,7 +2217,7 @@ EOF
         limits: {cpus: '0.3', memory: 128M}
 
   immich-machine-learning:
-    image: ghcr.io/immich-app/immich-machine-learning:v1.124.0
+    image: ghcr.io/immich-app/immich-machine-learning
     container_name: ${CONTAINER_PREFIX}immich-ml
     network_mode: "service:gluetun"
     volumes:

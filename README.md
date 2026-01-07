@@ -671,6 +671,22 @@ Opening a port for WireGuard does **not** expose your home to scanning.
 *   **RAM**: 4 GB (8 GB+ Recommended for Immich/VERT usage)
 *   **Storage**: 32 GB SSD (64 GB+ Recommended for media storage)
 
+### 📊 Default Resource Limits
+To ensure system stability and prevent any single service from exhausting host resources, the following CPU and memory limits are enforced via Docker Compose:
+
+| Service | CPU Limit | Memory Limit | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Immich Server** | 1.0 Core | 1536 MB | Main application logic |
+| **Immich ML** | 2.0 Cores | 2048 MB | Local AI processing |
+| **Invidious** | 1.5 Cores | 1024 MB | Video proxying & rendering |
+| **Gluetun** | 2.0 Cores | 512 MB | VPN Gateway (High throughput) |
+| **SearXNG** | 1.0 Core | 512 MB | Meta-search engine |
+| **AdGuard Home** | 0.5 Core | 512 MB | DNS Filtering |
+| **Unbound** | 0.5 Core | 256 MB | Recursive DNS Resolver |
+| **Other Frontends** | 0.5 Core | 256 MB | Redlib, Wikiless, Scribe, etc. |
+
+*Note: These limits are conservative and can be adjusted in `lib/services.sh` if your hardware permits.*
+
 ### Performance Expectations
 *   **Validation**: 1-2 min
 *   **Build & Deploy**: 15-25 min (Source compilation is CPU-intensive)

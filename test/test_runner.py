@@ -179,92 +179,99 @@ def main():
     if "hub-api" not in services_list:
         services_list += ",hub-api"
         
-    # 1. Cleanup Pre-Flight
-    print("Cleaning environment (Pre-flight)...")
     compose_dir = os.path.join(TEST_DATA_DIR, "data/AppData/privacy-hub-test")
-    if os.path.exists(os.path.join(compose_dir, "docker-compose.yml")):
-         run_command("docker compose down -v || true", cwd=compose_dir)
-    else:
-         print("No previous compose file found, skipping cleanup.")
-    
-    # 2. Deploy
-    # Note: We must ensure test_config.env path is correct relative to execution
-    env_vars = f"APP_NAME=privacy-hub-test PROJECT_ROOT={TEST_DATA_DIR}"
-    
-    # Step 2a: Generate Config Only
-    print("Generating configuration...")
-    cmd_gen = f"{env_vars} ./zima.sh -p -y -E test/test_config.env -s {services_list} -G"
-    run_command(cmd_gen, cwd=PROJECT_ROOT)
-    
-    # Step 2b: Sequential Build with Pruning
-    print("Building services sequentially to optimize storage...")
-    compose_cwd = os.path.join(TEST_DATA_DIR, "data/AppData/privacy-hub-test")
-    
-    # Explicitly rebuild BreezeWiki to pick up Racket 8.15 update (Alpine 3.21)
-    # We skip others to avoid Docker Hub rate limits
-    if "breezewiki" in services_list:
-        print("Rebuilding BreezeWiki...")
-        run_command("docker compose build breezewiki", cwd=compose_cwd)
-        run_command("docker builder prune -f", cwd=compose_cwd)
-
-    # Get list of valid services from the generated compose file
-    try:
-        res = subprocess.run(['docker', 'compose', 'config', '--services'], cwd=compose_cwd, capture_output=True, text=True, check=True)
-        valid_services = res.stdout.strip().split('\n')
-    except subprocess.CalledProcessError:
-        print("Failed to list services from docker-compose.yml")
-        sys.exit(1)
-
-    for service in valid_services:
-        service = service.strip()
-        if not service: continue
-        
-        print(f"Building {service}...")
-        run_command(f"docker compose build {service}", cwd=compose_cwd)
-        print(f"Pruning build cache after {service}...")
-        run_command("docker builder prune -f", cwd=compose_cwd)
-
-    # Step 2c: Deploy (Up)
-    print("Launching stack...")
-    # We call zima.sh again (without -G) to let it handle the final 'up' logic 
-    # (it includes some other checks/waits). 
-    cmd_deploy = f"{env_vars} ./zima.sh -p -y -E test/test_config.env -s {services_list}"
-    run_command(cmd_deploy, cwd=PROJECT_ROOT)
-
-    # 3. Verify URLs
     all_pass = True
-    for check in stage_conf['checks']:
-        if not verify_url(check['name'], check['url'], check['code']):
-            all_pass = False
-            
-    # 4. Verify Logs
-    verify_logs()
-    
-    # 4.1 Verify Docker Logs
-    if not verify_docker_logs(services_list):
-        all_pass = False
-    
-    # 5. Puppeteer Verification (Dashboard Interactions)
-    print("Running Puppeteer UI Verification...")
-    # Ensure dependencies are installed
-    if not os.path.exists(os.path.join(TEST_SCRIPT_DIR, "node_modules")): 
-        print("Installing test dependencies...")
-        run_command("bun install", cwd=TEST_SCRIPT_DIR)
-        
-    try:
-        run_command("bun test_service_pages_puppeteer.js", cwd=TEST_SCRIPT_DIR)
-        print("[PASS] Puppeteer UI tests passed.")
-    except Exception:
-        print("[FAIL] Puppeteer UI tests failed.")
-        all_pass = False
 
-    # 6. Cleanup Post-Flight
-    print("Post-test cleanup and storage optimization...")
-    if os.path.exists(os.path.join(compose_dir, "docker-compose.yml")): 
-        run_command("docker compose down -v", cwd=compose_dir)
-    
-    # Removed aggressive docker system prune -af to speed up multi-stage testing
-    run_command("docker system prune -f")
+    try:
+        # 1. Cleanup Pre-Flight
+        print("Cleaning environment (Pre-flight)...")
+        if os.path.exists(os.path.join(compose_dir, "docker-compose.yml")):
+             run_command("docker compose down -v || true", cwd=compose_dir)
+        else:
+             print("No previous compose file found, skipping cleanup.")
+        
+        # Ensure we start with a clean slate
+        run_command("docker system prune -f --volumes")
+        
+        # 2. Deploy
+        # Note: We must ensure test_config.env path is correct relative to execution
+        env_vars = f"APP_NAME=privacy-hub-test PROJECT_ROOT={TEST_DATA_DIR}"
+        
+        # Step 2a: Generate Config Only
+        print("Generating configuration...")
+        cmd_gen = f"{env_vars} ./zima.sh -p -y -E test/test_config.env -s {services_list} -G"
+        run_command(cmd_gen, cwd=PROJECT_ROOT)
+        
+        # Step 2b: Sequential Build with Pruning
+        print("Building services sequentially to optimize storage...")
+        compose_cwd = os.path.join(TEST_DATA_DIR, "data/AppData/privacy-hub-test")
+        env_cmd_prefix = f"set -a; [ -f {PROJECT_ROOT}/test/test_config.env ] && . {PROJECT_ROOT}/test/test_config.env; APP_NAME=privacy-hub-test; PROJECT_ROOT={TEST_DATA_DIR}; set +a; "
+        
+        # Explicitly rebuild BreezeWiki to pick up Racket 8.15 update (Alpine 3.21)
+        # We skip others to avoid Docker Hub rate limits
+        if "breezewiki" in services_list:
+            print("Rebuilding BreezeWiki...")
+            run_command(f"{env_cmd_prefix} docker compose build breezewiki", cwd=compose_cwd)
+            run_command("docker builder prune -f", cwd=compose_cwd)
+
+        # Get list of valid services from the generated compose file
+        try:
+            res = subprocess.run([f"{env_cmd_prefix} docker compose config --services"], cwd=compose_cwd, capture_output=True, text=True, check=True, shell=True)
+            valid_services = res.stdout.strip().split('\n')
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to list services: {e.stderr}")
+            sys.exit(1)
+
+        for service in valid_services:
+            service = service.strip()
+            if not service: continue
+            
+            print(f"Building {service}...")
+            run_command(f"{env_cmd_prefix} docker compose build {service}", cwd=compose_cwd)
+            print(f"Pruning build cache after {service}...")
+            run_command("docker builder prune -f", cwd=compose_cwd)
+
+        # Step 2c: Deploy (Up)
+        print("Launching stack...")
+        # We call zima.sh again (without -G) to let it handle the final 'up' logic 
+        # (it includes some other checks/waits). 
+        cmd_deploy = f"{env_vars} ./zima.sh -p -y -E test/test_config.env -s {services_list}"
+        run_command(cmd_deploy, cwd=PROJECT_ROOT)
+
+        # 3. Verify URLs
+        for check in stage_conf['checks']:
+            if not verify_url(check['name'], check['url'], check['code']):
+                all_pass = False
+                
+        # 4. Verify Logs
+        verify_logs()
+        
+        # 4.1 Verify Docker Logs
+        if not verify_docker_logs(services_list):
+            all_pass = False
+        
+        # 5. Puppeteer Verification (Dashboard Interactions)
+        print("Running Puppeteer UI Verification...")
+        # Ensure dependencies are installed
+        if not os.path.exists(os.path.join(TEST_SCRIPT_DIR, "node_modules")): 
+            print("Installing test dependencies...")
+            run_command("bun install", cwd=TEST_SCRIPT_DIR)
+            
+        try:
+            run_command("bun test_service_pages_puppeteer.js", cwd=TEST_SCRIPT_DIR)
+            print("[PASS] Puppeteer UI tests passed.")
+        except Exception:
+            print("[FAIL] Puppeteer UI tests failed.")
+            all_pass = False
+
+    finally:
+        # 6. Cleanup Post-Flight
+        print("Post-test cleanup and storage optimization...")
+        if os.path.exists(os.path.join(compose_dir, "docker-compose.yml")): 
+            run_command("docker compose down -v", cwd=compose_dir)
+        
+        # Aggressive cleanup to prevent disk exhaustion
+        run_command("docker system prune -f --volumes")
 
     if not all_pass:
         sys.exit(1)
