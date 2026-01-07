@@ -68,12 +68,26 @@ $SUDO chmod 666 "$DOTENV_FILE"
 # AB_SERVICES and CRITICAL_IMAGES are defined in lib/constants.sh (sourced via lib/core.sh)
 
 for srv in $AB_SERVICES; do
-    VAR_NAME="${srv//-/_}_IMAGE_TAG"
-    VAR_NAME=$(echo $VAR_NAME | tr '[:lower:]' '[:upper:]')
-    if ! grep -q "^$VAR_NAME=" "$DOTENV_FILE"; then
-        echo "$VAR_NAME=latest" | $SUDO tee -a "$DOTENV_FILE" >/dev/null
+    SRV_UPPER=$(echo "${srv//-/_}" | tr '[:lower:]' '[:upper:]')
+    VAR_NAME="${SRV_UPPER}_IMAGE_TAG"
+    SLOT_VAR_NAME="${VAR_NAME}_${CURRENT_SLOT^^}"
+    DEFAULT_VAR_NAME="${SRV_UPPER}_DEFAULT_TAG"
+    
+    # Determine the default value from constants.sh
+    DEFAULT_VAL="${!DEFAULT_VAR_NAME:-latest}"
+
+    # 1. Check if slot-specific tag exists in .env
+    if grep -q "^$SLOT_VAR_NAME=" "$DOTENV_FILE"; then
+        val=$(grep "^$SLOT_VAR_NAME=" "$DOTENV_FILE" | cut -d'=' -f2)
+    # 2. Check if global tag exists in .env
+    elif grep -q "^$VAR_NAME=" "$DOTENV_FILE"; then
+        val=$(grep "^$VAR_NAME=" "$DOTENV_FILE" | cut -d'=' -f2)
+    # 3. Use default from constants.sh
+    else
+        val="$DEFAULT_VAL"
+        echo "$VAR_NAME=$val" | $SUDO tee -a "$DOTENV_FILE" >/dev/null
     fi
-    val=$(grep "^$VAR_NAME=" "$DOTENV_FILE" | cut -d'=' -f2)
+    
     export "$VAR_NAME=$val"
 done
 

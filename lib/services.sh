@@ -8,6 +8,7 @@ sync_sources() {
     clone_repo() { 
         local repo_url="$1"
         local target_dir="$2"
+        local version="${3:-}"
         local max_retries=3
         local attempt=1
         local delay=5
@@ -17,17 +18,35 @@ sync_sources() {
                 log_info "Cloning $repo_url (Attempt $attempt/$max_retries)..."
                 $SUDO mkdir -p "$target_dir"
                 $SUDO chown "$(whoami)" "$target_dir"
-                if git clone --depth 1 "$repo_url" "$target_dir"; then
+                # If version is specified, we might not want --depth 1 if it's a specific commit
+                # But for tags and branches --depth 1 usually works if it's recent
+                local clone_opts="--depth 1"
+                if [ -n "$version" ] && [[ "$version" != "latest" ]]; then
+                    clone_opts="--branch $version --depth 1"
+                fi
+                
+                if git clone $clone_opts "$repo_url" "$target_dir"; then
                     return 0
+                fi
+                
+                # Fallback: if shallow clone fails with branch, try full clone and checkout
+                if [ -n "$version" ] && [[ "$version" != "latest" ]]; then
+                    log_warn "Shallow clone failed for $version. Trying full clone..."
+                    if git clone "$repo_url" "$target_dir" && (cd "$target_dir" && git checkout "$version"); then
+                        return 0
+                    fi
                 fi
             else 
                 if [ "${FORCE_UPDATE:-false}" = "true" ]; then
                     log_info "Updating $target_dir (Attempt $attempt/$max_retries)..."
-                    if (cd "$target_dir" && git fetch --all && git reset --hard "origin/$(git rev-parse --abbrev-ref HEAD)" && git pull); then
+                    if (cd "$target_dir" && git fetch --all && git checkout -f "${version:-HEAD}" && git reset --hard "origin/${version:-$(git rev-parse --abbrev-ref HEAD)}" && git pull); then
                         return 0
                     fi
                 else
-                    log_info "Repository exists at $target_dir. Skipping update (set FORCE_UPDATE=true to update)."
+                    log_info "Repository exists at $target_dir. Ensuring correct version ($version)..."
+                    if [ -n "$version" ] && [[ "$version" != "latest" ]]; then
+                        (cd "$target_dir" && git fetch --all --tags && git checkout -f "$version") || true
+                    fi
                     return 0
                 fi
             fi
@@ -52,19 +71,19 @@ sync_sources() {
     
     local pids=""
     
-    clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless" & pids="$pids $!"
-    clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe" & pids="$pids $!"
-    clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious" & pids="$pids $!"
-    clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster" & pids="$pids $!"
-    clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert" & pids="$pids $!"
-    clone_repo "https://github.com/VERT-sh/vertd.git" "$SRC_DIR/vertd" & pids="$pids $!"
-    clone_repo "https://codeberg.org/rimgo/rimgo.git" "$SRC_DIR/rimgo" & pids="$pids $!"
-    clone_repo "https://github.com/PussTheCat-org/docker-breezewiki-quay.git" "$SRC_DIR/breezewiki" & pids="$pids $!"
-    clone_repo "https://github.com/httpjamesm/AnonymousOverflow.git" "$SRC_DIR/anonymousoverflow" & pids="$pids $!"
-    clone_repo "https://github.com/qdm12/gluetun.git" "$SRC_DIR/gluetun" & pids="$pids $!"
+    clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless" "$WIKILESS_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe" "$SCRIBE_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious" "$INVIDIOUS_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster" "$ODIDO_BOOSTER_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert" "$VERT_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/VERT-sh/vertd.git" "$SRC_DIR/vertd" "$VERTD_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://codeberg.org/rimgo/rimgo.git" "$SRC_DIR/rimgo" "$RIMGO_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/PussTheCat-org/docker-breezewiki-quay.git" "$SRC_DIR/breezewiki" "$BREEZEWIKI_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/httpjamesm/AnonymousOverflow.git" "$SRC_DIR/anonymousoverflow" "$ANONYMOUSOVERFLOW_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/qdm12/gluetun.git" "$SRC_DIR/gluetun" "$GLUETUN_IMAGE_TAG" & pids="$pids $!"
     
     (
-        if clone_repo "https://github.com/AdguardTeam/AdGuardHome.git" "$SRC_DIR/adguardhome"; then
+        if clone_repo "https://github.com/AdguardTeam/AdGuardHome.git" "$SRC_DIR/adguardhome" "$ADGUARD_IMAGE_TAG"; then
             # AdGuard Home custom build Dockerfile (Upstream expects pre-built binaries)
             # We remove .dockerignore because it ignores everything by default, breaking our custom build
             rm -f "$SRC_DIR/adguardhome/.dockerignore"
@@ -101,12 +120,12 @@ EOF
         fi
     ) & pids="$pids $!"
 
-    clone_repo "https://github.com/klutchell/unbound-docker.git" "$SRC_DIR/unbound" & pids="$pids $!"
-    clone_repo "https://github.com/usememos/memos.git" "$SRC_DIR/memos" & pids="$pids $!"
-    clone_repo "https://github.com/redlib-org/redlib.git" "$SRC_DIR/redlib" & pids="$pids $!"
-    clone_repo "https://github.com/iv-org/invidious-companion.git" "$SRC_DIR/invidious-companion" & pids="$pids $!"
-    clone_repo "https://github.com/wg-easy/wg-easy.git" "$SRC_DIR/wg-easy" & pids="$pids $!"
-    clone_repo "https://github.com/portainer/portainer.git" "$SRC_DIR/portainer" & pids="$pids $!"
+    clone_repo "https://github.com/klutchell/unbound-docker.git" "$SRC_DIR/unbound" "$UNBOUND_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/usememos/memos.git" "$SRC_DIR/memos" "$MEMOS_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/redlib-org/redlib.git" "$SRC_DIR/redlib" "$REDLIB_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/iv-org/invidious-companion.git" "$SRC_DIR/invidious-companion" "$COMPANION_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/wg-easy/wg-easy.git" "$SRC_DIR/wg-easy" "$WG_EASY_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/portainer/portainer.git" "$SRC_DIR/portainer" "$PORTAINER_IMAGE_TAG" & pids="$pids $!"
 
     local success=true
     for pid in $pids; do
@@ -2105,7 +2124,7 @@ EOF
     cat >> "$COMPOSE_FILE" <<EOF
   # Cobalt: Media downloader (Local access only)
   cobalt:
-    image: ghcr.io/imputnet/cobalt
+    image: ghcr.io/imputnet/cobalt:${COBALT_IMAGE_TAG:-latest}
     container_name: ${CONTAINER_PREFIX}cobalt
     networks: [dhi-frontnet]
     ports: ["$LAN_IP:$PORT_COBALT:$PORT_INT_COBALT"]
@@ -2160,7 +2179,7 @@ EOF
     cat >> "$COMPOSE_FILE" <<EOF
   # Immich: High-performance self-hosted photo and video management
   immich-server:
-    image: ghcr.io/immich-app/immich-server
+    image: ghcr.io/immich-app/immich-server:${IMMICH_IMAGE_TAG:-latest}
     container_name: ${CONTAINER_PREFIX}immich-server
     network_mode: "service:gluetun"
     environment:
@@ -2183,7 +2202,7 @@ EOF
         limits: {cpus: '1.0', memory: 1024M}
 
   immich-db:
-    image: tensorchord/pgvector
+    image: ankane/pgvector:v0.5.0
     container_name: ${CONTAINER_PREFIX}immich-db
     networks: [dhi-frontnet]
     environment:
@@ -2217,7 +2236,7 @@ EOF
         limits: {cpus: '0.3', memory: 128M}
 
   immich-machine-learning:
-    image: ghcr.io/immich-app/immich-machine-learning
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_IMAGE_TAG:-latest}
     container_name: ${CONTAINER_PREFIX}immich-ml
     network_mode: "service:gluetun"
     volumes:
