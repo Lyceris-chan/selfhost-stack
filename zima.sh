@@ -31,6 +31,18 @@ source "$SCRIPT_DIR/lib/services.sh"
 # 3. Operations Logic (Cleanup, Backup, Deploy) - Defines: check_docker_rate_limit, check_cert_risk, clean_environment, cleanup_build_artifacts, perform_backup, swap_slots, finalize_swap, stop_inactive_slots, deploy_stack
 source "$SCRIPT_DIR/lib/operations.sh"
 
+# --- Error Handling ---
+failure_handler() {
+    local lineno=$1
+    local msg=$2
+    if command -v log_crit >/dev/null 2>&1; then
+        log_crit "Deployment failed at line $lineno: $msg"
+    else
+        echo "[CRIT] Deployment failed at line $lineno: $msg"
+    fi
+}
+trap 'failure_handler ${LINENO} "$BASH_COMMAND"' ERR
+
 # --- Main Execution Flow ---
 
 # 1. Cleanup & Reset
@@ -53,8 +65,7 @@ DOTENV_FILE="$BASE_DIR/.env"
 if [ ! -f "$DOTENV_FILE" ]; then $SUDO touch "$DOTENV_FILE"; fi
 $SUDO chmod 666 "$DOTENV_FILE"
 
-# Define all services that use the A/B scheme
-AB_SERVICES="hub-api odido-booster memos gluetun portainer adguard unbound wg-easy redlib wikiless invidious rimgo breezewiki anonymousoverflow scribe vert vertd companion"
+# AB_SERVICES and CRITICAL_IMAGES are defined in lib/constants.sh (sourced via lib/core.sh)
 
 for srv in $AB_SERVICES; do
     VAR_NAME="${srv//-/_}_IMAGE_TAG"
@@ -65,8 +76,6 @@ for srv in $AB_SERVICES; do
     val=$(grep "^$VAR_NAME=" "$DOTENV_FILE" | cut -d'=' -f2)
     export "$VAR_NAME=$val"
 done
-
-CRITICAL_IMAGES="nginx:1.27.3-alpine python:3.11.11-alpine3.21 node:20.18.1-alpine3.21 oven/bun:1.1.34-alpine alpine:3.21.0 redis:7.2.6-alpine postgres:14.15-alpine3.21 neilpang/acme.sh:latest"
 
 PIDS=""
 for img in $CRITICAL_IMAGES; do
@@ -131,22 +140,9 @@ else
         log_info "WireGuard configuration provided in environment. Decoding..." # (from lib/core.sh)
         echo "$WG_CONF_B64" | base64 -d | $SUDO tee "$ACTIVE_WG_CONF" >/dev/null
     elif [ "$AUTO_CONFIRM" = true ]; then
-        log_warn "Auto-confirm active: Using specific WireGuard configuration." # (from lib/core.sh)
-        cat <<EOF | $SUDO tee "$ACTIVE_WG_CONF" >/dev/null
-[Interface]
-# Bouncing = 1
-# NAT-PMP (Port Forwarding) = off
-# VPN Accelerator = on
-PrivateKey = UHKgB2Jp++nyH56z8sGnMhyhhdVZAeM6s5uq5+HInGQ=
-Address = 10.2.0.2/32
-DNS = 10.2.0.1
-
-[Peer]
-# NL-FREE#157
-PublicKey = V0F3qTpofzp/VUXX8hhmBksXcKJV9hNMOe3D2i3A9lk=
-AllowedIPs = 0.0.0.0/0, ::/0
-Endpoint = 185.107.56.106:51820
-EOF
+        log_crit "Auto-confirm active but no WireGuard configuration provided via environment (WG_CONF_B64)."
+        log_info "Please provide a base64-encoded WireGuard configuration in the WG_CONF_B64 environment variable."
+        exit 1
     else
         echo "PASTE YOUR WIREGUARD .CONF CONTENT BELOW."
         echo "Make sure to include the [Interface] block with PrivateKey."
@@ -198,11 +194,23 @@ generate_compose # (from lib/services.sh)
 generate_protonpass_export # (from lib/core.sh)
 generate_libredirect_export # (from lib/services.sh)
 
+if [ "$GENERATE_ONLY" = true ]; then
+    log_info "Generation complete. Skipping deployment (-G flag active)."
+    exit 0
+fi
+
 # 13. Deploy
 deploy_stack # (from lib/operations.sh)
 
 # 14. Cleanup Inactive Slots (post-success)
 if [ "$SWAP_SLOTS" = true ]; then
-    finalize_swap # (from lib/operations.sh)
-    stop_inactive_slots # (from lib/operations.sh)
+    if verify_health; then
+        finalize_swap # (from lib/operations.sh)
+        stop_inactive_slots # (from lib/operations.sh)
+    else
+        log_crit "Deployment health verification FAILED for the new slot. SWAP ABORTED."
+        log_warn "The inactive slot has NOT been cleaned up to allow for investigation."
+        log_warn "Active slot remains unchanged in state file."
+        exit 1
+    fi
 fi

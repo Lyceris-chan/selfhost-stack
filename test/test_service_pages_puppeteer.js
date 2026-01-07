@@ -249,7 +249,28 @@ async function run() {
 
   console.log('Starting Service Page Verification...');
   console.log(`Dashboard URL: ${DASHBOARD_URL}`);
+  
+  const dashboardConsoleErrors = [];
   const services = await withPage(browser, async (page) => {
+    // Capture console errors from the dashboard
+    page.on('console', msg => {
+      if (msg.type() === 'error') {
+        const text = msg.text();
+        // Ignore expected network errors during partial deployments
+        if (text.includes('401 (Unauthorized)') || 
+            text.includes('502 (Bad Gateway)') || 
+            text.includes('404 (Not Found)') ||
+            text.includes('net::ERR_ABORTED') ||
+            text.includes('fontlay.com') ||
+            text.includes('fetch error') ||
+            text.includes('API Call failed')) {
+          return;
+        }
+        dashboardConsoleErrors.push(text);
+        console.log(`[DASHBOARD CONSOLE ERROR] ${text}`);
+      }
+    });
+
     await attachApiMocks(page);
     await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(() => document.querySelectorAll('.card[data-url]').length > 0, { timeout: 30000 }).catch(() => null);
@@ -263,6 +284,13 @@ async function run() {
   });
 
   const results = [];
+  // Add dashboard console check result
+  results.push({
+    name: 'Dashboard Console Logs',
+    ok: dashboardConsoleErrors.length === 0,
+    error: dashboardConsoleErrors.length > 0 ? `${dashboardConsoleErrors.length} errors found in console` : undefined
+  });
+
   for (const service of services) {
     if (!service.url) continue;
     const name = service.container || service.id || service.url;

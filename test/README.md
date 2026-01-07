@@ -11,9 +11,9 @@ The testing suite automatically loads configuration from the `details` file in t
 
 ### Running the Full Suite
 
-The `run_full_verification.sh` script is the primary entry point. It performs:
+The `run_full_verification.sh` script (or `manual_verification.sh` for orchestrated runs) is the primary entry point. It performs:
 1. **Source Synchronization**: Clones all necessary service repositories.
-2. **Batch Deployment**: Builds and verifies services in small batches to manage storage and CPU usage.
+2. **6-Stage Batch Deployment**: Builds and verifies services in small batches (Stages 1-6) to manage storage and CPU usage. This prevents disk exhaustion on limited environments.
 3. **UI/UX Testing**: Uses Puppeteer to verify dashboard interactions, theme toggling, admin mode, and log filtering.
 4. **API Verification**: Tests the Hub API endpoints for health and status.
 5. **Slot Swapping**: Verifies the A/B update system by swapping active slots.

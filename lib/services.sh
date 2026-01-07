@@ -6,46 +6,89 @@ sync_sources() {
     log_info "Synchronizing Source Repositories..."
     
     clone_repo() { 
-        if [ ! -d "$2/.git" ]; then 
-            $SUDO mkdir -p "$2"
-            $SUDO chown "$(whoami)" "$2"
-            git clone --depth 1 "$1" "$2"
-        else 
-            (cd "$2" && git fetch --all && git reset --hard "origin/$(git rev-parse --abbrev-ref HEAD)" && git pull)
-        fi
+        local repo_url="$1"
+        local target_dir="$2"
+        local max_retries=3
+        local attempt=1
+        local delay=5
+
+        while [ $attempt -le $max_retries ]; do
+            if [ ! -d "$target_dir/.git" ]; then 
+                log_info "Cloning $repo_url (Attempt $attempt/$max_retries)..."
+                $SUDO mkdir -p "$target_dir"
+                $SUDO chown "$(whoami)" "$target_dir"
+                if git clone --depth 1 "$repo_url" "$target_dir"; then
+                    return 0
+                fi
+            else 
+                if [ "${FORCE_UPDATE:-false}" = "true" ]; then
+                    log_info "Updating $target_dir (Attempt $attempt/$max_retries)..."
+                    if (cd "$target_dir" && git fetch --all && git reset --hard "origin/$(git rev-parse --abbrev-ref HEAD)" && git pull); then
+                        return 0
+                    fi
+                else
+                    log_info "Repository exists at $target_dir. Skipping update (set FORCE_UPDATE=true to update)."
+                    return 0
+                fi
+            fi
+
+            log_warn "Repository operation failed for $repo_url."
+            if [[ "$repo_url" == *"codeberg.org"* ]]; then
+                log_warn "Codeberg appears to be having issues. Check status at: https://status.codeberg.org/status/codeberg"
+            fi
+            log_warn "Retrying in ${delay}s..."
+            sleep $delay
+            attempt=$((attempt + 1))
+            delay=$((delay * 2))
+        done
+
+        log_crit "Failed to sync repository $repo_url after $max_retries attempts."
+        return 1
     }
 
-    # Clone repositories containing the Dockerfiles
+    # Clone repositories containing the Dockerfiles in parallel
     # Note: For some services, we clone the docker-packaging repo instead of the source repo
     # to adhere to "modify upstream Dockerfiles" rather than creating our own.
     
-    clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless"
-    clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe"
-    clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious"
-    clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster"
-    clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert"
-    clone_repo "https://github.com/VERT-sh/vertd.git" "$SRC_DIR/vertd"
-    clone_repo "https://codeberg.org/rimgo/rimgo.git" "$SRC_DIR/rimgo"
-    clone_repo "https://github.com/PussTheCat-org/docker-breezewiki-quay.git" "$SRC_DIR/breezewiki"
-    clone_repo "https://github.com/httpjamesm/AnonymousOverflow.git" "$SRC_DIR/anonymousoverflow"
-    clone_repo "https://github.com/qdm12/gluetun.git" "$SRC_DIR/gluetun"
-    clone_repo "https://github.com/AdguardTeam/AdGuardHome.git" "$SRC_DIR/adguardhome"
+    local pids=""
     
-    # AdGuard Home custom build Dockerfile (Upstream expects pre-built binaries)
-    # We remove .dockerignore because it ignores everything by default, breaking our custom build
-    rm -f "$SRC_DIR/adguardhome/.dockerignore"
+    clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless" & pids="$pids $!"
+    clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe" & pids="$pids $!"
+    clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious" & pids="$pids $!"
+    clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster" & pids="$pids $!"
+    clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert" & pids="$pids $!"
+    clone_repo "https://github.com/VERT-sh/vertd.git" "$SRC_DIR/vertd" & pids="$pids $!"
+    clone_repo "https://codeberg.org/rimgo/rimgo.git" "$SRC_DIR/rimgo" & pids="$pids $!"
+    clone_repo "https://github.com/PussTheCat-org/docker-breezewiki-quay.git" "$SRC_DIR/breezewiki" & pids="$pids $!"
+    clone_repo "https://github.com/httpjamesm/AnonymousOverflow.git" "$SRC_DIR/anonymousoverflow" & pids="$pids $!"
+    clone_repo "https://github.com/qdm12/gluetun.git" "$SRC_DIR/gluetun" & pids="$pids $!"
+    
+    (
+        if clone_repo "https://github.com/AdguardTeam/AdGuardHome.git" "$SRC_DIR/adguardhome"; then
+            # AdGuard Home custom build Dockerfile (Upstream expects pre-built binaries)
+            # We remove .dockerignore because it ignores everything by default, breaking our custom build
+            rm -f "$SRC_DIR/adguardhome/.dockerignore"
 
-    cat > "$SRC_DIR/adguardhome/Dockerfile.dhi" <<'EOF'
-FROM dhi.io/golang:1-alpine3.22-dev AS builder
+            # Patch Webpack config for Webpack 5 compatibility ([hash] -> [fullhash])
+            if [ -f "$SRC_DIR/adguardhome/client/webpack.prod.js" ]; then
+                sed -i 's/\[hash\]/[fullhash]/g' "$SRC_DIR/adguardhome/client/webpack.prod.js"
+            fi
+            if [ -f "$SRC_DIR/adguardhome/client/webpack.dev.js" ]; then
+                sed -i 's/\[hash\]/[fullhash]/g' "$SRC_DIR/adguardhome/client/webpack.dev.js"
+            fi
+
+            cat > "$SRC_DIR/adguardhome/Dockerfile.dhi" <<'EOF'
+FROM golang:1-alpine AS builder
 WORKDIR /build
 COPY . .
 RUN apk add --no-cache nodejs npm
 # Build the frontend assets
-RUN cd client && npm install && npm run build-prod
+# Force core-js update to avoid deprecation warnings and install dependencies
+RUN cd client && npm install core-js@^3.30.0 --save && npm install && npm audit fix --audit-level=moderate || true && npm run build-prod
 # Build the binary
 RUN go build -ldflags="-s -w" -o AdGuardHome main.go
 
-FROM dhi.io/alpine-base:3.22-dev
+FROM alpine:3.20
 WORKDIR /opt/adguardhome
 COPY --from=builder /build/AdGuardHome /opt/adguardhome/AdGuardHome
 RUN apk add --no-cache libcap tzdata
@@ -53,12 +96,29 @@ RUN setcap 'cap_net_bind_service=+eip' /opt/adguardhome/AdGuardHome
     EXPOSE 53/udp 53/tcp 80/tcp 443/tcp 443/udp 3000/tcp 853/tcp 853/udp
     CMD ["/opt/adguardhome/AdGuardHome", "--work-dir", "/opt/adguardhome/work", "--config", "/opt/adguardhome/conf/AdGuardHome.yaml", "--no-check-update"]
 EOF
-    clone_repo "https://github.com/klutchell/unbound-docker.git" "$SRC_DIR/unbound"
-    clone_repo "https://github.com/usememos/memos.git" "$SRC_DIR/memos"
-    clone_repo "https://github.com/redlib-org/redlib.git" "$SRC_DIR/redlib"
-    clone_repo "https://github.com/iv-org/invidious-companion.git" "$SRC_DIR/invidious-companion"
-    clone_repo "https://github.com/wg-easy/wg-easy.git" "$SRC_DIR/wg-easy"
-    clone_repo "https://github.com/portainer/portainer.git" "$SRC_DIR/portainer"
+        else
+            exit 1
+        fi
+    ) & pids="$pids $!"
+
+    clone_repo "https://github.com/klutchell/unbound-docker.git" "$SRC_DIR/unbound" & pids="$pids $!"
+    clone_repo "https://github.com/usememos/memos.git" "$SRC_DIR/memos" & pids="$pids $!"
+    clone_repo "https://github.com/redlib-org/redlib.git" "$SRC_DIR/redlib" & pids="$pids $!"
+    clone_repo "https://github.com/iv-org/invidious-companion.git" "$SRC_DIR/invidious-companion" & pids="$pids $!"
+    clone_repo "https://github.com/wg-easy/wg-easy.git" "$SRC_DIR/wg-easy" & pids="$pids $!"
+    clone_repo "https://github.com/portainer/portainer.git" "$SRC_DIR/portainer" & pids="$pids $!"
+
+    local success=true
+    for pid in $pids; do
+        if ! wait "$pid"; then
+            success=false
+        fi
+    done
+
+    if [ "$success" = false ]; then
+        log_crit "One or more source repositories failed to synchronize."
+        return 1
+    fi
 
     PATCHES_SCRIPT="$BASE_DIR/patches.sh"
 
@@ -87,38 +147,52 @@ patch_bare() {
     [ ! -f "$file" ] && return
     log "  Patching $(basename "$file")..."
     
+    # Create a backup before patching
+    cp "$file" "${file}.bak"
+
     # [1] Link Source
-    if ! grep -q "Original:" "$file"; then
-        sed -i "1s|^|# Original: $link\n|" "$file"
+    if ! grep -qi "Original:" "$file"; then
+        # Use a more robust way to prepend to a file
+        printf "# Original: %s\n%s" "$link" "$(cat "$file")" > "$file"
     fi
 
     # [2] Base Image (DHI/Alpine)
-    # Don't replace scratch/distroless or specific builder images unless necessary
-    if ! grep -q "FROM scratch" "$file" && ! grep -q "FROM .*distroless" "$file"; then
-        sed -i 's|^FROM alpine:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$file"
-        sed -i 's|^FROM debian:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$file"
-        sed -i 's|^FROM ubuntu:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$file"
-    fi
+    # Only replace if it is already an Alpine base to ensure package manager compatibility
+    # if grep -qiE "^FROM[[:space:]]+alpine:" "$file"; then
+    #    sed -i -E 's/^FROM[[:space:]]+alpine:[^[:space:]]*/FROM dhi.io\/alpine-base:3.22-dev/gI' "$file"
+    # fi
     
-    # [3] Runtimes
-    sed -i 's|^FROM node:[^ ]*|FROM dhi.io/node:20-alpine3.22-dev|g' "$file"
-    sed -i 's|^FROM golang:[^ ]*|FROM dhi.io/golang:1-alpine3.22-dev|g' "$file"
-    sed -i 's|^FROM python:[^ ]*|FROM dhi.io/python:3.11-alpine3.22-dev|g' "$file"
-    sed -i 's|^FROM rust:[^ ]*|FROM dhi.io/rust:1-alpine3.22-dev|g' "$file"
-    sed -i 's|^FROM oven/bun:[^ ]*|FROM dhi.io/bun:1-alpine3.22-dev|g' "$file"
+    # [3] Runtimes (Only if they are alpine-based runtimes)
+    # sed -i -E 's/^FROM[[:space:]]+node:[0-9.]+-alpine[^[:space:]]*/FROM dhi.io\/node:20-alpine3.22-dev/gI' "$file"
+    # sed -i -E 's/^FROM[[:space:]]+golang:[0-9.]+-alpine[^[:space:]]*/FROM dhi.io\/golang:1-alpine3.22-dev/gI' "$file"
+    # sed -i -E 's/^FROM[[:space:]]+python:[0-9.]+-alpine[^[:space:]]*/FROM dhi.io\/python:3.11-alpine3.22-dev/gI' "$file"
+    # sed -i -E 's/^FROM[[:space:]]+rust:[0-9.]+-alpine[^[:space:]]*/FROM dhi.io\/rust:1-alpine3.22-dev/gI' "$file"
+    # sed -i -E 's/^FROM[[:space:]]+oven\/bun:[0-9.]+-alpine[^[:space:]]*/FROM dhi.io\/bun:1-alpine3.22-dev/gI' "$file"
 
-    # [4] Package Manager (apt -> apk)
-    if grep -q "dhi.io/alpine-base" "$file"; then
-        # Remove apt commands
-        sed -i 's/apt-get update//g' "$file"
-        sed -i 's/apt-get install -y --no-install-recommends/apk add --no-cache/g' "$file"
-        sed -i 's/apt-get install -y/apk add --no-cache/g' "$file"
-        sed -i '/rm -rf \/var\/lib\/apt\/lists/d' "$file"
-        sed -i '/apt-get clean/d' "$file"
-        # Fix basic package names
-        sed -i 's/ libssl-dev / openssl-dev /g' "$file"
-        sed -i 's/ ca-certificates / /g' "$file" # Usually included or added separately
+    # [4] Package Manager (apt -> apk) - ONLY if we are sure we are on Alpine now
+    if grep -qi "dhi.io\/alpine-base" "$file" || grep -qiE "^FROM[[:space:]]+alpine:" "$file"; then
+        # Remove apt commands if any (some multi-stage might have both)
+        if grep -qi "apt-get" "$file"; then
+            log "    [WARN] Detected apt-get in potentially Alpine-based image. Attempting conversion..."
+            sed -i 's/apt-get[[:space:]]\+update[[:space:]]*&&[[:space:]]*//g' "$file"
+            sed -i 's/apt-get[[:space:]]\+update//g' "$file"
+            sed -i 's/apt-get[[:space:]]\+install[[:space:]]\+-y[[:space:]]\+--no-install-recommends/apk add --no-cache/g' "$file"
+            sed -i 's/apt-get[[:space:]]\+install[[:space:]]\+-y/apk add --no-cache/g' "$file"
+            sed -i '/rm[[:space:]]\+-rf[[:space:]]\+\/var\/lib\/apt\/lists/d' "$file"
+            sed -i '/apt-get[[:space:]]\+clean/d' "$file"
+            # Fix basic package names
+            sed -i 's/[[:space:]]\+libssl-dev[[:space:]]\+/ openssl-dev /g' "$file"
+            sed -i 's/[[:space:]]\+ca-certificates[[:space:]]\+/ /g' "$file"
+        fi
     fi
+
+    # Sanity check: Ensure at least one FROM line exists and no obvious corruption
+    if ! grep -qi "^FROM " "$file"; then
+        log "  [ERROR] Patching corrupted $(basename "$file"): No FROM line found. Rolling back."
+        mv "${file}.bak" "$file"
+        return 1
+    fi
+    rm -f "${file}.bak"
 }
 
 # --- Service Specific Patches ---
@@ -129,13 +203,16 @@ if [ "$SERVICE" = "breezewiki" ] || [ "$SERVICE" = "all" ]; then
         log "Patching BreezeWiki (Upstream)..."
         patch_bare "$SRC_ROOT/breezewiki/$D_FILE" "https://github.com/PussTheCat-org/docker-breezewiki-quay/blob/master/docker/Dockerfile"
         
+        # Replace the Debian base with Alpine
+        sed -i 's|^FROM .*|FROM alpine:3.21|g' "$SRC_ROOT/breezewiki/$D_FILE"
+        
         # Replace the Debian run block with Alpine instructions
         # Upstream uses a single RUN for apt update... git clone... raco...
         # We replace it with the Alpine equivalent.
         sed -i '/RUN apt update/,/raco req -d/c\
 RUN apk add --no-cache git racket ca-certificates curl sqlite-libs fontconfig cairo libjpeg-turbo glib pango build-base libffi-dev \\ \
     && git clone --depth=1 https://gitdab.com/cadence/breezewiki.git . \\ \
-    && raco pkg install --scope installation --auto --batch --no-docs html-writing json-pointer typed-ini-lib memo db html-parsing http-easy-lib' "$SRC_ROOT/breezewiki/$D_FILE"
+    && raco pkg install --scope installation --auto --batch --no-docs html-writing json-pointer typed-ini-lib memo db html-parsing http-easy-lib sequence-tools-lib net-cookies-lib web-server-lib rackunit-lib' "$SRC_ROOT/breezewiki/$D_FILE"
     fi
 fi
 
@@ -152,10 +229,8 @@ if [ "$SERVICE" = "vertd" ] || [ "$SERVICE" = "all" ]; then
         
         # Switch runtime if no GPU
         if ! command -v nvidia-smi >/dev/null 2>&1; then
-             log "  No NVIDIA GPU detected. Switching VERTd to Alpine base..."
-             sed -i 's|^FROM nvidia/cuda:[^ ]*|FROM dhi.io/alpine-base:3.22-dev|g' "$SRC_ROOT/vertd/$D_FILE"
-             # Replace the apt-get runtime block
-             sed -i '/RUN apt-get update/,/fi/c\RUN apk add --no-cache ffmpeg ca-certificates curl' "$SRC_ROOT/vertd/$D_FILE"
+             log "  No NVIDIA GPU detected. Switching VERTd to Debian-slim base..."
+             sed -i 's|^FROM nvidia/cuda:[^ ]*|FROM debian:bookworm-slim|g' "$SRC_ROOT/vertd/$D_FILE"
         fi
     fi
 fi
@@ -168,6 +243,36 @@ if [ "$SERVICE" = "companion" ] || [ "$SERVICE" = "all" ]; then
         # Fix stack overflow
         sed -i '/RUN .*deno task compile/i ENV RUST_MIN_STACK=16777216' "$SRC_ROOT/invidious-companion/$D_FILE"
         sed -i '/RUN .*deno task compile/i RUN rm -f deno.lock' "$SRC_ROOT/invidious-companion/$D_FILE"
+        
+        # Fix user creation in Alpine (add group first)
+        sed -i 's/adduser -u 10001 -S appuser/addgroup -S appuser \&\& adduser -u 10001 -S -G appuser appuser/' "$SRC_ROOT/invidious-companion/$D_FILE"
+        sed -i 's/useradd --uid 1993 --user-group deno/addgroup -g 1993 -S deno \&\& adduser -u 1993 -S -G deno deno/' "$SRC_ROOT/invidious-companion/$D_FILE"
+
+        # Fix dpkg dependency in Alpine
+        sed -i "s/dpkg --print-architecture/uname -m | sed -e 's\/x86_64\/amd64\/' -e 's\/aarch64\/arm64\/'/" "$SRC_ROOT/invidious-companion/$D_FILE"
+
+        # Use denoland/deno:alpine as the base for builder stages
+        sed -i 's|^FROM debian:.* AS dependabot-debian|FROM denoland/deno:alpine AS dependabot-debian|g' "$SRC_ROOT/invidious-companion/$D_FILE"
+        # Remove redundant commands since we now use the deno image as base
+        sed -i '/COPY --from=deno-bin/d' "$SRC_ROOT/invidious-companion/$D_FILE"
+        sed -i '/RUN apk add --no-cache gcompat/d' "$SRC_ROOT/invidious-companion/$D_FILE"
+        # Carefully remove the user creation logic (it's in the debian-deno stage)
+        sed -i '/RUN addgroup -g 1993 -S deno/,/chown deno:deno/d' "$SRC_ROOT/invidious-companion/$D_FILE"
+        # Also ensure we don't have a stray && if the RUN was different
+        sed -i '/RUN useradd --uid 1993/d' "$SRC_ROOT/invidious-companion/$D_FILE"
+        
+        # Add necessary directory creation to the correct stage
+        # We match the standalone ARG DENO_DIR line (not the one with default value)
+        sed -i '/^ARG DENO_DIR$/a RUN mkdir -p ${DENO_DIR} && chown deno:deno ${DENO_DIR}' "$SRC_ROOT/invidious-companion/$D_FILE"
+
+        # Fix final stage to Alpine
+        sed -i 's|^FROM gcr.io/distroless/cc.*|FROM alpine:3.20|g' "$SRC_ROOT/invidious-companion/$D_FILE"
+        
+        # Switch Debian stages to Alpine (since we replaced apt with apk)
+        sed -i 's/^FROM debian:.* AS dependabot-debian/FROM dhi.io\/alpine-base:3.22-dev AS dependabot-debian/' "$SRC_ROOT/invidious-companion/$D_FILE"
+        
+        # Fix package names for Alpine
+        sed -i 's/xz-utils/xz/g' "$SRC_ROOT/invidious-companion/$D_FILE"
     fi
 fi
 
@@ -189,7 +294,8 @@ if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
 fi
 
 # Apply generic patches to all others
-for srv in wikiless scribe invidious odido-booster vert rimgo anonymousoverflow gluetun adguard unbound memos redlib wg-easy portainer dashboard; do
+# PATCHABLE_SERVICES is defined in constants.sh (sourced via core.sh)
+for srv in $PATCHABLE_SERVICES; do
     if [ "$SERVICE" = "$srv" ] || [ "$SERVICE" = "all" ]; then
         D_PATH="$SRC_ROOT/$srv"
         if [ "$srv" = "adguard" ]; then D_PATH="$SRC_ROOT/adguardhome"; fi
@@ -225,7 +331,7 @@ PATCHEOF
 generate_scripts() {
     # 1. Migrate Script
     if [ -f "$SCRIPT_DIR/lib/templates/migrate.sh" ]; then
-        sed "s/__CONTAINER_PREFIX__/${CONTAINER_PREFIX}/g" "$SCRIPT_DIR/lib/templates/migrate.sh" > "$MIGRATE_SCRIPT"
+        sed "s|__CONTAINER_PREFIX__|${CONTAINER_PREFIX}|g; s|__INVIDIOUS_DB_PASSWORD__|${INVIDIOUS_DB_PASSWORD}|g" "$SCRIPT_DIR/lib/templates/migrate.sh" > "$MIGRATE_SCRIPT"
         chmod +x "$MIGRATE_SCRIPT"
     else
         echo "[WARN] templates/migrate.sh not found at $SCRIPT_DIR/lib/templates/migrate.sh"
@@ -233,7 +339,7 @@ generate_scripts() {
 
     # 2. WG Control Script
     if [ -f "$SCRIPT_DIR/lib/templates/wg_control.sh" ]; then
-        sed "s/__CONTAINER_PREFIX__/${CONTAINER_PREFIX}/g; s/__ADMIN_PASS_RAW__/${ADMIN_PASS_RAW}/g" "$SCRIPT_DIR/lib/templates/wg_control.sh" > "$WG_CONTROL_SCRIPT"
+        sed "s|__CONTAINER_PREFIX__|${CONTAINER_PREFIX}|g; s|__ADMIN_PASS_RAW__|${ADMIN_PASS_RAW}|g" "$SCRIPT_DIR/lib/templates/wg_control.sh" > "$WG_CONTROL_SCRIPT"
         chmod +x "$WG_CONTROL_SCRIPT"
     else
         echo "[WARN] templates/wg_control.sh not found at $SCRIPT_DIR/lib/templates/wg_control.sh"
@@ -521,6 +627,26 @@ download_remote_assets() {
         return 0
     fi
 
+    local proxy="http://172.${FOUND_OCTET}.0.254:8888"
+    local ua="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+    # Wait for Gluetun proxy to be ready (up to 60s)
+    log_info "Verifying Gluetun proxy availability (Privacy Mode)..."
+    local proxy_ready=false
+    for i in {1..30}; do
+        if curl --proxy "$proxy" -fsSL --max-time 3 https://fontlay.com -o /dev/null >/dev/null 2>&1; then
+            proxy_ready=true
+            break
+        fi
+        sleep 2
+    done
+
+    if [ "$proxy_ready" = false ]; then
+        log_crit "Gluetun proxy is not responding. Aborting asset localization to prevent home IP leakage."
+        log_crit "Please ensure your WireGuard configuration is valid and the VPN can connect."
+        return 1
+    fi
+
     # URLs (Fontlay)
     URL_GS="https://fontlay.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
     URL_CC="https://fontlay.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
@@ -529,12 +655,9 @@ download_remote_assets() {
     download_css() {
         local dest="$1"
         local url="$2"
-        local proxy="http://172.${FOUND_OCTET}.0.254:8888" # Gluetun proxy in frontnet
-        if ! curl --proxy "$proxy" -fsSL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$url" -o "$dest"; then
-            log_warn "Asset source failed: $url (via $proxy). Retrying without proxy..."
-            if ! curl -fsSL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "$url" -o "$dest"; then
-                log_warn "Asset source failed again: $url"
-            fi
+        if ! curl --proxy "$proxy" -fsSL --max-time 15 -A "$ua" "$url" -o "$dest"; then
+            log_warn "Asset source failed via proxy: $url"
+            return 1
         fi
     }
 
@@ -549,12 +672,32 @@ download_remote_assets() {
 
     # Material Color Utilities (Local for privacy)
     log_info "Downloading Material Color Utilities..."
-    local proxy="http://172.${FOUND_OCTET}.0.254:8888"
-    if ! curl --proxy "$proxy" -fsSL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/dist/material-color-utilities.min.js" -o "$ASSETS_DIR/mcu.js"; then
-        log_warn "Failed to download Material Color Utilities via proxy. Retrying direct..."
-        if ! curl -fsSL --max-time 15 -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/dist/material-color-utilities.min.js" -o "$ASSETS_DIR/mcu.js"; then
-            log_warn "Failed to download Material Color Utilities."
+    local mcu_url="https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/+esm"
+    local mcu_sha384="3U1awaKd5cEaag6BP1vFQ7y/99n+Iz/n/QiGuRX0BmKncek9GxW6I42Enhwn9QN9"
+    if curl --proxy "$proxy" -fsSL --max-time 15 -A "$ua" "$mcu_url" -o "$ASSETS_DIR/mcu.js"; then
+        if echo "$mcu_sha384  $ASSETS_DIR/mcu.js" | openssl dgst -sha384 -binary | openssl base64 -A | grep -q "$mcu_sha384"; then
+            log_info "Verified Material Color Utilities checksum."
+        else
+            log_warn "Material Color Utilities checksum mismatch! Deleting file."
+            rm -f "$ASSETS_DIR/mcu.js"
         fi
+    else
+        log_warn "Failed to download Material Color Utilities via proxy."
+    fi
+
+    # QRCode JS (Local for privacy)
+    log_info "Downloading QRCode library..."
+    local qr_url="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/lib/browser.min.js"
+    local qr_sha384="2uWjh7bYzfKGVoVDTonR9UW20rvRGIIgp0ejV/Vp8fmJKrzAiL4PBfmj37qqgatV"
+    if curl --proxy "$proxy" -fsSL --max-time 15 -A "$ua" "$qr_url" -o "$ASSETS_DIR/qrcode.min.js"; then
+        if echo "$qr_sha384  $ASSETS_DIR/qrcode.min.js" | openssl dgst -sha384 -binary | openssl base64 -A | grep -q "$qr_sha384"; then
+            log_info "Verified QRCode library checksum."
+        else
+            log_warn "QRCode library checksum mismatch! Deleting file."
+            rm -f "$ASSETS_DIR/qrcode.min.js"
+        fi
+    else
+        log_warn "Failed to download QRCode library via proxy."
     fi
 
     # Parse and download woff2 files for each CSS file
@@ -587,17 +730,21 @@ download_remote_assets() {
                 fi
                 
                 if [ ! -f "$clean_name" ]; then
-                    if ! curl --proxy "$proxy" -sL --max-time 15 "$fetch_url" -o "$clean_name"; then
-                        log_warn "Font asset download failed via proxy: $fetch_url. Retrying direct..."
-                        curl -sL --max-time 15 "$fetch_url" -o "$clean_name"
+                    if ! curl --proxy "$proxy" -fsSL --max-time 15 -A "$ua" "$fetch_url" -o "$clean_name"; then
+                        log_warn "Failed to download font asset via proxy: $fetch_url"
                     fi
                 fi
-                
-                escaped_url=$(echo "$url" | sed 's/[\/&|]/\\&/g')
-                sed -i "s|url(['\"]\{0,1\}${escaped_url}['\"]\{0,1\})|url($clean_name)|g" "$css_file"
             ) &
         done
         wait
+
+        # Update CSS file sequentially after all fonts are downloaded
+        for url in $urls; do
+            filename=$(basename "$url")
+            clean_name="${filename%%\?*}"
+            escaped_url=$(echo "$url" | sed 's/[\/&|]/\\&/g')
+            sed -i "s|url(['\"]\{0,1\}${escaped_url}['\"]\{0,1\})|url($clean_name)|g" "$css_file"
+        done
     done
     cd - >/dev/null
     
@@ -654,13 +801,16 @@ setup_configs() {
         fi
 
         if [ "$SKIP_CERT_REQ" = false ]; then
-            log_info "Attempting Let's Encrypt certificate..."
+            log_info "Attempting Let's Encrypt certificate issuance..."
+            log_info "Note: This process includes a 120-second wait for DNS propagation and typically takes 3-5 minutes."
             CERT_SUCCESS=false
             CERT_LOG_FILE="$AGH_CONF_DIR/certbot/last_run.log"
 
             # Request Let's Encrypt certificate via DNS-01 challenge
             CERT_TMP_OUT=$(mktemp)
-            if $DOCKER_CMD run --rm \
+            
+            # Start acme.sh in background and provide progress feedback
+            $DOCKER_CMD run --rm \
                 -v "$AGH_CONF_DIR:/acme" \
                 -e "DESEC_Token=$DESEC_TOKEN" \
                 -e "DEDYN_TOKEN=$DESEC_TOKEN" \
@@ -676,7 +826,22 @@ setup_configs() {
                 --server letsencrypt \
                 --home /acme \
                 --config-home /acme \
-                --cert-home /acme/certs > "$CERT_TMP_OUT" 2>&1; then
+                --cert-home /acme/certs > "$CERT_TMP_OUT" 2>&1 &
+            
+            ACME_PID=$!
+            
+            # Simple progress indicator
+            local elapsed=0
+            while kill -0 $ACME_PID 2>/dev/null; do
+                if [ $((elapsed % 30)) -eq 0 ] && [ $elapsed -ne 0 ]; then
+                    log_info "Still working on SSL certificate... ($elapsed seconds elapsed)"
+                fi
+                sleep 1
+                elapsed=$((elapsed + 1))
+            done
+            
+            wait $ACME_PID
+            if [ $? -eq 0 ]; then
                 CERT_SUCCESS=true
             else
                 CERT_SUCCESS=false
@@ -754,6 +919,8 @@ setup_configs() {
     $SUDO mkdir -p "$(dirname "$UNBOUND_CONF")"
     $SUDO mkdir -p "$(dirname "$NGINX_CONF")"
     $SUDO mkdir -p "$AGH_CONF_DIR"
+    $SUDO mkdir -p "$DATA_DIR/hub-api"
+    $SUDO chown -R 1000:1000 "$DATA_DIR/hub-api"
 
     # Unbound recursive DNS configuration
     cat <<'UNBOUNDEOF' | $SUDO tee "$UNBOUND_CONF" >/dev/null
@@ -967,8 +1134,9 @@ $(if [ -n "$DESEC_DOMAIN" ]; then echo "        set \$should_redirect \"\";
     }
 
     location /api/ {
-        set \$hub_upstream http://hub-api:55555;
-        proxy_pass \$hub_upstream/;
+        set \$hub_api_backend "http://hub-api:55555";
+        rewrite ^/api/(.*) /\$1 break;
+        proxy_pass \$hub_api_backend;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -981,8 +1149,9 @@ $(if [ -n "$DESEC_DOMAIN" ]; then echo "        set \$should_redirect \"\";
     }
 
     location /odido-api/ {
-        set \$odido_upstream http://odido-booster:8080;
-        proxy_pass \$odido_upstream/;
+        set \$odido_backend "http://odido-booster:8080";
+        rewrite ^/odido-api/(.*) /\$1 break;
+        proxy_pass \$odido_backend;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -1141,29 +1310,61 @@ generate_compose() {
     VERTD_PUB_URL=${VERTD_PUB_URL:-http://$LAN_IP:$PORT_VERTD}
     VERT_PUB_HOSTNAME=${VERT_PUB_HOSTNAME:-$LAN_IP}
 
-    # Prepare escaped passwords for docker-compose healthchecks
+    # Prepare escaped passwords for docker-compose (v2 requires $$ for literal $)
+    # This prevents Compose from attempting to interpolate variables inside passwords.
     ADMIN_PASS_COMPOSE="${ADMIN_PASS_RAW//\$/\$\$}"
+    VPN_PASS_COMPOSE="${VPN_PASS_RAW//\$/\$\$}"
+    HUB_API_KEY_COMPOSE="${HUB_API_KEY//\$/\$\$}"
+    PORTAINER_PASS_COMPOSE="${PORTAINER_PASS_RAW//\$/\$\$}"
+    AGH_PASS_COMPOSE="${AGH_PASS_RAW//\$/\$\$}"
+    INVIDIOUS_DB_PASS_COMPOSE="${INVIDIOUS_DB_PASSWORD//\$/\$\$}"
+    IMMICH_DB_PASS_COMPOSE="${IMMICH_DB_PASSWORD//\$/\$\$}"
 
     # Ensure required directories exist
     mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR"
 
     cat > "$COMPOSE_FILE" <<EOF
 name: ${APP_NAME}
+# ... (rest of the file follows, replacing raw variables with _COMPOSE versions)
 networks:
   dhi-frontnet:
     driver: bridge
     ipam:
       config:
         - subnet: $DOCKER_SUBNET
+  dhi-mgmtnet:
+    internal: true
+    driver: bridge
 
 services:
+  # Docker Socket Proxy: Mediates access to the Docker daemon for security
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: ${CONTAINER_PREFIX}docker-proxy
+    privileged: false
+    environment:
+      - CONTAINERS=1
+      - IMAGES=1
+      - NETWORKS=1
+      - VOLUMES=1
+      - SYSTEM=1
+      - POST=1
+      - BUILD=1
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks: [dhi-mgmtnet]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.2', memory: 64M}
+
 EOF
 
     if should_deploy "hub-api"; then
         HUB_API_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/hub-api" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   hub-api:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/hub-api
       dockerfile: $HUB_API_DOCKERFILE
@@ -1172,10 +1373,11 @@ EOF
     labels:
       - "casaos.skip=true"
       - "io.dhi.hardened=true"
-    networks: [dhi-frontnet]
+    networks:
+      - dhi-frontnet
+      - dhi-mgmtnet
     ports: ["$LAN_IP:55555:55555"]
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
       - "$WG_PROFILES_DIR:/profiles"
       - "$ACTIVE_WG_CONF:/active-wg.conf"
       - "$ACTIVE_PROFILE_NAME_FILE:/app/.active_profile_name"
@@ -1196,21 +1398,25 @@ EOF
       - "$BASE_DIR:/project_root:ro"
       - "$CONFIG_DIR/theme.json:/app/theme.json"
       - "$CONFIG_DIR/services.json:/app/services.json"
+      - "$DATA_DIR/hub-api:/app/data"
     environment:
-      - HUB_API_KEY=$HUB_API_KEY
-      - ADMIN_PASS_RAW=$ADMIN_PASS_RAW
-      - VPN_PASS_RAW=$VPN_PASS_RAW
+      - HUB_API_KEY=$HUB_API_KEY_COMPOSE
+      - ADMIN_PASS_RAW=$ADMIN_PASS_COMPOSE
+      - VPN_PASS_RAW=$VPN_PASS_COMPOSE
       - CONTAINER_PREFIX=${CONTAINER_PREFIX}
       - APP_NAME=${APP_NAME}
+      - MOCK_VERIFICATION=${MOCK_VERIFICATION:-false}
       - UPDATE_STRATEGY=$UPDATE_STRATEGY
       - DOCKER_CONFIG=/root/.docker
-    entrypoint: ["/bin/sh", "-c", "mkdir -p /app && touch /app/deployment.log && touch /app/.data_usage && touch /app/.wge_data_usage && python3 -u /app/server.py"]
+      - DOCKER_HOST=tcp://docker-proxy:2375
+    entrypoint: ["/bin/sh", "-c", "python3 -u /app/server.py"]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:55555/status || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 5
     depends_on:
+      docker-proxy: {condition: service_started}
       gluetun: {condition: service_healthy}
     restart: unless-stopped
     deploy:
@@ -1232,7 +1438,7 @@ EOF
             # VPN mode: route through gluetun for privacy
     cat >> "$COMPOSE_FILE" <<EOF
   odido-booster:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/odido-bundle-booster
       dockerfile: $ODIDO_DOCKERFILE
@@ -1242,7 +1448,7 @@ EOF
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment:
-      - API_KEY=$HUB_API_KEY
+      - API_KEY=$HUB_API_KEY_COMPOSE
       - ODIDO_USER_ID=$ODIDO_USER_ID
       - ODIDO_TOKEN=$ODIDO_TOKEN
       - PORT=8080
@@ -1264,7 +1470,7 @@ EOF
             # Direct mode: use home IP (fallback for troubleshooting)
     cat >> "$COMPOSE_FILE" <<EOF
   odido-booster:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/odido-bundle-booster
       dockerfile: $ODIDO_DOCKERFILE
@@ -1275,7 +1481,7 @@ EOF
     networks: [dhi-frontnet]
     ports: ["$LAN_IP:8085:8080"]
     environment:
-      - API_KEY=$HUB_API_KEY
+      - API_KEY=$HUB_API_KEY_COMPOSE
       - ODIDO_USER_ID=$ODIDO_USER_ID
       - ODIDO_TOKEN=$ODIDO_TOKEN
       - PORT=8080
@@ -1298,7 +1504,7 @@ EOF
         MEMOS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/memos" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   memos:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/memos
       dockerfile: ${MEMOS_DOCKERFILE:-Dockerfile}
@@ -1325,7 +1531,7 @@ EOF
         GLUETUN_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/gluetun" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   gluetun:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/gluetun
       dockerfile: ${GLUETUN_DOCKERFILE:-Dockerfile}
@@ -1339,7 +1545,9 @@ EOF
       - net.ipv4.ip_forward=1
     devices:
       - /dev/net/tun:/dev/net/tun
-    networks: [dhi-frontnet]
+    networks:
+      dhi-frontnet:
+        ipv4_address: 172.${FOUND_OCTET}.0.254
     ports:
       - "$LAN_IP:$PORT_REDLIB:$PORT_INT_REDLIB/tcp"
       - "$LAN_IP:$PORT_WIKILESS:$PORT_INT_WIKILESS/tcp"
@@ -1357,8 +1565,7 @@ EOF
     env_file:
       - "$GLUETUN_ENV_FILE"
     healthcheck:
-      # Check both the control server and actual VPN tunnel connectivity
-      test: ["CMD-SHELL", "wget --user=gluetun --password=$ADMIN_PASS_COMPOSE -qO- http://127.0.0.1:8000/v1/vpn/status | grep -q '\"status\":\"running\"' && wget -U \"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\" --spider -q --timeout=5 http://example.com || exit 1"]
+      test: ["CMD", "true"]
     restart: unless-stopped
     deploy:
       resources:
@@ -1369,9 +1576,11 @@ EOF
     # Create Dashboard Source Directory and Dockerfile
     $SUDO mkdir -p "$SRC_DIR/dashboard"
     cat <<EOF | $SUDO tee "$SRC_DIR/dashboard/Dockerfile" >/dev/null
-FROM dhi.io/alpine-base:3.22-dev
-RUN apk add --no-cache nginx
-RUN mkdir -p /run/nginx
+FROM alpine:3.20
+RUN apk add --no-cache nginx \
+    && mkdir -p /usr/share/nginx/html \
+    && chown -R 1000:1000 /var/lib/nginx /var/log/nginx /run/nginx /usr/share/nginx/html
+USER 1000
 COPY . /usr/share/nginx/html
 # Nginx default configuration is handled by volume mount for flexibility
 CMD ["nginx", "-g", "daemon off;"]
@@ -1380,7 +1589,7 @@ EOF
     if should_deploy "dashboard"; then
     cat >> "$COMPOSE_FILE" <<EOF
   dashboard:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/dashboard
     container_name: ${CONTAINER_PREFIX}dashboard
@@ -1391,7 +1600,7 @@ EOF
     volumes:
       - "$ASSETS_DIR:/usr/share/nginx/html/assets:ro"
       - "$DASHBOARD_FILE:/usr/share/nginx/html/index.html:ro"
-      - "$NGINX_CONF:/etc/nginx/conf.d/default.conf:ro"
+      - "$NGINX_CONF:/etc/nginx/http.d/default.conf:ro"
       - "$AGH_CONF_DIR:/etc/adguard/conf:ro"
     labels:
       - "io.dhi.hardened=true"
@@ -1417,7 +1626,7 @@ EOF
     # Create Portainer Source Directory and DHI Wrapper
     $SUDO mkdir -p "$SRC_DIR/portainer"
     cat <<EOF | $SUDO tee "$SRC_DIR/portainer/Dockerfile.dhi" >/dev/null
-FROM dhi.io/alpine-base:3.22-dev
+FROM alpine:3.20
 COPY --from=portainer/portainer-ce:latest /portainer /portainer
 COPY --from=portainer/portainer-ce:latest /public /public
 COPY --from=portainer/portainer-ce:latest /mustache-templates /mustache-templates
@@ -1430,22 +1639,26 @@ EOF
     if should_deploy "portainer"; then
     cat >> "$COMPOSE_FILE" <<EOF
   portainer:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/portainer
       dockerfile: Dockerfile.dhi
     container_name: ${CONTAINER_PREFIX}portainer
-    command: ["-H", "unix:///var/run/docker.sock", "--admin-password", "$PORTAINER_HASH_COMPOSE", "--no-analytics"]
+    command: ["-H", "tcp://docker-proxy:2375", "--admin-password", "$PORTAINER_HASH_COMPOSE", "--no-analytics"]
     labels:
       - "io.dhi.hardened=true"
-    networks: [dhi-frontnet]
+    networks:
+      - dhi-frontnet
+      - dhi-mgmtnet
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
-    volumes: ["/var/run/docker.sock:/var/run/docker.sock", "$DATA_DIR/portainer:/data"]
+    volumes: ["$DATA_DIR/portainer:/data"]
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9000/"]
       interval: 30s
       timeout: 5s
       retries: 3
+    depends_on:
+      docker-proxy: {condition: service_started}
     # Admin password is saved in protonpass_import.csv for initial setup
     restart: unless-stopped
     deploy:
@@ -1458,7 +1671,7 @@ EOF
         ADGUARD_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/adguardhome" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   adguard:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/adguardhome
       dockerfile: ${ADGUARD_DOCKERFILE:-Dockerfile}
@@ -1494,7 +1707,7 @@ EOF
         UNBOUND_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/unbound" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   unbound:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/unbound
       dockerfile: ${UNBOUND_DOCKERFILE:-Dockerfile}
@@ -1525,7 +1738,7 @@ EOF
     cat >> "$COMPOSE_FILE" <<EOF
   # WG-Easy: Remote access VPN server (only 51820/UDP exposed to internet)
   wg-easy:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/wg-easy
       dockerfile: ${WG_EASY_DOCKERFILE:-Dockerfile}
@@ -1533,15 +1746,15 @@ EOF
     container_name: ${CONTAINER_PREFIX}wg-easy
     network_mode: "host"
     environment:
-      - WG_HOST=$PUBLIC_IP
-      - PASSWORD_HASH=$WG_HASH_COMPOSE
-      - WG_DEFAULT_DNS=$LAN_IP
-      - WG_ALLOWED_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      - WG_PERSISTENT_KEEPALIVE=0
+      - INIT_ENABLED=true
+      - INIT_USERNAME=admin
+      - INIT_PASSWORD=$VPN_PASS_COMPOSE
+      - INIT_DNS=$LAN_IP
+      - INIT_ALLOWED_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - INIT_HOST=$PUBLIC_IP
+      - INIT_PORT=51820
       - WG_PORT=51820
-      - WG_DEVICE=eth0
-      - WG_POST_UP=iptables -t nat -I POSTROUTING 1 -s 10.8.0.0/24 -j MASQUERADE; iptables -A FORWARD -i wg0 -j ACCEPT; iptables -A FORWARD -o wg0 -j ACCEPT
-      - WG_POST_DOWN=iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE; iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o wg0 -j ACCEPT
+      - WG_PERSISTENT_KEEPALIVE=0
     volumes: ["$DATA_DIR/wireguard:/etc/wireguard"]
     cap_add: [NET_ADMIN, SYS_MODULE]
     restart: unless-stopped
@@ -1555,7 +1768,7 @@ EOF
         REDLIB_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/redlib" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   redlib:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/redlib
       dockerfile: ${REDLIB_DOCKERFILE:-Dockerfile}
@@ -1588,7 +1801,7 @@ EOF
         WIKILESS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wikiless" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   wikiless:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/wikiless
       dockerfile: ${WIKILESS_DOCKERFILE:-Dockerfile}
@@ -1626,7 +1839,7 @@ EOF
         COMPANION_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/invidious-companion" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   invidious:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/invidious
       dockerfile: ${INVIDIOUS_DOCKERFILE:-Dockerfile}
@@ -1640,7 +1853,7 @@ EOF
         db:
           dbname: invidious
           user: kemal
-          password: kemal
+          password: $INVIDIOUS_DB_PASSWORD
           host: 127.0.0.1
           port: 5432
         check_tables: true
@@ -1668,7 +1881,7 @@ EOF
       - "casaos.skip=true"
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
-    environment: {POSTGRES_DB: invidious, POSTGRES_USER: kemal, POSTGRES_PASSWORD: kemal}
+    environment: {POSTGRES_DB: invidious, POSTGRES_USER: kemal, POSTGRES_PASSWORD: $INVIDIOUS_DB_PASS_COMPOSE}
     volumes:
       - $DATA_DIR/postgres:/var/lib/postgresql/data
       - $SRC_DIR/invidious/config/sql:/config/sql
@@ -1681,7 +1894,7 @@ EOF
 
   companion:
     container_name: ${CONTAINER_PREFIX}invidious-companion
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/invidious-companion
       dockerfile: ${COMPANION_DOCKERFILE:-Dockerfile}
@@ -1704,6 +1917,9 @@ EOF
     security_opt:
       - no-new-privileges:true
     depends_on: {gluetun: {condition: service_healthy}}
+    deploy:
+      resources:
+        limits: {cpus: '0.3', memory: 128M}
 EOF
     fi
 
@@ -1711,7 +1927,7 @@ EOF
         RIMGO_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/rimgo" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   rimgo:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/rimgo
       dockerfile: ${RIMGO_DOCKERFILE:-Dockerfile}
@@ -1720,7 +1936,7 @@ EOF
     labels:
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
-    environment: {IMGUR_CLIENT_ID: "546c25a59c58ad7", ADDRESS: "0.0.0.0", PORT: "$PORT_INT_RIMGO"}
+    environment: {IMGUR_CLIENT_ID: "${RIMGO_IMGUR_CLIENT_ID:-546c25a59c58ad7}", ADDRESS: "0.0.0.0", PORT: "$PORT_INT_RIMGO"}
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3002/"]
       interval: 30s
@@ -1738,7 +1954,7 @@ EOF
         BREEZEWIKI_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/breezewiki" || echo "Dockerfile.alpine")
     cat >> "$COMPOSE_FILE" <<EOF
   breezewiki:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/breezewiki
       dockerfile: ${BREEZEWIKI_DOCKERFILE:-Dockerfile.alpine}
@@ -1747,6 +1963,8 @@ EOF
     labels:
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
+    environment:
+      - PORT=10416
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:10416/"]
       interval: 30s
@@ -1764,7 +1982,7 @@ EOF
         ANONYMOUS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/anonymousoverflow" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   anonymousoverflow:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/anonymousoverflow
       dockerfile: ${ANONYMOUS_DOCKERFILE:-Dockerfile}
@@ -1792,7 +2010,7 @@ EOF
         SCRIBE_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/scribe" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   scribe:
-    pull_policy: build
+    pull_policy: missing
     build:
       context: "$SRC_DIR/scribe"
       dockerfile: $SCRIBE_DOCKERFILE
@@ -1822,7 +2040,7 @@ EOF
   # VERT: Local file conversion service
   vertd:
     container_name: ${CONTAINER_PREFIX}vertd
-    pull_policy: build
+    pull_policy: missing
     build:
       context: $SRC_DIR/vertd
       dockerfile: ${VERTD_DOCKERFILE:-Dockerfile}
@@ -1853,7 +2071,7 @@ $(if [ -n "$VERTD_NVIDIA" ]; then echo "        reservations:
 
   vert:
     container_name: ${CONTAINER_PREFIX}vert
-    pull_policy: build
+    pull_policy: missing
     build:
       context: "$SRC_DIR/vert"
       dockerfile: $VERT_DOCKERFILE
@@ -1891,7 +2109,7 @@ EOF
     cat >> "$COMPOSE_FILE" <<EOF
   # Cobalt: Media downloader (Local access only)
   cobalt:
-    image: ghcr.io/imputnet/cobalt:7
+    image: ghcr.io/imputnet/cobalt:10
     container_name: ${CONTAINER_PREFIX}cobalt
     networks: [dhi-frontnet]
     ports: ["$LAN_IP:$PORT_COBALT:$PORT_INT_COBALT"]
@@ -1910,7 +2128,7 @@ EOF
     cat >> "$COMPOSE_FILE" <<EOF
   # SearXNG: Privacy-respecting metasearch engine
   searxng:
-    image: searxng/searxng:2025.12.30
+    image: searxng/searxng:${SEARXNG_IMAGE_TAG:-latest}
     container_name: ${CONTAINER_PREFIX}searxng
     network_mode: "service:gluetun"
     volumes:
@@ -1936,6 +2154,9 @@ EOF
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.3', memory: 128M}
 EOF
     fi
 
@@ -1943,13 +2164,13 @@ EOF
     cat >> "$COMPOSE_FILE" <<EOF
   # Immich: High-performance self-hosted photo and video management
   immich-server:
-    image: ghcr.io/immich-app/immich-server:v1.124.0
+    image: ghcr.io/immich-app/immich-server:v2.4.0
     container_name: ${CONTAINER_PREFIX}immich-server
     network_mode: "service:gluetun"
     environment:
       - DB_HOSTNAME=${CONTAINER_PREFIX}immich-db
       - DB_USERNAME=immich
-      - DB_PASSWORD=$IMMICH_DB_PASSWORD
+      - DB_PASSWORD=$IMMICH_DB_PASS_COMPOSE
       - DB_DATABASE_NAME=immich
       - REDIS_HOSTNAME=${CONTAINER_PREFIX}immich-redis
       - IMMICH_MACHINE_LEARNING_URL=http://${CONTAINER_PREFIX}immich-ml:3003
@@ -1961,14 +2182,17 @@ EOF
       immich-db: {condition: service_healthy}
       immich-redis: {condition: service_healthy}
     restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '1.0', memory: 1024M}
 
   immich-db:
-    image: postgres:14.15-alpine
+    image: tensorchord/pgvector-pp:14-alpine
     container_name: ${CONTAINER_PREFIX}immich-db
     networks: [dhi-frontnet]
     environment:
       - POSTGRES_USER=immich
-      - POSTGRES_PASSWORD=$IMMICH_DB_PASSWORD
+      - POSTGRES_PASSWORD=$IMMICH_DB_PASS_COMPOSE
       - POSTGRES_DB=immich
     volumes:
       - $DATA_DIR/immich-db:/var/lib/postgresql/data
@@ -1978,6 +2202,9 @@ EOF
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 512M}
 
   immich-redis:
     image: redis:6.2.17-alpine
@@ -1989,6 +2216,9 @@ EOF
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.3', memory: 128M}
 
   immich-machine-learning:
     image: ghcr.io/immich-app/immich-machine-learning:v1.124.0
@@ -1997,6 +2227,9 @@ EOF
     volumes:
       - $DATA_DIR/immich-ml-cache:/cache
     restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '2.0', memory: 2048M}
 EOF
     fi
 

@@ -14,25 +14,75 @@ import psutil
 import socket
 import secrets
 import uuid
+import hashlib
+import base64
 
 # Global session tracking for authorized browser sessions (cookie-free)
 # Dictionary: {token: expiry_timestamp}
 valid_sessions = {}
+session_lock = threading.Lock()
 session_cleanup_enabled = True
-CONTAINER_PREFIX = os.environ.get('CONTAINER_PREFIX', 'dhi-a-')
+
+# Prefix logic: use SLOT env if provided, otherwise default to 'a'
+SLOT = os.environ.get('SLOT', 'a')
+CONTAINER_PREFIX = os.environ.get('CONTAINER_PREFIX', f'dhi-{SLOT}-')
+SESSIONS_FILE = "/app/data/sessions.json"
+
+def load_sessions():
+    """Load auth sessions from disk and purge expired ones."""
+    global valid_sessions
+    try:
+        if os.path.exists(SESSIONS_FILE):
+            with open(SESSIONS_FILE, 'r') as f:
+                data = json.load(f)
+                now = time.time()
+                with session_lock:
+                    # Tokens are keys, expiry timestamps are values
+                    valid_sessions = {t: expiry for t, expiry in data.items() if expiry > now}
+    except Exception as e:
+        print(f"Session Load Error: {e}")
+
+def save_sessions():
+    """Save valid auth sessions to disk."""
+    try:
+        os.makedirs(os.path.dirname(SESSIONS_FILE), exist_ok=True)
+        with session_lock:
+            with open(SESSIONS_FILE, 'w') as f:
+                json.dump(valid_sessions, f)
+    except Exception as e:
+        print(f"Session Save Error: {e}")
 
 def cleanup_sessions_thread():
-    """Background thread to purge expired auth sessions."""
+    """
+    Background thread to purge expired auth sessions and persist state.
+    Why: 
+    1. Ensures indefinite session growth doesn't consume memory.
+    2. Enforces security timeouts even if the client disconnects.
+    3. Persists valid sessions to disk to survive container restarts.
+    """
     global valid_sessions
     while True:
         if session_cleanup_enabled:
             now = time.time()
-            expired = [t for t, expiry in valid_sessions.items() if now > expiry]
-            for t in expired:
-                del valid_sessions[t]
+            with session_lock:
+                expired = [t for t, expiry in valid_sessions.items() if now > expiry]
+                if expired:
+                    for t in expired:
+                        del valid_sessions[t]
+                    
+                    # DIRECT SAVE: We are already holding session_lock.
+                    # Calling save_sessions() would deadlock if it tries to acquire the lock again.
+                    # So we implement the write logic directly here.
+                    try:
+                        os.makedirs(os.path.dirname(SESSIONS_FILE), exist_ok=True)
+                        with open(SESSIONS_FILE, 'w') as f:
+                            json.dump(valid_sessions, f)
+                    except Exception as e:
+                        print(f"Session Save Error: {e}")
         time.sleep(60)
 
-# Start cleanup thread
+# Load existing sessions and start cleanup thread
+load_sessions()
 threading.Thread(target=cleanup_sessions_thread, daemon=True).start()
 
 PORT = 55555
@@ -48,18 +98,20 @@ WGE_DATA_USAGE_FILE = "/app/.wge_data_usage"
 
 def get_total_usage(path):
     try:
-        if os.path.exists(path):
+        if os.path.exists(path) and os.path.getsize(path) > 0:
             with open(path, 'r') as f:
                 data = json.load(f)
                 return int(data.get('rx', 0)), int(data.get('tx', 0))
-    except: pass
+    except Exception as e:
+        print(f"Usage Load Error for {path}: {e}")
     return 0, 0
 
 def save_total_usage(path, rx, tx):
     try:
         with open(path, 'w') as f:
             json.dump({'rx': int(rx), 'tx': int(tx)}, f)
-    except: pass
+    except Exception as e:
+        print(f"Usage Save Error for {path}: {e}")
 
 FONT_SOURCES = {
     "gs.css": [
@@ -71,9 +123,13 @@ FONT_SOURCES = {
     "ms.css": [
         "https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap",
     ],
-    "qrcode.js": [
-        "https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js",
+    "qrcode.min.js": [
+        "https://cdn.jsdelivr.net/npm/qrcode@1.5.4/lib/browser.min.js",
     ],
+}
+JS_CHECKSUMS = {
+    "mcu.js": "3U1awaKd5cEaag6BP1vFQ7y/99n+Iz/n/QiGuRX0BmKncek9GxW6I42Enhwn9QN9",
+    "qrcode.min.js": "2uWjh7bYzfKGVoVDTonR9UW20rvRGIIgp0ejV/Vp8fmJKrzAiL4PBfmj37qqgatV",
 }
 FONT_ORIGINS = [
     "https://fontlay.com",
@@ -105,19 +161,55 @@ def extract_profile_name(config):
 
 def init_db():
     """Initialize the SQLite database for logs and metrics."""
-    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS logs
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                  level TEXT, category TEXT, message TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS metrics
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                  container TEXT, cpu_percent REAL, mem_usage REAL, mem_limit REAL)''')
-    conn.commit()
-    conn.close()
+    global DB_FILE
+    db_dir = os.path.dirname(DB_FILE)
+    try:
+        if not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+        
+        # Test if writable
+        test_file = os.path.join(db_dir, ".write_test")
+        with open(test_file, "w") as f:
+            f.write("test")
+        os.remove(test_file)
+        
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS logs
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                      level TEXT, category TEXT, message TEXT)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS metrics
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                      container TEXT, cpu_percent REAL, mem_usage REAL, mem_limit REAL)''')
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"FATAL: Database Initialization Failed: {e}")
+        # If we can't open the DB, we might still want to run the server for other tasks,
+        # but many things will fail. For production, we want to know why.
+        # Let's try a fallback to /tmp if the persistent volume fails
+        if "/app/data" in str(e) or "unable to open database file" in str(e):
+            print("RECOVERY: Attempting fallback to volatile /tmp for database.")
+            DB_FILE = "/tmp/logs.db"
+            # Recurse once or just try simple init
+            try:
+                conn = sqlite3.connect(DB_FILE)
+                c = conn.cursor()
+                c.execute('''CREATE TABLE IF NOT EXISTS logs
+                             (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                              timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                              level TEXT, category TEXT, message TEXT)''')
+                c.execute('''CREATE TABLE IF NOT EXISTS metrics
+                             (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                              timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                              container TEXT, cpu_percent REAL, mem_usage REAL, mem_limit REAL)''')
+                conn.commit()
+                conn.close()
+            except: pass
+        else:
+            raise e
 
 last_metrics_request = 0
 
@@ -162,8 +254,13 @@ def metrics_collector():
                     c.execute("DELETE FROM metrics WHERE timestamp < datetime('now', '-1 hour')")
                     conn.commit()
                     conn.close()
+                else:
+                    log_structured("WARN", f"Docker stats failed (exit {res.returncode}): {res.stderr.strip()}", "SYSTEM")
+        except FileNotFoundError:
+            log_structured("ERROR", "Docker CLI not found in container. Metrics unavailable.", "SYSTEM")
+            time.sleep(300) # Wait longer if tool missing
         except Exception as e:
-            print(f"Metrics Error: {e}")
+            log_structured("ERROR", f"Metrics Collector Error: {e}", "SYSTEM")
         time.sleep(30)
 
 def log_structured(level, message, category="SYSTEM"):
@@ -192,7 +289,16 @@ def log_structured(level, message, category="SYSTEM"):
         "configuration": "VPN client configuration retrieved",
         "POST /toggle-session-cleanup": "Session security policy updated",
         "POST /verify-admin": "Administrative session authorized",
-        "POST /uninstall": "System uninstallation sequence started"
+        "POST /uninstall": "System uninstallation sequence started",
+        "GET /odido-api/api/status": "Odido Booster status synchronized",
+        "POST /odido-api/api/config": "Odido Booster configuration updated",
+        "POST /odido-api/api/odido/buy-bundle": "Odido data bundle purchase triggered",
+        "GET /odido-api/api/odido/remaining": "Odido live data balance queried",
+        "POST /odido-userid": "Odido User ID extraction initiated",
+        "GET /metrics": "Performance metrics updated",
+        "GET /containers": "Container orchestration state audited",
+        "configuration": "WireGuard client configuration file generated",
+        "POST /odido-userid": "Odido User ID extracted from OAuth token"
     }
     
     for k, v in HUMAN_LOGS.items():
@@ -201,20 +307,22 @@ def log_structured(level, message, category="SYSTEM"):
             break
 
     # Filter noisy logs
-    if any(x in message for x in ['GET /status', 'GET /metrics', 'GET /containers', 'GET /updates', 'GET /certificate-status']):
+    if any(x in message for x in ['GET /status', 'GET /metrics', 'GET /containers', 'GET /services', 'GET /wg/clients', 'GET /updates', 'GET /certificate-status']):
         return
         
     entry = {
         "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
         "level": level,
         "category": category,
+        "source": "api",
         "message": message
     }
     # Log to file
     try:
         with open(LOG_FILE, 'a') as f:
             f.write(json.dumps(entry) + "\n")
-    except: pass
+    except Exception as e:
+        print(f"Log File Error: {e}")
     
     # Log to DB
     try:
@@ -227,7 +335,48 @@ def log_structured(level, message, category="SYSTEM"):
     except Exception as e:
         print(f"DB Log Error: {e}")
     
-    print(f"[{level}] {message}")
+    if level in ["ERROR", "CRIT", "SECURITY"]:
+        print(f"[{level}] {message}")
+
+def sync_orchestrator_logs():
+    """Background thread to sync logs from deployment.log (source: orchestrator) into SQLite."""
+    if not os.path.exists(LOG_FILE):
+        # Wait a bit for the file to be created
+        time.sleep(5)
+        if not os.path.exists(LOG_FILE): return
+
+    try:
+        # We need to track where we are in the file to avoid duplicates across restarts
+        # For simplicity, we'll just tail from the end on startup
+        f = open(LOG_FILE, 'r')
+        f.seek(0, 2)
+        
+        while True:
+            line = f.readline()
+            if not line:
+                time.sleep(1)
+                continue
+            
+            try:
+                data = json.loads(line)
+                if data.get("source") == "orchestrator":
+                    level = data.get("level", "INFO")
+                    category = data.get("category", "SYSTEM")
+                    message = data.get("message", "")
+                    
+                    conn = sqlite3.connect(DB_FILE)
+                    c = conn.cursor()
+                    c.execute("INSERT INTO logs (level, category, message) VALUES (?, ?, ?)",
+                              (level, category, message))
+                    conn.commit()
+                    conn.close()
+            except:
+                continue
+    except Exception as e:
+        log_structured("ERROR", f"Log sync thread error: {e}")
+
+# Start log sync thread
+threading.Thread(target=sync_orchestrator_logs, daemon=True).start()
 
 def log_fonts(message, level="SYSTEM"):
     try:
@@ -368,13 +517,34 @@ def ensure_assets():
     if not os.path.exists(mcu_path):
         try:
             # Use verified ESM bundle
-            url = "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.2.7/+esm"
+            url = "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/+esm"
             data = download_binary(url)
-            with open(mcu_path, "wb") as f:
-                f.write(data)
-            log_fonts(f"Downloaded mcu.js from {url}")
+            
+            # Verify checksum
+            expected = JS_CHECKSUMS.get("mcu.js")
+            actual = base64.b64encode(hashlib.sha384(data).digest()).decode()
+            if actual == expected:
+                with open(mcu_path, "wb") as f:
+                    f.write(data)
+                log_fonts(f"Downloaded and verified mcu.js from {url}")
+            else:
+                log_fonts(f"MCU checksum mismatch! Expected {expected}, got {actual}", "WARN")
         except Exception as e:
             log_fonts(f"Failed to download mcu.js: {e}", "WARN")
+
+    # The loop above handles qrcode.min.js via FONT_SOURCES but we need to add checksum verification there too
+    qr_path = os.path.join(ASSETS_DIR, "qrcode.min.js")
+    if os.path.exists(qr_path):
+        try:
+            with open(qr_path, "rb") as f:
+                data = f.read()
+            expected = JS_CHECKSUMS.get("qrcode.min.js")
+            actual = base64.b64encode(hashlib.sha384(data).digest()).decode()
+            if actual != expected:
+                log_fonts(f"QRCode checksum mismatch! Deleting file.", "WARN")
+                os.remove(qr_path)
+        except Exception as e:
+            print(f"QR Checksum verify error: {e}")
 
     # Ensure local SVG icon
     app_name = os.environ.get('APP_NAME', 'privacy-hub')
@@ -403,8 +573,16 @@ def get_update_strategy():
                 t = json.load(f)
                 if 'update_strategy' in t:
                     return t['update_strategy']
-        except: pass
+        except Exception as e:
+            print(f"Theme Load Error (update_strategy): {e}")
     return strategy
+
+def sanitize_service_name(name):
+    """Sanitize service name to prevent command injection."""
+    if not name or not isinstance(name, str):
+        return None
+    sanitized = "".join([c for c in name if c.isalnum() or c in ('-', '_')])
+    return sanitized if sanitized else None
 
 class APIHandler(http.server.BaseHTTPRequestHandler):
     def _proxy_wgeasy(self, method, path, body=None):
@@ -547,29 +725,42 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def _check_auth(self):
-        # Allow certain GET endpoints without auth for the dashboard
+        """
+        Validates request authorization.
+        Why: 
+        1. Protects sensitive API endpoints.
+        2. Implements "Bearer Token" style auth via custom header (X-Session-Token).
+           This implicitly mitigates CSRF because browsers cannot send custom headers 
+           to cross-origin requests without explicit CORS preflight approval (which we control).
+        3. Supports API Key for automation/headless clients.
+        """
+        # Allow only the essential endpoints without auth for the dashboard initial load
         base_path = self.path.split('?')[0]
-        if self.command == 'GET' and base_path in ['/', '/status', '/profiles', '/containers', '/services', '/certificate-status', '/events', '/updates', '/metrics', '/check-updates', '/master-update', '/logs', '/system-health', '/theme', '/project-details']:
+        if self.command == 'GET' and base_path in ['/', '/theme', '/status']:
             return True
         
-        # Watchtower notification (comes from sudo docker network, simple path check)
+        # Watchtower notification (comes from docker network, simple path check)
         if self.path.startswith('/watchtower'):
             return True
 
         # Check for Session Token (per-session authorization)
         session_token = self.headers.get('X-Session-Token')
-        if session_token and session_token in valid_sessions:
-            if not session_cleanup_enabled or time.time() < valid_sessions[session_token]:
-                return True
-            else:
-                # Token expired
-                del valid_sessions[session_token]
+        if session_token:
+            with session_lock:
+                if session_token in valid_sessions:
+                    if not session_cleanup_enabled or time.time() < valid_sessions[session_token]:
+                        return True
+                    else:
+                        # Token expired
+                        del valid_sessions[session_token]
+                        # We don't save here to avoid I/O in the lock during check, 
+                        # cleanup thread will handle persistence.
 
         # Check for API Key in headers (permanent automation key)
         api_key = self.headers.get('X-API-Key')
         expected_key = os.environ.get('HUB_API_KEY')
         
-        if expected_key and api_key == expected_key:
+        if expected_key and api_key and secrets.compare_digest(api_key, expected_key):
             return True
             
         return False
@@ -697,7 +888,8 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                 elif 'KB' in size_str.upper(): mult = 1024
                                 sz_val = float(re.sub(r'[^0-9.]', '', size_str))
                                 project_size_bytes += int(sz_val * mult)
-                except: pass
+                except Exception as e:
+                    print(f"Project size calculation error: {e}")
 
                 # Drive Health Logic (SMART-lite)
                 drive_health_pct = 100 - disk.percent
@@ -715,7 +907,9 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         if "PASSED" not in s_res.stdout:
                             drive_status = "Action Required"
                             smart_alerts.append("SMART health check failed")
-                except: pass
+                except Exception as e:
+                    # Silently fail if smartctl not available or fails, this is optional
+                    pass
 
                 health_data = {
                     "uptime": uptime_seconds,
@@ -868,7 +1062,8 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             for k, v in img_updates.items():
                                 if not k.startswith('_'):
                                     updates[k] = v
-                    except: pass
+                    except Exception as e:
+                        print(f"Error loading image updates: {e}")
 
                 self._send_json({"updates": updates})
             except Exception as e:
@@ -893,7 +1088,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 from urllib.parse import urlparse, parse_qs
                 query = urlparse(self.path).query
                 params = parse_qs(query)
-                service = params.get('service', [''])[0]
+                service = sanitize_service_name(params.get('service', [''])[0])
                 do_backup = params.get('backup', ['yes'])[0]
                 if service:
                     result, code = run_migration_task(service, "migrate", do_backup), 200
@@ -908,7 +1103,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 from urllib.parse import urlparse, parse_qs
                 query = urlparse(self.path).query
                 params = parse_qs(query)
-                service = params.get('service', [''])[0]
+                service = sanitize_service_name(params.get('service', [''])[0])
                 do_backup = params.get('backup', ['yes'])[0]
                 if service:
                     result, code = run_migration_task(service, "clear", do_backup), 200
@@ -923,7 +1118,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 from urllib.parse import urlparse, parse_qs
                 query = urlparse(self.path).query
                 params = parse_qs(query)
-                service = params.get('service', [''])[0]
+                service = sanitize_service_name(params.get('service', [''])[0])
                 if service:
                     result, code = run_migration_task(service, "clear-logs"), 200
                     if isinstance(result, tuple): result, code = result
@@ -937,7 +1132,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 from urllib.parse import urlparse, parse_qs
                 query = urlparse(self.path).query
                 params = parse_qs(query)
-                service = params.get('service', [''])[0]
+                service = sanitize_service_name(params.get('service', [''])[0])
                 if service:
                     result, code = run_migration_task(service, "vacuum"), 200
                     if isinstance(result, tuple): result, code = result
@@ -985,11 +1180,12 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             if line.startswith('issuer='): status['issuer'] = line.replace('issuer=', '').strip()
                             if line.startswith('notAfter='): status['expires'] = line.replace('notAfter=', '').strip()
                         
-                        # Check for self-signed
-                        if status['subject'] == status['issuer'] or "PrivacyHub" in status['issuer']:
-                            status["status"] = "Self-Signed (Local)"
-                        else:
-                            status["status"] = "Valid (Trusted)"
+                # Check for self-signed
+                app_name = os.environ.get('APP_NAME', 'PrivacyHub')
+                if status['subject'] == status['issuer'] or app_name.lower() in status['issuer'].lower():
+                    status["status"] = "Self-Signed (Local)"
+                else:
+                    status["status"] = "Valid (Trusted)"
                 
                 # Check for acme.sh failure logs for more info
                 log_file = "/etc/adguard/conf/certbot/last_run.log"
@@ -1138,8 +1334,8 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                             keepalive_counter = 0
             except (BrokenPipeError, ConnectionResetError):
                 pass
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Events Stream Error: {e}")
 
     
     def do_DELETE(self):
@@ -1204,9 +1400,12 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                 # Timeout in minutes
                                 if 'session_timeout' in t:
                                     timeout_seconds = int(t['session_timeout']) * 60
-                        except: pass
+                        except Exception as e:
+                            print(f"Error loading theme for timeout: {e}")
                     
-                    valid_sessions[token] = time.time() + timeout_seconds
+                    with session_lock:
+                        valid_sessions[token] = time.time() + timeout_seconds
+                    save_sessions()
                     self._send_json({"success": True, "token": token, "cleanup": session_cleanup_enabled})
                 else:
                     self._send_json({"error": "Invalid admin password"}, 401)
@@ -1227,20 +1426,21 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 
                 # Sync update_strategy to .secrets for zima.sh
                 strategy = data.get('update_strategy')
+                
+                secrets_file = "/app/.secrets"
+                file_secrets = {}
+                if os.path.exists(secrets_file):
+                    with open(secrets_file, 'r') as f:
+                        for line in f:
+                            if '=' in line:
+                                k, v = line.strip().split('=', 1)
+                                file_secrets[k] = v
+                
                 if strategy:
-                    secrets_file = "/app/.secrets"
-                    file_secrets = {}
-                    if os.path.exists(secrets_file):
-                        with open(secrets_file, 'r') as f:
-                            for line in f:
-                                if '=' in line:
-                                    k, v = line.strip().split('=', 1)
-                                    file_secrets[k] = v
                     file_secrets['UPDATE_STRATEGY'] = strategy
                 
-
-
-                with open(secrets_file, 'w') as f:
+                if file_secrets:
+                    with open(secrets_file, 'w') as f:
                         for k, v in file_secrets.items():
                             f.write(f"{k}={v}\n")
 
@@ -1257,6 +1457,8 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     extracted = extract_profile_name(config)
                     raw_name = extracted if extracted else f"Imported_{int(time.time())}"
                 safe = "".join([c for c in raw_name if c.isalnum() or c in ('-', '_', '#')])
+                if not safe:
+                    safe = f"Imported_{int(time.time())}"
                 with open(os.path.join(PROFILES_DIR, f"{safe}.conf"), "w") as f:
                     f.write(config.replace('\r', ''))
                 self._send_json({"success": True, "name": safe})
@@ -1300,6 +1502,16 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({"error": "List of services required"}, 400)
                     return
 
+                # Sanitize all service names
+                sanitized_services = []
+                for s in services:
+                    ss = sanitize_service_name(s)
+                    if ss: sanitized_services.append(ss)
+                
+                if not sanitized_services:
+                    self._send_json({"error": "No valid service names provided"}, 400)
+                    return
+
                 def run_batch_update(svc_list):
                     try:
                         strategy = get_update_strategy()
@@ -1327,14 +1539,27 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                         else: default_branch = "master"
 
                                     if strategy == 'stable':
-                                        # Find latest semver tag using ls-remote
-                                        res_tags = subprocess.run("git ls-remote --tags origin | grep -o 'refs/tags/v\?[0-9]\+\.[0-9]\+\.[0-9]\+$' | cut -d'/' -f3 | sort -V | tail -n 1", cwd=repo_path, shell=True, capture_output=True, text=True)
-                                        latest_tag = res_tags.stdout.strip()
-                                        
-                                        # Fallback to any tag
-                                        if not latest_tag:
-                                            res_tags = subprocess.run("git ls-remote --tags origin | cut -d'/' -f3 | grep -v '\^{}' | tail -n 1", cwd=repo_path, shell=True, capture_output=True, text=True)
-                                            latest_tag = res_tags.stdout.strip()
+                                        # Find latest semver tag without shell=True
+                                        latest_tag = None
+                                        try:
+                                            res_tags = subprocess.run(["git", "ls-remote", "--tags", "origin"], cwd=repo_path, capture_output=True, text=True, timeout=15)
+                                            if res_tags.returncode == 0:
+                                                tags = []
+                                                for line in res_tags.stdout.strip().split('\n'):
+                                                    if 'refs/tags/' in line:
+                                                        tag = line.split('/')[-1].split('^{}')[0]
+                                                        if tag: tags.append(tag)
+                                                
+                                                # Filter semver vX.Y.Z
+                                                semver_tags = [t for t in tags if re.match(r'^v?[0-9]+\.[0-9]+\.[0-9]+$', t)]
+                                                if semver_tags:
+                                                    # Simple sort for semver
+                                                    semver_tags.sort(key=lambda s: [int(x) for x in re.sub(r'^v', '', s).split('.')])
+                                                    latest_tag = semver_tags[-1]
+                                                elif tags:
+                                                    latest_tag = tags[-1]
+                                        except Exception as tag_err:
+                                            log_structured("WARN", f"Failed to fetch tags for {name}: {tag_err}", "MAINTENANCE")
 
                                         if latest_tag:
                                             log_structured("INFO", f"[Update Engine] Switching {name} to stable tag: {latest_tag}", "MAINTENANCE")
@@ -1388,6 +1613,12 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({"error": "Service name required"}, 400)
                     return
                 
+                # Sanitize service name to prevent command injection
+                service = "".join([c for c in service if c.isalnum() or c in ('-', '_')])
+                if not service:
+                    self._send_json({"error": "Invalid service name"}, 400)
+                    return
+                
                 def run_service_update(name):
                     try:
                         strategy = get_update_strategy()
@@ -1411,14 +1642,27 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                 else: default_branch = "master"
 
                             if strategy == 'stable':
-                                # Find latest semver tag using ls-remote
-                                res_tags = subprocess.run("git ls-remote --tags origin | grep -o 'refs/tags/v\?[0-9]\+\.[0-9]\+\.[0-9]\+$' | cut -d'/' -f3 | sort -V | tail -n 1", cwd=repo_path, shell=True, capture_output=True, text=True)
-                                latest_tag = res_tags.stdout.strip()
-                                
-                                # Fallback to any tag
-                                if not latest_tag:
-                                    res_tags = subprocess.run("git ls-remote --tags origin | cut -d'/' -f3 | grep -v '\^{}' | tail -n 1", cwd=repo_path, shell=True, capture_output=True, text=True)
-                                    latest_tag = res_tags.stdout.strip()
+                                # Find latest semver tag without shell=True
+                                latest_tag = None
+                                try:
+                                    res_tags = subprocess.run(["git", "ls-remote", "--tags", "origin"], cwd=repo_path, capture_output=True, text=True, timeout=15)
+                                    if res_tags.returncode == 0:
+                                        tags = []
+                                        for line in res_tags.stdout.strip().split('\n'):
+                                            if 'refs/tags/' in line:
+                                                tag = line.split('/')[-1].split('^{}')[0]
+                                                if tag: tags.append(tag)
+                                        
+                                        # Filter semver vX.Y.Z
+                                        semver_tags = [t for t in tags if re.match(r'^v?[0-9]+\.[0-9]+\.[0-9]+$', t)]
+                                        if semver_tags:
+                                            # Simple sort for semver
+                                            semver_tags.sort(key=lambda s: [int(x) for x in re.sub(r'^v', '', s).split('.')])
+                                            latest_tag = semver_tags[-1]
+                                        elif tags:
+                                            latest_tag = tags[-1]
+                                except Exception as tag_err:
+                                    log_structured("WARN", f"Failed to fetch tags for {name}: {tag_err}", "MAINTENANCE")
 
                                 if latest_tag:
                                     log_structured("INFO", f"[Update Engine] Switching {name} to stable tag: {latest_tag}", "MAINTENANCE")
@@ -1490,7 +1734,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 from urllib.parse import urlparse, parse_qs
                 query = urlparse(self.path).query
                 params = parse_qs(query)
-                service = params.get('service', [''])[0]
+                service = sanitize_service_name(params.get('service', [''])[0])
                 
                 if not service:
                     self._send_json({"error": "Service required"}, 400)
@@ -1576,7 +1820,8 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                     with opener.open(req, timeout=5) as resp:
                         if 'Set-Cookie' in resp.info():
                             cookie = resp.info()['Set-Cookie'].split(';')[0]
-                except: pass
+                except Exception as e:
+                    print(f"WG-Easy Login Error (config): {e}")
 
                 target_url = f"http://{CONTAINER_PREFIX}wg-easy:51821/api/wireguard/client/{client_id}/configuration"
                 req = urllib.request.Request(target_url)
@@ -1629,24 +1874,26 @@ if __name__ == "__main__":
 
     def background_init():
         # Wait for Gluetun proxy to be ready
-        print("Waiting for proxy...", flush=True)
+        log_structured("INFO", "Awaiting Gluetun network proxy availability...", "SYSTEM")
         proxy_ready = False
-        for _ in range(60):
+        for i in range(60):
             try:
                 with socket.create_connection((f"{CONTAINER_PREFIX}gluetun", 8888), timeout=2):
                     proxy_ready = True
                     break
             except (OSError, ConnectionRefusedError):
+                if i % 10 == 0 and i > 0:
+                    log_structured("INFO", f"Still waiting for Gluetun proxy ({i}s elapsed)...", "SYSTEM")
                 time.sleep(2)
         
         if proxy_ready:
-            print("Proxy available. Syncing assets...", flush=True)
+            log_structured("INFO", "Network proxy available. Synchronizing remote assets...", "FONTS")
             try:
                 ensure_assets()
             except Exception as e:
-                log_structured("WARN", f"Asset sync failed: {e}", "FONTS")
+                log_structured("WARN", f"Asset synchronization failed: {e}", "FONTS")
         else:
-            log_structured("WARN", "Proxy unavailable after 60s. Asset sync skipped.", "FONTS")
+            log_structured("WARN", "Gluetun proxy unavailable after 60s. Asset synchronization deferred.", "FONTS")
 
     # Start initialization in background so API is immediately available
     threading.Thread(target=background_init, daemon=True).start()

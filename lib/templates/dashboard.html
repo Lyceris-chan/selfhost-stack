@@ -11,8 +11,8 @@
     <link href="assets/ms.css" rel="stylesheet">
     <script>
         // HTTPS Auto-Switch & Default Logic
-        const isLocalHost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-        const isIpHost = window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/);
+        const isLocalHost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '[::1]');
+        const isIpHost = window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/) || window.location.hostname.includes(':');
         
         // Storage reset logic for -c cleanup
         if (window.location.search.includes('reset=true')) {
@@ -25,15 +25,20 @@
         if (window.location.protocol === 'http:' && !isLocalHost && !isIpHost) {
             const httpsPort = '8443';
             const httpsUrl = 'https://' + window.location.hostname + ':' + httpsPort + window.location.pathname + window.location.search;
-            // Only redirect if we're not on a standard port or if specifically requested
-            // Use a small delay to ensure page load doesnt flicker
-            setTimeout(() => {
-                fetch(httpsUrl, { mode: 'no-cors' }).then(() => {
+            
+            // Check if HTTPS is available before redirecting
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+            fetch(httpsUrl, { mode: 'no-cors', signal: controller.signal })
+                .then(() => {
+                    clearTimeout(timeoutId);
                     window.location.href = httpsUrl;
-                }).catch(() => {
-                    console.log("HTTPS port not reachable, staying on HTTP");
+                })
+                .catch(() => {
+                    clearTimeout(timeoutId);
+                    console.log("HTTPS port not reachable or timed out, staying on HTTP");
                 });
-            }, 500);
         }
         
         // Prevent extension injection errors - defined early
@@ -744,8 +749,9 @@
                 <div class="metric-bar"><div id="modal-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
                 
                 <div class="stat-row" style="margin-top:12px;">
-                                <span class="stat-label">Memory <span id="modal-mem-text" style="float:right; font-family:monospace; opacity:0.8;">0 MB / 0 MB</span></span>
-                                <span class="stat-value" id="modal-mem" style="display:none;">0 MB / 0 MB</span>                </div>
+                    <span class="stat-label">Memory <span id="modal-mem-text" style="float:right; font-family:monospace; opacity:0.8;">0 MB / 0 MB</span></span>
+                    <span class="stat-value" id="modal-mem" style="display:none;">0 MB / 0 MB</span>
+                </div>
                 <div class="metric-bar"><div id="modal-mem-fill" class="metric-fill" style="width: 0%"></div></div>
             </div>
             <div id="modal-actions" class="btn-group" style="flex-direction: column; gap: 8px;">

@@ -10,13 +10,13 @@ DATA_DIR="/app/data"
 log() {
     echo "[MIGRATE] $1"
     if [ -f "/app/deployment.log" ]; then
-        printf '{"timestamp": "%s", "level": "INFO", "category": "MAINTENANCE", "message": "[MIGRATE] %s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
+        printf '{"timestamp": "%s", "level": "INFO", "category": "MAINTENANCE", "source": "orchestrator", "message": "[MIGRATE] %s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
     fi
 }
 warn() {
     echo "[MIGRATE] ⚠️  WARNING: $1"
     if [ -f "/app/deployment.log" ]; then
-        printf '{"timestamp": "%s", "level": "WARN", "category": "MAINTENANCE", "message": "[MIGRATE] %s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
+        printf '{"timestamp": "%s", "level": "WARN", "category": "MAINTENANCE", "source": "orchestrator", "message": "[MIGRATE] %s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
     fi
 }
 mkdir -p "$BACKUP_DIR"
@@ -50,25 +50,25 @@ if [ "$SERVICE" = "invidious" ]; then
             warn "This will delete ALL your Invidious subscriptions, watch history, and preferences!"
             if [ "$BACKUP" != "no" ]; then
                 log "Creating safety backup..."
-                docker exec ${CONTAINER_PREFIX}invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
+                PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
                 log "Backup saved to: $BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
             fi
             # Drop and recreate
-            docker exec ${CONTAINER_PREFIX}invidious-db dropdb -U kemal invidious
-            docker exec ${CONTAINER_PREFIX}invidious-db createdb -U kemal invidious
-            docker exec ${CONTAINER_PREFIX}invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh
+            PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db dropdb -U kemal invidious
+            PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db createdb -U kemal invidious
+            PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh
             log "Invidious database cleared."
         elif [ "$ACTION" = "migrate" ]; then
             log "Starting Invidious migration..."
             # 1. Backup existing data
             if [ "$BACKUP" != "no" ] && [ -d "$DATA_DIR/postgres" ]; then
                 log "Backing up Invidious database..."
-                docker exec ${CONTAINER_PREFIX}invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"
+                PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"
                 log "Backup saved to: $BACKUP_DIR/invidious_$TIMESTAMP.sql"
             fi
             # 2. Run migrations
             log "Applying schema updates..."
-            docker exec ${CONTAINER_PREFIX}invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
+            PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
             log "Invidious migration complete."
         elif [ "$ACTION" = "vacuum" ]; then
              log "Invidious (Postgres) handles vacuuming automatically. Skipping."

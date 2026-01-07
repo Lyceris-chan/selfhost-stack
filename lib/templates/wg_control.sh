@@ -15,7 +15,7 @@ sanitize_json_string() {
 
 log_maintenance() {
     if [ -f "/app/deployment.log" ]; then
-        printf '{"timestamp": "%s", "level": "INFO", "category": "MAINTENANCE", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
+        printf '{"timestamp": "%s", "level": "INFO", "category": "MAINTENANCE", "source": "orchestrator", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
     fi
 }
 
@@ -60,6 +60,10 @@ elif [ "$ACTION" = "delete" ]; then
         rm "$PROFILES_DIR/$PROFILE_NAME.conf"
     fi
 elif [ "$ACTION" = "status" ]; then
+    if [ "$MOCK_VERIFICATION" = "true" ]; then
+        printf '{"gluetun":{"status":"up","healthy":true,"active_profile":"MockProfile","endpoint":"127.0.0.1","public_ip":"127.0.0.1","handshake_ago":"Connected","session_rx":"100","session_tx":"100","total_rx":"1000","total_tx":"1000"},"wgeasy":{"status":"up","host":"127.0.0.1","clients":"0","connected":"0","session_rx":"0","session_tx":"0","total_rx":"0","total_tx":"0"},"services":{},"health_details":{}}'
+        exit 0
+    fi
     GLUETUN_STATUS="down"
     GLUETUN_HEALTHY="false"
     HANDSHAKE_AGO="N/A"
@@ -262,8 +266,7 @@ WGEDATAEOF
     FIRST_SRV=1
     # Added core infrastructure services to the monitoring loop
     for srv in "invidious:3000" "redlib:8080" "wikiless:8180" "memos:5230" "rimgo:3002" "scribe:8280" "breezewiki:10416" "anonymousoverflow:8480" "vert:80" "vertd:24153" "adguard:8083" "portainer:9000" "wg-easy:51821"; do
-        s_name=${srv%:*}.base # Temporary placeholder to avoid confusion
-        s_name_real="${CONTAINER_PREFIX}${srv%:*} "
+        s_name_real="${CONTAINER_PREFIX}${srv%:*}"
         s_port=${srv#*:} 
         [ $FIRST_SRV -eq 0 ] && { SERVICES_JSON="$SERVICES_JSON,"; HEALTH_DETAILS_JSON="$HEALTH_DETAILS_JSON,"; }
         

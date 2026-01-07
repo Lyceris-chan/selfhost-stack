@@ -171,7 +171,7 @@ clean_environment() {
         echo ""
     fi
 
-    TARGET_CONTAINERS="gluetun adguard dashboard portainer wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd"
+    # ALL_CONTAINERS is defined in lib/constants.sh (sourced via lib/core.sh)
     
     # If selected services are provided, only clean those
     if [ -n "$SELECTED_SERVICES" ]; then
@@ -190,7 +190,7 @@ clean_environment() {
         done
         CLEAN_LIST="$ACTUAL_TARGETS"
     else
-        CLEAN_LIST="$TARGET_CONTAINERS"
+        CLEAN_LIST="$ALL_CONTAINERS"
     fi
 
     FOUND_CONTAINERS=""
@@ -291,7 +291,7 @@ clean_environment() {
         # PHASE 1: Stop all containers to release locks
         # ============================================================
         log_info "Phase 1: Terminating running containers..."
-        for c in $TARGET_CONTAINERS; do
+        for c in $ALL_CONTAINERS; do
             if $DOCKER_CMD ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${c}$"; then
                 log_info "  Stopping: $c"
                 $DOCKER_CMD stop "$c" 2>/dev/null || true
@@ -304,7 +304,7 @@ clean_environment() {
         # ============================================================
         log_info "Phase 2: Removing containers..."
         REMOVED_CONTAINERS=""
-        for c in $TARGET_CONTAINERS; do
+        for c in $ALL_CONTAINERS; do
             if $DOCKER_CMD ps -a --format '{{.Names}}' 2>/dev/null | grep -qE "^(${CONTAINER_PREFIX}${c}|${c})$"; then
                 NAME=$($DOCKER_CMD ps -a --format '{{.Names}}' | grep -E "^(${CONTAINER_PREFIX}${c}|${c})$" | head -n 1)
                 log_info "  Removing: $NAME"
@@ -488,8 +488,8 @@ clean_environment() {
 
 cleanup_build_artifacts() {
     log_info "Cleaning up build artifacts to save space..."
-    $DOCKER_CMD image prune -f >/dev/null 2>&1 || true
-    $DOCKER_CMD builder prune -f >/dev/null 2>&1 || true
+    $DOCKER_CMD image prune -f || true
+    $DOCKER_CMD builder prune -f || true
 }
 
 # --- SECTION 17: BACKUP & SLOT MANAGEMENT ---
@@ -542,6 +542,39 @@ finalize_swap() {
     log_info "Active slot persisted: $CURRENT_SLOT"
 }
 
+verify_health() {
+    log_info "Verifying deployment health for slot $CURRENT_SLOT..."
+    local failed=false
+    
+    # Get all containers for the current slot
+    local containers=$($DOCKER_CMD ps -a --format '{{.Names}}' | grep "^${CONTAINER_PREFIX}" || true)
+    
+    if [ -z "$containers" ]; then
+        log_warn "No containers found for slot $CURRENT_SLOT"
+        return 1
+    fi
+
+    for container in $containers; do
+        # Check if it's running and not unhealthy
+        local status=$($DOCKER_CMD inspect --format='{{.State.Status}}' "$container" 2>/dev/null || echo "not_found")
+        local health=$($DOCKER_CMD inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null || echo "none")
+        
+        if [ "$status" != "running" ]; then
+            log_warn "Container $container is NOT running (Status: $status)"
+            failed=true
+        elif [ "$health" = "unhealthy" ]; then
+            log_warn "Container $container is UNHEALTHY"
+            failed=true
+        fi
+    done
+    
+    if [ "$failed" = true ]; then
+        return 1
+    fi
+    log_info "All containers in slot $CURRENT_SLOT are healthy and running."
+    return 0
+}
+
 stop_inactive_slots() {
     local active_slot="$CURRENT_SLOT"
     local inactive_slot="a"
@@ -569,7 +602,7 @@ deploy_stack() {
 
     if [ "$PARALLEL_DEPLOY" = true ]; then
         log_info "Parallel Mode Enabled: Launching full stack immediately..."
-        $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d --build --remove-orphans
+        $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d --remove-orphans
     else
         # Explicitly launch core infrastructure services first if they are present
         CORE_SERVICES=""
@@ -581,7 +614,7 @@ deploy_stack() {
 
         if [ -n "$CORE_SERVICES" ]; then
             log_info "Launching core infrastructure services:$CORE_SERVICES..."
-            $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d --build $CORE_SERVICES
+            $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d $CORE_SERVICES
         fi
 
         # Wait for critical backends to be healthy before starting Nginx (dashboard) if they were launched
@@ -595,10 +628,10 @@ deploy_stack() {
                     HUB_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}hub-api 2>/dev/null || echo "unknown")
                 fi
                 if echo "$CORE_SERVICES" | grep -q "gluetun"; then
-                    GLU_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Status}}' ${CONTAINER_PREFIX}gluetun 2>/dev/null || echo "unknown")
+                    GLU_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}gluetun 2>/dev/null || echo "unknown")
                 fi
                 
-                if [ "$HUB_HEALTH" = "healthy" ] && [ "$GLU_HEALTH" = "running" ]; then
+                if [ "$HUB_HEALTH" = "healthy" ] && [ "$GLU_HEALTH" = "healthy" ]; then
                     log_info "Backends are stable. Finalizing stack launch..."
                     break
                 fi

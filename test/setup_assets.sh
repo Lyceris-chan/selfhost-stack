@@ -22,7 +22,10 @@ URL_CC_PRIMARY="https://fontlay.com/css2?family=Cascadia+Code:ital,wght@0,200..7
 URL_CC_FALLBACK="https://fonts.googleapis.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
 URL_MS_PRIMARY="https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
 URL_MS_FALLBACK="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
-URL_MCU_PRIMARY="https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/dist/material-color-utilities.min.js"
+URL_MCU_PRIMARY="https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/+esm"
+URL_QR_PRIMARY="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/lib/browser.min.js"
+SHA_MCU="3U1awaKd5cEaag6BP1vFQ7y/99n+Iz/n/QiGuRX0BmKncek9GxW6I42Enhwn9QN9"
+SHA_QR="2uWjh7bYzfKGVoVDTonR9UW20rvRGIIgp0ejV/Vp8fmJKrzAiL4PBfmj37qqgatV"
 
 GS_CSS_URL="$URL_GS_PRIMARY"
 CC_CSS_URL="$URL_CC_PRIMARY"
@@ -53,9 +56,18 @@ download_css() {
 download_js() {
   local dest="$1"
   local url="$2"
+  local expected_sha="$3"
 
   if curl -fsSL -A "$UA" "$url" -o "$dest"; then
-    return 0
+    actual_sha=$(openssl dgst -sha384 -binary "$dest" | openssl base64 -A)
+    if [ "$actual_sha" = "$expected_sha" ]; then
+      log "Verified checksum for $(basename "$dest")"
+      return 0
+    else
+      log "Checksum mismatch for $(basename "$dest")! Got $actual_sha"
+      rm -f "$dest"
+      return 1
+    fi
   fi
   log "Failed to download: $url"
   return 1
@@ -74,7 +86,11 @@ if [ ! -s "$ASSETS_DIR/ms.css" ]; then
 fi
 
 if [ ! -s "$ASSETS_DIR/mcu.js" ]; then
-  download_js "$ASSETS_DIR/mcu.js" "$URL_MCU_PRIMARY" || true
+  download_js "$ASSETS_DIR/mcu.js" "$URL_MCU_PRIMARY" "$SHA_MCU" || true
+fi
+
+if [ ! -s "$ASSETS_DIR/qrcode.min.js" ]; then
+  download_js "$ASSETS_DIR/qrcode.min.js" "$URL_QR_PRIMARY" "$SHA_QR" || true
 fi
 
 css_origin() {

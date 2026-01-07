@@ -1,21 +1,28 @@
 
+# Source Consolidated Constants
+# SCRIPT_DIR is exported from zima.sh
+source "${SCRIPT_DIR}/lib/constants.sh"
+
 # Core logging functions that output to terminal and persist JSON formatted logs for the dashboard.
 log_info() { 
     echo -e "\e[34m[INFO]\e[0m $1"
     if [ -d "$(dirname "$HISTORY_LOG")" ]; then
-        printf '{"timestamp": "%s", "level": "INFO", "category": "SYSTEM", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "$HISTORY_LOG" 2>/dev/null || true
+        local msg="${1//\"/\\\"}"
+        printf '{"timestamp": "%s", "level": "INFO", "category": "SYSTEM", "source": "orchestrator", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$msg" >> "$HISTORY_LOG" 2>/dev/null || true
     fi
 }
 log_warn() { 
     echo -e "\e[33m[WARN]\e[0m $1"
     if [ -d "$(dirname "$HISTORY_LOG")" ]; then
-        printf '{"timestamp": "%s", "level": "WARN", "category": "SYSTEM", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "$HISTORY_LOG" 2>/dev/null || true
+        local msg="${1//\"/\\\"}"
+        printf '{"timestamp": "%s", "level": "WARN", "category": "SYSTEM", "source": "orchestrator", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$msg" >> "$HISTORY_LOG" 2>/dev/null || true
     fi
 }
 log_crit() { 
     echo -e "\e[31m[CRIT]\e[0m $1"
     if [ -d "$(dirname "$HISTORY_LOG")" ]; then
-        printf '{"timestamp": "%s", "level": "CRIT", "category": "SYSTEM", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "$HISTORY_LOG" 2>/dev/null || true
+        local msg="${1//\"/\\\"}"
+        printf '{"timestamp": "%s", "level": "CRIT", "category": "SYSTEM", "source": "orchestrator", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$msg" >> "$HISTORY_LOG" 2>/dev/null || true
     fi
 }
 
@@ -82,6 +89,7 @@ usage() {
     echo "  -a          Allow ProtonVPN (adds ProtonVPN domains to AdGuard allowlist)"
     echo "  -D          Dashboard Only (UI testing, skips service rebuild)"
     echo "  -E <file>   Load Environment Variables from file"
+    echo "  -G          Generate Only (stops before deployment)"
     echo "  -h          Show this help message"
 }
 
@@ -97,9 +105,10 @@ DASHBOARD_ONLY=false
 PERSONAL_MODE=false
 PARALLEL_DEPLOY=false
 SWAP_SLOTS=false
+GENERATE_ONLY=false
 ENV_FILE=""
 
-while getopts "cxpyas:DPjShE:" opt; do
+while getopts "cxpyas:DPjShE:G" opt; do
     case ${opt} in
         c) RESET_ENV=true; FORCE_CLEAN=true ;;
         x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
@@ -112,6 +121,7 @@ while getopts "cxpyas:DPjShE:" opt; do
         j) PARALLEL_DEPLOY=true ;;
         S) SWAP_SLOTS=true ;;
         E) ENV_FILE="${OPTARG}" ;;
+        G) GENERATE_ONLY=true ;;
         h) 
             usage
             exit 0
@@ -197,14 +207,15 @@ ACTIVE_SLOT_FILE="$BASE_DIR/.active_slot"
 BACKUP_DIR="$BASE_DIR/backups"
 ASSETS_DIR="$BASE_DIR/assets"
 HISTORY_LOG="$BASE_DIR/deployment.log"
-CERT_BACKUP_DIR="/tmp/${APP_NAME}-cert-backup"
+CERT_BACKUP_DIR="$PROJECT_ROOT/data/AppData/.cert-backups/$APP_NAME"
 CERT_RESTORE=false
 CERT_PROTECT=false
 
 # Memos storage
 MEMOS_HOST_DIR="$PROJECT_ROOT/data/AppData/memos"
 
-$SUDO mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR"
+$SUDO mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
+$SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
 BASE_DIR="$(cd "$BASE_DIR" && pwd)"
 WG_PROFILES_DIR="$BASE_DIR/wg-profiles"
 ACTIVE_WG_CONF="$BASE_DIR/active-wg.conf"
@@ -226,8 +237,8 @@ export CURRENT_SLOT
 UPDATE_STRATEGY="stable"
 export UPDATE_STRATEGY
 
-# Docker Auth Config (stored in /tmp to survive -c cleanup)
-DOCKER_AUTH_DIR="/tmp/$APP_NAME-docker-auth"
+# Docker Auth Config
+DOCKER_AUTH_DIR="$BASE_DIR/.docker"
 # Ensure clean state for auth only if it doesn't already have a config
 if [ ! -f "$DOCKER_AUTH_DIR/config.json" ]; then
     $SUDO mkdir -p "$DOCKER_AUTH_DIR"
@@ -477,14 +488,14 @@ authenticate_registries() {
         
         # Docker Hub Login
         if [ -n "$REG_TOKEN" ] && [ "$REG_TOKEN" != "DOCKER_HUB_TOKEN_PLACEHOLDER" ]; then
-            if echo "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+            if printf "%s" "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
                  log_info "Docker Hub: Authentication successful."
             else
                  log_warn "Docker Hub: Authentication failed."
             fi
             
             # DHI Registry Login
-            if echo "$REG_TOKEN" | $DOCKER_CMD login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+            if printf "%s" "$REG_TOKEN" | $DOCKER_CMD login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
                  log_info "DHI Registry: Authentication successful."
             else
                  log_warn "DHI Registry: Authentication failed (using Docker Hub credentials)."
@@ -506,11 +517,11 @@ authenticate_registries() {
         echo ""
         
         # Docker Hub Login
-        if echo "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+        if printf "%s" "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
              log_info "Docker Hub: Authentication successful."
              
              # DHI Registry Login
-             if echo "$REG_TOKEN" | $DOCKER_CMD login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+             if printf "%s" "$REG_TOKEN" | $DOCKER_CMD login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
                  log_info "DHI Registry: Authentication successful."
              else
                  log_warn "DHI Registry: Authentication failed."
@@ -687,8 +698,6 @@ setup_secrets() {
             log_crit "Failed to generate WireGuard password hash. Check Docker status."
             exit 1
         fi
-        WG_HASH_ESCAPED="${WG_HASH_CLEAN//\\\$/\\\\\$\\$}"
-        export WG_HASH_COMPOSE="$WG_HASH_ESCAPED"
 
         AGH_USER="adguard"
         # Safely generate AGH hash
@@ -697,7 +706,6 @@ setup_secrets() {
             log_crit "Failed to generate AdGuard password hash. Check Docker status."
             exit 1
         fi
-        export AGH_USER AGH_PASS_HASH
 
         # Safely generate Portainer hash (bcrypt)
         PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
@@ -705,8 +713,6 @@ setup_secrets() {
             log_crit "Failed to generate Portainer password hash. Check Docker status."
             exit 1
         fi
-        export PORTAINER_PASS_HASH
-        export PORTAINER_HASH_COMPOSE="$PORTAINER_PASS_HASH"
         
         # Cryptographic Secrets
         SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64)
@@ -715,6 +721,7 @@ setup_secrets() {
         IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
         SEARXNG_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
         IMMICH_DB_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+        INVIDIOUS_DB_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
 
         cat > "$BASE_DIR/.secrets" <<EOF
 VPN_PASS_RAW="$VPN_PASS_RAW"
@@ -732,55 +739,87 @@ HUB_API_KEY="$HUB_API_KEY"
 UPDATE_STRATEGY="stable"
 SEARXNG_SECRET="$SEARXNG_SECRET"
 IMMICH_DB_PASSWORD="$IMMICH_DB_PASSWORD"
+INVIDIOUS_DB_PASSWORD="$INVIDIOUS_DB_PASSWORD"
+WG_HASH_CLEAN="$WG_HASH_CLEAN"
+AGH_PASS_HASH="$AGH_PASS_HASH"
+PORTAINER_PASS_HASH="$PORTAINER_PASS_HASH"
+SCRIBE_SECRET="$SCRIBE_SECRET"
+ANONYMOUS_SECRET="$ANONYMOUS_SECRET"
+IV_HMAC="$IV_HMAC"
+IV_COMPANION="$IV_COMPANION"
 EOF
+        $SUDO chmod 600 "$BASE_DIR/.secrets"
     else
         source "$BASE_DIR/.secrets"
         # Ensure all secrets are loaded/regenerated if missing
-        if [ -z "${SCRIBE_SECRET:-}" ]; then SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64); echo "SCRIBE_SECRET=$SCRIBE_SECRET" >> "$BASE_DIR/.secrets"; fi
-        if [ -z "${ANONYMOUS_SECRET:-}" ]; then ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32); echo "ANONYMOUS_SECRET=$ANONYMOUS_SECRET" >> "$BASE_DIR/.secrets"; fi
-        if [ -z "${IV_HMAC:-}" ]; then IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16); echo "IV_HMAC=$IV_HMAC" >> "$BASE_DIR/.secrets"; fi
-        if [ -z "${IV_COMPANION:-}" ]; then IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16); echo "IV_COMPANION=$IV_COMPANION" >> "$BASE_DIR/.secrets"; fi
-        if [ -z "${SEARXNG_SECRET:-}" ]; then SEARXNG_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32); echo "SEARXNG_SECRET=$SEARXNG_SECRET" >> "$BASE_DIR/.secrets"; fi
-        if [ -z "${IMMICH_DB_PASSWORD:-}" ]; then IMMICH_DB_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32); echo "IMMICH_DB_PASSWORD=$IMMICH_DB_PASSWORD" >> "$BASE_DIR/.secrets"; fi
+        local updated_secrets=false
+        if [ -z "${SCRIBE_SECRET:-}" ]; then SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64); echo "SCRIBE_SECRET=$SCRIBE_SECRET" >> "$BASE_DIR/.secrets"; updated_secrets=true; fi
+        if [ -z "${ANONYMOUS_SECRET:-}" ]; then ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32); echo "ANONYMOUS_SECRET=$ANONYMOUS_SECRET" >> "$BASE_DIR/.secrets"; updated_secrets=true; fi
+        if [ -z "${IV_HMAC:-}" ]; then IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16); echo "IV_HMAC=$IV_HMAC" >> "$BASE_DIR/.secrets"; updated_secrets=true; fi
+        if [ -z "${IV_COMPANION:-}" ]; then IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16); echo "IV_COMPANION=$IV_COMPANION" >> "$BASE_DIR/.secrets"; updated_secrets=true; fi
+        if [ -z "${SEARXNG_SECRET:-}" ]; then SEARXNG_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32); echo "SEARXNG_SECRET=$SEARXNG_SECRET" >> "$BASE_DIR/.secrets"; updated_secrets=true; fi
+        if [ -z "${IMMICH_DB_PASSWORD:-}" ]; then IMMICH_DB_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32); echo "IMMICH_DB_PASSWORD=$IMMICH_DB_PASSWORD" >> "$BASE_DIR/.secrets"; updated_secrets=true; fi
 
         if [ -z "${ADMIN_PASS_RAW:-}" ]; then
             ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
-            echo "ADMIN_PASS_RAW=$ADMIN_PASS_RAW" >> "$BASE_DIR/.secrets"
+            echo "ADMIN_PASS_RAW=$ADMIN_PASS_RAW" >> "$BASE_DIR/.secrets"; updated_secrets=true
         fi
         if [ -z "${PORTAINER_PASS_RAW:-}" ]; then
             PORTAINER_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
-            echo "PORTAINER_PASS_RAW=$PORTAINER_PASS_RAW" >> "$BASE_DIR/.secrets"
+            echo "PORTAINER_PASS_RAW=$PORTAINER_PASS_RAW" >> "$BASE_DIR/.secrets"; updated_secrets=true
         fi
-        # Generate Portainer hash if missing from existing .secrets
+
+        # Generate hashes if missing
+        if [ -z "${WG_HASH_CLEAN:-}" ]; then
+            log_info "Generating missing WireGuard hash..."
+            WG_HASH_CLEAN=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$VPN_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
+            echo "WG_HASH_CLEAN='$WG_HASH_CLEAN'" >> "$BASE_DIR/.secrets"; updated_secrets=true
+        fi
+        if [ -z "${AG_PASS_HASH:-}" ]; then
+            log_info "Generating missing AdGuard hash..."
+            AGH_USER="adguard"
+            AGH_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$AGH_USER" "$AGH_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
+            echo "AGH_PASS_HASH='$AGH_PASS_HASH'" >> "$BASE_DIR/.secrets"; updated_secrets=true
+        fi
         if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
             log_info "Generating missing Portainer hash..."
             PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
-            echo "PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'" >> "$BASE_DIR/.secrets"
+            echo "PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'" >> "$BASE_DIR/.secrets"; updated_secrets=true
         fi
+
         # Ensure API keys are consistent and present
         if [ -z "${HUB_API_KEY:-}" ] && [ -n "${ODIDO_API_KEY:-}" ]; then
             HUB_API_KEY="$ODIDO_API_KEY"
-            echo "HUB_API_KEY=$HUB_API_KEY" >> "$BASE_DIR/.secrets"
+            echo "HUB_API_KEY=$HUB_API_KEY" >> "$BASE_DIR/.secrets"; updated_secrets=true
         elif [ -n "${HUB_API_KEY:-}" ] && [ -z "${ODIDO_API_KEY:-}" ]; then
             ODIDO_API_KEY="$HUB_API_KEY"
-            echo "ODIDO_API_KEY=$ODIDO_API_KEY" >> "$BASE_DIR/.secrets"
+            echo "ODIDO_API_KEY=$ODIDO_API_KEY" >> "$BASE_DIR/.secrets"; updated_secrets=true
         elif [ -z "${HUB_API_KEY:-}" ] && [ -z "${ODIDO_API_KEY:-}" ]; then
             HUB_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
             ODIDO_API_KEY="$HUB_API_KEY"
-            echo "HUB_API_KEY=$HUB_API_KEY" >> "$BASE_DIR/.secrets"
-            echo "ODIDO_API_KEY=$ODIDO_API_KEY" >> "$BASE_DIR/.secrets"
+            echo "HUB_API_KEY=$HUB_API_KEY" >> "$BASE_DIR/.secrets"; updated_secrets=true
+            echo "ODIDO_API_KEY=$ODIDO_API_KEY" >> "$BASE_DIR/.secrets"; updated_secrets=true
         fi
 
         if [ -z "${UPDATE_STRATEGY:-}" ]; then
             UPDATE_STRATEGY="stable"
-            echo "UPDATE_STRATEGY=stable" >> "$BASE_DIR/.secrets"
+            echo "UPDATE_STRATEGY=stable" >> "$BASE_DIR/.secrets"; updated_secrets=true
         fi
         export UPDATE_STRATEGY
-        # If using an old .secrets file that has WG_HASH_ESCAPED but not WG_HASH_CLEAN
-        export WG_HASH_COMPOSE="${WG_HASH_ESCAPED:-}"
+        if [ "$updated_secrets" = true ]; then
+            $SUDO chmod 600 "$BASE_DIR/.secrets"
+        fi
         AGH_USER="adguard"
-        export AGH_USER AGH_PASS_HASH PORTAINER_PASS_HASH PORTAINER_HASH_COMPOSE
     fi
+    
+    # Final export of all variables for use in other scripts
+    export VPN_PASS_RAW AGH_PASS_RAW ADMIN_PASS_RAW PORTAINER_PASS_RAW
+    export DESEC_DOMAIN DESEC_TOKEN SCRIBE_GH_USER SCRIBE_GH_TOKEN
+    export ODIDO_TOKEN ODIDO_USER_ID ODIDO_API_KEY HUB_API_KEY
+    export WG_HASH_CLEAN AGH_PASS_HASH PORTAINER_PASS_HASH
+    export SCRIBE_SECRET ANONYMOUS_SECRET IV_HMAC IV_COMPANION
+    export SEARXNG_SECRET IMMICH_DB_PASSWORD INVIDIOUS_DB_PASSWORD
+    export AGH_USER
 }
 
 generate_protonpass_export() {
