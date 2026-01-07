@@ -8,12 +8,11 @@ test/SERVICE_VERIFICATION_REPORT.md
 test/screenshot_*.png
 test/test_data/
 test/test_config.env
+test/deployment_todos.json
 __pycache__/
 DATA/
 data/
 src/data/
 lib/hub-api/__pycache__/
-
-# Ignore corrupted directory that cannot be deleted
-"*/
-"
+test_data_ab/
+details

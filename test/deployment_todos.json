@@ -11,14 +11,14 @@
         "description": "Stage 2: Standard Privacy Frontends",
         "command": "python3 test/test_runner.py --stage 2",
         "log_file": "test/stage_2.log",
-        "status": "completed"
+        "status": "in_progress"
     },
     {
         "id": 3,
         "description": "Stage 3: Invidious & Search Stack",
         "command": "python3 test/test_runner.py --stage 3",
         "log_file": "test/stage_3.log",
-        "status": "completed"
+        "status": "pending"
     },
     {
         "id": 4,

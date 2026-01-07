@@ -734,6 +734,26 @@
         </div>
     </div>
 
+    <!-- Generic Dialog Modal -->
+    <div id="dialog-modal" class="modal-overlay" style="z-index: 30000;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 id="dialog-title">Title</h2>
+                <button onclick="closeDialog()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+            </div>
+            <p id="dialog-message" class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant); white-space: pre-wrap;"></p>
+            
+            <div id="dialog-input-container" style="display:none; margin-bottom: 24px;">
+                <input type="text" id="dialog-input" class="text-field" style="width: 100%;">
+            </div>
+
+            <div class="btn-group" style="justify-content: flex-end;">
+                <button id="dialog-cancel-btn" class="btn btn-outlined">Cancel</button>
+                <button id="dialog-confirm-btn" class="btn btn-filled">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Service Management Modal -->
     <div id="service-modal" class="modal-overlay">
         <div class="modal-card">

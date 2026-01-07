@@ -1223,8 +1223,20 @@ EOF
     generate_libredirect_export
 }
 
-generate_libredirect_export() {
+    generate_libredirect_export() {
     log_info "Generating LibRedirect import file from template..."
+    
+    # Validation: Only generate if deSEC domain AND certificates are present
+    if [ -z "$DESEC_DOMAIN" ]; then
+        log_info "Skipping LibRedirect export: No deSEC domain provided."
+        return 0
+    fi
+    
+    if [ ! -f "$AGH_CONF_DIR/ssl.crt" ] || [ ! -f "$AGH_CONF_DIR/ssl.key" ]; then
+        log_info "Skipping LibRedirect export: SSL certificates not found at $AGH_CONF_DIR."
+        return 0
+    fi
+
     local export_file="$BASE_DIR/libredirect_import.json"
     local template_file="$SCRIPT_DIR/lib/libredirect_template.json"
 
@@ -1242,33 +1254,18 @@ generate_libredirect_export() {
     fi
 
     local proto="https"
-    local host="$LAN_IP"
-    local port_suffix=""
+    local host="$DESEC_DOMAIN"
+    local port_suffix=":8443"
     
-    if [ -n "$DESEC_DOMAIN" ]; then
-        host="$DESEC_DOMAIN"
-        port_suffix=":8443"
-        
-        # Subdomain-based URLs for Nginx proxy
-        local url_invidious="${proto}://invidious.${host}${port_suffix}"
-        local url_redlib="${proto}://redlib.${host}${port_suffix}"
-        local url_wikiless="${proto}://wikiless.${host}${port_suffix}"
-        local url_rimgo="${proto}://rimgo.${host}${port_suffix}"
-        local url_scribe="${proto}://scribe.${host}${port_suffix}"
-        local url_breezewiki="${proto}://breezewiki.${host}${port_suffix}"
-        local url_anonoverflow="${proto}://anonymousoverflow.${host}${port_suffix}"
-        local url_searxng="${proto}://searxng.${host}${port_suffix}"
-    else
-        # IP-based URLs (direct access)
-        local url_invidious="${proto}://${host}:3000"
-        local url_redlib="${proto}://${host}:8080"
-        local url_wikiless="${proto}://${host}:8180"
-        local url_rimgo="${proto}://${host}:3002"
-        local url_scribe="${proto}://${host}:8280"
-        local url_breezewiki="${proto}://${host}:8380"
-        local url_anonoverflow="${proto}://${host}:8480"
-        local url_searxng="${proto}://${host}:8082"
-    fi
+    # Subdomain-based URLs for Nginx proxy
+    local url_invidious="${proto}://invidious.${host}${port_suffix}"
+    local url_redlib="${proto}://redlib.${host}${port_suffix}"
+    local url_wikiless="${proto}://wikiless.${host}${port_suffix}"
+    local url_rimgo="${proto}://rimgo.${host}${port_suffix}"
+    local url_scribe="${proto}://scribe.${host}${port_suffix}"
+    local url_breezewiki="${proto}://breezewiki.${host}${port_suffix}"
+    local url_anonoverflow="${proto}://anonymousoverflow.${host}${port_suffix}"
+    local url_searxng="${proto}://searxng.${host}${port_suffix}"
 
     log_info "Using template: lib/libredirect_template.json"
     # Use jq to update the template with local URLs and enable used services
@@ -1293,7 +1290,6 @@ generate_libredirect_export() {
     chmod 644 "$export_file"
     log_info "LibRedirect import file created at $export_file"
 }
-
 
 # --- SECTION 14: DOCKER COMPOSE GENERATION ---
 
@@ -1453,7 +1449,7 @@ EOF
       - ODIDO_TOKEN=$ODIDO_TOKEN
       - PORT=8080
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/docs"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -2187,7 +2183,7 @@ EOF
         limits: {cpus: '1.0', memory: 1024M}
 
   immich-db:
-    image: tensorchord/pgvector-pp:14-alpine
+    image: tensorchord/pgvector:pg14
     container_name: ${CONTAINER_PREFIX}immich-db
     networks: [dhi-frontnet]
     environment:

@@ -45,7 +45,7 @@ STAGES = {
         "checks": [
              {"name": "Portainer", "url": "http://localhost:9000", "code": 200},
              {"name": "Memos", "url": "http://localhost:5230", "code": 200},
-             {"name": "Odido Booster", "url": "http://localhost:8085", "code": 200}
+             {"name": "Odido Booster", "url": "http://localhost:8085/docs", "code": 200}
         ]
     },
     5: {
