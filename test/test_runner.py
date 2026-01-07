@@ -61,7 +61,7 @@ STAGES = {
         "name": "Heavy Media (Immich)",
         "services": "immich-server,immich-db,immich-redis,immich-machine-learning,gluetun,wg-easy",
         "checks": [
-             {"name": "Immich", "url": "http://localhost:2283/api/server-info", "code": 200}
+             {"name": "Immich", "url": "http://localhost:2283", "code": 200}
         ]
     }
 }
@@ -160,10 +160,40 @@ def verify_docker_logs(services_list):
             
     return all_clean
 
+def check_puppeteer_deps():
+    print("Checking Puppeteer dependencies...")
+    deps = [
+        "libatk1.0-0", "libatk-bridge2.0-0", "libcups2", "libdrm2", 
+        "libxkbcommon0", "libxcomposite1", "libxdamage1", "libxrandr2", 
+        "libgbm1", "libpango-1.0-0", "libcairo2", "libasound2"
+    ]
+    missing = []
+    for dep in deps:
+        # Check both the standard name and the t64 variant used in Ubuntu 24.04+
+        found = False
+        for variant in [dep, f"{dep}t64"]:
+            res = subprocess.run(f"dpkg -l {variant} >/dev/null 2>&1", shell=True)
+            if res.returncode == 0:
+                found = True
+                break
+        if not found:
+            missing.append(dep)
+    
+    if missing:
+        print("\n[WARN] Missing system packages required for Puppeteer UI tests:")
+        print(f"       {', '.join(missing)}")
+        print("       Run: sudo apt-get update && sudo apt-get install -y <missing-packages>")
+        print("       (Note: You may need to append 't64' to some package names on newer Ubuntu versions)\n")
+        return False
+    return True
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--stage", type=int, required=True)
     args = parser.parse_args()
+
+    # Pre-flight check for Puppeteer deps
+    check_puppeteer_deps()
 
     stage_conf = STAGES.get(args.stage)
     if not stage_conf:

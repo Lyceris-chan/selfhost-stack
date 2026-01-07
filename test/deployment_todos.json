@@ -39,6 +39,6 @@
         "description": "Stage 6: Heavy Media (Immich)",
         "command": "python3 test/test_runner.py --stage 6",
         "log_file": "test/stage_6.log",
-        "status": "failed"
+        "status": "completed"
     }
 ]

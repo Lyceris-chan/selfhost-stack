@@ -2179,9 +2179,12 @@ EOF
     cat >> "$COMPOSE_FILE" <<EOF
   # Immich: High-performance self-hosted photo and video management
   immich-server:
-    image: ghcr.io/immich-app/immich-server:${IMMICH_IMAGE_TAG:-latest}
+    image: ghcr.io/immich-app/immich-server:${IMMICH_IMAGE_TAG:-release}
     container_name: ${CONTAINER_PREFIX}immich-server
     network_mode: "service:gluetun"
+    volumes:
+      - $DATA_DIR/immich:/data
+      - /etc/localtime:/etc/localtime:ro
     environment:
       - DB_HOSTNAME=${CONTAINER_PREFIX}immich-db
       - DB_USERNAME=immich
@@ -2189,40 +2192,38 @@ EOF
       - DB_DATABASE_NAME=immich
       - REDIS_HOSTNAME=${CONTAINER_PREFIX}immich-redis
       - IMMICH_MACHINE_LEARNING_URL=http://${CONTAINER_PREFIX}immich-ml:3003
-      - IMMICH_CONFIG_FILE=/config/immich.json
-    volumes:
-      - $DATA_DIR/immich:/usr/src/app/upload
-      - $CONFIG_DIR/immich:/config
     depends_on:
       immich-db: {condition: service_healthy}
       immich-redis: {condition: service_healthy}
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
-        limits: {cpus: '1.0', memory: 1024M}
+        limits: {cpus: '1.5', memory: 2048M}
 
   immich-db:
-    image: ankane/pgvector:v0.5.0
+    image: ${IMMICH_POSTGRES_IMAGE:-ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0}
     container_name: ${CONTAINER_PREFIX}immich-db
     networks: [dhi-frontnet]
     environment:
       - POSTGRES_USER=immich
       - POSTGRES_PASSWORD=$IMMICH_DB_PASS_COMPOSE
       - POSTGRES_DB=immich
+      - POSTGRES_INITDB_ARGS=--data-checksums
     volumes:
       - $DATA_DIR/immich-db:/var/lib/postgresql/data
+    shm_size: 256mb
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d immich -U immich"]
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
-        limits: {cpus: '0.5', memory: 512M}
+        limits: {cpus: '1.0', memory: 1024M}
 
   immich-redis:
-    image: redis:alpine
+    image: ${IMMICH_VALKEY_IMAGE:-docker.io/valkey/valkey:9}
     container_name: ${CONTAINER_PREFIX}immich-redis
     networks: [dhi-frontnet]
     healthcheck:
@@ -2230,18 +2231,18 @@ EOF
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
-        limits: {cpus: '0.3', memory: 128M}
+        limits: {cpus: '0.5', memory: 256M}
 
   immich-machine-learning:
-    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_IMAGE_TAG:-latest}
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_IMAGE_TAG:-release}
     container_name: ${CONTAINER_PREFIX}immich-ml
     network_mode: "service:gluetun"
     volumes:
       - $DATA_DIR/immich-ml-cache:/cache
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
         limits: {cpus: '2.0', memory: 2048M}
