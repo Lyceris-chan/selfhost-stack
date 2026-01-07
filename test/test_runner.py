@@ -54,7 +54,7 @@ STAGES = {
         "checks": [
              {"name": "Cobalt", "url": "http://localhost:9001", "code": 200},
              {"name": "VERT", "url": "http://localhost:5555", "code": 200},
-             {"name": "VERTd", "url": "http://localhost:24153/api/v1/health", "code": 200}
+             {"name": "VERTd", "url": "http://localhost:24153/api/version", "code": 200}
         ]
     },
     6: {

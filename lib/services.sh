@@ -72,7 +72,45 @@ sync_sources() {
     local pids=""
     
     clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless" "$WIKILESS_IMAGE_TAG" & pids="$pids $!"
-    clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe" "$SCRIBE_IMAGE_TAG" & pids="$pids $!"
+    (
+        if clone_repo "https://git.sr.ht/~edwardloveall/scribe" "$SRC_DIR/scribe" "$SCRIBE_IMAGE_TAG"; then
+            cat > "$SRC_DIR/scribe/Dockerfile" <<'EOF'
+# Multi-stage build for Scribe (Crystal + Lucky framework)
+FROM node:16-alpine AS node_build
+WORKDIR /tmp_build
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile
+COPY . .
+RUN yarn prod
+
+FROM 84codes/crystal:1.11.2-alpine AS lucky_build
+# Install development libraries for static linking, fixing OpenSSL conflicts
+RUN apk add --no-cache yaml-dev yaml-static zlib-dev zlib-static openssl-dev openssl-libs-static
+WORKDIR /tmp_build
+COPY shard.yml shard.lock ./
+# Skip postinstall to avoid problematic dependencies like ameba during build
+RUN shards install --production --skip-postinstall
+COPY . .
+# Copy generated assets from node stage for manifest loading during compilation
+COPY --from=node_build /tmp_build/public ./public
+RUN crystal build --release --static src/start_server.cr -o start_server
+RUN crystal build --release --static tasks.cr -o run_task
+
+FROM alpine:latest
+RUN apk add --no-cache ca-certificates
+WORKDIR /app
+COPY --from=lucky_build /tmp_build/start_server /tmp_build/run_task ./
+COPY --from=lucky_build /tmp_build/config ./config
+COPY --from=node_build /tmp_build/public ./public
+# Lucky framework expectations
+ENV LUCKY_ENV=production
+EXPOSE 8080
+CMD ["./start_server"]
+EOF
+        else
+            exit 1
+        fi
+    ) & pids="$pids $!"
     clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious" "$INVIDIOUS_IMAGE_TAG" & pids="$pids $!"
     clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster" "$ODIDO_BOOSTER_IMAGE_TAG" & pids="$pids $!"
     clone_repo "https://github.com/VERT-sh/VERT.git" "$SRC_DIR/vert" "$VERT_IMAGE_TAG" & pids="$pids $!"
@@ -180,6 +218,12 @@ patch_bare() {
     # if grep -qiE "^FROM[[:space:]]+alpine:" "$file"; then
     #    sed -i -E 's/^FROM[[:space:]]+alpine:[^[:space:]]*/FROM dhi.io\/alpine-base:3.22-dev/gI' "$file"
     # fi
+    
+    # [2.1] Fix for EOL Debian Buster
+    if grep -qi "debian:buster-slim" "$file"; then
+        log "    [FIX] Upgrading legacy debian:buster-slim base to bookworm-slim..."
+        sed -i 's/debian:buster-slim/debian:bookworm-slim/gI' "$file"
+    fi
     
     # [3] Runtimes (Only if they are alpine-based runtimes)
     # sed -i -E 's/^FROM[[:space:]]+node:[0-9.]+-alpine[^[:space:]]*/FROM dhi.io\/node:20-alpine3.22-dev/gI' "$file"
@@ -309,6 +353,16 @@ if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
         # Simplify OpenVPN installation to avoid version mixing issues on DHI base
         # Replace the entire multi-line RUN block starting with apk add --no-cache --update -l wget
         sed -i '/RUN apk add --no-cache --update -l wget/,/mkdir \/gluetun/c\RUN apk add --no-cache --update wget openvpn iptables iptables-legacy tzdata && ln -s /usr/sbin/openvpn /usr/sbin/openvpn2.5 && ln -s /usr/sbin/openvpn /usr/sbin/openvpn2.6 && mkdir /gluetun' "$SRC_ROOT/gluetun/$D_FILE"
+    fi
+fi
+
+if [ "$SERVICE" = "rimgo" ] || [ "$SERVICE" = "all" ]; then
+    D_FILE=$(detect_dockerfile "$SRC_ROOT/rimgo")
+    if [ -n "$D_FILE" ]; then
+        log "Patching rimgo..."
+        patch_bare "$SRC_ROOT/rimgo/$D_FILE" "https://codeberg.org/rimgo/rimgo/src/branch/main/Dockerfile"
+        # Fix missing tailwindcss dependency for the CLI
+        sed -i 's/npx @tailwindcss\/cli/npm install tailwindcss \&\& npx @tailwindcss\/cli/g' "$SRC_ROOT/rimgo/$D_FILE"
     fi
 fi
 
@@ -512,7 +566,8 @@ generate_scripts() {
       "order": 100,
       "url": "http://$LAN_IP:$PORT_COMPANION",
       "source_url": "https://github.com/iv-org/invidious-companion",
-      "patch_url": "https://github.com/iv-org/invidious-companion/blob/master/Dockerfile"
+      "patch_url": "https://github.com/iv-org/invidious-companion/blob/master/Dockerfile",
+      "allowed_strategies": ["stable"]
     },
     "adguard": {
       "name": "AdGuard Home",
@@ -569,9 +624,10 @@ generate_scripts() {
       "description": "The background daemon for the VERT file conversion service. Handles intensive processing tasks and hardware acceleration logic.",
       "category": "system",
       "order": 50,
-      "url": "http://$LAN_IP:$PORT_VERTD/api/v1/health",
+      "url": "http://$LAN_IP:$PORT_VERTD/api/version",
       "source_url": "https://github.com/VERT-sh/vertd",
-      "patch_url": "https://github.com/VERT-sh/vertd/blob/main/Dockerfile"
+      "patch_url": "https://github.com/VERT-sh/vertd/blob/main/Dockerfile",
+      "allowed_strategies": ["nightly"]
     },
     "odido-booster": {
       "name": "Odido Booster",
@@ -1229,14 +1285,17 @@ EOF
 APP_URL=http://$LAN_IP:$PORT_ANONYMOUS
 JWT_SIGNING_SECRET=$ANONYMOUS_SECRET
 EOF
+    # Configure Scribe Environment
+    # We use SCRIBE_HOST=0.0.0.0 to bind to all interfaces
+    # We use LUCKY_ENV=production to disable development features like the watcher
+    # Scribe requires a DATABASE_URL even if it doesn't use it.
     cat <<EOF | $SUDO tee "$ENV_DIR/scribe.env" >/dev/null
 SCRIBE_HOST=0.0.0.0
 PORT=$PORT_SCRIBE
-SECRET_KEY_BASE=$SCRIBE_SECRET
 LUCKY_ENV=production
-APP_DOMAIN=$LAN_IP:$PORT_SCRIBE
-GITHUB_USERNAME="$SCRIBE_GH_USER"
-GITHUB_PERSONAL_ACCESS_TOKEN="$SCRIBE_GH_TOKEN"
+SECRET_KEY_BASE=$SCRIBE_SECRET
+DATABASE_URL=postgres://dummy:dummy@127.0.0.1/dummy
+APP_DOMAIN=http://$LAN_IP:$PORT_SCRIBE
 EOF
 
     generate_libredirect_export
@@ -2063,7 +2122,7 @@ EOF
     networks: [dhi-frontnet]
     ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:24153/api/v1/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:24153/api/version"]
       interval: 30s
       timeout: 5s
       retries: 3

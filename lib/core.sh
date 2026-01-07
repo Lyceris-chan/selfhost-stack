@@ -5,21 +5,21 @@ source "${SCRIPT_DIR}/lib/constants.sh"
 
 # Core logging functions that output to terminal and persist JSON formatted logs for the dashboard.
 log_info() { 
-    echo -e "\e[34m[INFO]\e[0m $1"
+    echo -e "\e[34m  ➜ [INFO]\e[0m $1"
     if [ -d "$(dirname "$HISTORY_LOG")" ]; then
         local msg="${1//\"/\\\"}"
         printf '{"timestamp": "%s", "level": "INFO", "category": "SYSTEM", "source": "orchestrator", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$msg" >> "$HISTORY_LOG" 2>/dev/null || true
     fi
 }
 log_warn() { 
-    echo -e "\e[33m[WARN]\e[0m $1"
+    echo -e "\e[33m  ⚠️ [WARN]\e[0m $1"
     if [ -d "$(dirname "$HISTORY_LOG")" ]; then
         local msg="${1//\"/\\\"}"
         printf '{"timestamp": "%s", "level": "WARN", "category": "SYSTEM", "source": "orchestrator", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$msg" >> "$HISTORY_LOG" 2>/dev/null || true
     fi
 }
 log_crit() { 
-    echo -e "\e[31m[CRIT]\e[0m $1"
+    echo -e "\e[31m  ✖ [CRIT]\e[0m $1"
     if [ -d "$(dirname "$HISTORY_LOG")" ]; then
         local msg="${1//\"/\\\"}"
         printf '{"timestamp": "%s", "level": "CRIT", "category": "SYSTEM", "source": "orchestrator", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$msg" >> "$HISTORY_LOG" 2>/dev/null || true
@@ -33,6 +33,57 @@ ask_confirm() {
         [yY][eE][sS]|[yY]) return 0 ;;
         *) return 1 ;;
     esac
+}
+
+get_latest_stable_tag() {
+    local repo_url="$1"
+    local strategy="${2:-stable}" # stable, nightly, or branch name
+    local default_branch="${3:-main}"
+    
+    # Fetch tags using git ls-remote
+    local tags
+    tags=$(git ls-remote --tags "$repo_url" 2>/dev/null | awk -F/ '{print $3}' | sed 's/\^{}//' | sort -u)
+    
+    if [ -z "$tags" ]; then
+        # If no tags, try to detect default branch from remote HEAD
+        local default_branch
+        default_branch=$(git ls-remote --symref "$repo_url" HEAD | awk '/^ref:/ {sub(/refs\/heads\//, "", $2); print $2}')
+        echo "${default_branch:-main}"
+        return 0
+    fi
+
+
+    if [ "$strategy" = "nightly" ]; then
+        # Fetch latest tag starting with nightly
+        local latest_nightly
+        latest_nightly=$(echo "$tags" | grep -E '^nightly' | sort -V | tail -n 1)
+        if [ -n "$latest_nightly" ]; then
+            echo "$latest_nightly"
+            return 0
+        fi
+    fi
+
+    # Strict semver (no pre-release), stripping 'v' for consistent comparison
+    local latest_version
+    latest_version=$(echo "$tags" | grep -E '^v?[0-9]+\.[0-9]+(\.[0-9]+)?$' | sed 's/^v//' | sort -V | tail -n 1)
+    
+    if [ -n "$latest_version" ]; then
+        # Restore 'v' if it was in the original tag
+        if echo "$tags" | grep -qx "v$latest_version"; then
+            echo "v$latest_version"
+        else
+            echo "$latest_version"
+        fi
+    else
+        # Allow pre-release if no strict stable found
+        latest_version=$(echo "$tags" | grep -E '^v?[0-9]+\.[0-9]+' | sed 's/^v//' | sort -V | tail -n 1)
+        if [ -n "$latest_version" ]; then
+            if echo "$tags" | grep -qx "v$latest_version"; then echo "v$latest_version"; else echo "$latest_version"; fi
+        else
+            # Absolute fallback
+            echo "$tags" | sort -V | tail -n 1
+        fi
+    fi
 }
 
 pull_with_retry() {
@@ -58,6 +109,7 @@ detect_dockerfile() {
     local found=""
     if [ -n "$preferred" ] && [ -f "$repo_dir/$preferred" ]; then echo "$preferred"; return 0; fi
     if [ -f "$repo_dir/Dockerfile.dhi" ]; then echo "Dockerfile.dhi"; return 0; fi
+    if [ -f "$repo_dir/Dockerfile.alpine" ]; then echo "Dockerfile.alpine"; return 0; fi
     if [ -f "$repo_dir/Dockerfile" ]; then echo "Dockerfile"; return 0; fi
     if [ -f "$repo_dir/docker/Dockerfile" ]; then echo "docker/Dockerfile"; return 0; fi
     # Search deeper

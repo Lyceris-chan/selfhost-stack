@@ -298,7 +298,12 @@ def log_structured(level, message, category="SYSTEM"):
         "GET /metrics": "Performance metrics updated",
         "GET /containers": "Container orchestration state audited",
         "configuration": "WireGuard client configuration file generated",
-        "POST /odido-userid": "Odido User ID extracted from OAuth token"
+        "POST /odido-userid": "Odido User ID extracted from OAuth token",
+        "POST /migrate": "Service database migration triggered",
+        "POST /vacuum": "Service database optimization (vacuum) started",
+        "POST /clear-logs": "Service log cleanup initiated",
+        "POST /clear-db": "Service database reset requested",
+        "POST /master-update": "Full system update sequence authorized"
     }
     
     for k, v in HUMAN_LOGS.items():
@@ -1514,12 +1519,20 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
 
                 def run_batch_update(svc_list):
                     try:
-                        strategy = get_update_strategy()
-                        log_structured("INFO", f"[Update Engine] Starting batch update (Strategy: {strategy}) for {len(svc_list)} services...", "MAINTENANCE")
+                        catalog = load_services()
+                        log_structured("INFO", f"[Update Engine] Starting batch update for {len(svc_list)} services...", "MAINTENANCE")
                         for name in svc_list:
                             try:
                                 log_structured("INFO", f"[Update Engine] Processing {name}...", "MAINTENANCE")
                                 
+                                # Check for service-specific strategy restriction
+                                strategy = get_update_strategy()
+                                svc_meta = catalog.get(name, {})
+                                allowed = svc_meta.get('allowed_strategies', [])
+                                if allowed and strategy not in allowed:
+                                    log_structured("INFO", f"[Update Engine] Global strategy '{strategy}' not allowed for {name}. Using '{allowed[0]}'.", "MAINTENANCE")
+                                    strategy = allowed[0]
+
                                 # 1. Backup
                                 subprocess.run(["/usr/local/bin/migrate.sh", name, "backup", "yes"], timeout=120)
                                 
@@ -1538,7 +1551,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                         if "origin/main" in res_db.stdout: default_branch = "main"
                                         else: default_branch = "master"
 
-                                    if strategy == 'stable':
+                                    if strategy == 'stable' or (name == 'vertd' and strategy == 'nightly'):
                                         # Find latest semver tag without shell=True
                                         latest_tag = None
                                         try:
@@ -1550,22 +1563,29 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                                         tag = line.split('/')[-1].split('^{}')[0]
                                                         if tag: tags.append(tag)
                                                 
-                                                # Filter semver vX.Y.Z
-                                                semver_tags = [t for t in tags if re.match(r'^v?[0-9]+\.[0-9]+\.[0-9]+$', t)]
-                                                if semver_tags:
-                                                    # Simple sort for semver
-                                                    semver_tags.sort(key=lambda s: [int(x) for x in re.sub(r'^v', '', s).split('.')])
-                                                    latest_tag = semver_tags[-1]
-                                                elif tags:
-                                                    latest_tag = tags[-1]
+                                                if name == 'vertd' and strategy == 'nightly':
+                                                    # Filter for nightly tags
+                                                    nightly_tags = [t for t in tags if t.startswith('nightly')]
+                                                    if nightly_tags:
+                                                        nightly_tags.sort()
+                                                        latest_tag = nightly_tags[-1]
+                                                else:
+                                                    # Filter semver vX.Y.Z
+                                                    semver_tags = [t for t in tags if re.match(r'^v?[0-9]+\.[0-9]+\.[0-9]+$', t)]
+                                                    if semver_tags:
+                                                        # Simple sort for semver
+                                                        semver_tags.sort(key=lambda s: [int(x) for x in re.sub(r'^v', '', s).split('.')])
+                                                        latest_tag = semver_tags[-1]
+                                                    elif tags:
+                                                        latest_tag = tags[-1]
                                         except Exception as tag_err:
                                             log_structured("WARN", f"Failed to fetch tags for {name}: {tag_err}", "MAINTENANCE")
 
                                         if latest_tag:
-                                            log_structured("INFO", f"[Update Engine] Switching {name} to stable tag: {latest_tag}", "MAINTENANCE")
+                                            log_structured("INFO", f"[Update Engine] Switching {name} to {strategy} tag: {latest_tag}", "MAINTENANCE")
                                             subprocess.run(["git", "checkout", "-f", latest_tag], cwd=repo_path, check=True, timeout=30)
                                         else:
-                                            log_structured("WARN", f"[Update Engine] No tags found for {name}, using {default_branch}", "MAINTENANCE")
+                                            log_structured("WARN", f"[Update Engine] No suitable tags found for {name}, using {default_branch}", "MAINTENANCE")
                                             subprocess.run(["git", "checkout", "-f", default_branch], cwd=repo_path, check=True, timeout=30)
                                             subprocess.run(["git", "reset", "--hard", f"origin/{default_branch}"], cwd=repo_path, check=True, timeout=30)
                                             subprocess.run(["git", "pull"], cwd=repo_path, check=True, timeout=60)
@@ -1621,7 +1641,14 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 
                 def run_service_update(name):
                     try:
+                        catalog = load_services()
                         strategy = get_update_strategy()
+                        svc_meta = catalog.get(name, {})
+                        allowed = svc_meta.get('allowed_strategies', [])
+                        if allowed and strategy not in allowed:
+                            log_structured("INFO", f"[Update Engine] Global strategy '{strategy}' not allowed for {name}. Using '{allowed[0]}'.", "MAINTENANCE")
+                            strategy = allowed[0]
+
                         log_structured("INFO", f"[Update Engine] Starting update for {name} (Strategy: {strategy})...", "MAINTENANCE")
                         
                         # 1. Pre-update Backup
@@ -1641,7 +1668,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                 if "origin/main" in res_db.stdout: default_branch = "main"
                                 else: default_branch = "master"
 
-                            if strategy == 'stable':
+                            if strategy == 'stable' or (name == 'vertd' and strategy == 'nightly'):
                                 # Find latest semver tag without shell=True
                                 latest_tag = None
                                 try:
@@ -1653,22 +1680,29 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                                 tag = line.split('/')[-1].split('^{}')[0]
                                                 if tag: tags.append(tag)
                                         
-                                        # Filter semver vX.Y.Z
-                                        semver_tags = [t for t in tags if re.match(r'^v?[0-9]+\.[0-9]+\.[0-9]+$', t)]
-                                        if semver_tags:
-                                            # Simple sort for semver
-                                            semver_tags.sort(key=lambda s: [int(x) for x in re.sub(r'^v', '', s).split('.')])
-                                            latest_tag = semver_tags[-1]
-                                        elif tags:
-                                            latest_tag = tags[-1]
+                                        if name == 'vertd' and strategy == 'nightly':
+                                            # Filter for nightly tags
+                                            nightly_tags = [t for t in tags if t.startswith('nightly')]
+                                            if nightly_tags:
+                                                nightly_tags.sort()
+                                                latest_tag = nightly_tags[-1]
+                                        else:
+                                            # Filter semver vX.Y.Z
+                                            semver_tags = [t for t in tags if re.match(r'^v?[0-9]+\.[0-9]+\.[0-9]+$', t)]
+                                            if semver_tags:
+                                                # Simple sort for semver
+                                                semver_tags.sort(key=lambda s: [int(x) for x in re.sub(r'^v', '', s).split('.')])
+                                                latest_tag = semver_tags[-1]
+                                            elif tags:
+                                                latest_tag = tags[-1]
                                 except Exception as tag_err:
                                     log_structured("WARN", f"Failed to fetch tags for {name}: {tag_err}", "MAINTENANCE")
 
                                 if latest_tag:
-                                    log_structured("INFO", f"[Update Engine] Switching {name} to stable tag: {latest_tag}", "MAINTENANCE")
+                                    log_structured("INFO", f"[Update Engine] Switching {name} to {strategy} tag: {latest_tag}", "MAINTENANCE")
                                     subprocess.run(["git", "checkout", "-f", latest_tag], cwd=repo_path, check=True, timeout=30)
                                 else:
-                                    log_structured("WARN", f"[Update Engine] No tags found for {name}, using {default_branch}", "MAINTENANCE")
+                                    log_structured("WARN", f"[Update Engine] No suitable tags found for {name}, using {default_branch}", "MAINTENANCE")
                                     subprocess.run(["git", "checkout", "-f", default_branch], cwd=repo_path, check=True, timeout=30)
                                     subprocess.run(["git", "reset", "--hard", f"origin/{default_branch}"], cwd=repo_path, check=True, timeout=30)
                                     subprocess.run(["git", "pull"], cwd=repo_path, check=True, timeout=60)

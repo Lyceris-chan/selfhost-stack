@@ -67,6 +67,26 @@ $SUDO chmod 666 "$DOTENV_FILE"
 
 # AB_SERVICES and CRITICAL_IMAGES are defined in lib/constants.sh (sourced via lib/core.sh)
 
+# Service Repository Mapping for dynamic tag resolution
+declare -A SERVICE_REPOS
+SERVICE_REPOS[wikiless]="https://github.com/Metastem/Wikiless"
+SERVICE_REPOS[scribe]="https://git.sr.ht/~edwardloveall/scribe"
+SERVICE_REPOS[invidious]="https://github.com/iv-org/invidious.git"
+SERVICE_REPOS[odido-booster]="https://github.com/Lyceris-chan/odido-bundle-booster.git"
+SERVICE_REPOS[vert]="https://github.com/VERT-sh/VERT.git"
+SERVICE_REPOS[vertd]="https://github.com/VERT-sh/vertd.git"
+SERVICE_REPOS[rimgo]="https://codeberg.org/rimgo/rimgo.git"
+SERVICE_REPOS[breezewiki]="https://github.com/PussTheCat-org/docker-breezewiki-quay.git"
+SERVICE_REPOS[anonymousoverflow]="https://github.com/httpjamesm/AnonymousOverflow.git"
+SERVICE_REPOS[gluetun]="https://github.com/qdm12/gluetun.git"
+SERVICE_REPOS[adguard]="https://github.com/AdguardTeam/AdGuardHome.git"
+SERVICE_REPOS[unbound]="https://github.com/klutchell/unbound-docker.git"
+SERVICE_REPOS[memos]="https://github.com/usememos/memos.git"
+SERVICE_REPOS[redlib]="https://github.com/redlib-org/redlib.git"
+SERVICE_REPOS[companion]="https://github.com/iv-org/invidious-companion.git"
+SERVICE_REPOS[wg-easy]="https://github.com/wg-easy/wg-easy.git"
+SERVICE_REPOS[portainer]="https://github.com/portainer/portainer.git"
+
 for srv in $AB_SERVICES; do
     SRV_UPPER=$(echo "${srv//-/_}" | tr '[:lower:]' '[:upper:]')
     VAR_NAME="${SRV_UPPER}_IMAGE_TAG"
@@ -85,7 +105,19 @@ for srv in $AB_SERVICES; do
     # 3. Use default from constants.sh
     else
         val="$DEFAULT_VAL"
-        echo "$VAR_NAME=$val" | $SUDO tee -a "$DOTENV_FILE" >/dev/null
+    fi
+
+    # Dynamic Resolution for 'stable', 'nightly', or specific branch overrides
+    if [ "$val" = "stable" ] || [ "$val" = "nightly" ]; then
+        REPO_URL="${SERVICE_REPOS[$srv]:-}"
+        if [ -n "$REPO_URL" ]; then
+            log_info "Resolving latest $val tag for $srv..."
+            resolved_tag=$(get_latest_stable_tag "$REPO_URL" "$val")
+            log_info "  -> Resolved $srv to $resolved_tag"
+            val="$resolved_tag"
+        else
+            val="latest"
+        fi
     fi
     
     export "$VAR_NAME=$val"
