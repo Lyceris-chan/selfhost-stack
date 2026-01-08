@@ -60,12 +60,17 @@
                 <div>
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <h1>Privacy Hub</h1>
-                        <div class="chip tertiary" style="height: 24px; font-size: 12px; padding: 0 12px;" data-tooltip="Active System Slot (A/B Update System)">Slot ${CURRENT_SLOT}</div>
+                        <div style="display: flex; align-items: center; gap: 4px; background: var(--md-sys-color-surface-container-high); padding: 4px; border-radius: 20px; border: 1px solid var(--md-sys-color-outline-variant);">
+                            <div class="chip tertiary" style="height: 24px; font-size: 11px; padding: 0 10px; border-radius: 12px; border: none; flex: 0 0 auto;" data-tooltip="Active System Slot (A/B Update System)">Slot ${CURRENT_SLOT}</div>
+                            <button class="btn btn-icon admin-only" style="width: 24px; height: 24px; min-width: 24px;" data-tooltip="Switch to standby slot (Triggers full stack migration)" onclick="switchSlot()">
+                                <span class="material-symbols-rounded" style="font-size: 16px;">swap_horiz</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
                 </div>
                 <div class="header-actions">
-                    <div id="https-badge" class="chip vpn" style="gap:4px; display:none; height: 32px; padding: 0 12px; border-radius: 16px;" data-tooltip="Connection is secured with end-to-end encryption.">
+                    <div id="https-badge" class="chip vpn" style="gap:4px; display:none; height: 32px; padding: 0 12px; border-radius: 16px; flex: 0 0 auto;" data-tooltip="Connection is secured with end-to-end encryption.">
                         <span class="material-symbols-rounded" style="font-size:18px;">lock</span>
                         <span style="font-size: 12px; font-weight: 600;">Secure HTTPS</span>
                     </div>
@@ -202,7 +207,7 @@
                     </div>
                 </div>
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; gap: 16px; flex-wrap: wrap;">
-                    <div id="cert-status-badge" class="chip" style="width: fit-content;" data-tooltip="Overall health of the SSL certificate issuance pipeline">Not Installed</div>
+                    <div id="cert-status-badge" class="chip" style="width: fit-content; flex: 0 0 auto;" data-tooltip="Overall health of the SSL certificate issuance pipeline">Not Installed</div>
                     <button id="ssl-retry-btn" class="btn btn-icon btn-action" style="display:none;" data-tooltip="Force Let's Encrypt re-attempt" onclick="requestSslCheck()">
                         <span class="material-symbols-rounded">refresh</span>
                     </button>
@@ -241,6 +246,9 @@
                     <div class="code-label" data-tooltip="Secured DNS via TLS">DNS-over-TLS</div>
                     <div class="code-block sensitive">$LAN_IP:853</div>
                 </div>
+                <p class="body-small" style="margin-top: 16px; opacity: 0.7; font-style: italic;">
+                    Note: Domain-based HTTPS endpoints (DOH/DOT) will only work if your device is using this project as its DNS server (at $LAN_IP).
+                </p>
             </div>
             <div class="card">
                 <h3>Endpoint Provisioning</h3>

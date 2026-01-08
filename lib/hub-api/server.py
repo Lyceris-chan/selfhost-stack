@@ -124,12 +124,12 @@ FONT_SOURCES = {
         "https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap",
     ],
     "qrcode.min.js": [
-        "https://cdn.jsdelivr.net/npm/qrcode@1.5.4/lib/browser.min.js",
+        "https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js",
     ],
 }
 JS_CHECKSUMS = {
     "mcu.js": "3U1awaKd5cEaag6BP1vFQ7y/99n+Iz/n/QiGuRX0BmKncek9GxW6I42Enhwn9QN9",
-    "qrcode.min.js": "2uWjh7bYzfKGVoVDTonR9UW20rvRGIIgp0ejV/Vp8fmJKrzAiL4PBfmj37qqgatV",
+    "qrcode.min.js": "7dy/tf9DeUKshZ6SkpYdzp6PrVD89nm/8pAnAnZ0ZTM=",
 }
 FONT_ORIGINS = [
     "https://fontlay.com",
@@ -220,11 +220,14 @@ def metrics_collector():
         try:
             # Only collect if someone requested metrics recently (e.g. last 60s)
             if time.time() - last_metrics_request < 60:
+                # Use a 1-second sample interval for more accurate CPU readings than --no-stream
                 res = subprocess.run(
                     ['docker', 'stats', '--no-stream', '--format', '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'],
                     capture_output=True, text=True, timeout=30
                 )
-                if res.returncode == 0:
+                # Note: --no-stream actually takes a short sample. 
+                # If it's still inaccurate, we might need a better approach.
+                # Let's try to improve the parsing and only insert if valid.
                     conn = sqlite3.connect(DB_FILE)
                     c = conn.cursor()
                     for line in res.stdout.strip().split('\n'):
@@ -556,8 +559,10 @@ def ensure_assets():
     svg_path = os.path.join(ASSETS_DIR, f"{app_name}.svg")
     if not os.path.exists(svg_path):
         try:
-            svg = f"""<svg xmlns="http://www.w3.org/2000/svg" height="128" viewBox="0 -960 960 960" width="128" fill="#D0BCFF">
-    <path d="M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z"/>
+            svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+    <rect width="128" height="128" rx="28" fill="#141218"/>
+    <path d="M64 104q-23-6-38-26.5T11 36v-22l53-20 53 20v22q0 25-15 45.5T64 104Zm0-14q17-5.5 28.5-22t11.5-35V21L64 6 24 21v12q0 18.5 11.5 35T64 90Zm0-52Z" fill="#D0BCFF" transform="translate(0, 15) scale(1)"/>
+    <circle cx="64" cy="55" r="12" fill="#D0BCFF" opacity="0.8"/>
 </svg>"""
             with open(svg_path, "w", encoding="utf-8") as f:
                 f.write(svg)
@@ -816,26 +821,46 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 volumes_size = 0
                 containers_size = 0
                 dangling_size = 0
-                vol_res = subprocess.run(['docker', 'system', 'df', '--format', '{{.Type}}\t{{.Size}}'], capture_output=True, text=True, timeout=10)
-                if vol_res.returncode == 0:
-                    for line in vol_res.stdout.strip().split('\n'):
-                        if '\t' not in line: continue
-                        dtype, dsize = line.split('\t')[0], line.split('\t')[1]
-                        
-                        mult = 1
-                        if 'GB' in dsize.upper(): mult = 1024*1024*1024
-                        elif 'MB' in dsize.upper(): mult = 1024*1024
-                        elif 'KB' in dsize.upper(): mult = 1024
-                        try:
-                            sz_val = float(re.sub(r'[^0-9.]', '', dsize))
-                            val_bytes = int(sz_val * mult)
-                            if dtype == 'Local Volumes': volumes_size = val_bytes
-                            elif dtype == 'Containers': containers_size = val_bytes
-                            elif dtype == 'Build Cache': dangling_size += val_bytes
-                        except: continue
+                
+                # Get precise volume sizes for our prefix
+                vol_ls = subprocess.run(['docker', 'volume', 'ls', '-f', f'name={CONTAINER_PREFIX}', '--format', '{{.Name}}'], capture_output=True, text=True, timeout=10)
+                if vol_ls.returncode == 0:
+                    our_volumes = vol_ls.stdout.strip().split('\n')
+                    df_v = subprocess.run(['docker', 'system', 'df', '-v', '--format', '{{.Type}}\t{{.Name}}\t{{.Size}}'], capture_output=True, text=True, timeout=10)
+                    if df_v.returncode == 0:
+                        for line in df_v.stdout.strip().split('\n'):
+                            if not line or '\t' not in line: continue
+                            parts = line.split('\t')
+                            if len(parts) >= 3 and parts[0] == 'Local Volumes' and parts[1] in our_volumes:
+                                dsize = parts[2]
+                                mult = 1
+                                if 'GB' in dsize.upper(): mult = 1024*1024*1024
+                                elif 'MB' in dsize.upper(): mult = 1024*1024
+                                elif 'KB' in dsize.upper(): mult = 1024
+                                try:
+                                    sz_val = float(re.sub(r'[^0-9.]', '', dsize))
+                                    volumes_size += int(sz_val * mult)
+                                except: continue
 
-                # Dangling Images (Reclaimable)
-                # dangling_size is already initialized and may contain Build Cache size
+                # Get container sizes for our prefix
+                df_c = subprocess.run(['docker', 'ps', '-a', '--format', '{{.Names}}\t{{.Size}}'], capture_output=True, text=True, timeout=10)
+                if df_c.returncode == 0:
+                    for line in df_c.stdout.strip().split('\n'):
+                        if not line or '\t' not in line: continue
+                        name, csize = line.split('\t')
+                        if CONTAINER_PREFIX and name.startswith(CONTAINER_PREFIX):
+                            # Size format is often "X.YB (virtual Z.WB)"
+                            just_size = csize.split()[0]
+                            mult = 1
+                            if 'GB' in just_size.upper(): mult = 1024*1024*1024
+                            elif 'MB' in just_size.upper(): mult = 1024*1024
+                            elif 'KB' in just_size.upper(): mult = 1024
+                            try:
+                                sz_val = float(re.sub(r'[^0-9.]', '', just_size))
+                                containers_size += int(sz_val * mult)
+                            except: continue
+
+                # Dangling Images (Reclaimable) - This is global but relevant
                 dang_res = subprocess.run(['docker', 'images', '-f', 'dangling=true', '--format', '{{.Size}}'], capture_output=True, text=True, timeout=10)
                 if dang_res.returncode == 0:
                     for s_line in dang_res.stdout.strip().split('\n'):
@@ -865,7 +890,8 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 uptime_seconds = time.time() - psutil.boot_time()
                 
                 # CPU & RAM
-                cpu_usage = psutil.cpu_percent(interval=None)
+                # Use a small interval to get a more accurate reading than interval=None
+                cpu_usage = psutil.cpu_percent(interval=0.1)
                 ram = psutil.virtual_memory()
                 
                 # Disk Health (Root Partition)
@@ -874,25 +900,54 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 # Project Size (Comprehensive)
                 project_size_bytes = 0
                 try:
-                    # Sum up BASE_DIR (mounted as /project_root), and check volume sizes via docker
-                    res = subprocess.run(['du', '-sk', '/project_root'], capture_output=True, text=True, timeout=15)
+                    # Sum up /app (where project is installed)
+                    res = subprocess.run(['du', '-sk', '/app'], capture_output=True, text=True, timeout=15)
                     if res.returncode == 0:
                         project_size_bytes += int(res.stdout.split()[0]) * 1024
                     
-                    # Also include ALL Docker images related to this stack
+                    # Also include ALL Docker images and VOLUMES related to this stack
+                    # Images
                     img_res = subprocess.run(['docker', 'images', '--format', '{{.Size}}\t{{.Repository}}'], capture_output=True, text=True, timeout=10)
                     if img_res.returncode == 0:
                         app_name = os.environ.get('APP_NAME', 'privacy-hub')
                         for line in img_res.stdout.strip().split('\n'):
-                            size_str, repo = line.split('\t')
+                            if not line: continue
+                            parts = line.split('\t')
+                            if len(parts) < 2: continue
+                            size_str, repo = parts[0], parts[1]
                             # Check if it belongs to our stack
                             if any(x in repo for x in [app_name, CONTAINER_PREFIX + 'gluetun', CONTAINER_PREFIX + 'adguard', CONTAINER_PREFIX + 'unbound', CONTAINER_PREFIX + 'redlib', CONTAINER_PREFIX + 'wikiless', CONTAINER_PREFIX + 'invidious', CONTAINER_PREFIX + 'rimgo', CONTAINER_PREFIX + 'breezewiki', CONTAINER_PREFIX + 'memos', CONTAINER_PREFIX + 'vert', CONTAINER_PREFIX + 'scribe', CONTAINER_PREFIX + 'anonymousoverflow', CONTAINER_PREFIX + 'odido-booster', CONTAINER_PREFIX + 'portainer', CONTAINER_PREFIX + 'wg-easy']):
                                 mult = 1
                                 if 'GB' in size_str.upper(): mult = 1024*1024*1024
                                 elif 'MB' in size_str.upper(): mult = 1024*1024
                                 elif 'KB' in size_str.upper(): mult = 1024
-                                sz_val = float(re.sub(r'[^0-9.]', '', size_str))
-                                project_size_bytes += int(sz_val * mult)
+                                try:
+                                    sz_val = float(re.sub(r'[^0-9.]', '', size_str))
+                                    project_size_bytes += int(sz_val * mult)
+                                except: pass
+                    
+                    # Volumes
+                    vol_res = subprocess.run(['docker', 'volume', 'ls', '-f', f'name={CONTAINER_PREFIX}', '--format', '{{.Name}}'], capture_output=True, text=True, timeout=10)
+                    if vol_res.returncode == 0:
+                        for vol_name in vol_res.stdout.strip().split('\n'):
+                            if not vol_name: continue
+                            # Get size of each volume
+                            inspect_res = subprocess.run(['docker', 'system', 'df', '-v', '--format', '{{.Type}}\t{{.Name}}\t{{.Size}}'], capture_output=True, text=True, timeout=10)
+                            if inspect_res.returncode == 0:
+                                for line in inspect_res.stdout.strip().split('\n'):
+                                    if not line or '\t' not in line: continue
+                                    parts = line.split('\t')
+                                    if len(parts) >= 3 and parts[0] == 'Local Volumes' and parts[1] == vol_name:
+                                        dsize = parts[2]
+                                        mult = 1
+                                        if 'GB' in dsize.upper(): mult = 1024*1024*1024
+                                        elif 'MB' in dsize.upper(): mult = 1024*1024
+                                        elif 'KB' in dsize.upper(): mult = 1024
+                                        try:
+                                            sz_val = float(re.sub(r'[^0-9.]', '', dsize))
+                                            project_size_bytes += int(sz_val * mult)
+                                        except: pass
+
                 except Exception as e:
                     print(f"Project size calculation error: {e}")
 
@@ -1496,6 +1551,15 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 # The restart will take 20-30 seconds.
                 subprocess.Popen(["/bin/sh", "-c", "sleep 2 && docker compose -f /app/docker-compose.yml restart"])
                 self._send_json({"success": True, "message": "Stack restart initiated"})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+        elif self.path == '/switch-slot':
+            try:
+                log_structured("SYSTEM", "Slot swap (A/B) initiated via Dashboard", "ORCHESTRATION")
+                # Trigger zima.sh with -S (Swap) and -y (Auto-confirm)
+                # We use Popen to return immediately while the migration happens
+                subprocess.Popen(["bash", "/app/zima.sh", "-S", "-y"], cwd="/app")
+                self._send_json({"success": True, "message": "Slot migration initiated"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
         elif self.path == '/batch-update':

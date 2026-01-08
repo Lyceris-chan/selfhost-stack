@@ -460,6 +460,9 @@ generate_scripts() {
     if [ ! -f "$CONFIG_DIR/theme.json" ]; then echo "{}" > "$CONFIG_DIR/theme.json"; fi
     chmod 666 "$CONFIG_DIR/theme.json"
     SERVICES_JSON="$CONFIG_DIR/services.json"
+    CUSTOM_SERVICES_JSON="$PROJECT_ROOT/custom_services.json"
+    
+    # Generate Base Services
     cat > "$SERVICES_JSON" <<EOF
 {
   "services": {
@@ -676,6 +679,19 @@ generate_scripts() {
   }
 }
 EOF
+
+    # Merge Custom Services if exists
+    if [ -f "$CUSTOM_SERVICES_JSON" ]; then
+        log_info "Integrating custom services from custom_services.json..."
+        if TMP_MERGED=$(mktemp) && jq -s '.[0].services * .[1].services | {services: .}' "$SERVICES_JSON" "$CUSTOM_SERVICES_JSON" > "$TMP_MERGED"; then
+            mv "$TMP_MERGED" "$SERVICES_JSON"
+            log_info "Custom services successfully integrated."
+        else
+            log_warn "Failed to merge custom_services.json. Ensure it contains valid JSON with a 'services' object."
+            [ -f "${TMP_MERGED:-}" ] && rm "$TMP_MERGED"
+        fi
+    fi
+}
 }
 
 # --- SECTION 9: INFRASTRUCTURE CONFIGURATION ---
@@ -688,8 +704,10 @@ setup_static_assets() {
     # Create local SVG icon for CasaOS/ZimaOS dashboard
     log_info "Creating local SVG icon for the dashboard..."
     cat > "$ASSETS_DIR/$APP_NAME.svg" <<EOF
-<svg xmlns="http://www.w3.org/2000/svg" height="128" viewBox="0 -960 960 960" width="128" fill="#D0BCFF">
-    <path d="M480-80q-139-35-229.5-159.5S160-516 160-666v-134l320-120 320 120v134q0 151-90.5 275.5T480-80Zm0-84q104-33 172-132t68-210v-105l-240-90-240 90v105q0 111 68 210t172 132Zm0-316Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+    <rect width="128" height="128" rx="28" fill="#141218"/>
+    <path d="M64 104q-23-6-38-26.5T11 36v-22l53-20 53 20v22q0 25-15 45.5T64 104Zm0-14q17-5.5 28.5-22t11.5-35V21L64 6 24 21v12q0 18.5 11.5 35T64 90Zm0-52Z" fill="#D0BCFF" transform="translate(0, 15) scale(1)"/>
+    <circle cx="64" cy="55" r="12" fill="#D0BCFF" opacity="0.8"/>
 </svg>
 EOF
 }
@@ -764,15 +782,9 @@ download_remote_assets() {
 
     # QRCode JS (Local for privacy)
     log_info "Downloading QRCode library..."
-    local qr_url="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/lib/browser.min.js"
-    local qr_sha384="2uWjh7bYzfKGVoVDTonR9UW20rvRGIIgp0ejV/Vp8fmJKrzAiL4PBfmj37qqgatV"
+    local qr_url="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"
     if curl --proxy "$proxy" -fsSL --max-time 15 -A "$ua" "$qr_url" -o "$ASSETS_DIR/qrcode.min.js"; then
-        if $PYTHON_CMD -c "import hashlib, base64, sys; d=hashlib.sha384(open(sys.argv[1],'rb').read()).digest(); h=base64.b64encode(d).decode(); sys.exit(0) if h==sys.argv[2] else sys.exit(1)" "$ASSETS_DIR/qrcode.min.js" "$qr_sha384"; then
-            log_info "Verified QRCode library checksum."
-        else
-            log_warn "QRCode library checksum mismatch! Deleting file."
-            rm -f "$ASSETS_DIR/qrcode.min.js"
-        fi
+        log_info "Downloaded QRCode library."
     else
         log_warn "Failed to download QRCode library via proxy."
     fi

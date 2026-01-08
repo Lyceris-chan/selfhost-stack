@@ -271,6 +271,7 @@
             word-wrap: normal;
             direction: ltr;
             -webkit-font-smoothing: antialiased;
+            font-feature-settings: 'liga';
         }
 
         .container { max-width: 1600px; width: 100%; margin: 0 auto; position: relative; }
@@ -344,13 +345,13 @@
             background: var(--md-sys-color-tertiary-container);
             color: var(--md-sys-color-on-tertiary-container);
             padding: 4px 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 700;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             height: fit-content;
-            margin-bottom: 4px;
+            border: 1px solid var(--md-sys-color-outline-variant);
         }
 
         .label-large {

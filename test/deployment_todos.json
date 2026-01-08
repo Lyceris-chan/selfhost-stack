@@ -4,41 +4,41 @@
         "description": "Stage 1: Core Infrastructure & Networking",
         "command": "python3 test/test_runner.py --stage 1",
         "log_file": "test/stage_1.log",
-        "status": "completed"
+        "status": "pending"
     },
     {
         "id": 2,
         "description": "Stage 2: Standard Privacy Frontends",
         "command": "python3 test/test_runner.py --stage 2",
         "log_file": "test/stage_2.log",
-        "status": "completed"
+        "status": "pending"
     },
     {
         "id": 3,
         "description": "Stage 3: Invidious & Search Stack",
         "command": "python3 test/test_runner.py --stage 3",
         "log_file": "test/stage_3.log",
-        "status": "completed"
+        "status": "pending"
     },
     {
         "id": 4,
         "description": "Stage 4: Management & Utilities",
         "command": "python3 test/test_runner.py --stage 4",
         "log_file": "test/stage_4.log",
-        "status": "completed"
+        "status": "pending"
     },
     {
         "id": 5,
         "description": "Stage 5: Media & Downloads",
         "command": "python3 test/test_runner.py --stage 5",
         "log_file": "test/stage_5.log",
-        "status": "completed"
+        "status": "pending"
     },
     {
         "id": 6,
         "description": "Stage 6: Heavy Media (Immich)",
         "command": "python3 test/test_runner.py --stage 6",
         "log_file": "test/stage_6.log",
-        "status": "completed"
+        "status": "pending"
     }
 ]

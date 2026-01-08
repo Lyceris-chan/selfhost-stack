@@ -15,8 +15,7 @@ data/
 src/data/
 lib/hub-api/__pycache__/
 test_data_ab/
-details
-
-# Generated test artifacts
+# Accidental artifacts
+'"'
 test/assets/
 test/dashboard.html
