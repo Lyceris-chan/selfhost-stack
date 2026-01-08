@@ -100,19 +100,24 @@ css_origin() {
 download_fonts_from_css() {
   local css_file="$1"
   local origin="$2"
+  local base_name="${css_file%.css}"
 
   if [ ! -s "$css_file" ]; then
     log "Skipping $css_file (missing or empty)."
     return
   fi
 
-  grep -o "url([^)]*)" "$css_file" | sed 's/url(//;s/)//' | tr -d "'\"" | sort | uniq | while read -r url; do
+  # Find all url() references and extract JUST the content between parens
+  grep -o "url([^)]*)" "$css_file" | sed -E 's/url\(["'\'']?([^"'\'')]+)["'\'']?\)/\1/' | sort | uniq | while read -r url; do
     if [ -z "$url" ]; then
       continue
     fi
-    local filename
-    filename=$(basename "$url")
-    local clean_name="${filename%%\?*}"
+    
+    # Determine extension
+    local ext="ttf"
+    if [[ "$url" == *.woff2* ]]; then ext="woff2"; elif [[ "$url" == *.woff* ]]; then ext="woff"; fi
+    
+    local filename="${base_name}.${ext}"
     local fetch_url="$url"
 
     if [[ "$url" == //* ]]; then
@@ -123,16 +128,16 @@ download_fonts_from_css() {
       fetch_url="${origin}/${url}"
     fi
 
-    if [ ! -f "$clean_name" ]; then
-      if ! curl -fsSL -A "$UA" "$fetch_url" -o "$clean_name"; then
-        log "Failed to download asset: $clean_name"
+    if [ ! -f "$filename" ]; then
+      log "Downloading font $filename from $fetch_url"
+      if ! curl -fsSL -A "$UA" "$fetch_url" -o "$filename"; then
+        log "Failed to download asset: $filename"
         continue
       fi
     fi
 
-    local escaped_url
-    escaped_url=$(echo "$url" | sed 's/[\\/&|]/\\\\&/g')
-    sed -i "s|url(['\"]\\{0,1\\}${escaped_url}['\"]\\{0,1\\})|url(${clean_name})|g" "$css_file"
+    # Robust replacement
+    sed -i "s|$url|$filename|g" "$css_file"
   done || true
 }
 

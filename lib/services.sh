@@ -692,7 +692,6 @@ EOF
         fi
     fi
 }
-}
 
 # --- SECTION 9: INFRASTRUCTURE CONFIGURATION ---
 # Generate configuration files for core system services (DNS, SSL, Nginx).

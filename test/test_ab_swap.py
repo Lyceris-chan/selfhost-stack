@@ -32,7 +32,7 @@ def main():
     # 1. Setup
     print("=== Testing A/B Swap Logic ===")
     if os.path.exists(TEST_DATA_DIR):
-        subprocess.call(f"rm -rf {TEST_DATA_DIR}", shell=True)
+        subprocess.call(f"sudo rm -rf {TEST_DATA_DIR}", shell=True)
     os.makedirs(TEST_DATA_DIR, exist_ok=True)
 
     dummy_wg_path = os.path.join(TEST_SCRIPT_DIR, "dummy_wg.conf")

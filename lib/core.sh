@@ -132,7 +132,6 @@ usage() {
     echo "Options:"
     echo "  -p          Auto-Passwords (generates random secure credentials)"
     echo "  -y          Auto-Confirm (non-interactive mode)"
-    echo "  -P          Personal Mode (fast-track: combines -p, -y, and -j)"
     echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
     echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
     echo "  -S          Swap Slots (A/B update toggle)"
@@ -154,13 +153,12 @@ AUTO_CONFIRM=false
 ALLOW_PROTON_VPN=false
 SELECTED_SERVICES=""
 DASHBOARD_ONLY=false
-PERSONAL_MODE=false
 PARALLEL_DEPLOY=false
 SWAP_SLOTS=false
 GENERATE_ONLY=false
 ENV_FILE=""
 
-while getopts "cxpyas:DPjShE:G" opt; do
+while getopts "cxpyas:DjShE:G" opt; do
     case ${opt} in
         c) RESET_ENV=true; FORCE_CLEAN=true ;;
         x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
@@ -169,7 +167,6 @@ while getopts "cxpyas:DPjShE:G" opt; do
         a) ALLOW_PROTON_VPN=true ;;
         s) SELECTED_SERVICES="${OPTARG}" ;;
         D) DASHBOARD_ONLY=true ;;
-        P) PERSONAL_MODE=true; AUTO_PASSWORD=true; AUTO_CONFIRM=true; PARALLEL_DEPLOY=true ;;
         j) PARALLEL_DEPLOY=true ;;
         S) SWAP_SLOTS=true ;;
         E) ENV_FILE="${OPTARG}" ;;
@@ -245,6 +242,8 @@ if [ -z "${PROJECT_ROOT:-}" ]; then
     fi
 fi
 BASE_DIR="$PROJECT_ROOT/data/AppData/$APP_NAME"
+$SUDO mkdir -p "$BASE_DIR"
+BASE_DIR="$(cd "$BASE_DIR" && pwd)"
 
 # Paths
 SRC_DIR="$BASE_DIR/sources"
@@ -266,26 +265,30 @@ CERT_PROTECT=false
 # Memos storage
 MEMOS_HOST_DIR="$PROJECT_ROOT/data/AppData/memos"
 
-$SUDO mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
+$SUDO mkdir -p "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
 $SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
-BASE_DIR="$(cd "$BASE_DIR" && pwd)"
 WG_PROFILES_DIR="$BASE_DIR/wg-profiles"
 ACTIVE_WG_CONF="$BASE_DIR/active-wg.conf"
 ACTIVE_PROFILE_NAME_FILE="$BASE_DIR/.active_profile_name"
 $SUDO mkdir -p "$WG_PROFILES_DIR"
 
 # Slot Management (A/B)
-if [ ! -f "$ACTIVE_SLOT_FILE" ]; then
-    echo "a" | $SUDO tee "$ACTIVE_SLOT_FILE" >/dev/null
-fi
-CURRENT_SLOT=$(cat "$ACTIVE_SLOT_FILE" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-if [[ "$CURRENT_SLOT" != "a" && "$CURRENT_SLOT" != "b" ]]; then
-    CURRENT_SLOT="a"
-    echo "a" | $SUDO tee "$ACTIVE_SLOT_FILE" >/dev/null
-fi
+ensure_active_slot_file() {
+    $SUDO mkdir -p "$(dirname "$ACTIVE_SLOT_FILE")"
+    if [ ! -f "$ACTIVE_SLOT_FILE" ]; then
+        echo "a" | $SUDO tee "$ACTIVE_SLOT_FILE" >/dev/null
+    fi
+    CURRENT_SLOT=$(cat "$ACTIVE_SLOT_FILE" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+    if [[ "$CURRENT_SLOT" != "a" && "$CURRENT_SLOT" != "b" ]]; then
+        CURRENT_SLOT="a"
+        echo "a" | $SUDO tee "$ACTIVE_SLOT_FILE" >/dev/null
+    fi
+    CONTAINER_PREFIX="dhi-${CURRENT_SLOT}-"
+    export CURRENT_SLOT
+}
 
-CONTAINER_PREFIX="dhi-${CURRENT_SLOT}-"
-export CURRENT_SLOT
+# Initial call
+ensure_active_slot_file
 UPDATE_STRATEGY="stable"
 export UPDATE_STRATEGY
 
@@ -356,6 +359,11 @@ WG_CONTROL_SCRIPT="$BASE_DIR/wg-control.sh"
 WG_API_SCRIPT="$BASE_DIR/wg-api.py"
 CERT_MONITOR_SCRIPT="$BASE_DIR/cert-monitor.sh"
 MIGRATE_SCRIPT="$BASE_DIR/migrate.sh"
+
+# Ensure root-level data files are writable by the container user (UID 1000)
+$SUDO touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
+$SUDO chown 1000:1000 "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage" "$ACTIVE_PROFILE_NAME_FILE" "$ACTIVE_SLOT_FILE" 2>/dev/null || true
+$SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$ASSETS_DIR" 2>/dev/null || true
 
 # Port Definitions
 PORT_DASHBOARD_WEB=8081
@@ -776,7 +784,7 @@ setup_secrets() {
         IMMICH_DB_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
         INVIDIOUS_DB_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
 
-        cat > "$BASE_DIR/.secrets" <<EOF
+        cat > "$BASE_DIR/.secrets" <<'EOF'
 VPN_PASS_RAW="$VPN_PASS_RAW"
 AGH_PASS_RAW="$AGH_PASS_RAW"
 ADMIN_PASS_RAW="$ADMIN_PASS_RAW"
@@ -806,7 +814,7 @@ EOF
         source "$BASE_DIR/.secrets"
         # Ensure all secrets are loaded/regenerated if missing
         local updated_secrets=false
-        if [ -z "${SCRIBE_SECRET:-}" ]; then SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64); echo "SCRIBE_SECRET=$SCRIBE_SECRET" >> "$BASE_DIR/.secrets"; updated_secrets=true; fi
+        if [ -z "${SCRIBE_SECRET:-}" ]; then SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64); echo "SCRIBE_SECRET='$SCRIBE_SECRET'" >> "$BASE_DIR/.secrets"; updated_secrets=true; fi
         if [ -z "${ANONYMOUS_SECRET:-}" ]; then ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32); echo "ANONYMOUS_SECRET=$ANONYMOUS_SECRET" >> "$BASE_DIR/.secrets"; updated_secrets=true; fi
         if [ -z "${IV_HMAC:-}" ]; then IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16); echo "IV_HMAC=$IV_HMAC" >> "$BASE_DIR/.secrets"; updated_secrets=true; fi
         if [ -z "${IV_COMPANION:-}" ]; then IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16); echo "IV_COMPANION=$IV_COMPANION" >> "$BASE_DIR/.secrets"; updated_secrets=true; fi

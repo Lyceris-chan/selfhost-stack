@@ -228,6 +228,7 @@ def metrics_collector():
                 # Note: --no-stream actually takes a short sample. 
                 # If it's still inaccurate, we might need a better approach.
                 # Let's try to improve the parsing and only insert if valid.
+                if res.returncode == 0:
                     conn = sqlite3.connect(DB_FILE)
                     c = conn.cursor()
                     for line in res.stdout.strip().split('\n'):
@@ -444,7 +445,6 @@ def ensure_assets():
         css_text = ""
 
         if not os.path.exists(css_path) or os.path.getsize(css_path) == 0:
-            css_text = None
             for url in sources:
                 try:
                     css_text = download_text(url)
@@ -465,56 +465,61 @@ def ensure_assets():
                 log_fonts(f"Failed to read {css_name}: {e}", "WARN")
                 continue
 
-        if "url(" not in css_text:
-            continue
-
-        urls_in_css = re.findall(r"url\(([^)]+)\)", css_text)
-        if not urls_in_css:
+        # Use fixed filenames based on the CSS name (e.g., gs.css -> gs.woff2).
+        # Why: Prevents the assets folder from filling up with multiple versions of 
+        # the same font if upstream hashes change, and ensures predictable local paths.
+        base_name = css_name.split('.')[0]
+        
+        # Find all url() references within the CSS.
+        urls_found = re.findall(r"url\(['\"]?([^'\" \)]+)['\"]?\)", css_text)
+        if not urls_found:
             continue
 
         updated = False
-        for raw in urls_in_css:
-            cleaned = raw.strip().strip("\"'")
-            if not cleaned or cleaned.startswith("data:"):
+        for original_url in urls_found:
+            if original_url.startswith("data:"):
                 continue
 
-            filename = os.path.basename(cleaned.split("?")[0])
-            if not filename:
-                continue
-
+            # Determine the appropriate extension. 
+            # Modern browsers prefer woff2 for better compression.
+            ext = "ttf"
+            if ".woff2" in original_url.lower(): ext = "woff2"
+            elif ".woff" in original_url.lower(): ext = "woff"
+            
+            filename = f"{base_name}.{ext}"
             local_path = os.path.join(ASSETS_DIR, filename)
+            
             if not os.path.exists(local_path):
-                candidates = []
-                if cleaned.startswith("//"):
-                    candidates = [f"https:{cleaned}"]
-                elif cleaned.startswith("http"):
-                    candidates = [cleaned]
-                else:
-                    for origin in FONT_ORIGINS:
-                        candidates.append(urllib.parse.urljoin(origin + "/", cleaned.lstrip("/")))
+                # Download font only if not already present locally.
+                fetch_url = original_url
+                if fetch_url.startswith("//"):
+                    fetch_url = "https:" + fetch_url
+                elif fetch_url.startswith("/"):
+                    fetch_url = urllib.parse.urljoin(FONT_ORIGINS[0], fetch_url)
+                elif not fetch_url.startswith("http"):
+                    fetch_url = urllib.parse.urljoin(FONT_ORIGINS[0], fetch_url)
 
-                last_err = None
-                for candidate in candidates:
-                    try:
-                        data = download_binary(candidate)
-                        with open(local_path, "wb") as f:
-                            f.write(data)
-                        log_fonts(f"Downloaded asset {filename} from {candidate}")
-                        last_err = None
-                        break
-                    except Exception as e:
-                        last_err = e
-
-                if last_err is not None and not os.path.exists(local_path):
-                    log_fonts(f"Failed to download asset {filename}: {last_err}", "WARN")
+                try:
+                    data = download_binary(fetch_url)
+                    with open(local_path, "wb") as f:
+                        f.write(data)
+                    log_fonts(f"Downloaded font {filename} from {fetch_url}")
+                except Exception as e:
+                    log_fonts(f"Failed to download font {filename}: {e}", "WARN")
                     continue
 
-            if raw != filename:
-                css_text = css_text.replace(raw, filename)
+            # Perform a robust replacement of the remote/complex URL with the local filename.
+            # Why: Ensures the dashboard is fully functional offline and eliminates 404s
+            # caused by root-relative paths in upstream CSS.
+            new_text = css_text.replace(original_url, filename)
+            if new_text != css_text:
+                css_text = new_text
                 updated = True
 
         if updated:
             try:
+                # Remove any leftover root-relative paths or strange characters that might cause 404s
+                # ensure all url() are just the filenames
                 with open(css_path, "w", encoding="utf-8") as f:
                     f.write(css_text)
             except Exception as e:

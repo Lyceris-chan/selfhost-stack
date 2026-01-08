@@ -296,12 +296,12 @@ def main():
 
     finally:
         # 6. Cleanup Post-Flight
-        print("Post-test cleanup and storage optimization...")
-        if os.path.exists(os.path.join(compose_dir, "docker-compose.yml")): 
-            run_command("docker compose down -v", cwd=compose_dir)
+        print("Skipping post-test cleanup for debugging...")
+        # if os.path.exists(os.path.join(compose_dir, "docker-compose.yml")): 
+        #    run_command("docker compose down -v", cwd=compose_dir)
         
         # Aggressive cleanup to prevent disk exhaustion
-        run_command("docker system prune -f --volumes")
+        # run_command("docker system prune -f --volumes")
 
     if not all_pass:
         sys.exit(1)
