@@ -32,8 +32,10 @@ sync_sources() {
                 # Fallback: if shallow clone fails with branch, try full clone and checkout
                 if [ -n "$version" ] && [[ "$version" != "latest" ]]; then
                     log_warn "Shallow clone failed for $version. Trying full clone..."
-                    if git clone "$repo_url" "$target_dir" && (cd "$target_dir" && git checkout "$version"); then
-                        return 0
+                    if git clone "$repo_url" "$target_dir"; then
+                        if (cd "$target_dir" && git fetch --all --tags && git checkout "$version"); then
+                            return 0
+                        fi
                     fi
                 fi
             else 
@@ -233,7 +235,7 @@ patch_bare() {
     # sed -i -E 's/^FROM[[:space:]]+oven\/bun:[0-9.]+-alpine[^[:space:]]*/FROM dhi.io\/bun:1-alpine3.22-dev/gI' "$file"
 
     # [4] Package Manager (apt -> apk) - ONLY if we are sure we are on Alpine now
-    if grep -qi "dhi.io\/alpine-base" "$file" || grep -qiE "^FROM[[:space:]]+alpine:" "$file"; then
+    if grep -qi "dhi.io/alpine-base" "$file" || grep -qiE "^FROM[[:space:]]+alpine:" "$file"; then
         # Remove apt commands if any (some multi-stage might have both)
         if grep -qi "apt-get" "$file"; then
             log "    [WARN] Detected apt-get in potentially Alpine-based image. Attempting conversion..."
@@ -312,7 +314,7 @@ if [ "$SERVICE" = "companion" ] || [ "$SERVICE" = "all" ]; then
         sed -i 's/useradd --uid 1993 --user-group deno/addgroup -g 1993 -S deno \&\& adduser -u 1993 -S -G deno deno/' "$SRC_ROOT/invidious-companion/$D_FILE"
 
         # Fix dpkg dependency in Alpine
-        sed -i "s/dpkg --print-architecture/uname -m | sed -e 's\/x86_64\/amd64\/' -e 's\/aarch64\/arm64\/'/" "$SRC_ROOT/invidious-companion/$D_FILE"
+        sed -i "s@dpkg --print-architecture@uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/'@" "$SRC_ROOT/invidious-companion/$D_FILE"
 
         # Use denoland/deno:alpine as the base for builder stages
         sed -i 's|^FROM debian:.* AS dependabot-debian|FROM denoland/deno:alpine AS dependabot-debian|g' "$SRC_ROOT/invidious-companion/$D_FILE"
@@ -461,11 +463,52 @@ generate_scripts() {
     cat > "$SERVICES_JSON" <<EOF
 {
   "services": {
+    "anonymousoverflow": {
+      "name": "AnonOverflow",
+      "description": "A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.",
+      "category": "apps",
+      "order": 10,
+      "url": "http://$LAN_IP:$PORT_ANONYMOUS",
+      "source_url": "https://github.com/httpjamesm/AnonymousOverflow",
+      "patch_url": "https://github.com/httpjamesm/AnonymousOverflow/blob/main/Dockerfile"
+    },
+    "breezewiki": {
+      "name": "BreezeWiki",
+      "description": "A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.",
+      "category": "apps",
+      "order": 20,
+      "url": "http://$LAN_IP:$PORT_BREEZEWIKI/",
+      "source_url": "https://github.com/breezewiki/breezewiki",
+      "patch_url": "https://github.com/PussTheCat-org/docker-breezewiki-quay/blob/master/docker/Dockerfile"
+    },
+    "cobalt": {
+      "name": "Cobalt",
+      "description": "Powerful media downloader. Extract content from dozens of platforms with a clean, efficient interface.",
+      "category": "apps",
+      "order": 30,
+      "url": "http://$LAN_IP:$PORT_COBALT",
+      "source_url": "https://github.com/imputnet/cobalt",
+      "patch_url": "https://github.com/imputnet/cobalt/blob/master/Dockerfile",
+      "chips": [
+        {"label": "Local Only", "icon": "lan", "variant": "tertiary"},
+        {"label": "Upstream Image", "icon": "package", "variant": "secondary"}
+      ]
+    },
+    "immich": {
+      "name": "Immich",
+      "description": "High-performance self-hosted photo and video management solution. Feature-rich alternative to mainstream cloud photo services.",
+      "category": "apps",
+      "order": 40,
+      "url": "http://$LAN_IP:$PORT_IMMICH",
+      "source_url": "https://github.com/immich-app/immich",
+      "patch_url": "https://github.com/immich-app/immich/blob/main/Dockerfile",
+      "chips": [{"label": "Upstream Image", "icon": "package", "variant": "secondary"}]
+    },
     "invidious": {
       "name": "Invidious",
       "description": "A privacy-respecting YouTube frontend. Eliminates advertisements and tracking while providing a lightweight interface without proprietary JavaScript.",
       "category": "apps",
-      "order": 10,
+      "order": 50,
       "url": "http://$LAN_IP:$PORT_INVIDIOUS",
       "source_url": "https://github.com/iv-org/invidious",
       "patch_url": "https://github.com/iv-org/invidious/blob/master/docker/Dockerfile",
@@ -474,65 +517,21 @@ generate_scripts() {
         {"type": "migrate", "label": "Clear Logs", "icon": "delete_sweep", "mode": "clear-logs", "confirm": false}
       ]
     },
-    "redlib": {
-      "name": "Redlib",
-      "description": "A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.",
-      "category": "apps",
-      "order": 20,
-      "url": "http://$LAN_IP:$PORT_REDLIB",
-      "source_url": "https://github.com/redlib-org/redlib",
-      "patch_url": "https://github.com/redlib-org/redlib/blob/main/Dockerfile.alpine"
-    },
-    "wikiless": {
-      "name": "Wikiless",
-      "description": "A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.",
-      "category": "apps",
-      "order": 30,
-      "url": "http://$LAN_IP:$PORT_WIKILESS",
-      "source_url": "https://github.com/Metastem/Wikiless",
-      "patch_url": "https://github.com/Metastem/Wikiless/blob/main/Dockerfile"
-    },
-    "rimgo": {
-      "name": "Rimgo",
-      "description": "An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.",
-      "category": "apps",
-      "order": 40,
-      "url": "http://$LAN_IP:$PORT_RIMGO",
-      "source_url": "https://codeberg.org/rimgo/rimgo",
-      "patch_url": "https://codeberg.org/rimgo/rimgo/src/branch/main/Dockerfile"
-    },
-    "breezewiki": {
-      "name": "BreezeWiki",
-      "description": "A clean interface for Fandom. Neutralizes aggressive advertising networks and tracking scripts that compromise standard browsing security.",
-      "category": "apps",
-      "order": 50,
-      "url": "http://$LAN_IP:$PORT_BREEZEWIKI/",
-      "source_url": "https://github.com/breezewiki/breezewiki",
-      "patch_url": "https://github.com/PussTheCat-org/docker-breezewiki-quay/blob/master/docker/Dockerfile"
-    },
-    "anonymousoverflow": {
-      "name": "AnonOverflow",
-      "description": "A private StackOverflow interface. Facilitates information retrieval for developers without facilitating cross-site corporate surveillance.",
+    "companion": {
+      "name": "Invidious Companion",
+      "description": "A helper service for Invidious that facilitates enhanced video retrieval and bypasses certain platform-specific limitations.",
       "category": "apps",
       "order": 60,
-      "url": "http://$LAN_IP:$PORT_ANONYMOUS",
-      "source_url": "https://github.com/httpjamesm/AnonymousOverflow",
-      "patch_url": "https://github.com/httpjamesm/AnonymousOverflow/blob/main/Dockerfile"
-    },
-    "scribe": {
-      "name": "Scribe",
-      "description": "An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.",
-      "category": "apps",
-      "order": 70,
-      "url": "http://$LAN_IP:$PORT_SCRIBE",
-      "source_url": "https://git.sr.ht/~edwardloveall/scribe",
-      "patch_url": "https://git.sr.ht/~edwardloveall/scribe"
+      "url": "http://$LAN_IP:$PORT_COMPANION",
+      "source_url": "https://github.com/iv-org/invidious-companion",
+      "patch_url": "https://github.com/iv-org/invidious-companion/blob/master/Dockerfile",
+      "allowed_strategies": ["stable"]
     },
     "memos": {
       "name": "Memos",
       "description": "A private notes and knowledge base. Capture ideas, snippets, and personal documentation without third-party tracking.",
       "category": "apps",
-      "order": 80,
+      "order": 70,
       "url": "http://$LAN_IP:$PORT_MEMOS",
       "source_url": "https://github.com/usememos/memos",
       "patch_url": "https://github.com/usememos/memos/blob/main/scripts/Dockerfile",
@@ -540,11 +539,48 @@ generate_scripts() {
         {"type": "vacuum", "label": "Optimize DB", "icon": "compress"}
       ]
     },
+    "redlib": {
+      "name": "Redlib",
+      "description": "A lightweight Reddit frontend that prioritizes privacy. Strips tracking pixels and unnecessary scripts to ensure a clean, performant browsing experience.",
+      "category": "apps",
+      "order": 80,
+      "url": "http://$LAN_IP:$PORT_REDLIB",
+      "source_url": "https://github.com/redlib-org/redlib",
+      "patch_url": "https://github.com/redlib-org/redlib/blob/main/Dockerfile.alpine"
+    },
+    "rimgo": {
+      "name": "Rimgo",
+      "description": "An anonymous Imgur viewer that removes telemetry and tracking scripts. Access visual content without facilitating behavioral profiling.",
+      "category": "apps",
+      "order": 90,
+      "url": "http://$LAN_IP:$PORT_RIMGO",
+      "source_url": "https://codeberg.org/rimgo/rimgo",
+      "patch_url": "https://codeberg.org/rimgo/rimgo/src/branch/main/Dockerfile"
+    },
+    "scribe": {
+      "name": "Scribe",
+      "description": "An alternative Medium frontend. Bypasses paywalls and eliminates tracking scripts to provide direct access to long-form content.",
+      "category": "apps",
+      "order": 100,
+      "url": "http://$LAN_IP:$PORT_SCRIBE",
+      "source_url": "https://git.sr.ht/~edwardloveall/scribe",
+      "patch_url": "https://git.sr.ht/~edwardloveall/scribe"
+    },
+    "searxng": {
+      "name": "SearXNG",
+      "description": "A privacy-respecting, hackable metasearch engine that aggregates results from more than 70 search services.",
+      "category": "apps",
+      "order": 110,
+      "url": "http://$LAN_IP:$PORT_SEARXNG",
+      "source_url": "https://github.com/searxng/searxng",
+      "patch_url": "https://github.com/searxng/searxng/blob/master/Dockerfile",
+      "chips": [{"label": "Upstream Image", "icon": "package", "variant": "secondary"}]
+    },
     "vert": {
       "name": "VERT",
       "description": "Local file conversion service. Maintains data autonomy by processing sensitive documents on your own hardware using GPU acceleration.",
       "category": "apps",
-      "order": 90,
+      "order": 120,
       "url": "http://$LAN_IP:$PORT_VERT",
       "source_url": "https://github.com/VERT-sh/VERT",
       "patch_url": "https://github.com/VERT-sh/VERT/blob/main/Dockerfile",
@@ -559,15 +595,14 @@ generate_scripts() {
         }
       ]
     },
-    "companion": {
-      "name": "Invidious Companion",
-      "description": "A helper service for Invidious that facilitates enhanced video retrieval and bypasses certain platform-specific limitations.",
+    "wikiless": {
+      "name": "Wikiless",
+      "description": "A privacy-focused Wikipedia frontend. Prevents cookie-based tracking and cross-site telemetry while providing an optimized reading environment.",
       "category": "apps",
-      "order": 100,
-      "url": "http://$LAN_IP:$PORT_COMPANION",
-      "source_url": "https://github.com/iv-org/invidious-companion",
-      "patch_url": "https://github.com/iv-org/invidious-companion/blob/master/Dockerfile",
-      "allowed_strategies": ["stable"]
+      "order": 130,
+      "url": "http://$LAN_IP:$PORT_WIKILESS",
+      "source_url": "https://github.com/Metastem/Wikiless",
+      "patch_url": "https://github.com/Metastem/Wikiless/blob/main/Dockerfile"
     },
     "adguard": {
       "name": "AdGuard Home",
@@ -582,42 +617,32 @@ generate_scripts() {
       ],
       "chips": [{"label": "Local Access", "icon": "lan", "variant": "tertiary"}, "Encrypted DNS"]
     },
-    "unbound": {
-      "name": "Unbound",
-      "description": "A validating, recursive, caching DNS resolver. Ensures that your DNS queries are resolved independently and securely.",
+    "hub-api": {
+      "name": "Hub API",
+      "description": "The central orchestration and management API for the Privacy Hub. Handles service lifecycles, metrics, and security policies.",
       "category": "system",
-      "order": 15,
-      "url": "#",
-      "source_url": "https://github.com/NLnetLabs/unbound",
-      "patch_url": "https://github.com/klutchell/unbound-docker/blob/main/Dockerfile"
+      "order": 20,
+      "url": "http://$LAN_IP:$PORT_DASHBOARD_WEB/api/status",
+      "source_url": "https://github.com/Lyceris-chan/selfhost-stack"
     },
     "portainer": {
       "name": "Portainer",
       "description": "A comprehensive management interface for the Docker environment. Facilitates granular control over container orchestration and infrastructure lifecycle management.",
       "category": "system",
-      "order": 20,
+      "order": 30,
       "url": "http://$LAN_IP:$PORT_PORTAINER",
       "source_url": "https://github.com/portainer/portainer",
       "patch_url": "https://github.com/portainer/portainer/blob/develop/build/linux/alpine.Dockerfile",
       "chips": [{"label": "Local Access", "icon": "lan", "variant": "tertiary"}]
     },
-    "wg-easy": {
-      "name": "WireGuard",
-      "description": "The primary gateway for secure remote access. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.",
-      "category": "system",
-      "order": 30,
-      "url": "http://$LAN_IP:$PORT_WG_WEB",
-      "source_url": "https://github.com/wg-easy/wg-easy",
-      "patch_url": "https://github.com/wg-easy/wg-easy/blob/master/Dockerfile",
-      "chips": [{"label": "Local Access", "icon": "lan", "variant": "tertiary"}]
-    },
-    "hub-api": {
-      "name": "Hub API",
-      "description": "The central orchestration and management API for the Privacy Hub. Handles service lifecycles, metrics, and security policies.",
+    "unbound": {
+      "name": "Unbound",
+      "description": "A validating, recursive, caching DNS resolver. Ensures that your DNS queries are resolved independently and securely.",
       "category": "system",
       "order": 40,
-      "url": "http://$LAN_IP:$PORT_DASHBOARD_WEB/api/status",
-      "source_url": "https://github.com/Lyceris-chan/selfhost-stack"
+      "url": "#",
+      "source_url": "https://github.com/NLnetLabs/unbound",
+      "patch_url": "https://github.com/klutchell/unbound-docker/blob/main/Dockerfile"
     },
     "vertd": {
       "name": "VERTd",
@@ -629,6 +654,16 @@ generate_scripts() {
       "patch_url": "https://github.com/VERT-sh/vertd/blob/main/Dockerfile",
       "allowed_strategies": ["nightly"]
     },
+    "wg-easy": {
+      "name": "WireGuard",
+      "description": "The primary gateway for secure remote access. Provides a cryptographically sound tunnel to your home network, maintaining your privacy boundary on external networks.",
+      "category": "system",
+      "order": 60,
+      "url": "http://$LAN_IP:$PORT_WG_WEB",
+      "source_url": "https://github.com/wg-easy/wg-easy",
+      "patch_url": "https://github.com/wg-easy/wg-easy/blob/master/Dockerfile",
+      "chips": [{"label": "Local Access", "icon": "lan", "variant": "tertiary"}]
+    },
     "odido-booster": {
       "name": "Odido Booster",
       "description": "Automated data management for Odido mobile connections. Ensures continuous connectivity by managing data bundles and usage thresholds.",
@@ -637,39 +672,6 @@ generate_scripts() {
       "url": "http://$LAN_IP:8085",
       "source_url": "https://github.com/Lyceris-chan/odido-bundle-booster",
       "patch_url": "https://github.com/Lyceris-chan/odido-bundle-booster/blob/main/Dockerfile"
-    },
-    "cobalt": {
-      "name": "Cobalt",
-      "description": "Powerful media downloader. Extract content from dozens of platforms with a clean, efficient interface.",
-      "category": "apps",
-      "order": 110,
-      "url": "http://$LAN_IP:$PORT_COBALT",
-      "source_url": "https://github.com/imputnet/cobalt",
-      "patch_url": "https://github.com/imputnet/cobalt/blob/master/Dockerfile",
-      "chips": [
-        {"label": "Local Only", "icon": "lan", "variant": "tertiary"},
-        {"label": "Upstream Image", "icon": "package", "variant": "secondary"}
-      ]
-    },
-    "searxng": {
-      "name": "SearXNG",
-      "description": "A privacy-respecting, hackable metasearch engine that aggregates results from more than 70 search services.",
-      "category": "apps",
-      "order": 120,
-      "url": "http://$LAN_IP:$PORT_SEARXNG",
-      "source_url": "https://github.com/searxng/searxng",
-      "patch_url": "https://github.com/searxng/searxng/blob/master/Dockerfile",
-      "chips": [{"label": "Upstream Image", "icon": "package", "variant": "secondary"}]
-    },
-    "immich": {
-      "name": "Immich",
-      "description": "High-performance self-hosted photo and video management solution. Feature-rich alternative to mainstream cloud photo services.",
-      "category": "apps",
-      "order": 130,
-      "url": "http://$LAN_IP:$PORT_IMMICH",
-      "source_url": "https://github.com/immich-app/immich",
-      "patch_url": "https://github.com/immich-app/immich/blob/main/Dockerfile",
-      "chips": [{"label": "Upstream Image", "icon": "package", "variant": "secondary"}]
     }
   }
 }
@@ -750,7 +752,7 @@ download_remote_assets() {
     local mcu_url="https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/+esm"
     local mcu_sha384="3U1awaKd5cEaag6BP1vFQ7y/99n+Iz/n/QiGuRX0BmKncek9GxW6I42Enhwn9QN9"
     if curl --proxy "$proxy" -fsSL --max-time 15 -A "$ua" "$mcu_url" -o "$ASSETS_DIR/mcu.js"; then
-        if echo "$mcu_sha384  $ASSETS_DIR/mcu.js" | openssl dgst -sha384 -binary | openssl base64 -A | grep -q "$mcu_sha384"; then
+        if $PYTHON_CMD -c "import hashlib, base64, sys; d=hashlib.sha384(open(sys.argv[1],'rb').read()).digest(); h=base64.b64encode(d).decode(); sys.exit(0) if h==sys.argv[2] else sys.exit(1)" "$ASSETS_DIR/mcu.js" "$mcu_sha384"; then
             log_info "Verified Material Color Utilities checksum."
         else
             log_warn "Material Color Utilities checksum mismatch! Deleting file."
@@ -765,7 +767,7 @@ download_remote_assets() {
     local qr_url="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/lib/browser.min.js"
     local qr_sha384="2uWjh7bYzfKGVoVDTonR9UW20rvRGIIgp0ejV/Vp8fmJKrzAiL4PBfmj37qqgatV"
     if curl --proxy "$proxy" -fsSL --max-time 15 -A "$ua" "$qr_url" -o "$ASSETS_DIR/qrcode.min.js"; then
-        if echo "$qr_sha384  $ASSETS_DIR/qrcode.min.js" | openssl dgst -sha384 -binary | openssl base64 -A | grep -q "$qr_sha384"; then
+        if $PYTHON_CMD -c "import hashlib, base64, sys; d=hashlib.sha384(open(sys.argv[1],'rb').read()).digest(); h=base64.b64encode(d).decode(); sys.exit(0) if h==sys.argv[2] else sys.exit(1)" "$ASSETS_DIR/qrcode.min.js" "$qr_sha384"; then
             log_info "Verified QRCode library checksum."
         else
             log_warn "QRCode library checksum mismatch! Deleting file."
@@ -1051,7 +1053,6 @@ dns:
   protection_enabled: true
   filtering_enabled: true
   blocking_mode: default
-  safesearch_enabled: true
 querylog:
   enabled: true
   file_enabled: true
@@ -1150,7 +1151,7 @@ map \$http_host \$backend {
     wireguard.$DESEC_DOMAIN  http://$LAN_IP:51821;
     odido.$DESEC_DOMAIN      http://${CONTAINER_PREFIX}odido-booster:8080;
     cobalt.$DESEC_DOMAIN     http://${CONTAINER_PREFIX}cobalt:9000;
-    searxng.$DESEC_DOMAIN    http://${CONTAINER_PREFIX}gluetun:8080;
+    searxng.$DESEC_DOMAIN    http://${CONTAINER_PREFIX}gluetun:8082;
     immich.$DESEC_DOMAIN     http://${CONTAINER_PREFIX}gluetun:2283;
     
     # Handle the 8443 port in the host header
@@ -1169,7 +1170,7 @@ map \$http_host \$backend {
     "wireguard.$DESEC_DOMAIN:8443"  http://$LAN_IP:51821;
     "odido.$DESEC_DOMAIN:8443"      http://${CONTAINER_PREFIX}odido-booster:8080;
     "cobalt.$DESEC_DOMAIN:8443"     http://${CONTAINER_PREFIX}cobalt:9000;
-    "searxng.$DESEC_DOMAIN:8443"    http://${CONTAINER_PREFIX}gluetun:8080;
+    "searxng.$DESEC_DOMAIN:8443"    http://${CONTAINER_PREFIX}gluetun:8082;
     "immich.$DESEC_DOMAIN:8443"     http://${CONTAINER_PREFIX}gluetun:2283;
 }
 
@@ -1258,6 +1259,7 @@ search:
 redis:
   url: redis://${CONTAINER_PREFIX}searxng-redis:6379/0
 EOF
+    $SUDO chmod -R 777 "$CONFIG_DIR/searxng"
 
     # Immich Configuration
     $SUDO mkdir -p "$CONFIG_DIR/immich"
@@ -1681,8 +1683,8 @@ EOF
       - "dev.casaos.app.ui.protocol=http"
       - "dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB"
       - "dev.casaos.app.ui.hostname=$LAN_IP"
-      - "dev.casaos.app.ui.icon=/assets/$APP_NAME.svg"
-      - "dev.casaos.app.icon=/assets/$APP_NAME.svg"
+      - "dev.casaos.app.ui.icon=http://$LAN_IP:$PORT_DASHBOARD_WEB/assets/$APP_NAME.svg"
+      - "dev.casaos.app.icon=http://$LAN_IP:$PORT_DASHBOARD_WEB/assets/$APP_NAME.svg"
     depends_on:
       hub-api: {condition: service_healthy}
     healthcheck:
@@ -1853,7 +1855,7 @@ EOF
     labels:
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
-    environment: {REDLIB_DEFAULT_WIDE: "on", REDLIB_DEFAULT_USE_HLS: "on", REDLIB_DEFAULT_SHOW_NSFW: "on"}
+    environment: {REDLIB_PORT: 8081, PORT: 8081, REDLIB_ADDRESS: "0.0.0.0", REDLIB_DEFAULT_WIDE: "on", REDLIB_DEFAULT_USE_HLS: "on", REDLIB_DEFAULT_SHOW_NSFW: "on"}
     restart: always
     user: nobody
     read_only: true
@@ -1861,7 +1863,7 @@ EOF
     cap_drop: [ALL]
     depends_on: {gluetun: {condition: service_healthy}}
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8080/robots.txt || [ $? -eq 8 ]"]
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8081/robots.txt || [ $? -eq 8 ]"]
       interval: 1m
       timeout: 5s
       retries: 3
@@ -1967,7 +1969,7 @@ EOF
         limits: {cpus: '1.0', memory: 512M}
 
   companion:
-    container_name: ${CONTAINER_PREFIX}invidious-companion
+    container_name: ${CONTAINER_PREFIX}companion
     pull_policy: missing
     build:
       context: $SRC_DIR/invidious-companion
@@ -1978,6 +1980,7 @@ EOF
     network_mode: "service:gluetun"
     environment:
       - SERVER_SECRET_KEY=$IV_COMPANION
+      - PORT=8282
     restart: always
     logging:
       options:
@@ -2026,6 +2029,13 @@ EOF
 
     if should_deploy "breezewiki"; then
         BREEZEWIKI_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/breezewiki" || echo "Dockerfile.alpine")
+        
+        if [ -n "$DESEC_DOMAIN" ]; then
+            BW_ORIGIN="https://breezewiki.$DESEC_DOMAIN"
+        else
+            BW_ORIGIN="http://$LAN_IP:$PORT_BREEZEWIKI"
+        fi
+
     cat >> "$COMPOSE_FILE" <<EOF
   breezewiki:
     pull_policy: missing
@@ -2039,6 +2049,7 @@ EOF
     network_mode: "service:gluetun"
     environment:
       - PORT=10416
+      - bw_canonical_origin=$BW_ORIGIN
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:10416/"]
       interval: 30s
@@ -2209,7 +2220,12 @@ EOF
       - $CONFIG_DIR/searxng:/etc/searxng:ro
     environment:
       - SEARXNG_SECRET=$SEARXNG_SECRET
-      - BASE_URL=http://$LAN_IP:$PORT_SEARXNG/
+      - SEARXNG_BASE_URL=http://$LAN_IP:$PORT_SEARXNG/
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8080 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     depends_on:
       searxng-redis: {condition: service_healthy}
     restart: unless-stopped

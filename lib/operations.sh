@@ -725,9 +725,16 @@ deploy_stack() {
     echo "=========================================================="
     echo "✅ DEPLOYMENT COMPLETE"
     echo "=========================================================="
-    echo "   • Dashboard:    http://$LAN_IP:$PORT_DASHBOARD_WEB"
-    if [ -n "$DESEC_DOMAIN" ]; then
-    echo "   • Secure DNS:   https://$DESEC_DOMAIN/dns-query"
+    if [ -n "${DESEC_DOMAIN:-}" ] && [ -f "${AGH_CONF_DIR:-}/ssl.crt" ]; then
+        echo "   • Dashboard:    https://${DESEC_DOMAIN}:8443"
+        echo "                   (Local IP: http://$LAN_IP:$PORT_DASHBOARD_WEB)"
+        echo "   • Secure DNS:   https://$DESEC_DOMAIN/dns-query"
+        echo "   • Note:         VERT requires HTTPS to function correctly."
+    else
+        echo "   • Dashboard:    http://$LAN_IP:$PORT_DASHBOARD_WEB"
+        if [ -n "${DESEC_DOMAIN:-}" ]; then
+            echo "   • Secure DNS:   https://$DESEC_DOMAIN/dns-query"
+        fi
     fi
     echo "   • Admin Pass:   $ADMIN_PASS_RAW"
     echo "   • Portainer:    http://$LAN_IP:$PORT_PORTAINER (User: portainer / Pass: $PORTAINER_PASS_RAW)"

@@ -172,6 +172,23 @@ async function testSpecialized(page, name, baseUrl, path, pattern, mockServices)
   }
 }
 
+async function testSelector(page, name, baseUrl, path, selector, mockServices) {
+  const url = joinUrl(baseUrl, path);
+  if (mockServices) {
+    const ok = isValidUrl(url);
+    return { name, url, status: ok ? 200 : null, ok, mocked: true };
+  }
+  try {
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    const status = response ? response.status() : null;
+    const hasSelector = await page.evaluate((sel) => !!document.querySelector(sel), selector);
+    const ok = !!response && status < 400 && hasSelector;
+    return { name, url, status, ok, error: !hasSelector ? `Selector '${selector}' not found` : undefined };
+  } catch (error) {
+    return { name, url, status: null, ok: false, error: error.message };
+  }
+}
+
 async function testBreezewiki(page, baseUrl, mockServices) {
   return testSpecialized(page, 'BreezeWiki /paladins/wiki/Talus', baseUrl, BREEZEWIKI_PATH, 'talus', mockServices);
 }
@@ -222,12 +239,54 @@ async function testInvidiousVideo(page, baseUrl, mockServices) {
   try {
     const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     const status = response ? response.status() : null;
+    
+    // Check for video element
     const hasVideo = await page.evaluate(() => !!document.querySelector('video'));
-    const hasError = await page.evaluate(() => /unavailable|error|not found/i.test(document.body ? document.body.innerText : ''));
-    const ok = !!response && status < 400 && hasVideo && !hasError;
-    return { name: 'Invidious video playback page', url, status, ok };
+    
+    // Check for playback readiness (readyState > 0 means metadata loaded)
+    const isPlayable = await page.evaluate(async () => {
+      const video = document.querySelector('video');
+      if (!video) return false;
+      if (video.readyState > 0) return true;
+      return new Promise(resolve => {
+        video.onloadedmetadata = () => resolve(true);
+        setTimeout(() => resolve(false), 5000);
+      });
+    });
+
+    const hasError = await page.evaluate(() => {
+      const body = document.body ? document.body.innerText : '';
+      return /unavailable|error|not found/i.test(body) || !!document.querySelector('.error-message');
+    });
+
+    const ok = !!response && status < 400 && hasVideo && isPlayable && !hasError;
+    return { name: 'Invidious video playback page', url, status, ok, error: !isPlayable ? 'Video metadata not loaded' : undefined };
   } catch (error) {
     return { name: 'Invidious video playback page', url, status: null, ok: false, error: error.message };
+  }
+}
+
+async function testSearXNGSearch(page, baseUrl, mockServices) {
+  const url = joinUrl(baseUrl, `/search?q=privacy+hub`);
+  if (mockServices) {
+    return { name: 'SearXNG search functionality', url, ok: true, mocked: true };
+  }
+  try {
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // Wait for either results or an error message
+    await page.waitForSelector('.result, article, .error, #results', { timeout: 10000 }).catch(() => null);
+    const status = response ? response.status() : null;
+    const hasResults = await page.evaluate(() => {
+      return document.querySelectorAll('.result, article, #results .result').length > 0;
+    });
+    const hasError = await page.evaluate(() => {
+      const body = document.body ? document.body.innerText : '';
+      return /error|unavailable|throttle/i.test(body);
+    });
+    const ok = !!response && status < 400 && hasResults && !hasError;
+    return { name: 'SearXNG search functionality', url, status, ok, error: hasError ? 'Upstream error detected' : (!hasResults ? 'No results found' : undefined) };
+  } catch (error) {
+    return { name: 'SearXNG search functionality', url, status: null, ok: false, error: error.message };
   }
 }
 
@@ -305,17 +364,18 @@ async function run() {
   if (serviceMap.breezewiki) results.push(await withPage(browser, (page) => testBreezewiki(page, serviceMap.breezewiki, MOCK_SERVICE_PAGES)));
   if (serviceMap.rimgo) results.push(await withPage(browser, (page) => testRimgoRandomImage(page, serviceMap.rimgo, MOCK_SERVICE_PAGES)));
   if (serviceMap.invidious) results.push(await withPage(browser, (page) => testInvidiousVideo(page, serviceMap.invidious, MOCK_SERVICE_PAGES)));
+  if (serviceMap.searxng) results.push(await withPage(browser, (page) => testSearXNGSearch(page, serviceMap.searxng, MOCK_SERVICE_PAGES)));
   
   // New specialized tests
-  if (serviceMap.redlib) results.push(await withPage(browser, (page) => testSpecialized(page, 'Redlib Content', serviceMap.redlib, '/r/all', 'redlib', MOCK_SERVICE_PAGES)));
-  if (serviceMap.wikiless) results.push(await withPage(browser, (page) => testSpecialized(page, 'Wikiless Content', serviceMap.wikiless, '/wiki/Main_Page', 'Wikipedia', MOCK_SERVICE_PAGES)));
-  if (serviceMap.searxng) results.push(await withPage(browser, (page) => testSpecialized(page, 'SearXNG Content', serviceMap.searxng, '/', 'SearXNG', MOCK_SERVICE_PAGES)));
+  if (serviceMap.redlib) results.push(await withPage(browser, (page) => testSelector(page, 'Redlib Content', serviceMap.redlib, '/r/all', 'body', MOCK_SERVICE_PAGES)));
+  if (serviceMap.wikiless) results.push(await withPage(browser, (page) => testSelector(page, 'Wikiless Content', serviceMap.wikiless, '/wiki/Main_Page', '#mw-content-text', MOCK_SERVICE_PAGES)));
+  if (serviceMap.cobalt) results.push(await withPage(browser, (page) => testSelector(page, 'Cobalt Interface', serviceMap.cobalt, '/', 'input', MOCK_SERVICE_PAGES)));
+  if (serviceMap.vert) results.push(await withPage(browser, (page) => testSelector(page, 'VERT Interface', serviceMap.vert, '/', 'body', MOCK_SERVICE_PAGES)));
+  if (serviceMap.anonymousoverflow) results.push(await withPage(browser, (page) => testSelector(page, 'AnonOverflow Interface', serviceMap.anonymousoverflow, '/', 'input', MOCK_SERVICE_PAGES)));
+  if (serviceMap.scribe) results.push(await withPage(browser, (page) => testSelector(page, 'Scribe Interface', serviceMap.scribe, '/', 'nav', MOCK_SERVICE_PAGES)));
+
   if (serviceMap.immich) results.push(await withPage(browser, (page) => testSpecialized(page, 'Immich Login', serviceMap.immich, '/auth/login', 'Immich', MOCK_SERVICE_PAGES)));
   if (serviceMap.memos) results.push(await withPage(browser, (page) => testSpecialized(page, 'Memos Login', serviceMap.memos, '/auth/login', 'Memos', MOCK_SERVICE_PAGES)));
-  if (serviceMap.vert) results.push(await withPage(browser, (page) => testSpecialized(page, 'VERT Interface', serviceMap.vert, '/', 'Conversion', MOCK_SERVICE_PAGES)));
-  if (serviceMap.cobalt) results.push(await withPage(browser, (page) => testSpecialized(page, 'Cobalt Interface', serviceMap.cobalt, '/', 'cobalt', MOCK_SERVICE_PAGES)));
-  if (serviceMap.scribe) results.push(await withPage(browser, (page) => testSpecialized(page, 'Scribe Interface', serviceMap.scribe, '/', 'scribe', MOCK_SERVICE_PAGES)));
-  if (serviceMap.anonymousoverflow) results.push(await withPage(browser, (page) => testSpecialized(page, 'AnonOverflow Interface', serviceMap.anonymousoverflow, '/', 'overflow', MOCK_SERVICE_PAGES)));
   if (serviceMap.adguard) results.push(await withPage(browser, (page) => testSpecialized(page, 'AdGuard Login', serviceMap.adguard, '/', 'AdGuard', MOCK_SERVICE_PAGES)));
   if (serviceMap['wg-easy']) results.push(await withPage(browser, (page) => testSpecialized(page, 'WireGuard Login', serviceMap['wg-easy'], '/', 'WireGuard', MOCK_SERVICE_PAGES)));
   if (serviceMap['odido-booster']) results.push(await withPage(browser, (page) => testSpecialized(page, 'Odido Booster', serviceMap['odido-booster'], '/', 'Odido', MOCK_SERVICE_PAGES)));

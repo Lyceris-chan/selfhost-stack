@@ -18,7 +18,7 @@ export CRITICAL_IMAGES="nginx:alpine python:3.11-alpine node:alpine oven/bun:alp
 # Default strategy for source-built services
 # Setting these to 'stable' will trigger dynamic tag resolution in zima.sh
 export INVIDIOUS_DEFAULT_TAG="stable"
-export REDLIB_DEFAULT_TAG="stable"
+export REDLIB_DEFAULT_TAG="latest"
 export WIKILESS_DEFAULT_TAG="stable"
 export SCRIBE_DEFAULT_TAG="stable"
 export ODIDO_BOOSTER_DEFAULT_TAG="stable"
