@@ -157,8 +157,11 @@ PARALLEL_DEPLOY=false
 SWAP_SLOTS=false
 GENERATE_ONLY=false
 ENV_FILE=""
+PERSONAL_MODE=false
+REG_TOKEN=""
+REG_USER=""
 
-while getopts "cxpyas:DjShE:G" opt; do
+while getopts "cxpyas:DjShE:GS" opt; do
     case ${opt} in
         c) RESET_ENV=true; FORCE_CLEAN=true ;;
         x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
@@ -534,10 +537,10 @@ authenticate_registries() {
     # Export DOCKER_CONFIG globally
     export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
     
-    if [ "$AUTO_CONFIRM" = true ] || [ -n "$REG_TOKEN" ] || [ "$PERSONAL_MODE" = true ]; then
-        if [ -n "$REG_TOKEN" ]; then
+    if [ "${AUTO_CONFIRM:-false}" = true ] || [ -n "${REG_TOKEN:-}" ] || [ "${PERSONAL_MODE:-false}" = true ]; then
+        if [ -n "${REG_TOKEN:-}" ]; then
              log_info "Using provided credentials from environment."
-        elif [ "$PERSONAL_MODE" = true ]; then
+        elif [ "${PERSONAL_MODE:-false}" = true ]; then
              log_info "Personal Mode: Using pre-configured registry credentials."
              REG_USER="${REG_USER:-}"
              REG_TOKEN="${REG_TOKEN:-}"
@@ -548,7 +551,7 @@ authenticate_registries() {
         fi
         
         # Docker Hub Login
-        if [ -n "$REG_TOKEN" ] && [ "$REG_TOKEN" != "DOCKER_HUB_TOKEN_PLACEHOLDER" ]; then
+        if [ -n "${REG_TOKEN:-}" ] && [ "${REG_TOKEN:-}" != "DOCKER_HUB_TOKEN_PLACEHOLDER" ]; then
             if printf "%s" "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
                  log_info "Docker Hub: Authentication successful."
             else
@@ -646,7 +649,7 @@ setup_secrets() {
         
         if [ "$AUTO_CONFIRM" = true ]; then
             log_info "Auto-confirm enabled: Skipping interactive deSEC/GitHub/Odido setup (preserving environment variables)."
-            if [ "$PERSONAL_MODE" = true ]; then
+            if [ "${PERSONAL_MODE:-false}" = true ]; then
                 log_info "Personal Mode: Applying user-specific defaults."
                 REG_USER="${REG_USER:-}"
                 DESEC_DOMAIN="${DESEC_DOMAIN:-}" # Keep if set, otherwise maybe prompt once

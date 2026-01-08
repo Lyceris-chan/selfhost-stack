@@ -58,7 +58,6 @@ authenticate_registries # (from lib/core.sh)
 # 3. Clean Environment (if not clean-only, already handled above if clean-only)
 clean_environment # (from lib/operations.sh)
 ensure_active_slot_file # (from lib/core.sh) - Ensure file exists after cleanup
-ensure_active_slot_file # (from lib/core.sh) - Ensure file exists after cleanup
 
 # 4. Pre-pull Critical Images
 log_info "Pre-pulling core infrastructure images in parallel..." # (from lib/core.sh)

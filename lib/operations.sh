@@ -502,13 +502,25 @@ perform_backup() {
     mkdir -p "$BACKUP_DIR"
     log_info "Creating system backup: $backup_name..."
     
-    # Backup secrets, config and dynamic state
+    # Backup secrets, config and dynamic state if they exist
     # We exclude large source directories and data volumes to keep it fast
-    tar -czf "$BACKUP_DIR/$backup_name" \
-        -C "$BASE_DIR" .secrets .active_slot config env \
-        --exclude="sources" --exclude="data" 2>/dev/null
-    
-    log_info "Backup created successfully at $BACKUP_DIR/$backup_name"
+    local targets=""
+    for t in .secrets .active_slot config env; do
+        if [ -e "$BASE_DIR/$t" ]; then
+            targets="$targets $t"
+        fi
+    done
+
+    if [ -n "$targets" ]; then
+        # shellcheck disable=SC2086
+        if tar -czf "$BACKUP_DIR/$backup_name" -C "$BASE_DIR" $targets --exclude="sources" --exclude="data" 2>/dev/null; then
+            log_info "Backup created successfully at $BACKUP_DIR/$backup_name"
+        else
+            log_warn "Backup partially failed or skipped some files."
+        fi
+    else
+        log_warn "No files found to backup."
+    fi
     
     # Keep only last 5 backups
     BACKUP_FILES=$(ls -t "$BACKUP_DIR"/backup_* 2>/dev/null | tail -n +6 || true)
