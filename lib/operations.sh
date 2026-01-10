@@ -143,6 +143,13 @@ clean_environment() {
     echo "=========================================================="
     echo "🛡️  ENVIRONMENT VALIDATION & CLEANUP"
     echo "=========================================================="
+
+    # Safety Check: Prevent catastrophic deletion
+    # Ensure BASE_DIR is not empty, root, or a top-level system directory
+    if [ -z "$BASE_DIR" ] || [ "$BASE_DIR" = "/" ] || [ "$BASE_DIR" = "/home" ] || [ "$BASE_DIR" = "/root" ] || [ "$BASE_DIR" = "/usr" ] || [ "$BASE_DIR" = "/var" ]; then
+         log_crit "Critical Error: BASE_DIR is set to a protected path or empty ($BASE_DIR). Aborting cleanup."
+         exit 1
+    fi
     
     if [ "$CLEAN_ONLY" = false ]; then
         check_docker_rate_limit
@@ -322,7 +329,7 @@ clean_environment() {
         ALL_VOLUMES=$($DOCKER_CMD volume ls -q 2>/dev/null || echo "")
         for vol in $ALL_VOLUMES; do
             case "$vol" in
-                # Match exact names
+                # Match exact names of volumes defined in our compose file
                 portainer-data|adguard-work|redis-data|postgresdata|wg-config|companioncache|odido-data)
                     log_info "  Removing volume: $vol"
                     $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
@@ -330,12 +337,6 @@ clean_environment() {
                     ;;
                 # Match prefixed names (sudo docker compose project prefix)
                 ${APP_NAME}_*|${APP_NAME//-/}_*)
-                    log_info "  Removing volume: $vol"
-                    $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
-                    REMOVED_VOLUMES="${REMOVED_VOLUMES}$vol "
-                    ;;
-                # Match any volume containing our identifiers
-                *portainer*|*adguard*|*redis*|*postgres*|*wg-config*|*companion*|*odido*)
                     log_info "  Removing volume: $vol"
                     $DOCKER_CMD volume rm -f "$vol" 2>/dev/null || true
                     REMOVED_VOLUMES="${REMOVED_VOLUMES}$vol "
@@ -353,8 +354,8 @@ clean_environment() {
             case "$net" in
                 # Skip default Docker networks
                 bridge|host|none) continue ;;
-                # Match our networks
-                ${APP_NAME}_*|${APP_NAME//-/}_*|*frontnet*)
+                # Match our networks by prefix only
+                ${APP_NAME}_*|${APP_NAME//-/}_*)
                     log_info "  Removing network: $net"
                     safe_remove_network "$net"
                     REMOVED_NETWORKS="${REMOVED_NETWORKS}$net "
@@ -529,203 +530,4 @@ perform_backup() {
             rm -f "$f"
         done
     fi
-}
-
-verify_health() {
-    log_info "Verifying deployment health..."
-    local failed=false
-    
-    # Get all containers for the stack
-    local containers=$($DOCKER_CMD ps -a --format '{{.Names}}' | grep "^${CONTAINER_PREFIX}" || true)
-    
-    if [ -z "$containers" ]; then
-        log_warn "No containers found with prefix ${CONTAINER_PREFIX}"
-        return 1
-    fi
-
-    for container in $containers; do
-        # Check if it's running and not unhealthy
-        local status=$($DOCKER_CMD inspect --format='{{.State.Status}}' "$container" 2>/dev/null || echo "not_found")
-        local health=$($DOCKER_CMD inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null || echo "none")
-        
-        if [ "$status" != "running" ]; then
-            log_warn "Container $container is NOT running (Status: $status)"
-            failed=true
-        elif [ "$health" = "unhealthy" ]; then
-            log_warn "Container $container is UNHEALTHY"
-            failed=true
-        fi
-    done
-    
-    if [ "$failed" = true ]; then
-        return 1
-    fi
-    log_info "All containers are healthy and running."
-    return 0
-}
-
-
-# --- SECTION 16: STACK ORCHESTRATION & DEPLOYMENT ---
-# Execute system deployment and verify global infrastructure integrity.
-
-deploy_stack() {
-    if command -v modprobe >/dev/null 2>&1; then
-        $SUDO modprobe tun || true
-    fi
-
-    if [ "$PARALLEL_DEPLOY" = true ]; then
-        log_info "Parallel Mode Enabled: Launching full stack immediately..."
-        $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d --remove-orphans
-    else
-        # Explicitly launch core infrastructure services first if they are present
-        CORE_SERVICES=""
-        for srv in hub-api adguard unbound gluetun; do
-            if grep -q "^  $srv:" "$COMPOSE_FILE"; then
-                CORE_SERVICES="$CORE_SERVICES $srv"
-            fi
-        done
-
-        if [ -n "$CORE_SERVICES" ]; then
-            log_info "Launching core infrastructure services:$CORE_SERVICES..."
-            $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d $CORE_SERVICES
-        fi
-
-        # Wait for critical backends to be healthy before starting Nginx (dashboard) if they were launched
-        if echo "$CORE_SERVICES" | grep -q "hub-api" || echo "$CORE_SERVICES" | grep -q "gluetun"; then
-            log_info "Waiting for backend services to stabilize (this may take up to 60s)..."
-            for i in $(seq 1 60); do
-                HUB_HEALTH="healthy"
-                GLU_HEALTH="running"
-                
-                if echo "$CORE_SERVICES" | grep -q "hub-api"; then
-                    HUB_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}hub-api 2>/dev/null || echo "unknown")
-                fi
-                if echo "$CORE_SERVICES" | grep -q "gluetun"; then
-                    GLU_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}gluetun 2>/dev/null || echo "unknown")
-                fi
-                
-                if [ "$HUB_HEALTH" = "healthy" ] && [ "$GLU_HEALTH" = "healthy" ]; then
-                    log_info "Backends are stable. Finalizing stack launch..."
-                    break
-                fi
-                [ "$i" -eq 60 ] && log_warn "Backends taking longer than expected to stabilize. Proceeding anyway..."
-                sleep 1
-            done
-        fi
-
-        # Launch the rest of the stack
-        # Use --remove-orphans only if we are doing a full deployment
-        ORPHAN_FLAG="--remove-orphans"
-        if [ -n "$SELECTED_SERVICES" ]; then
-            ORPHAN_FLAG=""
-        fi
-        $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d $ORPHAN_FLAG
-    fi
-
-    log_info "Verifying control plane connectivity..."
-    sleep 5
-    API_TEST=$(curl -s -o /dev/null -w "%{http_code}" "http://$LAN_IP:$PORT_DASHBOARD_WEB/api/status" || echo "FAILED")
-    if [ "$API_TEST" = "200" ]; then
-        log_info "Control plane is reachable."
-    elif [ "$API_TEST" = "401" ]; then
-        log_info "Control plane is reachable (Security handshake verified)."
-    else
-        log_warn "Control plane returned status $API_TEST. The dashboard may show 'Offline (API Error)' initially."
-    fi
-
-    # --- SECTION 16.1: PORTAINER AUTOMATION ---
-    if [ "$AUTO_PASSWORD" = true ] && grep -q "portainer:" "$COMPOSE_FILE"; then
-        log_info "Synchronizing Portainer administrative settings..."
-        PORTAINER_READY=false
-        for _ in {1..12}; do
-            if curl -s --max-time 2 "http://$LAN_IP:$PORT_PORTAINER/api/system/status" > /dev/null; then
-                PORTAINER_READY=true
-                break
-            fi
-            sleep 5
-        done
-
-        if [ "$PORTAINER_READY" = true ]; then
-            # Authenticate to get JWT (user was initialized via --admin-password CLI flag)
-            # Try 'admin' first, then 'portainer' (in case it was already renamed in a previous run)
-            AUTH_RESPONSE=$(curl -s --max-time 5 -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
-                -H "Content-Type: application/json" \
-                -d "{\"Username\":\"admin\",\"Password\":\"$PORTAINER_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
-            
-            if ! echo "$AUTH_RESPONSE" | grep -q "jwt"; then
-                AUTH_RESPONSE=$(curl -s --max-time 5 -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"Username\":\"portainer\",\"Password\":\"$PORTAINER_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
-            fi
-            
-            if echo "$AUTH_RESPONSE" | grep -q "jwt"; then
-                PORTAINER_JWT=$(echo "$AUTH_RESPONSE" | sed -n 's/.*"jwt":"\([^"\'']*\).*/\1/p')
-                
-                # 1. Disable Telemetry/Analytics
-                log_info "Disabling Portainer anonymous telemetry..."
-                curl -s --max-time 5 -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/settings" \
-                    -H "Authorization: Bearer $PORTAINER_JWT" \
-                    -H "Content-Type: application/json" \
-                    -d '{"EnableTelemetry":false}' >/dev/null 2>&1 || true
-
-                # 2. Rename 'admin' user to 'portainer' (Security Best Practice)
-                # First, get user ID of admin (usually 1)
-                ADMIN_ID=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/users/admin/check" 2>/dev/null | sed -n 's/.*"id":\([0-9]*\).*/\1/p' || echo "1")
-                
-                # Only rename if not already named 'portainer'
-                CHECK_USER=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/users/$ADMIN_ID" | sed -n 's/.*"Username":"\([^"\'']*\).*/\1/p')
-                if [ "$CHECK_USER" != "portainer" ]; then
-                    log_info "Renaming default 'admin' user to 'portainer'..."
-                    curl -s --max-time 5 -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/users/$ADMIN_ID" \
-                        -H "Authorization: Bearer $PORTAINER_JWT" \
-                        -H "Content-Type: application/json" \
-                        -d '{"Username":"portainer"}' >/dev/null 2>&1 || true
-                fi
-            else
-                log_warn "Failed to authenticate with Portainer API. Manual telemetry disable may be required."
-            fi
-        else
-            log_warn "Portainer did not become ready in time. Skipping automated configuration."
-        fi
-    fi
-
-    # --- SECTION 16.2: ASSET LOCALIZATION ---
-    # Download remote assets (fonts, utilities) via Gluetun proxy for privacy
-    download_remote_assets
-
-    # Final Summary
-    echo ""
-    echo "=========================================================="
-    echo "✅ DEPLOYMENT COMPLETE"
-    echo "=========================================================="
-    if [ -n "${DESEC_DOMAIN:-}" ] && [ -f "${AGH_CONF_DIR:-}/ssl.crt" ]; then
-        echo "   • Dashboard:    https://${DESEC_DOMAIN}:8443"
-        echo "                   (Local IP: http://$LAN_IP:$PORT_DASHBOARD_WEB)"
-        echo "   • Secure DNS:   https://$DESEC_DOMAIN/dns-query"
-        echo "   • Note:         VERT requires HTTPS to function correctly."
-    else
-        echo "   • Dashboard:    http://$LAN_IP:$PORT_DASHBOARD_WEB"
-        if [ -n "${DESEC_DOMAIN:-}" ]; then
-            echo "   • Secure DNS:   https://$DESEC_DOMAIN/dns-query"
-        fi
-    fi
-    echo "   • Admin Pass:   $ADMIN_PASS_RAW"
-    echo "   • Portainer:    http://$LAN_IP:$PORT_PORTAINER (User: portainer / Pass: $PORTAINER_PASS_RAW)"
-    echo "   • WireGuard:    http://$LAN_IP:$PORT_WG_WEB (Pass: $VPN_PASS_RAW)"
-    echo "   • AdGuard:      http://$LAN_IP:$PORT_ADGUARD_WEB (User: adguard / Pass: $AGH_PASS_RAW)"
-    if [ -n "$ODIDO_TOKEN" ]; then
-    echo "   • Odido Boost:  Active (Threshold: 100MB)"
-    fi
-    echo ""
-    echo "   📁 Credentials saved to: $BASE_DIR/.secrets"
-    echo "   📄 Importable CSV:      $BASE_DIR/protonpass_import.csv"
-    echo "   📄 LibRedirect JSON:    $PROJECT_ROOT/libredirect_import.json"
-    echo "=========================================================="
-    
-    if [ "$CLEAN_EXIT" = true ]; then
-        exit 0
-    fi
-
-    # Cleanup build artifacts to save space after successful deployment
-    cleanup_build_artifacts
 }

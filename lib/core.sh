@@ -370,6 +370,33 @@ allocate_subnet() {
     log_info "Assigned Virtual Subnet: $DOCKER_SUBNET"
 }
 
+check_port_availability() {
+    local port=$1
+    local proto=${2:-tcp}
+    
+    if command -v ss >/dev/null 2>&1; then
+        if $SUDO ss -Hl"${proto:0:1}"n sport = :"$port" | grep -q "$port"; then
+            return 1
+        fi
+    elif command -v netstat >/dev/null 2>&1; then
+        if $SUDO netstat -l"${proto:0:1}"n | grep -q ":$port "; then
+            return 1
+        fi
+    elif command -v lsof >/dev/null 2>&1; then
+        if $SUDO lsof -i "${proto}:${port}" -s "${proto}:LISTEN" >/dev/null 2>&1; then
+            return 1
+        fi
+    fi
+    return 0
+}
+
+is_service_enabled() {
+    local srv="$1"
+    if [ -z "${SELECTED_SERVICES:-}" ]; then return 0; fi
+    if echo "$SELECTED_SERVICES" | grep -qE "(^|,)$srv(,|$)"; then return 0; fi
+    return 1
+}
+
 safe_remove_network() {
     local net_name="$1"
     if $DOCKER_CMD network inspect "$net_name" >/dev/null 2>&1; then
@@ -624,31 +651,32 @@ setup_secrets() {
             fi
         fi
         
-        log_info "Generating Secrets..."
+        log_info "Generating Secrets (Batch Processing)..."
         HUB_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
         ODIDO_API_KEY="$HUB_API_KEY"
         
-        # Safely generate WG hash (using generic alpine to avoid GHCR pull)
-        # wg-easy uses standard bcrypt for its PASSWORD_HASH
-        WG_HASH_CLEAN=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$VPN_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
-        if [[ "$WG_HASH_CLEAN" == "FAILED" ]]; then
-            log_crit "Failed to generate WireGuard password hash. Check Docker status."
-            exit 1
+        # Optimized: Generate all hashes in a single container run to save time
+        # We use alpine:3.21 and install apache2-utils (htpasswd)
+        HASH_OUTPUT=$($DOCKER_CMD run --rm alpine:3.21 sh -c '
+            apk add --no-cache apache2-utils >/dev/null 2>&1
+            if [ $? -ne 0 ]; then echo "FAILED"; exit 1; fi
+            echo "WG_HASH:$(htpasswd -B -n -b "admin" "$1" | cut -d: -f2)"
+            echo "AGH_HASH:$(htpasswd -B -n -b "$2" "$3" | cut -d: -f2)"
+            echo "PORT_HASH:$(htpasswd -B -n -b "admin" "$4" | cut -d: -f2)"
+        ' -- "$VPN_PASS_RAW" "$AGH_USER" "$AGH_PASS_RAW" "$PORTAINER_PASS_RAW" 2>/dev/null || echo "FAILED")
+
+        if echo "$HASH_OUTPUT" | grep -q "FAILED"; then
+             log_crit "Failed to generate password hashes. Check Docker status."
+             exit 1
         fi
 
-        AGH_USER="adguard"
-        # Safely generate AGH hash
-        AGH_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$AGH_USER" "$AGH_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
-        if [[ "$AGH_PASS_HASH" == "FAILED" ]]; then
-            log_crit "Failed to generate AdGuard password hash. Check Docker status."
-            exit 1
-        fi
+        WG_HASH_CLEAN=$(echo "$HASH_OUTPUT" | grep "^WG_HASH:" | cut -d: -f2)
+        AGH_PASS_HASH=$(echo "$HASH_OUTPUT" | grep "^AGH_HASH:" | cut -d: -f2)
+        PORTAINER_PASS_HASH=$(echo "$HASH_OUTPUT" | grep "^PORT_HASH:" | cut -d: -f2)
 
-        # Safely generate Portainer hash (bcrypt)
-        PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
-        if [[ "$PORTAINER_PASS_HASH" == "FAILED" ]]; then
-            log_crit "Failed to generate Portainer password hash. Check Docker status."
-            exit 1
+        if [ -z "$WG_HASH_CLEAN" ] || [ -z "$AGH_PASS_HASH" ] || [ -z "$PORTAINER_PASS_HASH" ]; then
+             log_crit "Failed to parse generated hashes."
+             exit 1
         fi
         
         # Cryptographic Secrets
