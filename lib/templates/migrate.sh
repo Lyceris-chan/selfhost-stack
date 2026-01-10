@@ -1,4 +1,5 @@
 #!/bin/sh
+set -euo pipefail
 SERVICE=$1
 ACTION=$2
 BACKUP=${3:-yes}

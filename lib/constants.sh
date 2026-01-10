@@ -14,3 +14,24 @@ export CRITICAL_IMAGES="nginx:alpine python:3.11-alpine alpine:latest redis:alpi
 
 # Default tags for specific services
 export IMMICH_DEFAULT_TAG="release"
+
+# Service Repository Mapping for dynamic tag resolution
+declare -A SERVICE_REPOS
+SERVICE_REPOS[wikiless]="https://github.com/Metastem/Wikiless"
+SERVICE_REPOS[scribe]="https://git.sr.ht/~edwardloveall/scribe"
+SERVICE_REPOS[invidious]="https://github.com/iv-org/invidious.git"
+SERVICE_REPOS[odido-booster]="https://github.com/Lyceris-chan/odido-bundle-booster.git"
+SERVICE_REPOS[vert]="https://github.com/VERT-sh/VERT.git"
+SERVICE_REPOS[vertd]="https://github.com/VERT-sh/vertd.git"
+SERVICE_REPOS[rimgo]="https://codeberg.org/rimgo/rimgo.git"
+SERVICE_REPOS[breezewiki]="https://github.com/PussTheCat-org/docker-breezewiki-quay.git"
+SERVICE_REPOS[anonymousoverflow]="https://github.com/httpjamesm/AnonymousOverflow.git"
+SERVICE_REPOS[gluetun]="https://github.com/qdm12/gluetun.git"
+SERVICE_REPOS[adguard]="https://github.com/AdguardTeam/AdGuardHome.git"
+SERVICE_REPOS[unbound]="https://github.com/klutchell/unbound-docker.git"
+SERVICE_REPOS[memos]="https://github.com/usememos/memos.git"
+SERVICE_REPOS[redlib]="https://github.com/redlib-org/redlib.git"
+SERVICE_REPOS[companion]="https://github.com/iv-org/invidious-companion.git"
+SERVICE_REPOS[wg-easy]="https://github.com/wg-easy/wg-easy.git"
+SERVICE_REPOS[portainer]="https://github.com/portainer/portainer.git"
+export SERVICE_REPOS

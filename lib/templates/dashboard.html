@@ -59,9 +59,9 @@
             <div class="header-row">
                 <div>
                     <div style="display: flex; align-items: center; gap: 12px;">
-                        <h1>Privacy Hub</h1>
+                        <h1 class="display-small" style="color: var(--md-sys-color-primary); margin: 0;">Privacy Hub</h1>
                     </div>
-                    <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
+                    <div class="subtitle body-large" style="color: var(--md-sys-color-on-surface-variant); margin-top: 8px;">Self-hosted network security and private service infrastructure.</div>
                 </div>
                 <div class="header-actions">
                     <div id="https-badge" class="chip vpn" style="gap:4px; display:none; height: 32px; padding: 0 12px; border-radius: 16px; flex: 0 0 auto;" data-tooltip="Connection is secured with end-to-end encryption.">
@@ -97,14 +97,14 @@
             <div class="chip filter-chip admin-only" data-target="logs" onclick="filterCategory('logs')">System Logs</div>
         </div>
 
-        <div id="update-banner" class="admin-only" style="display:none; margin-bottom: 32px;">
-            <div class="card" style="min-height: auto; padding: 24px; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;">
+        <div id="update-banner" class="admin-only mb-32" style="display:none;">
+            <div class="card card-primary" style="min-height: auto;">
+                <div class="flex-row justify-between align-center gap-24 flex-wrap">
                     <div>
-                        <h3 style="margin:0; color: inherit;">Updates Available</h3>
-                        <p class="body-medium" id="update-list" style="margin: 8px 0 0 0; color: inherit; opacity: 0.9;">New versions detected for some services.</p>
+                        <h3 class="title-medium m-0" style="color: inherit;">Updates Available</h3>
+                        <p class="body-medium mt-8" id="update-list" style="color: inherit; opacity: 0.9;">New versions detected for some services.</p>
                     </div>
-                    <div style="display: flex; gap: 12px;">
+                    <div class="flex-row gap-12">
                         <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Pull latest source code and rebuild containers for all pending services.">Update All</button>
                         <button onclick="dismissUpdateBanner()" class="btn btn-outlined" style="border-color: currentColor; color: inherit;">Dismiss</button>
                     </div>
@@ -112,14 +112,14 @@
             </div>
         </div>
 
-        <div id="mac-advisory" style="margin-bottom: 32px;">
-            <div class="card" style="min-height: auto; padding: 16px 24px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 24px;">
-                    <div style="display: flex; gap: 16px; align-items: flex-start;">
-                        <span class="material-symbols-rounded" style="margin-top: 2px;">warning</span>
+        <div id="mac-advisory" class="mb-32">
+            <div class="card card-error" style="min-height: auto; padding: 16px 24px;">
+                <div class="flex-row justify-between align-start gap-24">
+                    <div class="flex-row gap-16 align-start">
+                        <span class="material-symbols-rounded mt-8">warning</span>
                         <div>
-                            <h3 style="margin:0; color: inherit; font-size: 16px;">Critical Network Advisory</h3>
-                            <p class="body-medium" style="margin: 4px 0 0 0; color: inherit; opacity: 0.9;">
+                            <h3 class="title-medium m-0" style="color: inherit;">Critical Network Advisory</h3>
+                            <p class="body-medium mt-8" style="color: inherit; opacity: 0.9;">
                                 To ensure firewall persistence and static IP reliability, you <strong>must disable Dynamic/Random MAC addresses</strong> in your host device's network settings.
                             </p>
                         </div>
@@ -146,13 +146,13 @@
         </section>
 
         <section data-category="system">
-        <div class="section-label">System Management</div>
-        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+        <div class="section-label title-medium">System Management</div>
+        <div class="section-hint body-medium" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
             <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);"><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
         </div>
         
-        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; border: 1px solid var(--md-sys-color-outline-variant); padding: 16px; border-radius: 16px;">
-            <div style="width: 100%; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--md-sys-color-primary);">
+        <div class="section-hint mb-16 card-outline" style="padding: 16px; border-radius: var(--md-sys-shape-corner-large);">
+            <div class="w-full flex-row align-center gap-8 mb-8" style="color: var(--md-sys-color-primary);">
                 <span class="material-symbols-rounded" style="font-size: 20px;">vpn_lock</span>
                 <span class="label-large" style="font-weight: 600;">Outbound VPN Gateway (Gluetun)</span>
             </div>
@@ -162,8 +162,8 @@
             <span class="chip category-badge" id="hint-vpn-usage" data-tooltip="VPN Session / Total Data Usage"><span class="material-symbols-rounded" style="font-size:14px;">data_usage</span> --</span>
         </div>
 
-        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap; border: 1px solid var(--md-sys-color-outline-variant); padding: 16px; border-radius: 16px;">
-            <div style="width: 100%; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--md-sys-color-primary);">
+        <div class="section-hint card-outline" style="padding: 16px; border-radius: var(--md-sys-shape-corner-large);">
+            <div class="w-full flex-row align-center gap-8 mb-8" style="color: var(--md-sys-color-primary);">
                 <span class="material-symbols-rounded" style="font-size: 20px;">settings_input_antenna</span>
                 <span class="label-large" style="font-weight: 600;">Inbound Access Gateway (WireGuard)</span>
             </div>
@@ -176,15 +176,15 @@
         </section>
 
         <section data-category="dns">
-        <div class="section-label">DNS Configuration</div>
+        <div class="section-label title-medium">DNS Configuration</div>
         <div class="grid">
             <div class="card">
-                <h3>Certificate Status</h3>
+                <h3 class="title-medium">Certificate Status</h3>
                 <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
-                    <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label">Type</span><span class="stat-value" id="cert-type">Checking...</span></div>
-                    <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label">Domain</span><span class="stat-value sensitive" id="cert-subject">Checking...</span></div>
-                    <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label">Issuer</span><span class="stat-value sensitive" id="cert-issuer">Checking...</span></div>
-                    <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label">Expires</span><span class="stat-value sensitive" id="cert-to">Checking...</span></div>
+                    <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label label-medium">Type</span><span class="stat-value title-small" id="cert-type">Checking...</span></div>
+                    <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label label-medium">Domain</span><span class="stat-value title-small sensitive" id="cert-subject">Checking...</span></div>
+                    <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label label-medium">Issuer</span><span class="stat-value title-small sensitive" id="cert-issuer">Checking...</span></div>
+                    <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label label-medium">Expires</span><span class="stat-value title-small sensitive" id="cert-to">Checking...</span></div>
                     <div id="ssl-failure-info" style="display:none; margin-top: 16px; padding: 16px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: 1px solid var(--md-sys-color-error);">
                         <div class="body-small" style="font-weight:600; margin-bottom:4px; display: flex; align-items: center; gap: 8px;">
                             <span class="material-symbols-rounded" style="font-size: 16px;">error</span>
@@ -208,7 +208,7 @@
                 </div>
             </div>
             <div class="card admin-only">
-                <h3>deSEC Configuration</h3>
+                <h3 class="title-medium">deSEC Configuration</h3>
                 <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
                 <form onsubmit="saveDesecConfig(); return false;">
                     <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. yourname.dedyn.io)" style="margin-bottom:12px;" autocomplete="username" data-tooltip="Enter your registered deSEC domain (e.g. yourname.dedyn.io). You can create one for free at desec.io.">
@@ -222,7 +222,7 @@
                 </form>
             </div>
             <div class="card">
-                <h3>Device DNS Settings</h3>
+                <h3 class="title-medium">Device DNS Settings</h3>
                 <p class="body-medium description">Utilize these RFC-compliant encrypted endpoints to maintain digital independence:</p>
                 <div class="code-label" data-tooltip="Standard unencrypted DNS (Port 53). Recommended only for use within your local LAN.">Standard IPv4 (Local LAN Only)</div>
                 <div class="code-block sensitive">$LAN_IP:53</div>
@@ -245,7 +245,7 @@
                 </p>
             </div>
             <div class="card">
-                <h3>Endpoint Provisioning</h3>
+                <h3 class="title-medium">Endpoint Provisioning</h3>
                 <div id="dns-setup-trusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
                     <p class="body-medium description">Globally trusted SSL is active via Let's Encrypt and deSEC. This enables zero-trust encrypted DNS on mobile devices without requiring certificate installation.</p>
                     <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
@@ -309,14 +309,14 @@
         </section>
 
         <section data-category="tools">
-        <div class="section-label">Service Utilities</div>
+        <div class="section-label title-medium">Service Utilities</div>
         <div id="grid-tools" class="grid">
             <!-- Dynamic Cards Injected Here -->
         </div>
         <div class="grid">
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <h3>Odido Status</h3>
+                    <h3 class="title-medium">Odido Status</h3>
                     <div id="odido-speed-indicator" class="body-small" style="color: var(--md-sys-color-primary); font-weight: 500; display:none;">0 Mb/s</div>
                 </div>
                 <div id="odido-status-container" style="display: flex; flex-direction: column; height: 100%;">
@@ -327,14 +327,14 @@
                     <div id="odido-configured" style="display:none; padding-top: 8px; flex-grow: 1; display: flex; flex-direction: column;">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                             <div>
-                                <div class="stat-row"><span class="stat-label">Remaining</span><span class="stat-value" id="odido-remaining">--</span></div>
-                                <div class="stat-row"><span class="stat-label">Bundle</span><span class="stat-value" id="odido-bundle-code">--</span></div>
-                                <div class="stat-row"><span class="stat-label">Rate</span><span class="stat-value" id="odido-rate">--</span></div>
+                                <div class="stat-row"><span class="stat-label label-medium">Remaining</span><span class="stat-value title-small" id="odido-remaining">--</span></div>
+                                <div class="stat-row"><span class="stat-label label-medium">Bundle</span><span class="stat-value title-small" id="odido-bundle-code">--</span></div>
+                                <div class="stat-row"><span class="stat-label label-medium">Rate</span><span class="stat-value title-small" id="odido-rate">--</span></div>
                             </div>
                             <div>
-                                <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value" id="odido-api-status">--</span></div>
-                                <div class="stat-row"><span class="stat-label">Threshold</span><span class="stat-value" id="odido-threshold">--</span></div>
-                                <div class="stat-row"><span class="stat-label">Auto-Renew</span><span class="stat-value" id="odido-auto-renew">--</span></div>
+                                <div class="stat-row"><span class="stat-label label-medium">Status</span><span class="stat-value title-small" id="odido-api-status">--</span></div>
+                                <div class="stat-row"><span class="stat-label label-medium">Threshold</span><span class="stat-value title-small" id="odido-threshold">--</span></div>
+                                <div class="stat-row"><span class="stat-label label-medium">Auto-Renew</span><span class="stat-value title-small" id="odido-auto-renew">--</span></div>
                             </div>
                         </div>
                         
@@ -375,7 +375,7 @@
                 </div>
             </div>
             <div class="card admin-only">
-                <h3>Configuration</h3>
+                <h3 class="title-medium">Configuration</h3>
                 <p class="body-medium description">Authentication and automation settings for backend services:</p>
                 <form onsubmit="saveOdidoConfig(); return false;">
                     <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;" autocomplete="username" data-tooltip="The HUB_API_KEY from your .secrets file.">
@@ -424,7 +424,7 @@
         <div class="grid admin-only">
             <div class="card" style="grid-column: span 2;">
                 <div class="card-header">
-                    <h3>Registered Clients</h3>
+                    <h3 class="title-medium">Registered Clients</h3>
                     <div class="card-header-actions">
                         <button onclick="openAddClientModal()" class="btn btn-filled" data-tooltip="Create a new client configuration">
                             <span class="material-symbols-rounded">add</span> New Client
@@ -446,7 +446,7 @@
         <div id="add-client-modal" class="modal-overlay">
             <div class="modal-card">
                 <div class="modal-header">
-                    <h2>New WireGuard Client</h2>
+                    <h2 class="headline-small">New WireGuard Client</h2>
                     <button onclick="document.getElementById('add-client-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
                 </div>
                 <input type="text" id="new-client-name" class="text-field" placeholder="Client Name (e.g. My Phone)" style="margin-bottom: 24px;">
@@ -460,7 +460,7 @@
         <div id="client-qr-modal" class="modal-overlay">
             <div class="modal-card" style="text-align: center;">
                 <div class="modal-header">
-                    <h2 id="qr-client-name">Client Config</h2>
+                    <h2 class="headline-small" id="qr-client-name">Client Config</h2>
                     <button onclick="document.getElementById('client-qr-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
                 </div>
                 <div id="qrcode-container" style="background: white; padding: 16px; border-radius: 16px; display: inline-block; margin: 16px 0;"></div>
@@ -473,7 +473,7 @@
         <div class="section-label admin-only">WireGuard Profiles</div>
         <div class="grid admin-only">
             <div class="card admin-only">
-                <h3>Upload Profile</h3>
+                <h3 class="title-medium">Upload Profile</h3>
                 <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;" data-tooltip="Give your profile a recognizable name.">
                 <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..." style="margin-bottom:16px;" data-tooltip="Paste the contents of your WireGuard .conf file."></textarea>
                 <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile. The VPN service will automatically restart to apply the new configuration (~15 seconds).">Upload & Activate</button></div>
@@ -494,7 +494,7 @@
         <div class="grid">
             <div class="card admin-only">
                 <div class="card-header">
-                    <h3>Theme Customization</h3>
+                    <h3 class="title-medium">Theme Customization</h3>
                     <div class="card-header-actions">
                         <button onclick="localStorage.removeItem('theme_seed'); location.reload();" class="btn btn-icon" data-tooltip="Reset theme to default"><span class="material-symbols-rounded">refresh</span></button>
                     </div>
@@ -553,7 +553,7 @@
                 </div>
             </div>
             <div class="card admin-only">
-                <h3>Security & Privacy</h3>
+                <h3 class="title-medium">Security & Privacy</h3>
                 <p class="body-medium description">Manage administrative session behavior and authentication security.</p>
                 <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
                     <div id="session-cleanup-warning" class="chip admin" style="display: flex; width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-highest); color: var(--md-sys-color-on-surface-variant); border: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 4px; transition: all 0.3s ease;">
@@ -595,13 +595,13 @@
                 </div>
             </div>
             <div class="card">
-                <h3>System Information</h3>
+                <h3 class="title-medium">System Information</h3>
                 <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
                 <div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1;">
-                    <div class="stat-row"><span class="stat-label">Secrets Location</span><span class="stat-value monospace" style="font-size: 12px;">$BASE_DIR/.secrets</span></div>
-                    <div class="stat-row"><span class="stat-label">Config Root</span><span class="stat-value monospace" style="font-size: 12px;">$BASE_DIR/config</span></div>
-                    <div class="stat-row"><span class="stat-label">Dashboard Port</span><span class="stat-value">$PORT_DASHBOARD_WEB</span></div>
-                    <div class="stat-row"><span class="stat-label">Safe Display Mode</span><span class="stat-value">Active (Local)</span></div>
+                    <div class="stat-row"><span class="stat-label label-medium">Secrets Location</span><span class="stat-value title-small monospace" style="font-size: 12px;">$BASE_DIR/.secrets</span></div>
+                    <div class="stat-row"><span class="stat-label label-medium">Config Root</span><span class="stat-value title-small monospace" style="font-size: 12px;">$BASE_DIR/config</span></div>
+                    <div class="stat-row"><span class="stat-label label-medium">Dashboard Port</span><span class="stat-value title-small">$PORT_DASHBOARD_WEB</span></div>
+                    <div class="stat-row"><span class="stat-label label-medium">Safe Display Mode</span><span class="stat-value title-small">Active (Local)</span></div>
                 </div>
                 <div class="admin-only" style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
                     <button onclick="checkUpdates()" class="btn btn-tonal" data-tooltip="Check for updates" style="width: 100%; justify-content: flex-start;">
@@ -626,7 +626,7 @@
         <div class="grid">
             <div class="card">
                 <div class="card-header">
-                    <h3>System Health</h3>
+                    <h3 class="title-medium">System Health</h3>
                     <div class="card-header-actions">
                         <div class="chip" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 0 12px; height: 28px; font-weight: 500; gap: 6px; box-shadow: var(--md-sys-elevation-1);">
                             <span class="material-symbols-rounded" id="health-icon" style="font-size: 16px;">check_circle</span>
@@ -635,10 +635,10 @@
                     </div>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1;">
-                    <div class="stat-row"><span class="stat-label">System CPU</span><span class="stat-value" id="sys-cpu">0%</span></div>
+                    <div class="stat-row"><span class="stat-label label-medium">System CPU</span><span class="stat-value title-small title-small" id="sys-cpu">0%</span></div>
                     <div class="metric-bar"><div id="sys-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
                     
-                    <div class="stat-row" style="margin-top:8px;"><span class="stat-label">System RAM</span><span class="stat-value" id="sys-ram">0 MB / 0 MB</span></div>
+                    <div class="stat-row" style="margin-top:8px;"><span class="stat-label label-medium">System RAM</span><span class="stat-value title-small title-small" id="sys-ram">0 MB / 0 MB</span></div>
                     <div class="metric-bar"><div id="sys-ram-fill" class="metric-fill" style="width: 0%"></div></div>
 
                     <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
@@ -669,7 +669,7 @@
             </div>
             <div class="card">
                 <div class="card-header">
-                    <h3>System & Deployment Logs</h3>
+                    <h3 class="title-medium">System & Deployment Logs</h3>
                     <div class="card-header-actions">
                         <select id="log-filter-level" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
                             <option value="ALL">All Levels</option>
@@ -701,7 +701,7 @@
     <div id="update-selection-modal" class="modal-overlay">
         <div class="modal-card" style="max-width: 600px;">
             <div class="modal-header">
-                <h2>Select Updates</h2>
+                <h2 class="headline-small">Select Updates</h2>
                 <button onclick="closeUpdateModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
             </div>
             <div style="padding: 16px 0;">
@@ -727,7 +727,7 @@
     <div id="changelog-modal" class="modal-overlay" style="z-index: 26000;">
         <div class="modal-card" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
             <div class="modal-header">
-                <h2 id="changelog-title">Changelog</h2>
+                <h2 class="headline-small" id="changelog-title">Changelog</h2>
                 <button onclick="document.getElementById('changelog-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
             </div>
             <div id="changelog-content" class="code-block" style="flex-grow: 1; overflow-y: auto; white-space: pre-wrap; margin-top: 16px; font-family: monospace; font-size: 13px;">
@@ -740,7 +740,7 @@
     <div id="dialog-modal" class="modal-overlay" style="z-index: 30000;">
         <div class="modal-card">
             <div class="modal-header">
-                <h2 id="dialog-title">Title</h2>
+                <h2 class="headline-small" id="dialog-title">Title</h2>
                 <button onclick="closeDialog()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
             </div>
             <p id="dialog-message" class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant); white-space: pre-wrap;"></p>
@@ -760,19 +760,19 @@
     <div id="service-modal" class="modal-overlay">
         <div class="modal-card">
             <div class="modal-header">
-                <h2 id="modal-service-name">Service Settings</h2>
+                <h2 class="headline-small" id="modal-service-name">Service Settings</h2>
                 <button onclick="closeServiceModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
             </div>
             <div id="modal-metrics" style="background: var(--md-sys-color-surface-container-low); padding: 16px; border-radius: 12px;">
                 <div class="stat-row">
-                    <span class="stat-label">CPU Usage <span id="modal-cpu-text" style="float:right; font-family:monospace; opacity:0.8;">0%</span></span>
-                    <span class="stat-value" id="modal-cpu" style="display:none;">0%</span>
+                    <span class="stat-label label-medium">CPU Usage <span id="modal-cpu-text" style="float:right; font-family:monospace; opacity:0.8;">0%</span></span>
+                    <span class="stat-value title-small" id="modal-cpu" style="display:none;">0%</span>
                 </div>
                 <div class="metric-bar"><div id="modal-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
                 
                 <div class="stat-row" style="margin-top:12px;">
-                    <span class="stat-label">Memory <span id="modal-mem-text" style="float:right; font-family:monospace; opacity:0.8;">0 MB / 0 MB</span></span>
-                    <span class="stat-value" id="modal-mem" style="display:none;">0 MB / 0 MB</span>
+                    <span class="stat-label label-medium">Memory <span id="modal-mem-text" style="float:right; font-family:monospace; opacity:0.8;">0 MB / 0 MB</span></span>
+                    <span class="stat-value title-small" id="modal-mem" style="display:none;">0 MB / 0 MB</span>
                 </div>
                 <div class="metric-bar"><div id="modal-mem-fill" class="metric-fill" style="width: 0%"></div></div>
             </div>
@@ -786,7 +786,7 @@
     <div id="login-modal" class="modal-overlay">
         <div class="modal-card">
             <div class="modal-header">
-                <h2>Admin Authentication</h2>
+                <h2 class="headline-small">Admin Authentication</h2>
                 <button onclick="closeLoginModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
             </div>
             <p class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant);">Enter your administrator password to unlock management features.</p>
@@ -822,7 +822,7 @@
     <div id="project-size-modal" class="modal-overlay">
         <div class="modal-card">
             <div class="modal-header">
-                <h2 id="modal-project-title">Storage Breakdown</h2>
+                <h2 class="headline-small" id="modal-project-title">Storage Breakdown</h2>
                 <button onclick="closeProjectSizeModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
             </div>
             <div id="project-size-details" style="display: flex; flex-direction: column; gap: 16px;">

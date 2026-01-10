@@ -40,6 +40,13 @@ failure_handler() {
     else
         echo "[CRIT] Deployment failed at line $lineno: $msg"
     fi
+    
+    if [ -f "${HISTORY_LOG:-}" ] && [ -s "$HISTORY_LOG" ]; then
+        echo "--- Last 5 Log Entries ---"
+        tail -n 5 "$HISTORY_LOG"
+        echo "--------------------------"
+    fi
+    log_info "Check the full log at: ${HISTORY_LOG:-$BASE_DIR/deployment.log}"
 }
 trap 'failure_handler ${LINENO} "$BASH_COMMAND"' ERR
 
@@ -61,59 +68,10 @@ log_info "Pre-pulling core infrastructure images in parallel..."
 
 # STACK_SERVICES and CRITICAL_IMAGES are defined in lib/constants.sh
 
-# Service Repository Mapping for dynamic tag resolution
-declare -A SERVICE_REPOS
-SERVICE_REPOS[wikiless]="https://github.com/Metastem/Wikiless"
-SERVICE_REPOS[scribe]="https://git.sr.ht/~edwardloveall/scribe"
-SERVICE_REPOS[invidious]="https://github.com/iv-org/invidious.git"
-SERVICE_REPOS[odido-booster]="https://github.com/Lyceris-chan/odido-bundle-booster.git"
-SERVICE_REPOS[vert]="https://github.com/VERT-sh/VERT.git"
-SERVICE_REPOS[vertd]="https://github.com/VERT-sh/vertd.git"
-SERVICE_REPOS[rimgo]="https://codeberg.org/rimgo/rimgo.git"
-SERVICE_REPOS[breezewiki]="https://github.com/PussTheCat-org/docker-breezewiki-quay.git"
-SERVICE_REPOS[anonymousoverflow]="https://github.com/httpjamesm/AnonymousOverflow.git"
-SERVICE_REPOS[gluetun]="https://github.com/qdm12/gluetun.git"
-SERVICE_REPOS[adguard]="https://github.com/AdguardTeam/AdGuardHome.git"
-SERVICE_REPOS[unbound]="https://github.com/klutchell/unbound-docker.git"
-SERVICE_REPOS[memos]="https://github.com/usememos/memos.git"
-SERVICE_REPOS[redlib]="https://github.com/redlib-org/redlib.git"
-SERVICE_REPOS[companion]="https://github.com/iv-org/invidious-companion.git"
-SERVICE_REPOS[wg-easy]="https://github.com/wg-easy/wg-easy.git"
-SERVICE_REPOS[portainer]="https://github.com/portainer/portainer.git"
+# 4. Image Tag Resolution & Pre-pull
+resolve_service_tags
+pull_critical_images
 
-for srv in $STACK_SERVICES; do
-    SRV_UPPER=$(echo "${srv//-/_}" | tr '[:lower:]' '[:upper:]')
-    VAR_NAME="${SRV_UPPER}_IMAGE_TAG"
-    DEFAULT_VAR_NAME="${SRV_UPPER}_DEFAULT_TAG"
-    
-    # Use specific default tag if defined, otherwise 'latest'
-    val="${!DEFAULT_VAR_NAME:-latest}"
-
-    if $SUDO grep -q "^$VAR_NAME=" "$DOTENV_FILE"; then
-        val=$($SUDO grep "^$VAR_NAME=" "$DOTENV_FILE" | cut -d'=' -f2)
-    fi
-    
-    export "$VAR_NAME=$val"
-done
-
-PIDS=""
-for img in $CRITICAL_IMAGES; do
-    pull_with_retry "$img" &
-    PIDS="$PIDS $!"
-done
-
-SUCCESS=true
-for pid in $PIDS; do
-    if ! wait "$pid"; then
-        SUCCESS=false
-    fi
-done
-
-if [ "$SUCCESS" = false ]; then
-    log_crit "One or more critical images failed to pull. Aborting."
-    exit 1
-fi
-log_info "All critical images pulled successfully."
 
 # 5. Network & Directories
 allocate_subnet
@@ -170,7 +128,7 @@ else
     fi
     
     $SUDO chmod 600 "$ACTIVE_WG_CONF"
-    $PYTHON_CMD "$SCRIPT_DIR/lib/format_wg.py" "$ACTIVE_WG_CONF"
+    $PYTHON_CMD "$SCRIPT_DIR/lib/scripts/format_wg.py" "$ACTIVE_WG_CONF"
 
     if ! validate_wg_config; then
         log_crit "The pasted WireGuard configuration is invalid."

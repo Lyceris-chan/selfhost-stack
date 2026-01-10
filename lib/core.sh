@@ -66,6 +66,17 @@ pull_with_retry() {
     return 1
 }
 
+generate_secret() {
+    local length=${1:-32}
+    head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c "$length"
+}
+
+generate_hash() {
+    local user=$1
+    local pass=$2
+    $DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$user" "$pass" 2>/dev/null | cut -d: -f2 || echo "FAILED"
+}
+
 # --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
 REG_USER="${REG_USER:-}"
 REG_TOKEN="${REG_TOKEN:-}"
@@ -172,6 +183,9 @@ else
 fi
 
 APP_NAME="${APP_NAME:-privacy-hub}"
+# Sanitize APP_NAME to prevent directory traversal or problematic characters
+APP_NAME=$(echo "$APP_NAME" | tr -cd 'a-zA-Z0-9-_')
+if [ -z "$APP_NAME" ]; then APP_NAME="privacy-hub"; fi
 # Use absolute path for BASE_DIR to ensure it stays in the project root's data folder
 # Detect PROJECT_ROOT dynamically if not already set
 if [ -z "${PROJECT_ROOT:-}" ]; then
@@ -228,7 +242,6 @@ init_directories() {
 }
 
 # Container naming and persistence
-APP_NAME="${APP_NAME:-privacy-hub}"
 CONTAINER_PREFIX="hub-"
 export CONTAINER_PREFIX
 
@@ -521,10 +534,10 @@ setup_secrets() {
             if [ "$FORCE_CLEAN" = false ] && [ -d "$DATA_DIR/portainer" ] && [ "$(ls -A "$DATA_DIR/portainer")" ]; then
                 log_warn "Portainer data directory already exists. Portainer's security policy only allows setting the admin password on the FIRST deployment. The newly generated password displayed at the end will NOT work unless you manually reset it or delete the Portainer volume."
             fi
-            if [ -z "$VPN_PASS_RAW" ]; then VPN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24); fi
-            if [ -z "$AGH_PASS_RAW" ]; then AGH_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24); fi
-            if [ -z "$ADMIN_PASS_RAW" ]; then ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24); fi
-            if [ -z "$PORTAINER_PASS_RAW" ]; then PORTAINER_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24); fi
+            if [ -z "$VPN_PASS_RAW" ]; then VPN_PASS_RAW=$(generate_secret 24); fi
+            if [ -z "$AGH_PASS_RAW" ]; then AGH_PASS_RAW=$(generate_secret 24); fi
+            if [ -z "$ADMIN_PASS_RAW" ]; then ADMIN_PASS_RAW=$(generate_secret 24); fi
+            if [ -z "$PORTAINER_PASS_RAW" ]; then PORTAINER_PASS_RAW=$(generate_secret 24); fi
             log_info "Credentials generated and will be displayed upon completion."
             echo ""
         else
@@ -652,7 +665,7 @@ setup_secrets() {
         fi
         
         log_info "Generating Secrets (Batch Processing)..."
-        HUB_API_KEY=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+        HUB_API_KEY=$(generate_secret 32)
         ODIDO_API_KEY="$HUB_API_KEY"
         
         # Optimized: Generate all hashes in a single container run to save time
@@ -680,13 +693,13 @@ setup_secrets() {
         fi
         
         # Cryptographic Secrets
-        SCRIBE_SECRET=$(head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64)
-        ANONYMOUS_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
-        IV_HMAC=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
-        IV_COMPANION=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
-        SEARXNG_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
-        IMMICH_DB_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
-        INVIDIOUS_DB_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+        SCRIBE_SECRET=$(generate_secret 64)
+        ANONYMOUS_SECRET=$(generate_secret 32)
+        IV_HMAC=$(generate_secret 16)
+        IV_COMPANION=$(generate_secret 16)
+        SEARXNG_SECRET=$(generate_secret 32)
+        IMMICH_DB_PASSWORD=$(generate_secret 32)
+        INVIDIOUS_DB_PASSWORD=$(generate_secret 32)
 
         cat > "$BASE_DIR/.secrets" <<EOF
 VPN_PASS_RAW="$VPN_PASS_RAW"
@@ -737,18 +750,18 @@ EOF
         # Generate hashes if missing
         if [ -z "${WG_HASH_CLEAN:-}" ]; then
             log_info "Generating missing WireGuard hash..."
-            WG_HASH_CLEAN=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$VPN_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
+            WG_HASH_CLEAN=$(generate_hash "admin" "$VPN_PASS_RAW")
             echo "WG_HASH_CLEAN='$WG_HASH_CLEAN'" >> "$BASE_DIR/.secrets"; updated_secrets=true
         fi
         if [ -z "${AG_PASS_HASH:-}" ]; then
             log_info "Generating missing AdGuard hash..."
             AGH_USER="adguard"
-            AGH_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "$AGH_USER" "$AGH_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
+            AGH_PASS_HASH=$(generate_hash "$AGH_USER" "$AGH_PASS_RAW")
             echo "AGH_PASS_HASH='$AGH_PASS_HASH'" >> "$BASE_DIR/.secrets"; updated_secrets=true
         fi
         if [ -z "${PORTAINER_PASS_HASH:-}" ]; then
             log_info "Generating missing Portainer hash..."
-            PORTAINER_PASS_HASH=$($DOCKER_CMD run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "admin" "$1"' -- "$PORTAINER_PASS_RAW" 2>/dev/null | cut -d ":" -f 2 || echo "FAILED")
+            PORTAINER_PASS_HASH=$(generate_hash "admin" "$PORTAINER_PASS_RAW")
             echo "PORTAINER_PASS_HASH='$PORTAINER_PASS_HASH'" >> "$BASE_DIR/.secrets"; updated_secrets=true
         fi
 

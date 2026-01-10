@@ -1,78 +1,22 @@
 # --- SECTION 14: DOCKER COMPOSE GENERATION ---
 
-generate_compose() {
-    log_info "Generating Docker Compose Configuration..."
+# Helper to check if a service should be deployed
+should_deploy() {
+    if [ -z "${SELECTED_SERVICES:-}" ]; then return 0; fi
+    if echo "$SELECTED_SERVICES" | grep -qE "(^|,)$1(,|$)ப்புகளை"; then return 0; fi
+    return 1
+}
 
-    should_deploy() {
-        if [ -z "$SELECTED_SERVICES" ]; then return 0; fi
-        if echo "$SELECTED_SERVICES" | grep -q "$1"; then return 0; fi
-        return 1
-    }
-
-    # Set defaults for VERT variables
-    VERTD_PUB_URL=${VERTD_PUB_URL:-http://$LAN_IP:$PORT_VERTD}
-    VERT_PUB_HOSTNAME=${VERT_PUB_HOSTNAME:-$LAN_IP}
-
-    # Prepare escaped passwords for docker-compose (v2 requires $$ for literal $)
-    # This prevents Compose from attempting to interpolate variables inside passwords.
-    ADMIN_PASS_COMPOSE="${ADMIN_PASS_RAW//\\\$/\\\$\$}"
-    VPN_PASS_COMPOSE="${VPN_PASS_RAW//\\\$/\\\$\$}"
-    HUB_API_KEY_COMPOSE="${HUB_API_KEY//\\\$/\\\$\$}"
-    PORTAINER_PASS_COMPOSE="${PORTAINER_PASS_RAW//\\\$/\\\$\$}"
-    AGH_PASS_COMPOSE="${AGH_PASS_RAW//\\\$/\\\$\$}"
-    INVIDIOUS_DB_PASS_COMPOSE="${INVIDIOUS_DB_PASSWORD//\\\$/\\\$\$}"
-    IMMICH_DB_PASS_COMPOSE="${IMMICH_DB_PASSWORD//\\\$/\\\$\$}"
-
-    # Ensure required directories exist
-    mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR"
-
-    cat > "$COMPOSE_FILE" <<EOF
-name: ${APP_NAME}
-# ... (rest of the file follows, replacing raw variables with _COMPOSE versions)
-networks:
-  dhi-frontnet:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: $DOCKER_SUBNET
-  dhi-mgmtnet:
-    internal: true
-    driver: bridge
-
-services:
-  # Docker Socket Proxy: Mediates access to the Docker daemon for security
-  docker-proxy:
-    image: tecnativa/docker-socket-proxy:latest
-    container_name: ${CONTAINER_PREFIX}docker-proxy
-    privileged: false
-    environment:
-      - CONTAINERS=1
-      - IMAGES=1
-      - NETWORKS=1
-      - VOLUMES=1
-      - SYSTEM=1
-      - POST=1
-      - BUILD=1
-      - EXEC=1
-      - LOGS=1
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-    networks: [dhi-mgmtnet]
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits: {cpus: '0.2', memory: 64M}
-
-EOF
-
-    if should_deploy "hub-api"; then
-        HUB_API_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/hub-api" || echo "Dockerfile")
+# Service definition functions
+append_hub_api() {
+    if ! should_deploy "hub-api"; then return 0; fi
+    local DOCKERFILE=$(detect_dockerfile "$SRC_DIR/hub-api" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   hub-api:
     pull_policy: missing
     build:
       context: $SRC_DIR/hub-api
-      dockerfile: $HUB_API_DOCKERFILE
+      dockerfile: $DOCKERFILE
     image: selfhost/hub-api:latest
     container_name: ${CONTAINER_PREFIX}hub-api
     labels:
@@ -112,6 +56,8 @@ EOF
       - APP_NAME=${APP_NAME}
       - MOCK_VERIFICATION=${MOCK_VERIFICATION:-false}
       - UPDATE_STRATEGY=$UPDATE_STRATEGY
+      - LAN_IP=$LAN_IP
+      - DESEC_DOMAIN=$DESEC_DOMAIN
       - DOCKER_CONFIG=/root/.docker
       - DOCKER_HOST=tcp://docker-proxy:2375
     entrypoint: ["/bin/sh", "-c", "python3 -u /app/server.py"]
@@ -128,63 +74,42 @@ EOF
       resources:
         limits: {cpus: '0.5', memory: 256M}
 EOF
-    fi
+}
 
-    if should_deploy "odido-booster"; then
-        ODIDO_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/odido-bundle-booster" || echo "Dockerfile")
-        # Check if odido should use VPN (default: true for privacy)
-        # Read from theme.json if it exists, otherwise default to VPN mode
-        ODIDO_VPN_MODE="true"
-        if [ -f "$CONFIG_DIR/theme.json" ]; then
-            ODIDO_VPN_MODE=$(grep -o '"odido_use_vpn"[[:space:]]*:[[:space:]]*\(true\|false\)' "$CONFIG_DIR/theme.json" 2>/dev/null | grep -o '\(true\|false\)' || echo "true")
-        fi
-        
-        if [ "$ODIDO_VPN_MODE" = "true" ]; then
-            # VPN mode: route through gluetun for privacy
+append_odido_booster() {
+    if ! should_deploy "odido-booster"; then return 0; fi
+    local DOCKERFILE=$(detect_dockerfile "$SRC_DIR/odido-bundle-booster" || echo "Dockerfile")
+    local VPN_MODE="true"
+    if [ -f "$CONFIG_DIR/theme.json" ]; then
+        VPN_MODE=$(grep -o '"odido_use_vpn"[[:space:]]*:[[:space:]]*\(true\|false\)' "$CONFIG_DIR/theme.json" 2>/dev/null | grep -o '\(true\|false\)' || echo "true")
+    fi
+    
     cat >> "$COMPOSE_FILE" <<EOF
   odido-booster:
     pull_policy: missing
     build:
       context: $SRC_DIR/odido-bundle-booster
-      dockerfile: $ODIDO_DOCKERFILE
+      dockerfile: $DOCKERFILE
     image: selfhost/odido-booster:${ODIDO_BOOSTER_IMAGE_TAG:-latest}
     container_name: ${CONTAINER_PREFIX}odido-booster
     labels:
       - "io.dhi.hardened=true"
+EOF
+
+    if [ "$VPN_MODE" = "true" ]; then
+        cat >> "$COMPOSE_FILE" <<EOF
     network_mode: "service:gluetun"
-    environment:
-      - API_KEY=$HUB_API_KEY_COMPOSE
-      - ODIDO_USER_ID=$ODIDO_USER_ID
-      - ODIDO_TOKEN=$ODIDO_TOKEN
-      - PORT=8085
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8085/docs"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    volumes:
-      - $DATA_DIR/odido:/data
     depends_on:
       gluetun: {condition: service_healthy}
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits: {cpus: '0.3', memory: 128M}
 EOF
-        else
-            # Direct mode: use home IP (fallback for troubleshooting)
-    cat >> "$COMPOSE_FILE" <<EOF
-  odido-booster:
-    pull_policy: missing
-    build:
-      context: $SRC_DIR/odido-bundle-booster
-      dockerfile: $ODIDO_DOCKERFILE
-    image: selfhost/odido-booster:${ODIDO_BOOSTER_IMAGE_TAG:-latest}
-    container_name: ${CONTAINER_PREFIX}odido-booster
-    labels:
-      - "io.dhi.hardened=true"
+    else
+        cat >> "$COMPOSE_FILE" <<EOF
     networks: [dhi-frontnet]
     ports: ["$LAN_IP:8085:8085"]
+EOF
+    fi
+
+    cat >> "$COMPOSE_FILE" <<EOF
     environment:
       - API_KEY=$HUB_API_KEY_COMPOSE
       - ODIDO_USER_ID=$ODIDO_USER_ID
@@ -202,10 +127,10 @@ EOF
       resources:
         limits: {cpus: '0.3', memory: 128M}
 EOF
-        fi
-    fi
+}
 
-    if should_deploy "memos"; then
+append_memos() {
+    if ! should_deploy "memos"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
   memos:
     image: ghcr.io/usememos/memos:latest
@@ -228,9 +153,10 @@ EOF
       resources:
         limits: {cpus: '0.5', memory: 256M}
 EOF
-    fi
+}
 
-    if should_deploy "gluetun"; then
+append_gluetun() {
+    if ! should_deploy "gluetun"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
   gluetun:
     image: qmcgaw/gluetun:latest
@@ -274,22 +200,22 @@ EOF
       resources:
         limits: {cpus: '2.0', memory: 512M}
 EOF
-    fi
+}
 
+append_dashboard() {
+    if ! should_deploy "dashboard"; then return 0; fi
     # Create Dashboard Source Directory and Dockerfile
     $SUDO mkdir -p "$SRC_DIR/dashboard"
-    cat <<EOF | $SUDO tee "$SRC_DIR/dashboard/Dockerfile" >/dev/null
+    cat <<DASHEOF | $SUDO tee "$SRC_DIR/dashboard/Dockerfile" >/dev/null
 FROM alpine:3.20
 RUN apk add --no-cache nginx \
     && mkdir -p /usr/share/nginx/html \
     && chown -R 1000:1000 /var/lib/nginx /var/log/nginx /run/nginx /usr/share/nginx/html
 USER 1000
 COPY . /usr/share/nginx/html
-# Nginx default configuration is handled by volume mount for flexibility
 CMD ["nginx", "-g", "daemon off;"]
-EOF
+DASHEOF
 
-    if should_deploy "dashboard"; then
     cat >> "$COMPOSE_FILE" <<EOF
   dashboard:
     pull_policy: missing
@@ -324,22 +250,22 @@ EOF
       resources:
         limits: {cpus: '0.3', memory: 128M}
 EOF
-    fi
+}
 
+append_portainer() {
+    if ! should_deploy "portainer"; then return 0; fi
     # Create Portainer Source Directory and DHI Wrapper
     $SUDO mkdir -p "$SRC_DIR/portainer"
-    cat <<EOF | $SUDO tee "$SRC_DIR/portainer/Dockerfile.dhi" >/dev/null
+    cat <<PORTEOF | $SUDO tee "$SRC_DIR/portainer/Dockerfile.dhi" >/dev/null
 FROM alpine:3.20
 COPY --from=portainer/portainer-ce:latest /portainer /portainer
 COPY --from=portainer/portainer-ce:latest /public /public
 COPY --from=portainer/portainer-ce:latest /mustache-templates /mustache-templates
-# Portainer expectations
 WORKDIR /
 EXPOSE 9000 9443
 ENTRYPOINT ["/portainer"]
-EOF
+PORTEOF
 
-    if should_deploy "portainer"; then
     cat >> "$COMPOSE_FILE" <<EOF
   portainer:
     image: portainer/portainer-ce:latest
@@ -364,9 +290,10 @@ EOF
       resources:
         limits: {cpus: '0.5', memory: 512M}
 EOF
-    fi
+}
 
-    if should_deploy "adguard"; then
+append_adguard() {
+    if ! should_deploy "adguard"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
   adguard:
     image: adguard/adguardhome:latest
@@ -395,9 +322,10 @@ EOF
       resources:
         limits: {cpus: '0.5', memory: 512M}
 EOF
-    fi
+}
 
-    if should_deploy "unbound"; then
+append_unbound() {
+    if ! should_deploy "unbound"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
   unbound:
     image: klutchell/unbound:latest
@@ -420,11 +348,11 @@ EOF
       resources:
         limits: {cpus: '0.5', memory: 256M}
 EOF
-    fi
+}
 
-    if should_deploy "wg-easy"; then
+append_wg_easy() {
+    if ! should_deploy "wg-easy"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
-  # WG-Easy: Remote access VPN server (only 51820/UDP exposed to internet)
   wg-easy:
     image: ghcr.io/wg-easy/wg-easy:latest
     container_name: ${CONTAINER_PREFIX}wg-easy
@@ -443,9 +371,10 @@ EOF
       resources:
         limits: {cpus: '1.0', memory: 256M}
 EOF
-    fi
+}
 
-    if should_deploy "redlib"; then
+append_redlib() {
+    if ! should_deploy "redlib"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
   redlib:
     image: quay.io/redlib/redlib:latest
@@ -461,7 +390,7 @@ EOF
     cap_drop: [ALL]
     depends_on: {gluetun: {condition: service_healthy}}
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/robots.txt || [ $? -eq 8 ]"]
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/robots.txt || [ \\$? -eq 8 ]"]
       interval: 1m
       timeout: 5s
       retries: 3
@@ -469,16 +398,17 @@ EOF
       resources:
         limits: {cpus: '0.5', memory: 256M}
 EOF
-    fi
+}
 
-    if should_deploy "wikiless"; then
-        WIKILESS_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wikiless" || echo "Dockerfile")
+append_wikiless() {
+    if ! should_deploy "wikiless"; then return 0; fi
+    local DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wikiless" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   wikiless:
     pull_policy: missing
     build:
       context: "$SRC_DIR/wikiless"
-      dockerfile: $WIKILESS_DOCKERFILE
+      dockerfile: $DOCKERFILE
     image: selfhost/wikiless:latest
     container_name: ${CONTAINER_PREFIX}wikiless
     labels:
@@ -506,9 +436,10 @@ EOF
       resources:
         limits: {cpus: '0.3', memory: 128M}
 EOF
-    fi
+}
 
-    if should_deploy "invidious"; then
+append_invidious() {
+    if ! should_deploy "invidious"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
   invidious:
     image: quay.io/invidious/invidious:latest
@@ -571,9 +502,10 @@ EOF
       resources:
         limits: {cpus: '0.3', memory: 256M}
 EOF
-    fi
+}
 
-    if should_deploy "rimgo"; then
+append_rimgo() {
+    if ! should_deploy "rimgo"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
   rimgo:
     image: codeberg.org/rimgo/rimgo:latest
@@ -593,14 +525,14 @@ EOF
       resources:
         limits: {cpus: '0.5', memory: 256M}
 EOF
-    fi
+}
 
-    if should_deploy "breezewiki"; then
-        if [ -n "$DESEC_DOMAIN" ]; then
-            BW_ORIGIN="https://breezewiki.$DESEC_DOMAIN"
-        else
-            BW_ORIGIN="http://$LAN_IP:$PORT_BREEZEWIKI"
-        fi
+append_breezewiki() {
+    if ! should_deploy "breezewiki"; then return 0; fi
+    local BW_ORIGIN="http://$LAN_IP:$PORT_BREEZEWIKI"
+    if [ -n "$DESEC_DOMAIN" ]; then
+        BW_ORIGIN="https://breezewiki.$DESEC_DOMAIN"
+    fi
 
     cat >> "$COMPOSE_FILE" <<EOF
   breezewiki:
@@ -621,9 +553,10 @@ EOF
       resources:
         limits: {cpus: '0.5', memory: 512M}
 EOF
-    fi
+}
 
-    if should_deploy "anonymousoverflow"; then
+append_anonymousoverflow() {
+    if ! should_deploy "anonymousoverflow"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
   anonymousoverflow:
     image: ghcr.io/httpjamesm/anonymousoverflow:release
@@ -644,16 +577,17 @@ EOF
       resources:
         limits: {cpus: '0.5', memory: 256M}
 EOF
-    fi
+}
 
-    if should_deploy "scribe"; then
-        SCRIBE_DOCKERFILE=$(detect_dockerfile "$SRC_DIR/scribe" || echo "Dockerfile")
+append_scribe() {
+    if ! should_deploy "scribe"; then return 0; fi
+    local DOCKERFILE=$(detect_dockerfile "$SRC_DIR/scribe" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   scribe:
     pull_policy: missing
     build:
       context: "$SRC_DIR/scribe"
-      dockerfile: $SCRIBE_DOCKERFILE
+      dockerfile: $DOCKERFILE
     image: selfhost/scribe:${SCRIBE_IMAGE_TAG:-latest}
     container_name: ${CONTAINER_PREFIX}scribe
     labels:
@@ -671,11 +605,11 @@ EOF
       resources:
         limits: {cpus: '0.5', memory: 256M}
 EOF
-    fi
+}
 
-    if should_deploy "vert"; then
+append_vert() {
+    if ! should_deploy "vert"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
-  # VERT: Local file conversion service
   vertd:
     container_name: ${CONTAINER_PREFIX}vertd
     image: ghcr.io/vert-sh/vertd:latest
@@ -691,13 +625,12 @@ EOF
       - "io.dhi.hardened=true"
     environment:
       - PUBLIC_URL=http://${CONTAINER_PREFIX}vertd:$PORT_INT_VERTD
-    # Hardware Acceleration (Intel Quick Sync, AMD VA-API, NVIDIA)
 $VERTD_DEVICES
     restart: always
     deploy:
       resources:
         limits: {cpus: '2.0', memory: 1024M}
-$(if [ -n "$VERTD_NVIDIA" ]; then echo "        reservations:
+$(if [ -n "${VERTD_NVIDIA:-}" ]; then echo "        reservations:
           devices:
             - driver: nvidia
               count: all
@@ -733,11 +666,11 @@ $(if [ -n "$VERTD_NVIDIA" ]; then echo "        reservations:
       resources:
         limits: {cpus: '0.5', memory: 256M}
 EOF
-    fi
+}
 
-    if should_deploy "cobalt"; then
+append_cobalt() {
+    if ! should_deploy "cobalt"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
-  # Cobalt: Media downloader (Local access only)
   cobalt:
     image: ghcr.io/imputnet/cobalt:${COBALT_IMAGE_TAG:-latest}
     container_name: ${CONTAINER_PREFIX}cobalt
@@ -756,11 +689,11 @@ EOF
       resources:
         limits: {cpus: '1.0', memory: 512M}
 EOF
-    fi
+}
 
-    if should_deploy "searxng"; then
+append_searxng() {
+    if ! should_deploy "searxng"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
-  # SearXNG: Privacy-respecting metasearch engine
   searxng:
     image: searxng/searxng:${SEARXNG_IMAGE_TAG:-latest}
     container_name: ${CONTAINER_PREFIX}searxng
@@ -798,11 +731,11 @@ EOF
       resources:
         limits: {cpus: '0.3', memory: 128M}
 EOF
-    fi
+}
 
-    if should_deploy "immich"; then
+append_immich() {
+    if ! should_deploy "immich"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
-  # Immich: High-performance self-hosted photo and video management
   immich-server:
     image: ghcr.io/immich-app/immich-server:${IMMICH_IMAGE_TAG:-release}
     container_name: ${CONTAINER_PREFIX}immich-server
@@ -872,11 +805,11 @@ EOF
       resources:
         limits: {cpus: '2.0', memory: 2048M}
 EOF
-    fi
+}
 
-    if should_deploy "watchtower"; then
+append_watchtower() {
+    if ! should_deploy "watchtower"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
-  # Watchtower: Automatic container updates
   watchtower:
     image: containrrr/watchtower:latest
     container_name: ${CONTAINER_PREFIX}watchtower
@@ -892,8 +825,93 @@ EOF
       resources:
         limits: {cpus: '0.2', memory: 128M}
 EOF
-    fi
+}
 
+generate_compose() {
+    log_info "Generating Docker Compose Configuration..."
+
+    # Set defaults for VERT variables
+    VERTD_PUB_URL=${VERTD_PUB_URL:-http://$LAN_IP:$PORT_VERTD}
+    VERT_PUB_HOSTNAME=${VERT_PUB_HOSTNAME:-$LAN_IP}
+
+    # Prepare escaped passwords for docker-compose (v2 requires $$ for literal $)
+    ADMIN_PASS_COMPOSE="${ADMIN_PASS_RAW//$/\$\$}"
+    VPN_PASS_COMPOSE="${VPN_PASS_RAW//$/\$\$}"
+    HUB_API_KEY_COMPOSE="${HUB_API_KEY//$/\$\$}"
+    PORTAINER_PASS_COMPOSE="${PORTAINER_PASS_RAW//$/\$\$}"
+    AGH_PASS_COMPOSE="${AGH_PASS_RAW//$/\$\$}"
+    INVIDIOUS_DB_PASS_COMPOSE="${INVIDIOUS_DB_PASSWORD//$/\$\$}"
+    IMMICH_DB_PASS_COMPOSE="${IMMICH_DB_PASSWORD//$/\$\$}"
+
+    # Ensure required directories exist
+    mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR"
+
+    # Header
+    cat > "$COMPOSE_FILE" <<EOF
+name: ${APP_NAME}
+networks:
+  dhi-frontnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: $DOCKER_SUBNET
+  dhi-mgmtnet:
+    internal: true
+    driver: bridge
+
+services:
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: ${CONTAINER_PREFIX}docker-proxy
+    privileged: false
+    environment:
+      - CONTAINERS=1
+      - IMAGES=1
+      - NETWORKS=1
+      - VOLUMES=1
+      - SYSTEM=1
+      - POST=1
+      - BUILD=1
+      - EXEC=1
+      - LOGS=1
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks: [dhi-mgmtnet]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.2', memory: 64M}
+
+EOF
+
+    # Core Infrastructure
+    append_hub_api
+    append_gluetun
+    append_adguard
+    append_unbound
+    append_wg_easy
+    append_dashboard
+    append_portainer
+
+    # Privacy Frontends
+    append_redlib
+    append_wikiless
+    append_invidious
+    append_rimgo
+    append_breezewiki
+    append_anonymousoverflow
+    append_scribe
+
+    # Utilities & Others
+    append_memos
+    append_odido_booster
+    append_vert
+    append_cobalt
+    append_searxng
+    append_immich
+    append_watchtower
+
+    # CasaOS Metadata
     cat >> "$COMPOSE_FILE" <<EOF
 x-casaos:
   architectures:
@@ -904,7 +922,7 @@ x-casaos:
   scheme: http
   hostname: $LAN_IP
   index: /
-  port_map: "8081"
+  port_map: "$PORT_DASHBOARD_WEB"
   title:
     en_us: Privacy Hub
   tagline:

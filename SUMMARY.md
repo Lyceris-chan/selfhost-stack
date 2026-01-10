@@ -1,8 +1,0 @@
-- services only show when in admin view
-- privacy hub icon still doesnt show properly on native zima os dashboard favicon is fine 
-- settings manage is still shown as text for the portainer manage button
-- ensure the portainer password is set properly as it doesnt appear to work currently
-- dont show upstream images for the ones we dont build from source
-- ensure project size and CPU usage are accurate as the information obtained from htop is different from what the script reports project size should show a drop down of all categories of things showing images source etc and allowing users to cleanup and manage unneeded items 
-- it looks like the purge unused images button has double icons and shouldnt it say something else incase other files are ready for cleanup
-- ➜ [INFO] Localizing font assets in parallel...

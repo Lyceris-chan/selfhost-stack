@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     SESSIONS_FILE: str = "/app/data/sessions.json"
     SECRETS_FILE: str = "/app/.secrets"
 
+    # Network
+    LAN_IP: str = os.environ.get('LAN_IP', '127.0.0.1')
+    DESEC_DOMAIN: str = os.environ.get('DESEC_DOMAIN', '')
+
     # Auth
     HUB_API_KEY: str | None = os.environ.get('HUB_API_KEY')
     ADMIN_PASS_RAW: str | None = os.environ.get('ADMIN_PASS_RAW')

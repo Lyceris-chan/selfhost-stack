@@ -398,9 +398,8 @@ setup_configs() {
         log_info "Configuring deSEC and LE..."
         DESEC_RESPONSE=$(curl -s --max-time 15 -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
             -H "Authorization: Token $DESEC_TOKEN" -H "Content-Type: application/json" \
-            -d "[{"subname": "", "ttl": 3600, "type": "A", "records": ["$PUBLIC_IP"]}, {"subname": "*", "ttl": 3600, "type": "A", "records": ["$PUBLIC_IP"]}]" 2>&1 || echo "CURL_ERROR")
+            -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}]" 2>&1 || echo "CURL_ERROR")
         
-        PUBLIC_IP_ESCAPED="${PUBLIC_IP//./\.}}"
         if [ "$DESEC_RESPONSE" = "CURL_ERROR" ]; then log_warn "deSEC API failed"; fi
         
         mkdir -p "$AGH_CONF_DIR/certbot"
@@ -501,7 +500,7 @@ EOF
 generate_libredirect_export() {
     if [ -z "$DESEC_DOMAIN" ] || [ ! -f "$AGH_CONF_DIR/ssl.crt" ]; then return 0; fi
     local export_file="$BASE_DIR/libredirect_import.json"
-    local template_file="$SCRIPT_DIR/lib/libredirect_template.json"
+    local template_file="$SCRIPT_DIR/lib/templates/libredirect_template.json"
     [ ! -f "$template_file" ] && return 0
 
     local host="$DESEC_DOMAIN"

@@ -3,6 +3,22 @@
 
 sync_sources() {
     log_info "Synchronizing Source Repositories..."
+
+    # Pre-sync connectivity check
+    log_info "Verifying connectivity to source repositories..."
+    local check_failed=false
+    for repo in "https://github.com" "https://git.sr.ht" "https://codeberg.org"; do
+        if ! curl -s --max-time 5 "$repo" -o /dev/null >/dev/null 2>&1; then
+            log_warn "Could not reach $repo. Sync may fail."
+            check_failed=true
+        fi
+    done
+    if [ "$check_failed" = true ]; then
+        if ! ask_confirm "One or more repository hosts are unreachable. Proceed anyway?"; then
+            log_crit "Sync aborted by user due to connectivity issues."
+            return 1
+        fi
+    fi
     
     clone_repo() { 
         local repo_url="$1"
