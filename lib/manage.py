@@ -24,8 +24,6 @@ def print_banner():
 
 def run_install(args):
     cmd = [INSTALL_SCRIPT]
-    if args.personal:
-        cmd.append("-P")
     if args.auto:
         cmd.append("-y")
     if args.clean:
@@ -42,7 +40,6 @@ def run_install(args):
 def main():
     parser = argparse.ArgumentParser(description="Privacy Hub Management CLI")
     parser.add_argument("--install", action="store_true", help="Run the installer")
-    parser.add_argument("-P", "--personal", action="store_true", help="Personal mode (fast-track)")
     parser.add_argument("-y", "--auto", action="store_true", help="Auto-confirm")
     parser.add_argument("-c", "--clean", action="store_true", help="Clean environment before install")
     parser.add_argument("-x", "--nuke", action="store_true", help="Factory reset (Data Loss!)")

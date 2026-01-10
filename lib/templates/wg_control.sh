@@ -265,7 +265,7 @@ WGEDATAEOF
     HEALTH_DETAILS_JSON="{"
     FIRST_SRV=1
     # Added core infrastructure services to the monitoring loop
-    for srv in "invidious:3000" "redlib:8080" "wikiless:8180" "memos:5230" "rimgo:3002" "scribe:8280" "breezewiki:10416" "anonymousoverflow:8480" "vert:80" "vertd:24153" "adguard:8083" "portainer:9000" "wg-easy:51821"; do
+    for srv in "invidious:3000" "redlib:8080" "wikiless:8180" "memos:5230" "rimgo:3002" "scribe:8280" "breezewiki:10416" "anonymousoverflow:8480" "vert:80" "vertd:24153" "adguard:8083" "portainer:9000" "wg-easy:51821" "cobalt:9000"; do
         s_name_real="${CONTAINER_PREFIX}${srv%:*}"
         s_port=${srv#*:} 
         [ $FIRST_SRV -eq 0 ] && { SERVICES_JSON="$SERVICES_JSON,"; HEALTH_DETAILS_JSON="$HEALTH_DETAILS_JSON,"; }

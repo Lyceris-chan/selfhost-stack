@@ -57,6 +57,10 @@ def update_test_config(template_path, output_path, details_data):
             new_lines.append('export VPN_PASS_RAW="vpn123"\n')
         elif line.startswith('export WG_CONF_B64='):
             val = details_data.get('WG_CONF_B64', '')
+            if not val:
+                # Provide a dummy config for testing if none exists
+                dummy_conf = "[Interface]\nPrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\nAddress = 10.2.0.2/32\nDNS = 10.2.0.1\n\n[Peer]\nPublicKey = BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=\nEndpoint = 127.0.0.1:51820\nAllowedIPs = 0.0.0.0/0\n"
+                val = base64.b64encode(dummy_conf.encode()).decode()
             new_lines.append(f'export WG_CONF_B64="{val}"\n')
         elif line.startswith('export REG_USER='):
              val = details_data.get('REG_USER', '')

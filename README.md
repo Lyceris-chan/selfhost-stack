@@ -28,7 +28,6 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
   - [Network Configuration](#-network-configuration)
 - [Advanced Setup: OpenWrt & Double NAT](#-advanced-setup-openwrt--double-nat)
 - [Privacy & Architecture](#️-privacy--architecture)
-  - [A/B Update System](#automatic-version-pinning--ab-system)
   - [Surgical Patch Registry](#surgical-patch-registry)
 - [Security Standards](#-security-standards)
 - [System Requirements](#️-system-requirements)
@@ -46,12 +45,11 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
 *   **📱 Frictionless Browsing (Redlib)**: Redlib eliminates aggressive "Open in App" prompts and mobile-web trackers. Enjoy a fast, premium Reddit experience on any device without being forced into the official app's data-harvesting ecosystem.
 *   **🚀 Faster & Safer**: Self-hosted frontends strip out tracking scripts, telemetry, and bloated JavaScript. The result? Pages load faster and your browser isn't executing code designed to spy on you.
 *   **🔑 Easy Remote Access**: Built-in **WireGuard** management. Generate client configs and **QR codes** directly from the dashboard to connect your phone or laptop securely.
-*   **🔄 Atomic A/B Updates**: Safe, zero-downtime updates with automated rollback capability. Switch between "Slot A" and "Slot B" to ensure high availability during service maintenance.
-*   **⚡ Hardware Performance**: Automatically detects and provisions GPU acceleration (Intel QSV, AMD VA-API, or NVIDIA) for media-heavy services like Immich and VERT. Code is built from source locally to ensure compatibility with your host environment.
+*   **⚡ Hardware Performance**: Automatically detects and provisions GPU acceleration (Intel QSV, AMD VA-API, or NVIDIA) for media-heavy services like Immich and VERT.
 *   **🎨 Material Design 3**: A beautiful, responsive dashboard with dynamic theming and real-time health metrics.
 
 > ⚠️ **Heads Up: The Cat-and-Mouse Game**  
-> Companies like Google and Reddit **actively try to break** these privacy frontends. Why? Because every user on Invidious or Redlib is a user they can't track, monetize, or serve ads to. They regularly change their APIs, add new anti-bot measures, and modify their page structures specifically to break these tools. This stack uses **local builds** so we can apply fixes quickly when upstream breaks-but occasional outages are part of the privacy game. It's worth it.
+> Companies like Google and Reddit **actively try to break** these privacy frontends. Why? Because every user on Invidious or Redlib is a user they can't track, monetize, or serve ads to. They regularly change their APIs, add new anti-bot measures, and modify their page structures specifically to break these tools. This stack uses **pre-built images** and automated updates so we can apply fixes quickly-but occasional outages are part of the privacy game. It's worth it.
 
 > 🔌 **Service Availability & Redundancy**  
 > These services are **only available** while the device you are hosting on is powered on and network-accessible. In the event of a power outage, network failure, or hardware issue, access to your self-hosted services will be lost. We strongly recommend exploring redundancy options (such as UPS backups or secondary failover nodes) to ensure continuous access to your privacy infrastructure. Be aware that you are your own "cloud provider" now!
@@ -60,15 +58,16 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
 
 ## 🚀 Deployment
 
-**Don't worry-this is easier than it looks!** The Privacy Hub guides you through everything. Just follow these steps, and you'll have your own private internet in about 20 minutes.
+**Don't worry-this is easier than it looks!** The Privacy Hub guides you through everything. Just follow these steps, and you'll have your own private internet in about **2-5 minutes**.
 
 ### Before You Start (Checklist)
 
 You'll need:
-- [ ] A computer running **ZimaOS**, **Ubuntu 22.04+**, or **Debian 12+** (this will be your "hub")
-- [ ] **Docker** installed on that computer ([Get Docker](https://docs.docker.com/get-docker/))
-- [ ] A **ProtonVPN** account (free tier works!) for your VPN tunnel
-- [ ] *(Optional)* A **deSEC** account for a free domain name (for remote access with SSL)
+- [ ] A modern 64-bit computer (ZimaBoard, Raspberry Pi 5, NUC, or any PC)
+- [ ] **ZimaOS**, **Ubuntu 22.04+**, or **Debian 12+**
+- [ ] **Docker** installed ([Get Docker](https://docs.docker.com/get-docker/))
+- [ ] A **ProtonVPN** account (free tier works!)
+- [ ] *(Optional)* A **deSEC** account for free SSL/domain
 
 ---
 
@@ -135,9 +134,9 @@ The script will ask you a few questions:
 2.  **Enter your deSEC domain and token** (from Step 2, or skip if you didn't set this up)
 3.  **Choose your password preferences** (auto-generate or set your own)
 
-That's it! Sit back and let it build (~15-20 minutes).
+That's it! Sit back and let it build.
 
-> 💡 **The "I'm in a hurry" Way**: Use `./zima.sh -P` to fast-track setup with automated passwords and parallel builds.
+> 💡 **The "I'm in a hurry" Way**: Use `./zima.sh -P` to fast-track setup with automated passwords and parallel deployment.
 
 <a id="customization-flags"></a>
 ### 🛠️ Customization Flags (Optional)
@@ -148,40 +147,42 @@ Before running the installer, you can customize your deployment using these flag
 | :--- | :--- |
 | `-p` | **Auto-Passwords**: Generates random secure credentials automatically. |
 | `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless mode). |
-| `-P` | **Personal Mode**: Fast-track setup (combines `-p`, `-y`, and `-j`). |
-| `-j` | **Parallel Deploy**: Builds everything at once. Faster, but high CPU usage! |
+| `-j` | **Parallel Deploy**: Deploys services in parallel. Faster, but higher CPU usage! |
 | `-s` | **Selective**: Install only specific apps (e.g., `-s invidious,memos`). |
-| `-S` | **Swap Slots**: A/B Update toggle. Deploys the new version to the standby slot before swapping. |
 | `-c` | **Maintenance**: Recreates containers and networks to fix glitches while **preserving** your persistent data. |
 | `-x` | **Factory Reset**: ⚠️ **Deletes everything**. Wipes all containers, volumes, and application data. |
-| `-a` | **Allow ProtonVPN**: Adds ProtonVPN domains to the AdGuard allowlist for browser extension users. Entries added: `getproton.me`, `vpn-api.proton.me`, `protonstatus.com`, `protonvpn.ch`, `protonvpn.com`, `protonvpn.net`. This does not affect other privacy services or VPN functionality. |
-| `-D` | **Dashboard Only**: Regenerates only the dashboard without rebuilding services. Useful for UI testing and development. |
+| `-a` | **Allow ProtonVPN**: Adds ProtonVPN domains to the AdGuard allowlist for browser extension users. |
 | `-h` | **Help**: Displays usage information and available flags. |
 
 **Example usage:**
 ```bash
-# Fast-track personal deployment
-./zima.sh -P
+# Automated deployment with parallel builds
+./zima.sh -p -y -j
 
 # Selective deployment with auto-passwords
 ./zima.sh -p -y -s invidious,memos,searxng
-
-# Dashboard-only rebuild (development/testing)
-./zima.sh -D
 ```
-
-> 💡 **Development Tip**: Use `-s` for Codespaces or limited storage environments. Use `-D` when testing UI changes without rebuilding all services.
 
 ---
 
 ### What Happens Next?
 
-1.  **🔨 Privacy Build**: The system clones and builds your private apps
-2.  **✅ Ready to Use**: You get a link to your dashboard (e.g., `http://192.168.1.100:8081`)
-3.  **🔐 Credential Export**: Your passwords are saved for safe keeping
-4.  **🔀 Instant Redirection**: A `libredirect_import.json` is created-import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically redirect YouTube/Reddit to your hub
+1.  **🚀 Instant Deployment**: The system pulls and starts your private apps.
+2.  **✅ Ready to Use**: You get a link to your dashboard (e.g., `http://192.168.1.100:8081`).
+3.  **🔐 Credential Export**: Your passwords are saved for safe keeping.
+4.  **🔀 Instant Redirection**: A `libredirect_import.json` is created-import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically redirect YouTube/Reddit to your hub.
 
-> 📁 **Where are my passwords?**: Check the [Credential Management](#-credential-management) section for details on accessing your generated credentials.
+---
+
+## 🖥️ System Requirements
+
+To ensure a smooth experience, your "hub" should meet the following minimum specifications:
+
+*   **Operating System**: 64-bit Linux (ZimaOS, Ubuntu 22.04+, or Debian 12+).
+*   **Processor**: x86_64 or ARM64 (ZimaBoard, Raspberry Pi 5, NUC, or any modern PC).
+*   **Memory**: 2GB RAM minimum (4GB+ highly recommended for optimal performance with Immich/SearXNG).
+*   **Storage**: 16GB+ available space on a fast SSD/NVMe (plus additional space for your personal data/media).
+*   **Network**: Stable internet connection. Public IP only required for remote access via WireGuard.
 
 ---
 
@@ -255,40 +256,41 @@ To automatically redirect your browser from big-tech sites to your private Hub:
 
 ### Included Privacy Services
 
-Every service in this stack is either built from source (and hardened) or pulled from a trusted minimal image. All services marked with **🔒 VPN** are locked inside the VPN tunnel-they cannot "see" the real internet, and the real internet cannot "see" them.
+Every service in this stack is pulled from a trusted minimal image. All services marked with **🔒 VPN** are locked inside the VPN tunnel-they cannot "see" the real internet, and the real internet cannot "see" them.
 
 <details>
 <summary>📋 <strong>View Full Service Catalog & Routing</strong> (Click to expand)</summary>
 
-| Service | Category | 🛡️ Routing | Source & Patched Dockerfile |
+| Service | Category | 🛡️ Routing | Official Source |
 | :--- | :--- | :--- | :--- |
-| **Invidious** | Frontend | **🔒 VPN** | [iv-org/invidious](https://github.com/iv-org/invidious) ([Patched](https://github.com/iv-org/invidious/blob/master/Dockerfile)) |
-| **Companion** | Helper | **🔒 VPN** | [iv-org/companion](https://github.com/iv-org/invidious-companion) ([Patched](https://github.com/iv-org/invidious-companion/blob/master/Dockerfile)) |
-| **Redlib** | Frontend | **🔒 VPN** | [redlib-org/redlib](https://github.com/redlib-org/redlib) ([Patched](https://github.com/redlib-org/redlib/blob/master/Dockerfile)) |
-| **SearXNG** | Frontend | **🔒 VPN** | [searxng/searxng](https://github.com/searxng/searxng) (Pre-built Image) |
-| **Scribe** | Frontend | **🔒 VPN** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) ([Patched](https://github.com/edwardloveall/scribe/blob/main/Dockerfile)) |
-| **Rimgo** | Frontend | **🔒 VPN** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) ([Patched](https://codeberg.org/rimgo/rimgo/src/branch/main/Dockerfile)) |
-| **Wikiless** | Frontend | **🔒 VPN** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) ([Patched](https://github.com/Metastem/Wikiless/blob/master/Dockerfile)) |
-| **BreezeWiki** | Frontend | **🔒 VPN** | [breezewiki](https://gitdab.com/cadence/breezewiki) ([Patched](https://github.com/PussTheCat-org/docker-breezewiki-quay/blob/master/docker/Dockerfile)) |
-| **AnonOverflow** | Frontend | **🔒 VPN** | [anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) ([Patched](https://github.com/httpjamesm/anonymousoverflow/blob/master/Dockerfile)) |
-| **Cobalt** | Utility | **🏠 Local** | [imputnet/cobalt](https://github.com/imputnet/cobalt) (Pre-built Image) |
-| **Memos** | Utility | **🏠 Local** | [usememos/memos](https://github.com/usememos/memos) ([Patched](https://github.com/usememos/memos/blob/main/Dockerfile)) |
-| **Immich** | Utility | **🔒 VPN*** | [immich-app/immich](https://github.com/immich-app/immich) (Pre-built Image) |
-| **VERT / VERTd** | Utility | **🏠 Local** | [vert-sh/vert](https://github.com/vert-sh/vert) ([Patched](https://github.com/vert-sh/vert/blob/main/Dockerfile)) |
-| **AdGuard Home** | Core | **🏠 Local** | [AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) ([Patched](https://github.com/AdguardTeam/AdGuardHome/blob/master/Dockerfile)) |
-| **Unbound** | Core | **🏠 Local** | [unbound](https://github.com/klutchell/unbound-docker) ([Patched](https://github.com/klutchell/unbound-docker/blob/master/Dockerfile)) |
-| **WireGuard** | Core | **🏠 Local** | [wg-easy](https://github.com/wg-easy/wg-easy) ([Patched](https://github.com/wg-easy/wg-easy/blob/master/Dockerfile)) |
-| **Gluetun** | Core | **🌍 Exit** | [gluetun](https://github.com/qdm12/gluetun) ([Patched](https://github.com/qdm12/gluetun/blob/master/Dockerfile)) |
-| **Portainer** | Core | **🏠 Local** | [portainer](https://github.com/portainer/portainer) ([Patched](lib/services.sh)) |
-| **Dashboard** | Core | **🏠 Local** | [Local Source] ([Custom](lib/services.sh)) |
-| **Hub API** | Core | **🏠 Local** | [Local Source](/hub-api) ([Custom](/hub-api/Dockerfile)) |
-| **Odido Booster** | Utility | **🏠 Local** | [odido-booster](https://github.com/Lyceris-chan/odido-bundle-booster) ([Patched](https://github.com/Lyceris-chan/odido-bundle-booster/blob/master/Dockerfile)) |
+| **Invidious** | Frontend | **🔒 VPN** | [iv-org/invidious](https://github.com/iv-org/invidious) |
+| **Companion** | Helper | **🔒 VPN** | [iv-org/companion](https://github.com/iv-org/invidious-companion) |
+| **Redlib** | Frontend | **🔒 VPN** | [redlib-org/redlib](https://github.com/redlib-org/redlib) |
+| **SearXNG** | Frontend | **🔒 VPN** | [searxng/searxng](https://github.com/searxng/searxng) |
+| **Scribe** | Frontend | **🔒 VPN** | [edwardloveall/scribe](https://github.com/edwardloveall/scribe) |
+| **Rimgo** | Frontend | **🔒 VPN** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) |
+| **Wikiless** | Frontend | **🔒 VPN** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) |
+| **BreezeWiki** | Frontend | **🔒 VPN** | [breezewiki](https://github.com/breezewiki/breezewiki) |
+| **AnonOverflow** | Frontend | **🔒 VPN** | [anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) |
+| **Cobalt** | Utility | **🔒 VPN** | [imputnet/cobalt](https://github.com/imputnet/cobalt) |
+| **Memos** | Utility | **🔒 VPN** | [usememos/memos](https://github.com/usememos/memos) |
+| **Immich** | Utility | **🔒 VPN*** | [immich-app/immich](https://github.com/immich-app/immich) |
+| **VERT / VERTd** | Utility | **🏠 Local** | [vert-sh/vert](https://github.com/vert-sh/vert) |
+| **AdGuard Home** | Core | **🏠 Local** | [AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) |
+| **Unbound** | Core | **🏠 Local** | [unbound](https://github.com/klutchell/unbound-docker) |
+| **WireGuard** | Core | **🏠 Local** | [wg-easy](https://github.com/wg-easy/wg-easy) |
+| **Gluetun** | Core | **🌍 Exit** | [gluetun](https://github.com/qdm12/gluetun) |
+| **Portainer** | Core | **🏠 Local** | [portainer](https://github.com/portainer/portainer) |
+| **Watchtower** | Core | **🏠 Local** | [watchtower](https://github.com/containrrr/watchtower) |
+| **Dashboard** | Core | **🏠 Local** | [Local Source] |
+| **Hub API** | Core | **🏠 Local** | [Local Source](/hub-api) |
+| **Odido Booster** | Utility | **🏠 Local** | [odido-booster](https://github.com/Lyceris-chan/odido-bundle-booster) |
 
 *\*Immich uses the VPN only for specific machine learning model downloads and metadata fetching. Your photos stay local.
 
 </details>
 
-> **Note**: All "Frontend" services (and Immich/SearXNG) are routed through the VPN tunnel automatically. VERT, Cobalt UI, and core management tools are strictly local-only.
+> **Note**: All "Frontend" services (and Immich/SearXNG/Cobalt) are routed through the VPN tunnel automatically. VERT and core management tools are strictly local-only.
 
 ### ⚡ Hardware Acceleration (GPU/QSV)
 To ensure peak performance for media-heavy tasks, this stack supports hardware-accelerated transcoding and machine learning:
@@ -299,7 +301,7 @@ To ensure peak performance for media-heavy tasks, this stack supports hardware-a
 *   **Immich**: Utilizes Intel Quick Sync (QSV), VA-API, or NVIDIA GPUs for localized image auto-tagging and video transcoding.
 *   **VERT / VERTd**: Optimized for high-speed local file conversion using hardware encoders to minimize CPU load.
 *   **Detection & Provisioning**: The stack automatically identifies your hardware vendor (Intel, AMD, or NVIDIA) during deployment via [lib/scripts.sh](lib/scripts.sh) and provisions the necessary devices (`/dev/dri`, `/dev/vulkan`) or container reservations.
-*   **Surgical Fixes**: Specific compilation flags and static library injections are applied in [lib/services.sh](lib/services.sh) to ensure these drivers function correctly within the hardened Alpine environments.
+*   **Surgical Fixes**: Specific optimizations are applied to ensure these drivers function correctly within the container environments.
 *   **Requirements**: Ensure your ZimaOS/host device has the correct drivers installed (e.g., `intel-media-driver` or `nvidia-container-toolkit`).
 
 </details>
@@ -344,6 +346,8 @@ Privacy frontends and external-facing services are routed exclusively through th
 | **AnonOverflow** | StackOverflow frontend | Developer research without corporate profiling |
 | **Scribe** | Medium frontend | Paywall bypass and tracking removal |
 | **Immich** | Photo management | ML model downloads and metadata fetched via VPN* |
+| **Cobalt** | Media downloader | Downloads anonymized through VPN |
+| **Memos** | Note taking | Version checks and metadata fetched via VPN |
 
 **Kill Switch Protection**: If the VPN tunnel fails, these services lose internet access entirely-they cannot accidentally expose your home IP.
 
@@ -364,8 +368,6 @@ Management tools and utilities that never touch the internet:
 | **Dashboard** | Unified control center | No external dependencies |
 | **AdGuard Home** | DNS filtering | Must be accessible even if VPN fails |
 | **Portainer** | Container management | Security-critical, no external exposure |
-| **Memos** | Private notes | Your data never leaves your network |
-| **Cobalt** | Media downloader | Runs locally, downloads via your IP |
 | **VERT / VERTd** | File conversion | GPU-accelerated, all processing local |
 | **Unbound** | Recursive DNS | Talks directly to root servers |
 | **WireGuard (wg-easy)** | VPN server | Manages your remote access peers |
@@ -437,20 +439,35 @@ To implement this on your router, refer to the following official guides:
 *   [OpenWrt Guide: Intercepting DNS](https://openwrt.org/docs/guide-user/firewall/fw3_configurations/intercept_dns) (Step-by-step NAT Redirection)
 *   [OpenWrt Guide: Blocking DoH (banIP)](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/ban_ip) (Preventing filter bypass via encrypted DNS)
 
----
+### 🛡️ Privacy & Architecture
 
-<a id="privacy--architecture"></a>
-## 🛡️ Privacy & Architecture
+#### Dual-Zone Split Tunneling
+The stack implements an intelligent routing model to balance performance and total privacy:
+- **🔒 VPN Zone (Kill-Switch Protected)**: Services like Invidious, SearXNG, and Redlib are locked inside the VPN. If the tunnel drops, they lose all connectivity instantly, preventing any IP leaks.
+- **🏠 Home Zone (Direct Access)**: Management tools (Dashboard, AdGuard, Portainer) are accessible directly via your LAN IP or WireGuard remote access tunnel for maximum reliability.
 
-### Zero-Leaks Asset Architecture
+#### DNS Subdomain Mapping & HTTPS
+When a **deSEC** domain is configured, the system automatically provisions:
+- **Wildcard DNS Rewrites**: `*.yourdomain.dedyn.io` resolves automatically to your hub's internal IP.
+- **Nginx Subdomain Routing**: Each service is reachable via its own secure subdomain (e.g., `invidious.yourdomain.dedyn.io`).
+- **End-to-End Encryption**: Valid Let's Encrypt certificates are automatically managed and applied to all subdomain endpoints on port `8443`.
+
+#### Unified Deployment & Continuous Updates
+This stack uses a **Unified Deployment** model combined with **Watchtower** for automated updates, ensuring you always have the latest privacy fixes without manual intervention.
+
+- **Latest-Stable Strategy**: By default, all service frontends pull the `latest` stable image.
+- **Automated Lifecycle**: Watchtower monitors your containers and performs graceful restarts when new upstream security patches are released.
+- **Single-Stage Verification**: The integrated test suite verifies the entire stack in one pass, ensuring inter-service dependencies are validated.
+
+#### Zero-Leaks Asset Architecture
 External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN proxy** and served locally. Your public home IP is never exposed to CDNs.
 
 **Privacy Enforcement Logic:**
 1.  **Container Initiation**: When the Hub API container starts, it initiates an asset verification check.
 2.  **Proxy Routing**: If assets are missing, the Hub API routes download requests through the Gluetun VPN container (acting as an HTTP proxy on port 8888).
-3.  **Encapsulated Fetching**: All requests to external CDNs (Fontlay, JSDelivr) occur *inside* the VPN tunnel. Upstream providers only see the VPN IP.
+3.  **Encapsulated Fetching**: All requests to external CDNs occur *inside* the VPN tunnel. Upstream providers only see the VPN IP.
 4.  **Local Persistence**: Assets are saved to a persistent Docker volume (`/assets`).
-5.  **Offline Serving**: The Management Dashboard (Nginx) serves all UI resources exclusively from this local volume.
+5.  **Offline Serving**: The Management Dashboard serves all UI resources exclusively from this local volume.
 
 ---
 
@@ -459,137 +476,11 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 *   **Composition**: Based on **Hagezi Pro++**, curated for performance and dutch users.
 *   **Note**: This blocklist is **aggressive** by design.
 
-### 📦 Docker Hardened Images (DHI) & Source Strategy
-This stack uses a hybrid deployment model to balance extreme privacy with system stability. We don't just "run" apps; we surgically improve them.
+### 🛡️ Deployment Strategy
+This stack uses a hybrid deployment model to balance privacy with system stability.
 
-<details>
-<summary>🔨 **View Build & Hardening Strategy** (Click to expand)</summary>
-
-#### Services Built from Source
-The following services are cloned from their official repositories and compiled locally on your machine:
-*   **Infrastructure**: `hub-api`, `gluetun`, `adguard-home`, `unbound`, `wg-easy`, `portainer`, `dashboard` (nginx).
-*   **Frontends**: `invidious`, `redlib`, `wikiless`, `rimgo`, `breezewiki`, `scribe`, `anonymousoverflow`.
-*   **Utilities**: `memos`, `vert`, `vertd`, `odido-booster`, `invidious-companion`.
-
-**Why build from source?**
-1.  **Transparent Hardening**: We replace standard base images (Debian/Ubuntu) with our own minimal, hardened Alpine variants.
-2.  **Telemetry Stripping**: We remove "phone home" signals and tracking scripts at the build level.
-3.  **Surgical Patches**: We apply critical fixes (like the VERT stack-size fix or BreezeWiki native conversion) that aren't available in upstream Docker images.
-4.  **Hardware Optimization**: Code is compiled specifically for your CPU architecture, ensuring better performance.
-
-#### 📦 Services using Pre-built Images
-The following services use trusted upstream images:
-*   **`Immich`**, **`SearXNG`**, **`Cobalt`**.
-
-**Why use images?**
-*   **Complexity**: Some apps (like Immich) have extremely complex build pipelines that would take hours to compile on home hardware.
-*   **Security by Design**: These specific upstreams already provide excellent, minimal images that meet our standards without further surgical modification.
-
----
-
-#### 🛡️ Global Hardening Logic
-The following modifications are applied automatically to **every** service built from source:
-*   **Base Image Migration**: Surgically replaces `FROM alpine`, `FROM debian`, and `FROM ubuntu` with `dhi.io/alpine-base:3.22-dev`.
-*   **Runtime Hardening**: 
-    *   **Node.js**: Replaced with `dhi.io/node:20-alpine3.22-dev`
-    *   **Bun**: Replaced with `dhi.io/bun:1-alpine3.22-dev`
-    *   **Python**: Replaced with `dhi.io/python:3.11-alpine3.22-dev`
-    *   **Go**: Replaced with `dhi.io/golang:1-alpine3.22-dev`
-    *   **Rust**: Replaced with `dhi.io/rust:1-alpine3.22-dev`
-*   **Package Manager Translation**: 
-    *   Converts `apt-get install` to `apk add --no-cache`.
-    *   Removes `apt-get update`, `apt-get clean`, and `/var/lib/apt/lists` cleanup blocks.
-    *   Translates common package names (e.g., `libssl-dev` → `openssl-dev`).
-*   **Telemetry Removal**: All patched runtimes are configured to disable upstream telemetry and phone-home signals by default.
-
-For service-specific modifications (such as memory limits and GPU fallbacks), see the [Surgical Patch Registry](#surgical-patch-registry) below.
-
-</details>
-
-### Automatic Version Pinning & A/B System
-
-The stack implements a robust A/B deployment strategy for safe, zero-downtime updates with automatic rollback capability.
-
-#### How A/B Slots Work
-
-| Concept | Description |
-| :--- | :--- |
-| **Slot A / Slot B** | Two independent deployment environments. Only one is active at a time. |
-| **Active Slot** | The slot currently serving traffic (stored in `.active_slot` file). |
-| **Standby Slot** | The inactive slot used for building and testing new versions. |
-| **Swap Operation** | Atomically switches traffic from one slot to the other. |
-
-#### Update Workflow
-
-1. **Build Phase**: New versions are built in the standby slot while the active slot continues serving traffic.
-2. **Verification**: Health checks validate the new build before any traffic swap.
-3. **Swap**: The `-S` flag triggers the swap, making the standby slot active.
-4. **Rollback**: If issues occur, simply swap back to the previous slot (instant recovery).
-
-#### Version Strategies
-
-| Strategy | Tag | Behavior | Use Case |
-| :--- | :--- | :--- | :--- |
-| **Stable** (Default) | `latest` | Automatically identifies the latest semantic version tag (e.g., `v1.2.3`) from upstream repositories. | Production use-predictable, tested releases. |
-| **Latest** | `latest` | Tracks the default upstream branch (`main` or `master`) for bleeding-edge updates. | Early adopters wanting immediate fixes. |
-
-#### Benefits
-
-- **Zero Downtime**: Users experience no interruption during updates.
-- **Instant Rollback**: If a new version has issues, swap back in seconds.
-- **Safe Testing**: Verify new builds in isolation before exposing them to traffic.
-- **Parallel Builds**: Use `-j` flag to build all services simultaneously for faster deployments.
-
-<a id="surgical-patch-registry"></a>
-<details>
-<summary>🛠️ <strong>Surgical Patch Registry</strong> (Click to expand)</summary>
-
-The following modifications are applied to upstream Dockerfiles and source code to ensure security, compatibility, and optimal performance.
-
-#### Service-Specific Patches
-
-| Service | Upstream Source | Modifications Applied | Implementation |
-| :--- | :--- | :--- | :--- |
-| **BreezeWiki** | [PussTheCat-org/docker-breezewiki](https://github.com/PussTheCat-org/docker-breezewiki-quay) | **Native Conversion**: Migrated from Debian to Alpine. Replaced `apt` logic with `apk`. Implemented localized Racket package management. | [lib/services.sh#L104-L117](lib/services.sh#L104-L117) |
-| **Invidious Companion** | [iv-org/invidious-companion](https://github.com/iv-org/invidious-companion) | **Build Reliability**: Resolved Rust compilation stack overflow by injecting `ENV RUST_MIN_STACK=16777216`. Forced lockfile regeneration to prevent stale dependency issues. | [lib/services.sh#L141-L149](lib/services.sh#L141-L149) |
-| **VERTd** | [VERT-sh/vertd](https://github.com/VERT-sh/vertd) | **Hybrid Optimization**: Implemented NVIDIA GPU detection logic. Added Alpine fallback for non-GPU environments. Fixed static compilation with `openssl-libs-static`. | [lib/services.sh#L120-L138](lib/services.sh#L120-L138) |
-| **Hub API** | [Local Source](/hub-api) | **Custom Build**: Purpose-built orchestration API using DHI Python base. Full telemetry isolation. | [lib/services.sh#L167-L187](lib/services.sh#L167-L187) |
-
-#### Standard Hardening (Generic Patch Loop)
-
-The following services receive standard DHI hardening via the [`patch_bare` function](lib/services.sh#L62-L100), applied through the [generic patch loop](lib/services.sh#L153-L162):
-
-| Service | Upstream Source | Hardening Applied |
-| :--- | :--- | :--- |
-| **VERT** | [VERT-sh/vert](https://github.com/VERT-sh/VERT) | DHI Alpine base, Bun/Node runtime hardening, telemetry disabled |
-| **Invidious** | [iv-org/invidious](https://github.com/iv-org/invidious) | DHI Alpine base, standard package translation |
-| **Redlib** | [redlib-org/redlib](https://github.com/redlib-org/redlib) | DHI Alpine base, runs as `nobody` user, read-only filesystem |
-| **Wikiless** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) | DHI Alpine base, Node.js runtime hardening |
-| **Rimgo** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) | DHI Alpine base, Go runtime hardening |
-| **AnonOverflow** | [httpjamesm/AnonymousOverflow](https://github.com/httpjamesm/AnonymousOverflow) | DHI Alpine base, standard package translation |
-| **Scribe** | [edwardloveall/scribe](https://git.sr.ht/~edwardloveall/scribe) | DHI Alpine base, Crystal runtime compatibility fixes |
-| **Memos** | [usememos/memos](https://github.com/usememos/memos) | DHI Alpine base, Go and Node.js runtime hardening |
-| **Gluetun** | [qdm12/gluetun](https://github.com/qdm12/gluetun) | DHI Alpine base, standard package translation |
-| **AdGuard Home** | [AdguardTeam/AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) | DHI Alpine base, Go runtime hardening |
-| **Unbound** | [klutchell/unbound-docker](https://github.com/klutchell/unbound-docker) | DHI Alpine base, recursive resolver hardening |
-| **WG-Easy** | [wg-easy/wg-easy](https://github.com/wg-easy/wg-easy) | DHI Alpine base, Node.js runtime hardening |
-| **Portainer** | [portainer/portainer](https://github.com/portainer/portainer) | DHI Alpine base, telemetry disabled, hardened runtime |
-| **Dashboard** | [nginx/nginx](https://github.com/nginx/nginx) | DHI Alpine base, minimal static server hardening |
-| **Odido Booster** | [Lyceris-chan/odido-bundle-booster](https://github.com/Lyceris-chan/odido-bundle-booster) | DHI Alpine base, Python runtime hardening |
-
-#### Global Patches (Applied to All Built Services)
-
-These modifications are defined in the [`patch_bare` function](lib/services.sh#L62-L100) and applied to every service built from source:
-
-| Patch Category | Description | Benefit |
-| :--- | :--- | :--- |
-| **Base Image Migration** | Replaces `FROM alpine`, `FROM debian`, and `FROM ubuntu` with `dhi.io/alpine-base:3.22-dev`. | Minimal attack surface, consistent security baseline. |
-| **Runtime Hardening** | Replaces Node.js, Go, Python, Rust, and Bun images with DHI hardened equivalents (e.g., `dhi.io/node:20-alpine3.22-dev`). | Telemetry disabled, security patches applied, optimized for containers. |
-| **Package Manager Translation** | Converts `apt-get install` to `apk add --no-cache`. Removes Debian-specific cleanup commands. | Cross-distribution compatibility, smaller image sizes. |
-| **Package Name Translation** | Translates common package names (e.g., `libssl-dev` → `openssl-dev`). | Seamless Alpine compatibility. |
-| **Telemetry Removal** | All patched runtimes configured to disable upstream telemetry and analytics by default. | Privacy by design-no "phone home" signals. |
-
-</details>
+- **Pre-built Images**: Most services use trusted upstream images to ensure fast deployment and reliable updates.
+- **Local Optimization**: Critical orchestration components like `hub-api` are optimized for your environment.
 
 ### 🛡️ Self-Healing & High Availability
 *   **VPN Monitoring**: Gluetun is continuously monitored. Docker restarts the gateway if the tunnel stalls.
@@ -621,18 +512,13 @@ Run the maintenance command to recreate containers without losing data:
 ./zima.sh -c
 ```
 
-#### Scenario 2: Service update broke something
-If you used the A/B swap system (`-S`), you can instantly roll back:
-1.  Check which slot is active: `cat data/AppData/privacy-hub/.active_slot`
-2.  Manually swap it back or run `./zima.sh -S` again to move to the other slot.
-
-#### Scenario 3: Total hardware failure
+#### Scenario 2: Total hardware failure
 1.  Set up a new machine with Docker and Git.
 2.  Clone this repository.
 3.  Restore your `data/AppData/privacy-hub` folder from your latest backup.
 4.  Run `./zima.sh`. The script will detect your existing configs and restore the stack.
 
-#### Scenario 4: "I need a fresh start"
+#### Scenario 3: "I need a fresh start"
 To wipe everything and start over (Warning: IRREVERSIBLE):
 ```bash
 ./zima.sh -x
@@ -642,10 +528,9 @@ To wipe everything and start over (Warning: IRREVERSIBLE):
 
 ## 🛡️ Security Standards
 
-### DHI Hardened Images
-We don't use standard "official" images where we can avoid it. We use **DHI hardened images** (`dhi.io`).
-*   **Why?**: Standard images are often packed with "convenience" tools that are security liabilities.
-*   **The Benefit**: Hardened images minimize the attack surface by removing unnecessary binaries and libraries, following the principle of least privilege. (Concept based on [CIS Benchmarks](https://www.cisecurity.org/benchmark/docker) and minimal base image best practices).
+### Hardened Security Baseline
+We prioritize minimal, security-focused images for all services.
+*   **The Benefit**: Minimal images reduce the attack surface by removing unnecessary binaries and libraries, following the principle of least privilege. (Concept based on [CIS Benchmarks](https://www.cisecurity.org/benchmark/docker) and minimal base image best practices).
 
 ### The "Silent" Security Model
 Opening a port for WireGuard does **not** expose your home to scanning.
@@ -655,45 +540,6 @@ Opening a port for WireGuard does **not** expose your home to scanning.
 
 ---
 
-<a id="system-requirements"></a>
-## 🖥️ System Requirements
-
-### Verified Environment (High Performance)
-*   **CPU**: Intel® Core™ i3-10105T (4 Cores / 8 Threads)
-    *   Base: 2.90 GHz, Turbo: 3.00 GHz
-*   **RAM**: 32 GB DDR4 @ 2666 MHz
-*   **GPU**: Intel® UHD Graphics 630 (CometLake-S GT2)
-    *   *Note: Fully compatible with Intel Quick Sync (QSV) for hardware-accelerated media tasks.*
-*   **OS**: ZimaOS, Ubuntu 22.04 LTS, or Debian 12+
-
-### Minimum Requirements
-*   **CPU**: 2 Cores (64-bit)
-*   **RAM**: 4 GB (8 GB+ Recommended for Immich/VERT usage)
-*   **Storage**: 32 GB SSD (64 GB+ Recommended for media storage)
-
-### 📊 Default Resource Limits
-To ensure system stability and prevent any single service from exhausting host resources, the following CPU and memory limits are enforced via Docker Compose:
-
-| Service | CPU Limit | Memory Limit | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Immich Server** | 1.0 Core | 1536 MB | Main application logic |
-| **Immich ML** | 2.0 Cores | 2048 MB | Local AI processing |
-| **Invidious** | 1.5 Cores | 1024 MB | Video proxying & rendering |
-| **Gluetun** | 2.0 Cores | 512 MB | VPN Gateway (High throughput) |
-| **SearXNG** | 1.0 Core | 512 MB | Meta-search engine |
-| **AdGuard Home** | 0.5 Core | 512 MB | DNS Filtering |
-| **Unbound** | 0.5 Core | 256 MB | Recursive DNS Resolver |
-| **Other Frontends** | 0.5 Core | 256 MB | Redlib, Wikiless, Scribe, etc. |
-
-*Note: These limits are conservative and can be adjusted in `lib/services.sh` if your hardware permits.*
-
-### Performance Expectations
-*   **Validation**: 1-2 min
-*   **Build & Deploy**: 15-25 min (Source compilation is CPU-intensive)
-
----
-
-<a id="troubleshooting"></a>
 ## 🔧 Troubleshooting
 
 | Issue | Potential Solution |
@@ -798,7 +644,7 @@ Locate the `generate_compose` function and add your service block:
   myservice:
     image: my-image:latest
     container_name: myservice
-    networks: [dhi-frontnet]
+    networks: [frontnet]
     restart: unless-stopped
 EOF
     fi
@@ -861,8 +707,8 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
 | **DNS Blocklists** | AdGuard filter updates | **🔒 VPN IP** (Gluetun) |
 | **deSEC.io** | SSL DNS Challenges | **🏠 Home IP** (Direct) |
 | **Odido API** | Mobile Data fetching | **🏠 Home IP** (Direct) |
+| **Cobalt** | Media downloads | **🔒 VPN IP** (Gluetun) |
 | **SearXNG / Immich** | Search & Media sync | **🔒 VPN IP** (Gluetun) |
-| **Cobalt** | Media downloads | **🏠 Home IP** (Direct) |
 
 ### Detailed Privacy Policies
 
@@ -874,8 +720,8 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
   - [deSEC.io](https://desec.io/privacy-policy) (SSL challenges via **🏠 Home IP**)
   - [fontlay.com](https://github.com/miroocloud/fontlay) (Fetched via **🔒 VPN IP**)
   - [cdn.jsdelivr.net](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net) (Fetched via **🔒 VPN IP**)
-- **Registries & Source Code**:
-  - [Docker Hub / dhi.io](https://www.docker.com/legal/docker-privacy-policy/) (Image pulls via **🏠 Home IP**)
+| **Registries & Source Code** |
+  - [Docker Hub](https://www.docker.com/legal/docker-privacy-policy/) (Image pulls via **🏠 Home IP**)
   - [GitHub / GHCR](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) (Source cloning via **🏠 Home IP**)
   - [Codeberg](https://codeberg.org/privacy) (Source cloning via **🏠 Home IP**)
   - [Quay.io](https://quay.io/privacy) (Image pulls via **🏠 Home IP**)

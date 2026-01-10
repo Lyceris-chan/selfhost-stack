@@ -3,6 +3,20 @@
 # SCRIPT_DIR is exported from zima.sh
 source "${SCRIPT_DIR}/lib/constants.sh"
 
+detect_dockerfile() {
+    local repo_dir="$1"
+    local preferred="${2:-}"
+    local found=""
+    if [ -n "$preferred" ] && [ -f "$repo_dir/$preferred" ]; then echo "$preferred"; return 0; fi
+    if [ -f "$repo_dir/Dockerfile.alpine" ]; then echo "Dockerfile.alpine"; return 0; fi
+    if [ -f "$repo_dir/Dockerfile" ]; then echo "Dockerfile"; return 0; fi
+    if [ -f "$repo_dir/docker/Dockerfile" ]; then echo "docker/Dockerfile"; return 0; fi
+    # Search deeper
+    found=$(find "$repo_dir" -maxdepth 3 -type f -name 'Dockerfile*' -not -path '*/.*' 2>/dev/null | head -n 1 || true)
+    if [ -n "$found" ]; then echo "${found#"$repo_dir/"}"; return 0; fi
+    return 1
+}
+
 # Core logging functions that output to terminal and persist JSON formatted logs for the dashboard.
 log_info() { 
     echo -e "\e[34m  ➜ [INFO]\e[0m $1"
@@ -35,57 +49,6 @@ ask_confirm() {
     esac
 }
 
-get_latest_stable_tag() {
-    local repo_url="$1"
-    local strategy="${2:-stable}" # stable, nightly, or branch name
-    local default_branch="${3:-main}"
-    
-    # Fetch tags using git ls-remote
-    local tags
-    tags=$(git ls-remote --tags "$repo_url" 2>/dev/null | awk -F/ '{print $3}' | sed 's/\^{}//' | sort -u)
-    
-    if [ -z "$tags" ]; then
-        # If no tags, try to detect default branch from remote HEAD
-        local default_branch
-        default_branch=$(git ls-remote --symref "$repo_url" HEAD | awk '/^ref:/ {sub(/refs\/heads\//, "", $2); print $2}')
-        echo "${default_branch:-main}"
-        return 0
-    fi
-
-
-    if [ "$strategy" = "nightly" ]; then
-        # Fetch latest tag starting with nightly
-        local latest_nightly
-        latest_nightly=$(echo "$tags" | grep -E '^nightly' | sort -V | tail -n 1)
-        if [ -n "$latest_nightly" ]; then
-            echo "$latest_nightly"
-            return 0
-        fi
-    fi
-
-    # Strict semver (no pre-release), stripping 'v' for consistent comparison
-    local latest_version
-    latest_version=$(echo "$tags" | grep -E '^v?[0-9]+\.[0-9]+(\.[0-9]+)?$' | sed 's/^v//' | sort -V | tail -n 1)
-    
-    if [ -n "$latest_version" ]; then
-        # Restore 'v' if it was in the original tag
-        if echo "$tags" | grep -qx "v$latest_version"; then
-            echo "v$latest_version"
-        else
-            echo "$latest_version"
-        fi
-    else
-        # Allow pre-release if no strict stable found
-        latest_version=$(echo "$tags" | grep -E '^v?[0-9]+\.[0-9]+' | sed 's/^v//' | sort -V | tail -n 1)
-        if [ -n "$latest_version" ]; then
-            if echo "$tags" | grep -qx "v$latest_version"; then echo "v$latest_version"; else echo "$latest_version"; fi
-        else
-            # Absolute fallback
-            echo "$tags" | sort -V | tail -n 1
-        fi
-    fi
-}
-
 pull_with_retry() {
     local img=$1
     local max_retries=3
@@ -103,23 +66,6 @@ pull_with_retry() {
     return 1
 }
 
-detect_dockerfile() {
-    local repo_dir="$1"
-    local preferred="${2:-}"
-    local found=""
-    if [ -n "$preferred" ] && [ -f "$repo_dir/$preferred" ]; then echo "$preferred"; return 0; fi
-    if [ -f "$repo_dir/Dockerfile.dhi" ]; then echo "Dockerfile.dhi"; return 0; fi
-    if [ -f "$repo_dir/Dockerfile.alpine" ]; then echo "Dockerfile.alpine"; return 0; fi
-    if [ -f "$repo_dir/Dockerfile" ]; then echo "Dockerfile"; return 0; fi
-    if [ -f "$repo_dir/docker/Dockerfile" ]; then echo "docker/Dockerfile"; return 0; fi
-    # Search deeper
-    found=$(find "$repo_dir" -maxdepth 3 -type f -name 'Dockerfile*' -not -path '*/.*' 2>/dev/null | head -n 1 || true)
-    if [ -n "$found" ]; then echo "${found#"$repo_dir/"}"; return 0; fi
-    return 1
-}
-
-
-
 # --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
 REG_USER="${REG_USER:-}"
 REG_TOKEN="${REG_TOKEN:-}"
@@ -134,11 +80,7 @@ usage() {
     echo "  -y          Auto-Confirm (non-interactive mode)"
     echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
     echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
-    echo "  -S          Swap Slots (A/B update toggle)"
     echo "  -c          Maintenance (recreates containers, preserves data)"
-    echo "  -x          Factory Reset (⚠️ WIPES ALL CONTAINERS AND VOLUMES)"
-    echo "  -a          Allow ProtonVPN (adds ProtonVPN domains to AdGuard allowlist)"
-    echo "  -D          Dashboard Only (UI testing, skips service rebuild)"
     echo "  -E <file>   Load Environment Variables from file"
     echo "  -G          Generate Only (stops before deployment)"
     echo "  -h          Show this help message"
@@ -152,16 +94,14 @@ RESET_ENV=false
 AUTO_CONFIRM=false
 ALLOW_PROTON_VPN=false
 SELECTED_SERVICES=""
-DASHBOARD_ONLY=false
 PARALLEL_DEPLOY=false
-SWAP_SLOTS=false
 GENERATE_ONLY=false
 ENV_FILE=""
 PERSONAL_MODE=false
 REG_TOKEN=""
 REG_USER=""
 
-while getopts "cxpyas:DjShE:GS" opt; do
+while getopts "cxpyas:j hE:G" opt; do
     case ${opt} in
         c) RESET_ENV=true; FORCE_CLEAN=true ;;
         x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
@@ -169,9 +109,7 @@ while getopts "cxpyas:DjShE:GS" opt; do
         y) AUTO_CONFIRM=true; AUTO_PASSWORD=true ;;
         a) ALLOW_PROTON_VPN=true ;;
         s) SELECTED_SERVICES="${OPTARG}" ;;
-        D) DASHBOARD_ONLY=true ;;
         j) PARALLEL_DEPLOY=true ;;
-        S) SWAP_SLOTS=true ;;
         E) ENV_FILE="${OPTARG}" ;;
         G) GENERATE_ONLY=true ;;
         h) 
@@ -246,6 +184,7 @@ if [ -z "${PROJECT_ROOT:-}" ]; then
 fi
 BASE_DIR="$PROJECT_ROOT/data/AppData/$APP_NAME"
 $SUDO mkdir -p "$BASE_DIR"
+$SUDO chown "$(whoami)" "$BASE_DIR"
 BASE_DIR="$(cd "$BASE_DIR" && pwd)"
 
 # Paths
@@ -257,7 +196,6 @@ COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
 DASHBOARD_FILE="$BASE_DIR/dashboard.html"
 GLUETUN_ENV_FILE="$BASE_DIR/gluetun.env"
 SECRETS_FILE="$BASE_DIR/.secrets"
-ACTIVE_SLOT_FILE="$BASE_DIR/.active_slot"
 BACKUP_DIR="$BASE_DIR/backups"
 ASSETS_DIR="$BASE_DIR/assets"
 HISTORY_LOG="$BASE_DIR/deployment.log"
@@ -268,30 +206,32 @@ CERT_PROTECT=false
 # Memos storage
 MEMOS_HOST_DIR="$PROJECT_ROOT/data/AppData/memos"
 
-$SUDO mkdir -p "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
-$SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
+# WireGuard & Profiles
 WG_PROFILES_DIR="$BASE_DIR/wg-profiles"
 ACTIVE_WG_CONF="$BASE_DIR/active-wg.conf"
 ACTIVE_PROFILE_NAME_FILE="$BASE_DIR/.active_profile_name"
-$SUDO mkdir -p "$WG_PROFILES_DIR"
+DOTENV_FILE="$BASE_DIR/.env"
 
-# Slot Management (A/B)
-ensure_active_slot_file() {
-    $SUDO mkdir -p "$(dirname "$ACTIVE_SLOT_FILE")"
-    if [ ! -f "$ACTIVE_SLOT_FILE" ]; then
-        echo "a" | $SUDO tee "$ACTIVE_SLOT_FILE" >/dev/null
-    fi
-    CURRENT_SLOT=$(cat "$ACTIVE_SLOT_FILE" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-    if [[ "$CURRENT_SLOT" != "a" && "$CURRENT_SLOT" != "b" ]]; then
-        CURRENT_SLOT="a"
-        echo "a" | $SUDO tee "$ACTIVE_SLOT_FILE" >/dev/null
-    fi
-    CONTAINER_PREFIX="dhi-${CURRENT_SLOT}-"
-    export CURRENT_SLOT
+init_directories() {
+    log_info "Initializing project directories..."
+    $SUDO mkdir -p "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api" "$WG_PROFILES_DIR"
+    $SUDO chown "$(whoami)" "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$WG_PROFILES_DIR"
+    
+    # Initialize metadata files with correct ownership
+    [ ! -f "$DOTENV_FILE" ] && $SUDO touch "$DOTENV_FILE"
+    [ ! -f "$ACTIVE_WG_CONF" ] && $SUDO touch "$ACTIVE_WG_CONF"
+    
+    $SUDO chown "$(whoami)" "$DOTENV_FILE" "$ACTIVE_WG_CONF"
+    $SUDO chmod 600 "$DOTENV_FILE" "$ACTIVE_WG_CONF"
+
+    $SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
 }
 
-# Initial call
-ensure_active_slot_file
+# Container naming and persistence
+APP_NAME="${APP_NAME:-privacy-hub}"
+CONTAINER_PREFIX="hub-"
+export CONTAINER_PREFIX
+
 UPDATE_STRATEGY="stable"
 export UPDATE_STRATEGY
 
@@ -362,10 +302,11 @@ WG_CONTROL_SCRIPT="$BASE_DIR/wg-control.sh"
 WG_API_SCRIPT="$BASE_DIR/wg-api.py"
 CERT_MONITOR_SCRIPT="$BASE_DIR/cert-monitor.sh"
 MIGRATE_SCRIPT="$BASE_DIR/migrate.sh"
+PATCHES_SCRIPT="$BASE_DIR/patches.sh"
 
 # Ensure root-level data files are writable by the container user (UID 1000)
 $SUDO touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
-$SUDO chown 1000:1000 "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage" "$ACTIVE_PROFILE_NAME_FILE" "$ACTIVE_SLOT_FILE" 2>/dev/null || true
+$SUDO chown 1000:1000 "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage" "$ACTIVE_PROFILE_NAME_FILE" 2>/dev/null || true
 $SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$ASSETS_DIR" 2>/dev/null || true
 
 # Port Definitions
@@ -504,7 +445,7 @@ validate_wg_config() {
     if [ ! -s "$ACTIVE_WG_CONF" ]; then return 1; fi
     if ! grep -q "PrivateKey" "$ACTIVE_WG_CONF"; then return 1; fi
     local PK_VAL
-    PK_VAL=$(grep "PrivateKey" "$ACTIVE_WG_CONF" | cut -d'=' -f2 | tr -d '[:space:]')
+    PK_VAL=$(grep "PrivateKey" "$ACTIVE_WG_CONF" | cut -d'=' -f2- | tr -d '[:space:]')
     if [ -z "$PK_VAL" ]; then return 1; fi
     if [ "${#PK_VAL}" -lt 40 ]; then return 1; fi
     return 0
@@ -533,73 +474,6 @@ extract_wg_profile_name() {
     return 1
 }
 
-authenticate_registries() {
-    # Export DOCKER_CONFIG globally
-    export DOCKER_CONFIG="$DOCKER_AUTH_DIR"
-    
-    if [ "${AUTO_CONFIRM:-false}" = true ] || [ -n "${REG_TOKEN:-}" ] || [ "${PERSONAL_MODE:-false}" = true ]; then
-        if [ -n "${REG_TOKEN:-}" ]; then
-             log_info "Using provided credentials from environment."
-        elif [ "${PERSONAL_MODE:-false}" = true ]; then
-             log_info "Personal Mode: Using pre-configured registry credentials."
-             REG_USER="${REG_USER:-}"
-             REG_TOKEN="${REG_TOKEN:-}"
-        else
-             log_info "Auto-confirm enabled: Skipping registry authentication."
-             REG_USER="${REG_USER:-}"
-             REG_TOKEN="${REG_TOKEN:-}"
-        fi
-        
-        # Docker Hub Login
-        if [ -n "${REG_TOKEN:-}" ] && [ "${REG_TOKEN:-}" != "DOCKER_HUB_TOKEN_PLACEHOLDER" ]; then
-            if printf "%s" "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-                 log_info "Docker Hub: Authentication successful."
-            else
-                 log_warn "Docker Hub: Authentication failed."
-            fi
-            
-            # DHI Registry Login
-            if printf "%s" "$REG_TOKEN" | $DOCKER_CMD login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-                 log_info "DHI Registry: Authentication successful."
-            else
-                 log_warn "DHI Registry: Authentication failed (using Docker Hub credentials)."
-            fi
-        else
-            log_info "Registry authentication skipped (no token provided)."
-        fi
-        return 0
-    fi
-
-    echo ""
-    echo "--- REGISTRY AUTHENTICATION ---"
-    echo "Please provide your credentials for Docker Hub."
-    echo ""
-
-    while true; do
-        read -r -p "Username: " REG_USER
-        read -rs -p "Token: " REG_TOKEN
-        echo ""
-        
-        # Docker Hub Login
-        if printf "%s" "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-             log_info "Docker Hub: Authentication successful."
-             
-             # DHI Registry Login
-             if printf "%s" "$REG_TOKEN" | $DOCKER_CMD login dhi.io -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
-                 log_info "DHI Registry: Authentication successful."
-             else
-                 log_warn "DHI Registry: Authentication failed."
-             fi
-             
-             return 0
-        else
-             log_warn "Docker Hub: Authentication failed."
-        fi
-
-        if ! ask_confirm "Authentication failed. Want to try again?"; then return 1; fi
-    done
-}
-
 setup_secrets() {
     export PORTAINER_PASS_HASH="${PORTAINER_PASS_HASH:-}"
     export AGH_PASS_HASH="${AGH_PASS_HASH:-}"
@@ -620,10 +494,10 @@ setup_secrets() {
             if [ "$FORCE_CLEAN" = false ] && [ -d "$DATA_DIR/portainer" ] && [ "$(ls -A "$DATA_DIR/portainer")" ]; then
                 log_warn "Portainer data directory already exists. Portainer's security policy only allows setting the admin password on the FIRST deployment. The newly generated password displayed at the end will NOT work unless you manually reset it or delete the Portainer volume."
             fi
-            VPN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
-            AGH_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
-            ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
-            PORTAINER_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+            if [ -z "$VPN_PASS_RAW" ]; then VPN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24); fi
+            if [ -z "$AGH_PASS_RAW" ]; then AGH_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24); fi
+            if [ -z "$ADMIN_PASS_RAW" ]; then ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24); fi
+            if [ -z "$PORTAINER_PASS_RAW" ]; then PORTAINER_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24); fi
             log_info "Credentials generated and will be displayed upon completion."
             echo ""
         else
@@ -651,7 +525,6 @@ setup_secrets() {
             log_info "Auto-confirm enabled: Skipping interactive deSEC/GitHub/Odido setup (preserving environment variables)."
             if [ "${PERSONAL_MODE:-false}" = true ]; then
                 log_info "Personal Mode: Applying user-specific defaults."
-                REG_USER="${REG_USER:-}"
                 DESEC_DOMAIN="${DESEC_DOMAIN:-}" # Keep if set, otherwise maybe prompt once
             fi
             DESEC_DOMAIN="${DESEC_DOMAIN:-}"
@@ -787,7 +660,7 @@ setup_secrets() {
         IMMICH_DB_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
         INVIDIOUS_DB_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
 
-        cat > "$BASE_DIR/.secrets" <<'EOF'
+        cat > "$BASE_DIR/.secrets" <<EOF
 VPN_PASS_RAW="$VPN_PASS_RAW"
 AGH_PASS_RAW="$AGH_PASS_RAW"
 ADMIN_PASS_RAW="$ADMIN_PASS_RAW"
@@ -897,7 +770,7 @@ Name,URL,Username,Password,Note
 Privacy Hub Admin,http://$LAN_IP:$PORT_DASHBOARD_WEB,admin,$ADMIN_PASS_RAW,Primary management portal for the privacy stack.
 AdGuard Home,http://$LAN_IP:$PORT_ADGUARD_WEB,adguard,$AGH_PASS_RAW,Network-wide advertisement and tracker filtration.
 WireGuard VPN UI,http://$LAN_IP:$PORT_WG_WEB,admin,$VPN_PASS_RAW,WireGuard remote access management interface.
-Portainer UI,http://$LAN_IP:$PORT_PORTAINER,portainer,$PORTAINER_PASS_RAW,Docker container management interface.
+Portainer UI,http://$LAN_IP:$PORT_PORTAINER,admin,$PORTAINER_PASS_RAW,Docker container management interface.
 Odido Booster API,http://$LAN_IP:8085,admin,$ODIDO_API_KEY,API key for dashboard and Odido automation.
 Gluetun Control Server,http://$LAN_IP:8000,gluetun,$ADMIN_PASS_RAW,Internal VPN gateway control API.
 deSEC DNS API,https://desec.io,$DESEC_DOMAIN,$DESEC_TOKEN,API token for deSEC dynamic DNS management.

@@ -1,26 +1,8 @@
-# 🛡️ Project Session Summary - Final Production-Ready Release
-
-## ✅ Work Completed
-- **Full-Scale Interaction Testing**:
-    - Developed and executed `test/thorough_interactions.js`, a comprehensive Puppeteer-based test suite.
-    - Verified **100% of User & Admin interactions** on the Material Design 3 dashboard.
-    - Confirmed correct behavior for all toggles, sliders, lists, and multi-stage confirmation dialogs.
-- **Asset Optimization & Reliability**:
-    - Resolved critical font-related 404 errors by standardizing filenames (`gs.woff2`, `cc.woff2`, `ms.woff2`) and implementing robust CSS URL rewriting.
-    - Synchronized asset management logic between the production server and the test environment.
-- **Backend API (`hub-api`) & CLI Enhancements**:
-    - Implemented the missing WireGuard client configuration endpoint in `server.py`.
-    - Removed the obsolete `-P` quick setup option from `zima.sh` and `lib/core.sh` to simplify the CLI interface.
-    - Refined Odido Booster default routing to use VPN IP for enhanced privacy, with a clear home IP fallback toggle in the dashboard.
-- **Code Quality & Maintenance**:
-    - Performed a final thorough check of the codebase and improved documentation via meaningful, high-value code comments.
-    - Cleaned up the repository by removing temporary log files, test artifacts, and redundant font files.
-- **Production Readiness**:
-    - Sub-agent audit (`codebase_investigator`) confirmed the stack is stable, secure, and ready for deployment.
-
-## ⏳ Final Status
-- **Status**: Production Ready. All systems verified, optimized, and stable. 
-- **Release**: Final code committed and pushed to `main`.
-
----
-**Digital independence achieved. Control established. Privacy maintained.**
+- services only show when in admin view
+- privacy hub icon still doesnt show properly on native zima os dashboard favicon is fine 
+- settings manage is still shown as text for the portainer manage button
+- ensure the portainer password is set properly as it doesnt appear to work currently
+- dont show upstream images for the ones we dont build from source
+- ensure project size and CPU usage are accurate as the information obtained from htop is different from what the script reports project size should show a drop down of all categories of things showing images source etc and allowing users to cleanup and manage unneeded items 
+- it looks like the purge unused images button has double icons and shouldnt it say something else incase other files are ready for cleanup
+- ➜ [INFO] Localizing font assets in parallel...

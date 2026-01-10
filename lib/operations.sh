@@ -209,7 +209,7 @@ clean_environment() {
         fi
     fi
 
-    CONFLICT_NETS=$($DOCKER_CMD network ls --format '{{.Name}}' | grep -E "(${APP_NAME}_dhi-frontnet|${APP_NAME//-/}_dhi-frontnet|${APP_NAME}_default|${APP_NAME//-/}_default)" || true)
+    CONFLICT_NETS=$($DOCKER_CMD network ls --format '{{.Name}}' | grep -E "(${APP_NAME}_frontnet|${APP_NAME//-/}_frontnet|${APP_NAME}_default|${APP_NAME//-/}_default)" || true)
     if [ -n "$CONFLICT_NETS" ]; then
         if ask_confirm "Conflicting networks detected. Should they be cleared?"; then
             for net in $CONFLICT_NETS; do
@@ -354,7 +354,7 @@ clean_environment() {
                 # Skip default Docker networks
                 bridge|host|none) continue ;;
                 # Match our networks
-                ${APP_NAME}_*|${APP_NAME//-/}_*|*dhi-frontnet*)
+                ${APP_NAME}_*|${APP_NAME//-/}_*|*frontnet*)
                     log_info "  Removing network: $net"
                     safe_remove_network "$net"
                     REMOVED_NETWORKS="${REMOVED_NETWORKS}$net "
@@ -492,7 +492,7 @@ cleanup_build_artifacts() {
     $DOCKER_CMD builder prune -f || true
 }
 
-# --- SECTION 17: BACKUP & SLOT MANAGEMENT ---
+# --- SECTION 17: BACKUP MANAGEMENT ---
 
 perform_backup() {
     local tag="${1:-manual}"
@@ -505,7 +505,7 @@ perform_backup() {
     # Backup secrets, config and dynamic state if they exist
     # We exclude large source directories and data volumes to keep it fast
     local targets=""
-    for t in .secrets .active_slot config env; do
+    for t in .secrets config env; do
         if [ -e "$BASE_DIR/$t" ]; then
             targets="$targets $t"
         fi
@@ -531,38 +531,15 @@ perform_backup() {
     fi
 }
 
-swap_slots() {
-    local old_slot="$CURRENT_SLOT"
-    local new_slot="a"
-    if [ "$old_slot" = "a" ]; then new_slot="b"; fi
-    
-    log_info "ORCHESTRATING SLOT SWAP: $old_slot -> $new_slot"
-    
-    # 1. Perform safety backup
-    perform_backup "pre_swap"
-    
-    # 2. Update session state (file persistence happens in finalize_swap)
-    export CURRENT_SLOT="$new_slot"
-    export CONTAINER_PREFIX="dhi-${new_slot}-"
-    
-    log_info "Standby slot ($new_slot) initialized. Preparing deployment..."
-}
-
-finalize_swap() {
-    log_info "Finalizing slot swap to $CURRENT_SLOT..."
-    echo "$CURRENT_SLOT" | $SUDO tee "$ACTIVE_SLOT_FILE" >/dev/null
-    log_info "Active slot persisted: $CURRENT_SLOT"
-}
-
 verify_health() {
-    log_info "Verifying deployment health for slot $CURRENT_SLOT..."
+    log_info "Verifying deployment health..."
     local failed=false
     
-    # Get all containers for the current slot
+    # Get all containers for the stack
     local containers=$($DOCKER_CMD ps -a --format '{{.Names}}' | grep "^${CONTAINER_PREFIX}" || true)
     
     if [ -z "$containers" ]; then
-        log_warn "No containers found for slot $CURRENT_SLOT"
+        log_warn "No containers found with prefix ${CONTAINER_PREFIX}"
         return 1
     fi
 
@@ -583,26 +560,10 @@ verify_health() {
     if [ "$failed" = true ]; then
         return 1
     fi
-    log_info "All containers in slot $CURRENT_SLOT are healthy and running."
+    log_info "All containers are healthy and running."
     return 0
 }
 
-stop_inactive_slots() {
-    local active_slot="$CURRENT_SLOT"
-    local inactive_slot="a"
-    if [ "$active_slot" = "a" ]; then inactive_slot="b"; fi
-    
-    local inactive_prefix="dhi-${inactive_slot}-"
-    
-    log_info "Cleaning up inactive slot ($inactive_slot) containers..."
-    
-    # Find all containers with the inactive prefix and stop/remove them
-    local containers=$($DOCKER_CMD ps -a --format '{{.Names}}' | grep "^${inactive_prefix}" || true)
-    if [ -n "$containers" ]; then
-        $DOCKER_CMD rm -f $containers >/dev/null 2>&1 || true
-        log_info "Inactive slot containers removed."
-    fi
-}
 
 # --- SECTION 16: STACK ORCHESTRATION & DEPLOYMENT ---
 # Execute system deployment and verify global infrastructure integrity.

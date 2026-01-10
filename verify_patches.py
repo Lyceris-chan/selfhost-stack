@@ -73,9 +73,9 @@ def preprocess_adguard():
             with open(path, 'w') as file:
                 file.write(content)
 
-    # Create Dockerfile.dhi
-    dockerfile_dhi = os.path.join(adguard_dir, "Dockerfile.dhi")
-    with open(dockerfile_dhi, 'w') as f:
+    # Create Dockerfile.alpine
+    dockerfile_alpine = os.path.join(adguard_dir, "Dockerfile.alpine")
+    with open(dockerfile_alpine, 'w') as f:
         f.write(r"""
 FROM golang:1-alpine AS builder
 WORKDIR /build
@@ -131,21 +131,21 @@ patch_bare() {
         printf "# Original: %s\n%s" "$link" "$(cat "$file")" > "$file"
     fi
 
-    # [2] Base Image (DHI/Alpine)
+    # [2] Base Image (Alpine)
     # Only replace if it is already an Alpine base to ensure package manager compatibility
     # if grep -qiE "^FROM[[:space:]]+alpine:" "$file"; then
-    #    sed -i -E 's/^FROM[[:space:]]+alpine:[^[:space:]]*/FROM dhi.io \/alpine-base:3.22-dev/gI' "$file"
+    #    sed -i -E 's/^FROM[[:space:]]+alpine:[^[:space:]]*/FROM alpine:latest/gI' "$file"
     # fi
     
     # [3] Runtimes (Only if they are alpine-based runtimes)
-    # sed -i -E 's/^FROM[[:space:]]+node:[0-9.]+-alpine[^[:space:]]*/FROM dhi.io \/node:20-alpine3.22-dev/gI' "$file"
-    # sed -i -E 's/^FROM[[:space:]]+golang:[0-9.]+-alpine[^[:space:]]*/FROM dhi.io \/golang:1-alpine3.22-dev/gI' "$file"
-    # sed -i -E 's/^FROM[[:space:]]+python:[0-9.]+-alpine[^[:space:]]*/FROM dhi.io \/python:3.11-alpine3.22-dev/gI' "$file"
-    # sed -i -E 's/^FROM[[:space:]]+rust:[0-9.]+-alpine[^[:space:]]*/FROM dhi.io \/rust:1-alpine3.22-dev/gI' "$file"
-    # sed -i -E 's/^FROM[[:space:]]+oven\/bun:[0-9.]+-alpine[^[:space:]]*/FROM dhi.io \/bun:1-alpine3.22-dev/gI' "$file"
+    # sed -i -E 's/^FROM[[:space:]]+node:[0-9.]+-alpine[^[:space:]]*/FROM node:20-alpine/gI' "$file"
+    # sed -i -E 's/^FROM[[:space:]]+golang:[0-9.]+-alpine[^[:space:]]*/FROM golang:1-alpine/gI' "$file"
+    # sed -i -E 's/^FROM[[:space:]]+python:[0-9.]+-alpine[^[:space:]]*/FROM python:3.11-alpine/gI' "$file"
+    # sed -i -E 's/^FROM[[:space:]]+rust:[0-9.]+-alpine[^[:space:]]*/FROM rust:1-alpine/gI' "$file"
+    # sed -i -E 's/^FROM[[:space:]]+oven\/bun:[0-9.]+-alpine[^[:space:]]*/FROM bun:1-alpine/gI' "$file"
 
     # [4] Package Manager (apt -> apk) - ONLY if we are sure we are on Alpine now
-    if grep -qi "dhi.io\/alpine-base" "$file" || grep -qiE "^FROM[[:space:]]+alpine:" "$file"; then
+    if grep -qiE "^FROM[[:space:]]+alpine:" "$file"; then
         # Remove apt commands if any (some multi-stage might have both)
         if grep -qi "apt-get" "$file"; then
             log "    [WARN] Detected apt-get in potentially Alpine-based image. Attempting conversion..."
@@ -245,7 +245,7 @@ if [ "$SERVICE" = "companion" ] || [ "$SERVICE" = "all" ]; then
         sed -i 's|^FROM gcr.io/distroless/cc.*|FROM alpine:3.20|g' "$SRC_ROOT/invidious-companion/$D_FILE"
         
         # Switch Debian stages to Alpine (since we replaced apt with apk)
-        sed -i 's/^FROM debian:.* AS dependabot-debian/FROM dhi.io \/alpine-base:3.22-dev AS dependabot-debian/' "$SRC_ROOT/invidious-companion/$D_FILE"
+        sed -i 's/^FROM debian:.* AS dependabot-debian/FROM alpine:latest AS dependabot-debian/' "$SRC_ROOT/invidious-companion/$D_FILE"
         
         # Fix package names for Alpine
         sed -i 's/xz-utils/xz/g' "$SRC_ROOT/invidious-companion/$D_FILE"
@@ -259,13 +259,13 @@ if [ "$SERVICE" = "gluetun" ] || [ "$SERVICE" = "all" ]; then
         patch_bare "$SRC_ROOT/gluetun/$D_FILE" "https://github.com/qdm12/gluetun/blob/master/Dockerfile"
         
         # Ensure /etc/alpine-release exists for OS detection
-        if grep -q "dhi.io\/alpine-base" "$SRC_ROOT/gluetun/$D_FILE"; then
-            sed -i '/FROM dhi.io \/alpine-base:3.22-dev/a RUN echo "3.22.0" > /etc/alpine-release' "$SRC_ROOT/gluetun/$D_FILE"
+        if grep -q "alpine:" "$SRC_ROOT/gluetun/$D_FILE"; then
+            sed -i '/FROM alpine:/a RUN echo "3.22.0" > /etc/alpine-release' "$SRC_ROOT/gluetun/$D_FILE"
         fi
 
-        # Simplify OpenVPN installation to avoid version mixing issues on DHI base
+        # Simplify OpenVPN installation to avoid version mixing issues
         # Replace the entire multi-line RUN block starting with apk add --no-cache --update -l wget
-        sed -i '/RUN apk add --no-cache --update -l wget/,/mkdir \/gluetun/c\RUN apk add --no-cache --update wget openvpn iptables iptables-legacy tzdata && ln -s /usr/sbin/openvpn /usr/sbin/openvpn2.5 && ln -s /usr/sbin/openvpn /usr/sbin/openvpn2.6 && mkdir /gluetun' "$SRC_ROOT/gluetun/$D_FILE"
+        sed -i '/RUN apk add --no-cache --update -l wget/,/mkdir \/gluetun/c\\RUN apk add --no-cache --update wget openvpn iptables iptables-legacy tzdata && ln -s /usr/sbin/openvpn /usr/sbin/openvpn2.5 && ln -s /usr/sbin/openvpn /usr/sbin/openvpn2.6 && mkdir /gluetun' "$SRC_ROOT/gluetun/$D_FILE"
     fi
 fi
 

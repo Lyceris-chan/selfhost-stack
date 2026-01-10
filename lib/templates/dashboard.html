@@ -50,7 +50,7 @@
     </script>
     <script src="assets/qrcode.min.js"></script>
     <style>
-{{DHI_CSS}}
+{{HUB_CSS}}
     </style>
 </head>
 <body>
@@ -60,12 +60,6 @@
                 <div>
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <h1>Privacy Hub</h1>
-                        <div style="display: flex; align-items: center; gap: 4px; background: var(--md-sys-color-surface-container-high); padding: 4px; border-radius: 20px; border: 1px solid var(--md-sys-color-outline-variant);">
-                            <div class="chip tertiary" style="height: 24px; font-size: 11px; padding: 0 10px; border-radius: 12px; border: none; flex: 0 0 auto;" data-tooltip="Active System Slot (A/B Update System)">Slot ${CURRENT_SLOT}</div>
-                            <button class="btn btn-icon admin-only" style="width: 24px; height: 24px; min-width: 24px;" data-tooltip="Switch to standby slot (Triggers full stack migration)" onclick="switchSlot()">
-                                <span class="material-symbols-rounded" style="font-size: 16px;">swap_horiz</span>
-                            </button>
-                        </div>
                     </div>
                     <div class="subtitle">Self-hosted network security and private service infrastructure.</div>
                 </div>
@@ -809,7 +803,7 @@
     </div>
 
     <script>
-{{DHI_JS}}
+{{HUB_JS}}
     </script>
     <script>
         // DNS Setup Visibility Logic
@@ -839,8 +833,8 @@
                     </div>
                     <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; flex-direction: column; gap: 12px;">
                         <button onclick="purgeUnusedImages(event)" class="btn btn-filled" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
-                            <span class="material-symbols-rounded">broom</span>
-                            <span>Purge Unused Images</span>
+                            <span class="material-symbols-rounded">delete_sweep</span>
+                            <span>Cleanup System Assets</span>
                         </button>
                         <p class="body-small" style="opacity: 0.7; text-align: center;">Safe removal of dangling images and unused build cache.</p>
                     </div>

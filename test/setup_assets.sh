@@ -17,11 +17,8 @@ if [ -d "../data/AppData/privacy-hub/assets" ] && [ ! -s "$ASSETS_DIR/ms.css" ];
 fi
 
 URL_GS_PRIMARY="https://fontlay.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
-URL_GS_FALLBACK="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@400;500;600;700&display=swap"
 URL_CC_PRIMARY="https://fontlay.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
-URL_CC_FALLBACK="https://fonts.googleapis.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
 URL_MS_PRIMARY="https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
-URL_MS_FALLBACK="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
 URL_MCU_PRIMARY="https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/+esm"
 URL_QR_PRIMARY="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/lib/browser.min.js"
 SHA_MCU="3U1awaKd5cEaag6BP1vFQ7y/99n+Iz/n/QiGuRX0BmKncek9GxW6I42Enhwn9QN9"
@@ -34,7 +31,6 @@ MS_CSS_URL="$URL_MS_PRIMARY"
 download_css() {
   local dest="$1"
   local primary="$2"
-  local fallback="$3"
   local varname="$4"
 
   printf -v "$varname" '%s' "$primary"
@@ -43,13 +39,6 @@ download_css() {
   fi
 
   log "Asset source failed: $primary"
-  if [ -n "$fallback" ]; then
-    printf -v "$varname" '%s' "$fallback"
-    if curl -fsSL -A "$UA" "$fallback" -o "$dest"; then
-      return 0
-    fi
-    log "Fallback asset source failed: $fallback"
-  fi
   return 1
 }
 

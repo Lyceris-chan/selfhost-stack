@@ -11,7 +11,7 @@ The **Hub API** is the local control plane for the self-hosted privacy stack. It
 - **Language:** Python 3.11 (Alpine Linux)
 - **Framework:** Custom `http.server` implementation (no heavy framework dependencies like Flask/FastAPI to keep the container minimal ~50MB).
 - **Security:** 
-    - Runs on an internal Docker network (`dhi-frontnet`).
+    - Runs on an internal Docker network (`frontnet`).
     - API endpoints are protected by the `HUB_API_KEY` (for Odido Booster) or `ADMIN_PASS_RAW` (for dashboard operations).
 
 ## API Endpoints

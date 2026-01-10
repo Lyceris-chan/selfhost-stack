@@ -76,9 +76,9 @@
         }
         .filter-chip:focus { outline: none !important; }
         .filter-chip.active {
-            background: var(--md-sys-color-primary-container) !important;
-            color: var(--md-sys-color-on-primary-container) !important;
-            border-color: var(--md-sys-color-primary) !important;
+            background: var(--md-sys-color-secondary-container) !important;
+            color: var(--md-sys-color-on-secondary-container) !important;
+            border-color: transparent !important;
         }
 
         @media (max-width: 720px) {
@@ -341,18 +341,13 @@
             letter-spacing: 0;
         }
 
-        .slot-badge {
-            background: var(--md-sys-color-tertiary-container);
-            color: var(--md-sys-color-on-tertiary-container);
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            height: fit-content;
-            border: 1px solid var(--md-sys-color-outline-variant);
+        .category-badge {
+            background: var(--md-sys-color-surface-container-high);
+            color: var(--md-sys-color-primary);
+            border: none;
+            font-weight: 500;
         }
+
 
         .label-large {
             font-size: 14px;

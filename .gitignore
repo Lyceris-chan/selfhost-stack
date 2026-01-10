@@ -1,21 +1,30 @@
+# Core
 node_modules/
 .DS_Store
 *.log
 tmp/
+__pycache__/
+*.pyc
+
+# Test Artifacts
 test/VERIFICATION_REPORT.md
 test/USER_INTERACTIONS_REPORT.md
 test/SERVICE_VERIFICATION_REPORT.md
 test/screenshot_*.png
+test/screenshots/
 test/test_data/
 test/test_config.env
 test/deployment_todos.json
-__pycache__/
+test/assets/
+test/dashboard.html
+test_data_ab/
+
+# App Data
 DATA/
 data/
 src/data/
 lib/hub-api/__pycache__/
-test_data_ab/
-# Accidental artifacts
-'"'
-test/assets/
-test/dashboard.html
+
+# Secrets
+.secrets
+.env

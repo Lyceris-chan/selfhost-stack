@@ -23,9 +23,8 @@ valid_sessions = {}
 session_lock = threading.Lock()
 session_cleanup_enabled = True
 
-# Prefix logic: use SLOT env if provided, otherwise default to 'a'
-SLOT = os.environ.get('SLOT', 'a')
-CONTAINER_PREFIX = os.environ.get('CONTAINER_PREFIX', f'dhi-{SLOT}-')
+# Constants
+CONTAINER_PREFIX = os.environ.get('CONTAINER_PREFIX', 'hub-')
 SESSIONS_FILE = "/app/data/sessions.json"
 
 def load_sessions():
@@ -560,7 +559,12 @@ def ensure_assets():
             print(f"QR Checksum verify error: {e}")
 
     # Ensure local SVG icon
-    app_name = os.environ.get('APP_NAME', 'privacy-hub')
+    app_name_raw = os.environ.get('APP_NAME', 'privacy-hub')
+    # Sanitize for filename (kebab-case)
+    app_name = "".join([c if c.isalnum() else '-' for c in app_name_raw]).lower()
+    while '--' in app_name: app_name = app_name.replace('--', '-')
+    app_name = app_name.strip('-')
+    
     svg_path = os.path.join(ASSETS_DIR, f"{app_name}.svg")
     if not os.path.exists(svg_path):
         try:
@@ -749,9 +753,19 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
            to cross-origin requests without explicit CORS preflight approval (which we control).
         3. Supports API Key for automation/headless clients.
         """
-        # Allow only the essential endpoints without auth for the dashboard initial load
-        base_path = self.path.split('?')[0]
-        if self.command == 'GET' and base_path in ['/', '/theme', '/status']:
+        # Strip /api prefix if present
+        path_to_check = self.path.split('?')[0]
+        if path_to_check.startswith('/api/'):
+            path_to_check = path_to_check[5:] # Remove '/api/'
+        elif path_to_check.startswith('/api'):
+            path_to_check = path_to_check[4:] # Remove '/api'
+        
+        # Ensure path starts with / for consistent matching
+        if not path_to_check.startswith('/'):
+            path_to_check = '/' + path_to_check
+
+        # Allow dashboard data endpoints for read-only access (required for non-admin view)
+        if self.command == 'GET' and path_to_check in ['/', '/theme', '/status', '/services', '/system-health', '/updates', '/certificate-status', '/metrics', '/containers']:
             return True
         
         # Watchtower notification (comes from docker network, simple path check)
@@ -786,48 +800,55 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             return
 
         path_clean = self.path.split('?')[0]
+        if path_clean.startswith('/api/'):
+            path_clean = path_clean[4:]
+        elif path_clean == '/api':
+            path_clean = '/'
 
         if path_clean == '/project-details':
             try:
-                # Source Size
-                source_size = 0
-                res = subprocess.run(['du', '-sk', '/app/sources'], capture_output=True, text=True, timeout=10)
-                if res.returncode == 0: source_size = int(res.stdout.split()[0]) * 1024
+                # Breakdown dictionary
+                breakdown = []
                 
-                # Config Size
-                config_size = 0
-                res = subprocess.run(['du', '-sk', '/app/config'], capture_output=True, text=True, timeout=10)
-                if res.returncode == 0: config_size = int(res.stdout.split()[0]) * 1024
+                def get_dir_size(path):
+                    try:
+                        res = subprocess.run(['du', '-sk', path], capture_output=True, text=True, timeout=10)
+                        if res.returncode == 0: return int(res.stdout.split()[0]) * 1024
+                    except: pass
+                    return 0
 
-                # Data Size
-                data_size = 0
-                res = subprocess.run(['du', '-sk', '/app/data'], capture_output=True, text=True, timeout=10)
-                if res.returncode == 0: data_size = int(res.stdout.split()[0]) * 1024
+                # 1. Sources & Config
+                src_size = get_dir_size('/app/sources')
+                conf_size = get_dir_size('/app/config')
+                breakdown.append({"category": "System & Config", "size": (src_size + conf_size) / (1024 * 1024), "icon": "settings_system_daydream"})
 
-                # Images Size
+                # 2. User Data
+                data_size = get_dir_size('/app/data')
+                # Subtract sessions.json and logs.db if they are large? No, they are part of data.
+                breakdown.append({"category": "Service Data", "size": data_size / (1024 * 1024), "icon": "database"})
+
+                # 3. Docker Images (Stack-specific)
                 images_size = 0
                 img_res = subprocess.run(['docker', 'images', '--format', '{{.Size}}\t{{.Repository}}'], capture_output=True, text=True, timeout=10)
                 if img_res.returncode == 0:
-                    app_name = os.environ.get('APP_NAME', 'privacy-hub')
                     for line in img_res.stdout.strip().split('\n'):
                         if not line: continue
                         parts = line.split('\t')
                         if len(parts) < 2: continue
                         size_str, repo = parts[0], parts[1]
-                        if any(x in repo for x in [app_name, CONTAINER_PREFIX + 'gluetun', CONTAINER_PREFIX + 'adguard', CONTAINER_PREFIX + 'unbound', CONTAINER_PREFIX + 'redlib', CONTAINER_PREFIX + 'wikiless', CONTAINER_PREFIX + 'invidious', CONTAINER_PREFIX + 'rimgo', CONTAINER_PREFIX + 'breezewiki', CONTAINER_PREFIX + 'memos', CONTAINER_PREFIX + 'vert', CONTAINER_PREFIX + 'scribe', CONTAINER_PREFIX + 'anonymousoverflow', CONTAINER_PREFIX + 'odido-booster', CONTAINER_PREFIX + 'portainer', CONTAINER_PREFIX + 'wg-easy']):
+                        if repo.startswith('selfhost/') or 'immich' in repo or 'gluetun' in repo:
                             mult = 1
                             if 'GB' in size_str.upper(): mult = 1024*1024*1024
                             elif 'MB' in size_str.upper(): mult = 1024*1024
                             elif 'KB' in size_str.upper(): mult = 1024
-                            sz_val = float(re.sub(r'[^0-9.]', '', size_str))
-                            images_size += int(sz_val * mult)
+                            try:
+                                sz_val = float(re.sub(r'[^0-9.]', '', size_str))
+                                images_size += int(sz_val * mult)
+                            except: pass
+                breakdown.append({"category": "Docker Images", "size": images_size / (1024 * 1024), "icon": "album"})
 
-                # Volumes & Containers Size
+                # 4. Volumes (Stack-specific)
                 volumes_size = 0
-                containers_size = 0
-                dangling_size = 0
-                
-                # Get precise volume sizes for our prefix
                 vol_ls = subprocess.run(['docker', 'volume', 'ls', '-f', f'name={CONTAINER_PREFIX}', '--format', '{{.Name}}'], capture_output=True, text=True, timeout=10)
                 if vol_ls.returncode == 0:
                     our_volumes = vol_ls.stdout.strip().split('\n')
@@ -845,27 +866,11 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                 try:
                                     sz_val = float(re.sub(r'[^0-9.]', '', dsize))
                                     volumes_size += int(sz_val * mult)
-                                except: continue
+                                except: pass
+                breakdown.append({"category": "Docker Volumes", "size": volumes_size / (1024 * 1024), "icon": "storage"})
 
-                # Get container sizes for our prefix
-                df_c = subprocess.run(['docker', 'ps', '-a', '--format', '{{.Names}}\t{{.Size}}'], capture_output=True, text=True, timeout=10)
-                if df_c.returncode == 0:
-                    for line in df_c.stdout.strip().split('\n'):
-                        if not line or '\t' not in line: continue
-                        name, csize = line.split('\t')
-                        if CONTAINER_PREFIX and name.startswith(CONTAINER_PREFIX):
-                            # Size format is often "X.YB (virtual Z.WB)"
-                            just_size = csize.split()[0]
-                            mult = 1
-                            if 'GB' in just_size.upper(): mult = 1024*1024*1024
-                            elif 'MB' in just_size.upper(): mult = 1024*1024
-                            elif 'KB' in just_size.upper(): mult = 1024
-                            try:
-                                sz_val = float(re.sub(r'[^0-9.]', '', just_size))
-                                containers_size += int(sz_val * mult)
-                            except: continue
-
-                # Dangling Images (Reclaimable) - This is global but relevant
+                # 5. Reclaimable (Dangling)
+                dangling_size = 0
                 dang_res = subprocess.run(['docker', 'images', '-f', 'dangling=true', '--format', '{{.Size}}'], capture_output=True, text=True, timeout=10)
                 if dang_res.returncode == 0:
                     for s_line in dang_res.stdout.strip().split('\n'):
@@ -877,15 +882,12 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         try:
                             v = float(re.sub(r'[^0-9.]', '', s_line))
                             dangling_size += int(v * mult)
-                        except: continue
+                        except: pass
 
                 self._send_json({
-                    "source_size": (source_size + config_size) / (1024 * 1024),
-                    "data_size": data_size / (1024 * 1024),
-                    "images_size": images_size / (1024 * 1024),
-                    "volumes_size": volumes_size / (1024 * 1024),
-                    "containers_size": containers_size / (1024 * 1024),
-                    "dangling_size": dangling_size / (1024 * 1024)
+                    "total": sum(item["size"] for item in breakdown),
+                    "breakdown": breakdown,
+                    "reclaimable": dangling_size / (1024 * 1024)
                 })
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
@@ -895,33 +897,33 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 uptime_seconds = time.time() - psutil.boot_time()
                 
                 # CPU & RAM
-                # Use a small interval to get a more accurate reading than interval=None
-                cpu_usage = psutil.cpu_percent(interval=0.1)
+                # Use a 0.5-second interval for better dashboard responsiveness while maintaining accuracy
+                cpu_usage = psutil.cpu_percent(interval=0.5)
                 ram = psutil.virtual_memory()
                 
                 # Disk Health (Root Partition)
                 disk = psutil.disk_usage('/')
                 
-                # Project Size (Comprehensive)
+                # Project Size (Comprehensive & Accurate)
                 project_size_bytes = 0
                 try:
-                    # Sum up /app (where project is installed)
-                    res = subprocess.run(['du', '-sk', '/app'], capture_output=True, text=True, timeout=15)
-                    if res.returncode == 0:
-                        project_size_bytes += int(res.stdout.split()[0]) * 1024
+                    # Calculate directory sizes individually to avoid double-counting mounts
+                    for d in ['/app/sources', '/app/config', '/app/data']:
+                        if os.path.exists(d):
+                            res = subprocess.run(['du', '-sk', d], capture_output=True, text=True, timeout=15)
+                            if res.returncode == 0:
+                                project_size_bytes += int(res.stdout.split()[0]) * 1024
                     
-                    # Also include ALL Docker images and VOLUMES related to this stack
-                    # Images
+                    # Include ALL Docker images used by this stack
                     img_res = subprocess.run(['docker', 'images', '--format', '{{.Size}}\t{{.Repository}}'], capture_output=True, text=True, timeout=10)
                     if img_res.returncode == 0:
-                        app_name = os.environ.get('APP_NAME', 'privacy-hub')
                         for line in img_res.stdout.strip().split('\n'):
                             if not line: continue
                             parts = line.split('\t')
                             if len(parts) < 2: continue
                             size_str, repo = parts[0], parts[1]
-                            # Check if it belongs to our stack
-                            if any(x in repo for x in [app_name, CONTAINER_PREFIX + 'gluetun', CONTAINER_PREFIX + 'adguard', CONTAINER_PREFIX + 'unbound', CONTAINER_PREFIX + 'redlib', CONTAINER_PREFIX + 'wikiless', CONTAINER_PREFIX + 'invidious', CONTAINER_PREFIX + 'rimgo', CONTAINER_PREFIX + 'breezewiki', CONTAINER_PREFIX + 'memos', CONTAINER_PREFIX + 'vert', CONTAINER_PREFIX + 'scribe', CONTAINER_PREFIX + 'anonymousoverflow', CONTAINER_PREFIX + 'odido-booster', CONTAINER_PREFIX + 'portainer', CONTAINER_PREFIX + 'wg-easy']):
+                            # Count selfhost images and upstream dependencies
+                            if repo.startswith('selfhost/') or any(x in repo for x in ['immich', 'gluetun', 'postgres', 'redis', 'adguard', 'unbound', 'portainer']):
                                 mult = 1
                                 if 'GB' in size_str.upper(): mult = 1024*1024*1024
                                 elif 'MB' in size_str.upper(): mult = 1024*1024
@@ -931,18 +933,17 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                                     project_size_bytes += int(sz_val * mult)
                                 except: pass
                     
-                    # Volumes
+                    # Include stack-specific Docker volumes
                     vol_res = subprocess.run(['docker', 'volume', 'ls', '-f', f'name={CONTAINER_PREFIX}', '--format', '{{.Name}}'], capture_output=True, text=True, timeout=10)
                     if vol_res.returncode == 0:
-                        for vol_name in vol_res.stdout.strip().split('\n'):
-                            if not vol_name: continue
-                            # Get size of each volume
-                            inspect_res = subprocess.run(['docker', 'system', 'df', '-v', '--format', '{{.Type}}\t{{.Name}}\t{{.Size}}'], capture_output=True, text=True, timeout=10)
-                            if inspect_res.returncode == 0:
-                                for line in inspect_res.stdout.strip().split('\n'):
+                        vols = vol_res.stdout.strip().split('\n')
+                        if vols and vols[0]:
+                            df_v = subprocess.run(['docker', 'system', 'df', '-v', '--format', '{{.Type}}\t{{.Name}}\t{{.Size}}'], capture_output=True, text=True, timeout=10)
+                            if df_v.returncode == 0:
+                                for line in df_v.stdout.strip().split('\n'):
                                     if not line or '\t' not in line: continue
                                     parts = line.split('\t')
-                                    if len(parts) >= 3 and parts[0] == 'Local Volumes' and parts[1] == vol_name:
+                                    if len(parts) >= 3 and parts[0] == 'Local Volumes' and parts[1] in vols:
                                         dsize = parts[2]
                                         mult = 1
                                         if 'GB' in dsize.upper(): mult = 1024*1024*1024
@@ -1221,7 +1222,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                         if CONTAINER_PREFIX and name.startswith(CONTAINER_PREFIX):
                             name = name[len(CONTAINER_PREFIX):]
                         labels = parts[2] if len(parts) > 2 else ""
-                        is_hardened = "io.dhi.hardened=true" in labels
+                        is_hardened = "io.privacyhub.hardened=true" in labels
                         containers[name] = {"id": cid, "hardened": is_hardened}
                 self._send_json({"containers": containers})
             except Exception as e:
@@ -1408,8 +1409,14 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"error": "Unauthorized"}, 401)
             return
 
-        if self.path.startswith('/wg/clients/'):
-            client_id = self.path.split('/')[-1]
+        path_clean = self.path.split('?')[0]
+        if path_clean.startswith('/api/'):
+            path_clean = path_clean[4:]
+        elif path_clean == '/api':
+            path_clean = '/'
+
+        if path_clean.startswith('/wg/clients/'):
+            client_id = path_clean.split('/')[-1]
             if client_id:
                 resp, code = self._proxy_wgeasy('DELETE', f"/{client_id}")
                 self._send_json(resp, code)
@@ -1427,13 +1434,27 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
         except:
             data = {}
 
-        if self.path == '/toggle-session-cleanup':
+        path_clean = self.path.split('?')[0]
+        if path_clean.startswith('/api/'):
+            path_clean = path_clean[4:]
+        elif path_clean == '/api':
+            path_clean = '/'
+
+        if path_clean == '/watchtower':
+            try:
+                log_structured("INFO", f"Watchtower Notification: {post_data}", "MAINTENANCE")
+                self._send_json({"success": True})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+            return
+
+        if path_clean == '/toggle-session-cleanup':
             global session_cleanup_enabled
             session_cleanup_enabled = data.get('enabled', True)
             self._send_json({"success": True, "enabled": session_cleanup_enabled})
             return
 
-        if self.path == '/uninstall':
+        if path_clean == '/uninstall':
             try:
                 def run_uninstall():
                     log_structured("INFO", "Uninstall sequence started", "MAINTENANCE")
@@ -1447,7 +1468,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
             return
 
-        if self.path == '/verify-admin':
+        if path_clean == '/verify-admin':
             try:
                 password = data.get('password')
                 expected_admin = os.environ.get('ADMIN_PASS_RAW')
@@ -1483,7 +1504,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"error": "Unauthorized"}, 401)
             return
 
-        if self.path == '/theme':
+        if path_clean == '/theme':
             theme_file = os.path.join(CONFIG_DIR, "theme.json")
             try:
                 with open(theme_file, 'w') as f:
@@ -1512,7 +1533,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/upload':
+        elif path_clean == '/upload':
             try:
                 l = int(self.headers['Content-Length'])
                 data = json.loads(self.rfile.read(l).decode('utf-8'))
@@ -1529,7 +1550,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True, "name": safe})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/activate':
+        elif path_clean == '/activate':
             try:
                 l = int(self.headers['Content-Length'])
                 name = json.loads(self.rfile.read(l).decode('utf-8')).get('name')
@@ -1538,7 +1559,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/delete':
+        elif path_clean == '/delete':
             try:
                 l = int(self.headers['Content-Length'])
                 name = json.loads(self.rfile.read(l).decode('utf-8')).get('name')
@@ -1547,7 +1568,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/restart-stack':
+        elif path_clean == '/restart-stack':
             try:
                 # Trigger a full stack restart in the background
                 log_structured("SYSTEM", "Full stack restart triggered via Dashboard", "ORCHESTRATION")
@@ -1558,16 +1579,7 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True, "message": "Stack restart initiated"})
             except Exception as e:
                 self._send_json({"error": str(e)}, 500)
-        elif self.path == '/switch-slot':
-            try:
-                log_structured("SYSTEM", "Slot swap (A/B) initiated via Dashboard", "ORCHESTRATION")
-                # Trigger zima.sh with -S (Swap) and -y (Auto-confirm)
-                # We use Popen to return immediately while the migration happens
-                subprocess.Popen(["bash", "/app/zima.sh", "-S", "-y"], cwd="/app")
-                self._send_json({"success": True, "message": "Slot migration initiated"})
-            except Exception as e:
-                self._send_json({"error": str(e)}, 500)
-        elif self.path == '/batch-update':
+        elif path_clean == '/batch-update':
             try:
                 l = int(self.headers['Content-Length'])
                 data = json.loads(self.rfile.read(l).decode('utf-8'))
@@ -1991,12 +2003,13 @@ if __name__ == "__main__":
         
         if proxy_ready:
             log_structured("INFO", "Network proxy available. Synchronizing remote assets...", "FONTS")
-            try:
-                ensure_assets()
-            except Exception as e:
-                log_structured("WARN", f"Asset synchronization failed: {e}", "FONTS")
         else:
-            log_structured("WARN", "Gluetun proxy unavailable after 60s. Asset synchronization deferred.", "FONTS")
+            log_structured("WARN", "Gluetun proxy unavailable after 60s. Attempting fallback synchronization...", "FONTS")
+        
+        try:
+            ensure_assets()
+        except Exception as e:
+            log_structured("WARN", f"Asset synchronization failed: {e}", "FONTS")
 
     # Start initialization in background so API is immediately available
     threading.Thread(target=background_init, daemon=True).start()
