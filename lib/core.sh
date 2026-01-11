@@ -751,10 +751,6 @@ EOF
             PORTAINER_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
             echo "PORTAINER_PASS_RAW=$PORTAINER_PASS_RAW" >> "$BASE_DIR/.secrets"; updated_secrets=true
         fi
-        if [ -z "${IMMICH_ADMIN_PASS_RAW:-}" ]; then
-            IMMICH_ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
-            echo "IMMICH_ADMIN_PASS_RAW=$IMMICH_ADMIN_PASS_RAW" >> "$BASE_DIR/.secrets"; updated_secrets=true
-        fi
 
         # Generate hashes if missing
         if [ -z "${WG_HASH_CLEAN:-}" ]; then
@@ -800,7 +796,7 @@ EOF
     fi
     
     # Final export of all variables for use in other scripts
-    export VPN_PASS_RAW AGH_PASS_RAW ADMIN_PASS_RAW PORTAINER_PASS_RAW IMMICH_ADMIN_PASS_RAW
+    export VPN_PASS_RAW AGH_PASS_RAW ADMIN_PASS_RAW PORTAINER_PASS_RAW
     export DESEC_DOMAIN DESEC_TOKEN SCRIBE_GH_USER SCRIBE_GH_TOKEN
     export ODIDO_TOKEN ODIDO_USER_ID ODIDO_API_KEY HUB_API_KEY
     export WG_HASH_CLEAN AGH_PASS_HASH PORTAINER_PASS_HASH
@@ -825,7 +821,6 @@ Odido Booster API,http://$LAN_IP:8085,admin,$ODIDO_API_KEY,API key for dashboard
 Gluetun Control Server,http://$LAN_IP:8000,gluetun,$ADMIN_PASS_RAW,Internal VPN gateway control API.
 deSEC DNS API,https://desec.io,$DESEC_DOMAIN,$DESEC_TOKEN,API token for deSEC dynamic DNS management.
 GitHub Scribe Token,https://github.com/settings/tokens,$SCRIBE_GH_USER,$SCRIBE_GH_TOKEN,GitHub Personal Access Token (Gist Key) for Scribe Medium frontend.
-Immich Admin,http://$LAN_IP:$PORT_IMMICH,admin,$IMMICH_ADMIN_PASS_RAW,Self-hosted photo and video management solution.
 EOF
     chmod 600 "$export_file"
     log_info "Credential export file created: $export_file"
