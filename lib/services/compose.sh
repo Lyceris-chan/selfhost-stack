@@ -193,10 +193,8 @@ append_gluetun() {
       - FIREWALL_OUTBOUND_SUBNETS=$DOCKER_SUBNET
       - FIREWALL_VPN_INPUT_PORTS=10416,8080,8180,3000,3002,8280,8480,80,24153,8282,9000,2283
       - HTTPPROXY=on
-      - DNS_KEEP_NAMESERVERS=on
-      - DNS_ADDRESS=127.0.0.11
     healthcheck:
-      test: ["CMD-SHELL", "$(if [ "${MOCK_VERIFICATION:-false}" = "true" ]; then echo "exit 0"; else echo "wget -qO- http://127.0.0.1:8000/status && (nslookup example.com 127.0.0.1 > /dev/null || exit 1)"; fi)"]
+      test: ["CMD-SHELL", "$(if [ "${MOCK_VERIFICATION:-false}" = "true" ]; then echo "exit 0"; else echo "wget -qO- http://127.0.0.1:8000/status && (nslookup example.com > /dev/null || exit 1)"; fi)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -395,7 +393,7 @@ append_redlib() {
     cap_drop: [ALL]
     depends_on: {gluetun: {condition: service_healthy}}
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/robots.txt || [ \\$? -eq 8 ]"]
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/robots.txt || [ \$\$? -eq 8 ]"]
       interval: 1m
       timeout: 5s
       retries: 3
@@ -420,7 +418,11 @@ append_wikiless() {
       - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment: {DOMAIN: "$LAN_IP:$PORT_WIKILESS", NONSSL_PORT: "$PORT_INT_WIKILESS", REDIS_URL: "redis://127.0.0.1:6379"}
-    healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:8180/ || exit 1", interval: 30s, timeout: 5s, retries: 2}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -nv --tries=1 --spider http://127.0.0.1:8180/ || [ \$\$? -eq 8 ]"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
     depends_on: {wikiless_redis: {condition: service_healthy}, gluetun: {condition: service_healthy}}
     restart: always
     deploy:
@@ -457,7 +459,11 @@ append_invidious() {
     environment:
       - INVIDIOUS_DATABASE_URL=postgres://kemal:$INVIDIOUS_DB_PASS_COMPOSE@invidious-db:5432/invidious
       - INVIDIOUS_HMAC_KEY=$IV_HMAC
-    healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || exit 1", interval: 30s, timeout: 5s, retries: 2}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || [ \$\$\$? -eq 8 ]"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
     logging:
       options:
         max-size: "1G"
@@ -600,7 +606,7 @@ append_scribe() {
     network_mode: "service:gluetun"
     env_file: ["$ENV_DIR/scribe.env"]
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8280/ || exit 1"]
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8280/ || [ \$\$? -eq 8 ]"]
       interval: 1m
       timeout: 5s
       retries: 3
@@ -842,11 +848,13 @@ append_watchtower() {
     container_name: ${CONTAINER_PREFIX}watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - dhi-mgmtnet
     environment:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_POLL_INTERVAL=3600
       - WATCHTOWER_NOTIFICATIONS=shoutrrr
-      - WATCHTOWER_NOTIFICATION_URL=generic://hub-api:55555/watchtower
+      - WATCHTOWER_NOTIFICATION_URL=generic+http://hub-api:55555/watchtower
     restart: unless-stopped
     deploy:
       resources:

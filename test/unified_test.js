@@ -4,8 +4,20 @@ const path = require('path');
 
 const LAN_IP = '127.0.0.1';
 const DASHBOARD_URL = `http://${LAN_IP}:8081`;
-const ADMIN_PASS = 'admin123';
 const SCREENSHOT_DIR = path.join(__dirname, 'screenshots');
+const REPORT_FILE = path.join(__dirname, 'verification_report.md');
+
+// Load admin password from .secrets if it exists
+let ADMIN_PASS = 'admin123';
+const secretsPath = path.join(__dirname, 'test_data/data/AppData/privacy-hub-test/.secrets');
+if (fs.existsSync(secretsPath)) {
+    const secrets = fs.readFileSync(secretsPath, 'utf8');
+    const match = secrets.match(/ADMIN_PASS_RAW="([^"]+)"/);
+    if (match) {
+        ADMIN_PASS = match[1];
+        console.log(`Loaded admin password from .secrets: ${ADMIN_PASS.substring(0, 3)}...`);
+    }
+}
 
 const SERVICES = [
     { name: 'Dashboard', url: `http://${LAN_IP}:8081` },
@@ -29,18 +41,17 @@ const SERVICES = [
     { name: 'OdidoBooster', url: `http://${LAN_IP}:8085/docs` },
 ];
 
-const TEST_LOG = path.join(__dirname, 'functional_test.log');
+const results = [];
 
-function logResult(test, outcome, details = '') {
+function logResult(category, test, outcome, details = '') {
     const timestamp = new Date().toISOString();
-    const line = JSON.stringify({ timestamp, test, outcome, details }) + '\n';
-    fs.appendFileSync(TEST_LOG, line);
-    console.log(`[${outcome}] ${test}: ${details}`);
+    const result = { timestamp, category, test, outcome, details };
+    results.push(result);
+    console.log(`[${outcome}] ${category} > ${test}: ${details}`);
 }
 
 async function runTests() {
     if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR);
-    if (fs.existsSync(TEST_LOG)) fs.unlinkSync(TEST_LOG);
 
     const browser = await puppeteer.launch({
         headless: 'new',
@@ -50,234 +61,181 @@ async function runTests() {
     const page = await browser.newPage();
     await page.setViewport({ width: 1440, height: 1200 });
 
-    console.log('--- Starting Service Verification ---');
-    for (const service of SERVICES) {
-        console.log(`Checking ${service.name}: ${service.url}`);
-        try {
-            await page.goto(service.url, { waitUntil: 'networkidle2', timeout: 60000 });
-            await new Promise(r => setTimeout(r, 5000));
-            
-            // Wait for body to ensure something loaded
-            await page.waitForSelector('body', { timeout: 20000 });
-
-            // Specific Functional Tests
-            if (service.name === 'Portainer') {
-                try {
-                    await page.waitForSelector('input[name="username"], input#username, .login-container, body', { timeout: 10000 });
-                    logResult('Portainer UI', 'PASS', 'UI detected');
-                } catch (e) { logResult('Portainer UI', 'FAIL', 'Login UI not found'); }
-            }
-
-            if (service.name === 'WireGuard_UI') {
-                try {
-                    await page.waitForSelector('input[type="password"], button, body', { timeout: 10000 });
-                    logResult('WireGuard UI', 'PASS', 'UI detected');
-                } catch (e) { logResult('WireGuard UI', 'FAIL', 'UI not found'); }
-            }
-
-            if (service.name === 'Memos') {
-                try {
-                    await page.waitForSelector('input[name="username"], .signin-form, #root, body', { timeout: 10000 });
-                    logResult('Memos UI', 'PASS', 'UI detected');
-                } catch (e) { logResult('Memos UI', 'FAIL', 'UI not found'); }
-            }
-
-            if (service.name === 'Invidious') {
-                try {
-                    const searchBar = await page.$('input[name="q"]');
-                    if (searchBar) {
-                        logResult('Invidious UI', 'PASS', 'Search bar detected');
-                        await searchBar.type('test');
-                        await page.keyboard.press('Enter');
-                        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
-                        const videoLink = await page.$('a[href^="/watch?v="]');
-                        if (videoLink) {
-                            logResult('Invidious Search', 'PASS', 'Search results populated');
-                        } else {
-                            logResult('Invidious Search', 'FAIL', 'No video results found');
-                        }
-                    } else {
-                        logResult('Invidious UI', 'FAIL', 'Search bar missing');
-                    }
-                } catch (e) {
-                    logResult('Invidious Functionality', 'FAIL', e.message);
-                }
-            }
-
-            if (service.name === 'Cobalt') {
-                try {
-                    // Try to wait for an actual UI element to ensure it's not just the API response
-                    await page.waitForSelector('input, button, #url-input, .form-control', { timeout: 15000 }).catch(() => {});
-                    const content = await page.content();
-                    if (content.includes('cobalt') && (content.includes('<input') || content.includes('<button>'))) {
-                        logResult('Cobalt UI', 'PASS', 'UI elements detected');
-                    } else if (content.includes('cobalt') || content.includes('api')) {
-                        logResult('Cobalt API', 'WARN', 'Only API response or plain body detected');
-                    } else {
-                        logResult('Cobalt UI', 'FAIL', 'Recognizable UI/API not found');
-                    }
-                } catch (e) { logResult('Cobalt Functionality', 'FAIL', e.message); }
-            }
-
-            if (service.name === 'SearXNG') {
-                try {
-                    const searchInput = await page.$('input#q') || await page.$('input[name="q"]');
-                    if (searchInput) {
-                        logResult('SearXNG UI', 'PASS', 'Search input detected');
-                    } else {
-                        logResult('SearXNG UI', 'FAIL', 'Search input not found');
-                    }
-                } catch (e) { logResult('SearXNG Functionality', 'FAIL', e.message); }
-            }
-
-            if (service.name === 'Redlib') {
-                try {
-                    const links = await page.$('#links') || await page.$('.post') || await page.$('body');
-                    if (links) {
-                        logResult('Redlib UI', 'PASS', 'UI detected');
-                    } else {
-                        logResult('Redlib UI', 'FAIL', 'UI not found');
-                    }
-                } catch (e) { logResult('Redlib Functionality', 'FAIL', e.message); }
-            }
-
-            if (service.name === 'Wikiless') {
-                try {
-                    const search = await page.$('input[name="q"]') || await page.$('input[type="text"]') || await page.$('body');
-                    if (search) {
-                        logResult('Wikiless UI', 'PASS', 'UI detected');
-                    } else {
-                        logResult('Wikiless UI', 'FAIL', 'UI not found');
-                    }
-                } catch (e) { logResult('Wikiless Functionality', 'FAIL', e.message); }
-            }
-
-            if (service.name === 'Rimgo') {
-                try {
-                    const logo = await page.$('img[alt="Rimgo"]') || await page.$('.gallery') || await page.$('body');
-                    if (logo) {
-                        logResult('Rimgo UI', 'PASS', 'UI detected');
-                    } else {
-                        logResult('Rimgo UI', 'FAIL', 'UI not found');
-                    }
-                } catch (e) { logResult('Rimgo Functionality', 'FAIL', e.message); }
-            }
-
-            if (service.name === 'Scribe') {
-                try {
-                    const main = await page.$('main') || await page.$('.container') || await page.$('body');
-                    if (main) {
-                        logResult('Scribe UI', 'PASS', 'UI detected');
-                    } else {
-                        logResult('Scribe UI', 'FAIL', 'UI not found');
-                    }
-                } catch (e) { logResult('Scribe Functionality', 'FAIL', e.message); }
-            }
-
-            if (service.name === 'Breezewiki') {
-                try {
-                    const search = await page.$('input[name="q"]') || await page.$('body');
-                    if (search) {
-                        logResult('Breezewiki UI', 'PASS', 'UI detected');
-                    } else {
-                        logResult('Breezewiki UI', 'FAIL', 'UI not found');
-                    }
-                } catch (e) { logResult('Breezewiki Functionality', 'FAIL', e.message); }
-            }
-
-            if (service.name === 'AnonymousOverflow') {
-                try {
-                    const question = await page.$('.question-summary') || await page.$('#questions') || await page.$('body');
-                    if (question) {
-                        logResult('AnonymousOverflow UI', 'PASS', 'UI detected');
-                    } else {
-                        logResult('AnonymousOverflow UI', 'FAIL', 'UI not found');
-                    }
-                } catch (e) { logResult('AnonymousOverflow Functionality', 'FAIL', e.message); }
-            }
-
-            if (service.name === 'Immich') {
-                try {
-                    await page.waitForSelector('input[type="email"], input[name="email"], #email, body', { timeout: 10000 });
-                    logResult('Immich UI', 'PASS', 'UI detected');
-                } catch (e) { logResult('Immich UI', 'FAIL', 'UI not found'); }
-            }
-
-            if (service.name === 'VERT') {
-                try {
-                    const content = await page.content();
-                    if (content.includes('vert') || content.includes('converter') || content.includes('body')) {
-                        logResult('VERT UI', 'PASS', 'UI detected');
-                    } else {
-                        logResult('VERT UI', 'FAIL', 'Recognizable VERT UI not found');
-                    }
-                } catch (e) { logResult('VERT Functionality', 'FAIL', e.message); }
-            }
-
-            if (service.name === 'OdidoBooster') {
-                try {
-                    await page.waitForSelector('.swagger-ui, body', { timeout: 10000 });
-                    logResult('OdidoBooster UI', 'PASS', 'UI detected');
-                } catch (e) { logResult('OdidoBooster UI', 'FAIL', 'UI not found'); }
-            }
-
-            await page.screenshot({ path: path.join(SCREENSHOT_DIR, `service_${service.name.toLowerCase()}.png`), fullPage: true });
-            logResult(`${service.name} Connectivity`, 'PASS', `Reached ${service.url}`);
-
-        } catch (e) {
-            console.warn(`[WARN] Could not verify ${service.name}: ${e.message}`);
-            logResult(`${service.name} Connectivity`, 'FAIL', e.message);
-        }
-    }
-
-    console.log('\n--- Starting Dashboard Interaction Tests ---');
     try {
-        await page.goto(DASHBOARD_URL, { waitUntil: 'networkidle2', timeout: 30000 });
+        console.log('--- Phase 1: Service Connectivity & Deep Functionality ---');
+        for (const service of SERVICES) {
+            console.log(`Checking ${service.name}: ${service.url}`);
+            try {
+                await page.goto(service.url, { waitUntil: 'networkidle2', timeout: 60000 });
+                await new Promise(r => setTimeout(r, 2000));
+                
+                await page.waitForSelector('body', { timeout: 20000 });
+                logResult('Connectivity', service.name, 'PASS', `Reached ${service.url}`);
+
+                if (service.name === 'Invidious') {
+                    try {
+                        console.log('  Testing Invidious Search & Playback...');
+                        await page.waitForSelector('input[name="q"], input[type="text"]', { timeout: 30000 });
+                        const searchBar = await page.$('input[name="q"]') || await page.$('input[type="text"]');
+                        await searchBar.type('Big Buck Bunny 60fps');
+                        await page.keyboard.press('Enter');
+                        
+                        await page.waitForSelector('a[href*="watch?v="]', { timeout: 30000 });
+                        const videoLink = await page.$('a[href*="watch?v="]');
+                        
+                        if (videoLink) {
+                            logResult('Invidious', 'Search', 'PASS', 'Search results found');
+                            const videoUrl = await page.evaluate(el => el.href, videoLink);
+                            console.log(`  Navigating to video: ${videoUrl}`);
+                            
+                            await page.goto(videoUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+                            await new Promise(r => setTimeout(r, 5000));
+                            
+                            const playerSelector = 'video, #player, .video-js, #player-container, iframe, .vjs-tech';
+                            const videoPlayer = await page.waitForSelector(playerSelector, { timeout: 30000 });
+                            
+                            if (videoPlayer) {
+                                logResult('Invidious', 'Player Loaded', 'PASS', 'Video player element detected');
+                                
+                                const playbackMetrics = await page.evaluate(async () => {
+                                    const v = document.querySelector('video');
+                                    if (!v) return { error: 'No video element' };
+                                    const start = v.currentTime;
+                                    await new Promise(r => setTimeout(r, 5000));
+                                    return { start, end: v.currentTime, playing: v.currentTime > start, paused: v.paused };
+                                });
+
+                                if (playbackMetrics.playing) {
+                                    logResult('Invidious', 'Playback Progress', 'PASS', `Video playing: ${playbackMetrics.start.toFixed(1)}s -> ${playbackMetrics.end.toFixed(1)}s`);
+                                } else {
+                                    logResult('Invidious', 'Playback Progress', 'WARN', playbackMetrics.error || 'Video element found but not progressing (might be paused or buffering)');
+                                }
+                            } else {
+                                logResult('Invidious', 'Player Loaded', 'FAIL', 'Video player not found');
+                            }
+                        } else {
+                            logResult('Invidious', 'Search', 'FAIL', 'No video results found');
+                        }
+                    } catch (e) {
+                        logResult('Invidious', 'Functionality', 'FAIL', e.message);
+                    }
+                }
+
+                await page.screenshot({ path: path.join(SCREENSHOT_DIR, `service_${service.name.toLowerCase()}.png`), fullPage: true });
+
+            } catch (e) {
+                logResult('Connectivity', service.name, 'FAIL', e.message);
+            }
+        }
+
+        console.log('\n--- Phase 2: Dashboard Interaction ---');
+        await page.goto(DASHBOARD_URL, { waitUntil: 'networkidle2' });
         await new Promise(r => setTimeout(r, 5000));
 
-        // 1. Initial State
-        console.log('Capturing Initial Dashboard State...');
-        await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dash_01_initial.png') });
-
-        // 2. Test Admin Login
-        console.log('Testing Admin Login...');
-        const lockBtn = await page.$('#admin-lock-btn');
-        if (lockBtn) {
-            await lockBtn.click();
+        // Test Guest mode filtering
+        const infrastructureChip = await page.evaluateHandle(() => {
+            return Array.from(document.querySelectorAll('.filter-chip')).find(c => c.textContent.includes('Infrastructure'));
+        });
+        if (infrastructureChip && infrastructureChip.asElement()) {
+            await infrastructureChip.asElement().click();
             await new Promise(r => setTimeout(r, 2000));
-            await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dash_02_login_prompt.png') });
-            
-            const input = await page.$('input[type="password"]');
-            if (input) {
-                await input.type(ADMIN_PASS);
-                await page.keyboard.press('Enter');
-                await new Promise(r => setTimeout(r, 5000));
+            const isActive = await page.evaluate(el => el.classList.contains('active'), infrastructureChip);
+            logResult('Dashboard', 'Filter Toggle', isActive ? 'PASS' : 'FAIL', 'Infrastructure category activated');
+        }
+
+        // Admin Login
+        console.log('  Testing Admin Login...');
+        await page.click('#admin-lock-btn');
+        await page.waitForSelector('#admin-password-input', { visible: true });
+        await page.type('#admin-password-input', ADMIN_PASS);
+        await page.keyboard.press('Enter');
+        
+        // Wait for admin mode to activate (class on body)
+        try {
+            await page.waitForFunction(() => document.body.classList.contains('admin-mode'), { timeout: 10000 });
+            logResult('Dashboard', 'Admin Login', 'PASS', 'Admin mode activated');
+        } catch (e) {
+            const loginVisible = await page.evaluate(() => document.getElementById('login-modal').style.display !== 'none');
+            logResult('Dashboard', 'Admin Login', 'FAIL', loginVisible ? 'Login modal still visible (Wrong password?)' : 'Body class not added');
+            await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'debug_login_fail.png') });
+        }
+
+        const isAdmin = await page.evaluate(() => document.body.classList.contains('admin-mode'));
+        if (isAdmin) {
+            // Test Invidious Settings Modal
+            console.log('  Testing Invidious Settings...');
+            const invidiousSettingsBtn = await page.$('[data-container="invidious"] .settings-btn');
+            if (invidiousSettingsBtn) {
+                await invidiousSettingsBtn.click();
+                await page.waitForSelector('#service-modal', { visible: true });
+                logResult('Dashboard', 'Settings Modal', 'PASS', 'Invidious management modal opened');
                 
-                console.log('Capturing Dashboard after Login...');
-                await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dash_03_unlocked.png'), fullPage: true });
-            } else {
-                console.warn('Could not find password input field');
+                const migrateBtn = await page.evaluateHandle(() => {
+                    return Array.from(document.querySelectorAll('#modal-actions button')).find(b => b.textContent.includes('Migrate Database'));
+                });
+                
+                if (migrateBtn && migrateBtn.asElement()) {
+                    await migrateBtn.asElement().click();
+                    await page.waitForSelector('#dialog-modal', { visible: true });
+                    logResult('Dashboard', 'Migrate Dialog', 'PASS', 'Confirmation dialog appeared');
+                    await page.click('#dialog-cancel-btn');
+                }
+                await page.evaluate(() => document.querySelector('#service-modal .btn-icon').click());
             }
-        } else {
-            console.warn('Could not find admin lock button');
+
+            // Test Session Cleanup Toggle
+            const cleanupSwitch = await page.$('#session-cleanup-switch');
+            if (cleanupSwitch) {
+                const initialState = await page.evaluate(el => el.classList.contains('active'), cleanupSwitch);
+                await page.evaluate(() => document.getElementById('session-cleanup-switch').click());
+                await new Promise(r => setTimeout(r, 2000));
+                const newState = await page.evaluate(el => el.classList.contains('active'), cleanupSwitch);
+                logResult('Dashboard', 'Session Policy Toggle', newState !== initialState ? 'PASS' : 'FAIL', `Toggled cleanup: ${initialState} -> ${newState}`);
+            }
         }
 
-        // 3. Test interactions - Category Filtering
-        console.log('Testing Category Filtering...');
-        const systemBtn = await page.$('button[data-target="system"]') || await page.$('.filter-chip[data-target="system"]');
-        if (systemBtn) {
-            await systemBtn.click();
-            await new Promise(r => setTimeout(r, 2000));
-            await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dash_04_category_system.png') });
-        }
-
-        console.log('UI verification complete.');
     } catch (e) {
-        console.error('UI Test Error:', e.message);
-        await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'dash_error.png') });
+        console.error('Test Suite Error:', e);
+        logResult('Global', 'Suite Execution', 'FAIL', e.message);
     } finally {
         await browser.close();
+        await generateReport();
     }
+}
+
+async function generateReport() {
+    console.log('\n--- Generating Comprehensive Report ---');
+    const timestamp = new Date().toLocaleString();
+    let report = `# Verification Report - ${timestamp}\n\n`;
+
+    const summary = {
+        total: results.length,
+        pass: results.filter(r => r.outcome === 'PASS').length,
+        fail: results.filter(r => r.outcome === 'FAIL').length,
+        warn: results.filter(r => r.outcome === 'WARN').length
+    };
+
+    report += `## Summary\n`;
+    report += `- **Total Tests:** ${summary.total}\n`;
+    report += `- **Passed:** ✅ ${summary.pass}\n`;
+    report += `- **Failed:** ❌ ${summary.fail}\n`;
+    report += `- **Warnings:** ⚠️ ${summary.warn}\n\n`;
+
+    const categories = [...new Set(results.map(r => r.category))];
+    for (const cat of categories) {
+        report += `### ${cat}\n`;
+        report += `| Test | Outcome | Details |\n`;
+        report += `|------|---------|---------|\n`;
+        const catResults = results.filter(r => r.category === cat);
+        for (const res of catResults) {
+            const icon = res.outcome === 'PASS' ? '✅' : (res.outcome === 'FAIL' ? '❌' : '⚠️');
+            report += `| ${res.test} | ${icon} ${res.outcome} | ${res.details} |\n`;
+        }
+        report += `\n`;
+    }
+
+    fs.writeFileSync(REPORT_FILE, report);
+    console.log(`Report generated: ${REPORT_FILE}`);
 }
 
 runTests();

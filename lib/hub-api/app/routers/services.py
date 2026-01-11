@@ -215,6 +215,75 @@ def batch_update_services(req: BatchUpdate, background_tasks: BackgroundTasks, u
     background_tasks.add_task(_run_batch)
     return {"success": True, "message": "Batch update started"}
 
+@router.post("/migrate")
+def migrate_service(service: str, backup: str = "yes", user: str = Depends(get_current_user)):
+    service = sanitize_service_name(service)
+    if not service:
+        raise HTTPException(status_code=400, detail="Invalid service name")
+    
+    # We run this synchronously since it might be critical for the UI to know it finished
+    # or we could run it in background. For the test runner, synchronous is better if it doesn't timeout.
+    # Actually, migration can take a while. Let's use a long timeout.
+    try:
+        res = run_command(["/usr/local/bin/migrate.sh", service, "migrate" if backup == "yes" else "migrate-no-backup"], timeout=300)
+        return {"success": True, "output": res.stdout}
+    except Exception as e:
+        return {"error": str(e)}
+
+@router.post("/clear-db")
+def clear_db(service: str, backup: str = "yes", user: str = Depends(get_current_user)):
+    service = sanitize_service_name(service)
+    if not service:
+        raise HTTPException(status_code=400, detail="Invalid service name")
+    
+    try:
+        res = run_command(["/usr/local/bin/migrate.sh", service, "clear" if backup == "yes" else "clear-no-backup"], timeout=120)
+        return {"success": True, "output": res.stdout}
+    except Exception as e:
+        return {"error": str(e)}
+
+@router.get("/clear-logs")
+def clear_logs(service: str, user: str = Depends(get_current_user)):
+    service = sanitize_service_name(service)
+    if not service:
+        raise HTTPException(status_code=400, detail="Invalid service name")
+    
+    try:
+        # Specialized logic for AdGuard
+        if service == "adguard":
+            run_command(["docker", "exec", "hub-adguard", "/opt/adguardhome/AdGuardHome", "-s", "reset_querylog"], timeout=30)
+        return {"success": True}
+    except Exception as e:
+        return {"error": str(e)}
+
+@router.get("/vacuum")
+def vacuum_db(service: str, user: str = Depends(get_current_user)):
+    service = sanitize_service_name(service)
+    if not service:
+        raise HTTPException(status_code=400, detail="Invalid service name")
+    
+    try:
+        if service == "memos":
+            run_command(["docker", "exec", "hub-memos", "sh", "-c", "sqlite3 /var/opt/memos/memos_prod.db 'VACUUM;'"], timeout=60)
+        return {"success": True}
+    except Exception as e:
+        return {"error": str(e)}
+
+@router.get("/changelog")
+def get_changelog(service: str, user: str = Depends(get_current_user)):
+    service = sanitize_service_name(service)
+    if not service:
+        raise HTTPException(status_code=400, detail="Invalid service name")
+    
+    repo_path = f"/app/sources/{service}"
+    if os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, ".git")):
+        try:
+            res = run_command(["git", "log", "-n", "10", "--pretty=format:%h - %s (%cr)", "HEAD"], cwd=repo_path, timeout=10)
+            return {"changelog": res.stdout}
+        except:
+            pass
+    return {"changelog": "No detailed changelog available for this service."}
+
 @router.post("/master-update")
 def master_update(background_tasks: BackgroundTasks, user: str = Depends(get_current_user)):
     def _run():

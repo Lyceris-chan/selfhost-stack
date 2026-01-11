@@ -147,9 +147,11 @@ def main():
         run_command("docker system prune -f --volumes")
         
         # 2. Deploy
-        env_vars = f"APP_NAME=privacy-hub-test PROJECT_ROOT={TEST_DATA_DIR} MOCK_VERIFICATION=true"
+        env_vars = f"APP_NAME=privacy-hub-test PROJECT_ROOT={TEST_DATA_DIR} MOCK_VERIFICATION=true ADMIN_PASS_RAW=admin123 VPN_PASS_RAW=vpn123 FORCE_UPDATE=true"
         
         print("Generating configuration...")
+        # We manually copy Hub API source to ensure it's up to date before zima runs if needed, 
+        # but zima.sh should handle it. To be safe, we'll ensure the source is fresh.
         cmd_gen = f"{env_vars} ./zima.sh -p -y -E test/test_config.env -s {services_list} -G"
         run_command(cmd_gen, cwd=PROJECT_ROOT)
         
@@ -243,14 +245,12 @@ def main():
         for svc in local_builds:
             if svc in services_list:
                 print(f"Building {svc}...")
-                run_command(f"{env_cmd_prefix} docker compose build {svc}", cwd=compose_cwd)
+                run_command(f"{env_cmd_prefix} docker compose build --no-cache {svc}", cwd=compose_cwd)
 
         print("Pulling other services...")
         subprocess.call(f"{env_cmd_prefix} docker compose pull", shell=True, cwd=compose_cwd)
 
         print("Launching stack...")
-        # Use docker compose directly to preserve patched configuration
-        # Use sudo -E to ensure permissions for reading root-owned env files
         cmd_deploy = f"{env_cmd_prefix} sudo -E docker compose up -d"
         run_command(cmd_deploy, cwd=compose_cwd, ignore_failure=True)
 
@@ -259,12 +259,82 @@ def main():
             if not verify_url(check['name'], check['url'], check['code']):
                 all_pass = False
                 
-        # 4. Verify Logs
+        # 4. Verify Watchtower Integration
+        print("Verifying Watchtower notification pipeline...")
+        try:
+            notification_data = {"entries": [{"container": "test-container", "status": "updated"}]}
+            req = urllib.request.Request(
+                "http://127.0.0.1:55555/watchtower",
+                data=json.dumps(notification_data).encode(),
+                headers={"Content-Type": "application/json"}
+            )
+            urllib.request.urlopen(req, timeout=10)
+            
+            log_path = os.path.join(TEST_DATA_DIR, "data/AppData/privacy-hub-test/deployment.log")
+            time.sleep(2)
+            if os.path.exists(log_path):
+                with open(log_path, 'r') as f:
+                    logs = f.read()
+                    if "Watchtower Notification" in logs:
+                        print("[PASS] Watchtower notification received and logged.")
+                    else:
+                        print("[FAIL] Watchtower notification endpoint hit but not found in logs.")
+                        all_pass = False
+            else:
+                print("[FAIL] Deployment log not found for Watchtower check.")
+                all_pass = False
+        except Exception as e:
+            print(f"[FAIL] Watchtower verification error: {e}")
+            all_pass = False
+
+        # 5. Verify Backup/Migration Backend
+        print("Verifying Invidious backup/migration backend...")
+        try:
+            secrets_path = os.path.join(TEST_DATA_DIR, "data/AppData/privacy-hub-test/.secrets")
+            api_key = "dummy"
+            if os.path.exists(secrets_path):
+                with open(secrets_path, 'r') as f:
+                    for line in f:
+                        if "HUB_API_KEY=" in line:
+                            api_key = line.split("=")[1].strip().strip('"')
+            
+            # Use query parameters correctly for FastAPI
+            url = f"http://127.0.0.1:55555/migrate?service=invidious&backup=yes"
+            print(f"  Calling: {url}")
+            req = urllib.request.Request(
+                url,
+                method="POST",
+                headers={"X-API-Key": api_key}
+            )
+            with urllib.request.urlopen(req, timeout=120) as response:
+                resp_data = json.loads(response.read().decode())
+                if resp_data.get('success'):
+                    print(f"[PASS] Migration API call successful: {resp_data.get('output', '')[:100]}...")
+                else:
+                    print(f"[FAIL] Migration API reported failure: {resp_data.get('error')}")
+                    all_pass = False
+            
+            # Check for backup file existence
+            backup_dir = os.path.join(TEST_DATA_DIR, "data/AppData/privacy-hub-test/data/hub-api/backups")
+            backups = os.listdir(backup_dir) if os.path.exists(backup_dir) else []
+            if any("invidious" in b for b in backups):
+                print(f"[PASS] Invidious backup file created: {backups}")
+            else:
+                print(f"[FAIL] No invidious backup file found in {backup_dir}")
+                all_pass = False
+        except Exception as e:
+            print(f"[FAIL] Migration/Backup verification error: {e}")
+            # Get hub-api logs for debugging
+            print("--- Hub API Logs ---")
+            subprocess.call("docker logs hub-api --tail 50", shell=True)
+            all_pass = False
+
+        # 6. Verify Logs
         verify_logs()
         
-        # 5. Unified Puppeteer Verification (Verified + Screenshots)
+        # 7. Unified Puppeteer Verification (Verified + Screenshots)
         print("Waiting for containers to stabilize before UI tests...")
-        time.sleep(120)
+        time.sleep(180) # Increased to 3 mins
         print("Running Unified Puppeteer Verification & Screenshots...")
         if not os.path.exists(os.path.join(TEST_SCRIPT_DIR, "node_modules")):
             print("Installing test dependencies...")

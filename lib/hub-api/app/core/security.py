@@ -83,7 +83,7 @@ async def get_current_user(
     if token_to_check:
         with session_lock:
             if token_to_check in valid_sessions:
-                if not session_cleanup_enabled or time.time() < valid_sessions[token_to_check]:
+                if not session_state["cleanup_enabled"] or time.time() < valid_sessions[token_to_check]:
                     # Refresh session (slide window)
                     valid_sessions[token_to_check] = time.time() + 1800
                     return "admin"

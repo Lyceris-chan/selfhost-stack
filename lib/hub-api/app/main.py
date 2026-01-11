@@ -1,9 +1,11 @@
 import threading
+import json
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
-from .utils.logging import init_db
+from .core.security import get_current_user
+from .utils.logging import init_db, log_structured
 from .utils.assets import ensure_assets
 from .routers import auth, system, services, wireguard, logs
 from .services.background import metrics_collector_thread, log_sync_thread, update_metrics_activity
@@ -34,6 +36,23 @@ def startup_event():
     threading.Thread(target=metrics_collector_thread, daemon=True).start()
     threading.Thread(target=log_sync_thread, daemon=True).start()
     # Note: Session cleanup is started in security.py on import.
+
+@app.post("/watchtower")
+async def watchtower_notification(request: Request, user: str = Depends(get_current_user)):
+    """Receives notifications from Watchtower and logs them."""
+    try:
+        data = await request.json()
+        # Log the raw notification for debugging
+        log_structured("INFO", f"Watchtower Notification: {json.dumps(data)}", "MAINTENANCE")
+        
+        # We can extract useful info and update our local 'updates' state
+        # if Watchtower reported a successful update.
+        return {"success": True}
+    except Exception as e:
+        # Fallback for non-JSON notifications
+        body = await request.body()
+        log_structured("INFO", f"Watchtower Notification (Plain): {body.decode(errors='replace')}", "MAINTENANCE")
+        return {"success": True}
 
 @app.middleware("http")
 async def update_activity_middleware(request, call_next):

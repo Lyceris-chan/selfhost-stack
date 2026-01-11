@@ -62,10 +62,14 @@ if [ "$SERVICE" = "invidious" ]; then
         elif [ "$ACTION" = "migrate" ]; then
             log "Starting Invidious migration..."
             # 1. Backup existing data
-            if [ "$BACKUP" != "no" ] && [ -d "$DATA_DIR/postgres" ]; then
+            if [ "$BACKUP" != "no" ]; then
                 log "Backing up Invidious database..."
-                PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"
-                log "Backup saved to: $BACKUP_DIR/invidious_$TIMESTAMP.sql"
+                # Use a temporary file and check if it succeeds
+                if PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"; then
+                    log "Backup saved to: $BACKUP_DIR/invidious_$TIMESTAMP.sql"
+                else
+                    warn "Database backup failed. Proceeding with migration anyway..."
+                fi
             fi
             # 2. Run migrations
             log "Applying schema updates..."
