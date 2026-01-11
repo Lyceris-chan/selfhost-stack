@@ -15,6 +15,42 @@ export CRITICAL_IMAGES="nginx:alpine python:3.11-alpine alpine:latest redis:alpi
 # Default tags for specific services
 export IMMICH_DEFAULT_TAG="release"
 
+# Port Definitions
+export PORT_DASHBOARD_WEB=8081
+export PORT_ADGUARD_WEB=8083
+export PORT_PORTAINER=9000
+export PORT_WG_WEB=51821
+export PORT_INVIDIOUS=3000
+export PORT_REDLIB=8080
+export PORT_WIKILESS=8180
+export PORT_RIMGO=3002
+export PORT_BREEZEWIKI=8380
+export PORT_ANONYMOUS=8480
+export PORT_SCRIBE=8280
+export PORT_MEMOS=5230
+export PORT_VERT=5555
+export PORT_VERTD=24153
+export PORT_COMPANION=8282
+export PORT_COBALT=9001
+export PORT_COBALT_API=9002
+export PORT_SEARXNG=8082
+export PORT_IMMICH=2283
+
+# Internal Ports
+export PORT_INT_REDLIB=8081
+export PORT_INT_WIKILESS=8180
+export PORT_INT_INVIDIOUS=3000
+export PORT_INT_RIMGO=3002
+export PORT_INT_BREEZEWIKI=10416
+export PORT_INT_ANONYMOUS=8480
+export PORT_INT_VERT=80
+export PORT_INT_VERTD=24153
+export PORT_INT_COMPANION=8282
+export PORT_INT_COBALT=80
+export PORT_INT_COBALT_API=9000
+export PORT_INT_SEARXNG=8080
+export PORT_INT_IMMICH=2283
+
 # Service Repository Mapping for dynamic tag resolution
 declare -A SERVICE_REPOS
 SERVICE_REPOS[wikiless]="https://github.com/Metastem/Wikiless"

@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # Network
     LAN_IP: str = os.environ.get('LAN_IP', '127.0.0.1')
     DESEC_DOMAIN: str = os.environ.get('DESEC_DOMAIN', '')
+    CORS_ORIGINS: list[str] = ["http://localhost", f"http://{LAN_IP}"]  # Production: Override with specific origins via env var (JSON list)
 
     # Auth
     HUB_API_KEY: str | None = os.environ.get('HUB_API_KEY')

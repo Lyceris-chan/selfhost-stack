@@ -60,8 +60,9 @@ append_hub_api() {
       - DESEC_DOMAIN=$DESEC_DOMAIN
       - DOCKER_CONFIG=/root/.docker
       - DOCKER_HOST=tcp://docker-proxy:2375
+      - CORS_ORIGINS=["http://localhost", "http://${LAN_IP}", "http://${LAN_IP}:${PORT_DASHBOARD_WEB}"${DESEC_DOMAIN:+, "https://${DESEC_DOMAIN}"}]
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:55555/status || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:55555/health || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 5
@@ -896,8 +897,8 @@ services:
       - VOLUMES=1
       - SYSTEM=1
       - POST=1
-      - BUILD=1
-      - EXEC=1
+      - BUILD=0
+      - EXEC=0
       - LOGS=1
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"

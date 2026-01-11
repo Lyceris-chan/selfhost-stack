@@ -1,6 +1,6 @@
 import os
 import json
-import requests
+import httpx
 import urllib.parse
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
@@ -9,26 +9,28 @@ from ..core.config import settings
 
 router = APIRouter()
 
-def get_wgeasy_session():
+async def get_wgeasy_session():
     password = settings.VPN_PASS_RAW or settings.ADMIN_PASS_RAW or ""
     try:
         url = f"http://{settings.CONTAINER_PREFIX}wg-easy:51821/api/session"
-        resp = requests.post(url, json={"password": password}, timeout=5)
-        if resp.status_code == 200 or resp.status_code == 204:
-            return resp.cookies
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, json={"password": password}, timeout=5.0)
+            if resp.status_code in (200, 204):
+                return resp.cookies
     except Exception as e:
         print(f"WG Login Error: {e}")
     return None
 
 @router.get("/wg/clients")
-def get_clients(user: str = Depends(get_current_user)):
-    cookies = get_wgeasy_session()
+async def get_clients(user: str = Depends(get_current_user)):
+    cookies = await get_wgeasy_session()
     if not cookies:
         raise HTTPException(status_code=500, detail="Failed to auth with WG-Easy")
     try:
         url = f"http://{settings.CONTAINER_PREFIX}wg-easy:51821/api/wireguard/client"
-        resp = requests.get(url, cookies=cookies, timeout=5)
-        return resp.json()
+        async with httpx.AsyncClient(cookies=cookies) as client:
+            resp = await client.get(url, timeout=5.0)
+            return resp.json()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -36,36 +38,39 @@ class CreateClientRequest(BaseModel):
     name: str
 
 @router.post("/wg/clients")
-def create_client(req: CreateClientRequest, user: str = Depends(get_current_user)):
-    cookies = get_wgeasy_session()
+async def create_client(req: CreateClientRequest, user: str = Depends(get_current_user)):
+    cookies = await get_wgeasy_session()
     if not cookies:
         raise HTTPException(status_code=500, detail="Failed to auth with WG-Easy")
     try:
         url = f"http://{settings.CONTAINER_PREFIX}wg-easy:51821/api/wireguard/client"
-        resp = requests.post(url, json={"name": req.name}, cookies=cookies, timeout=5)
-        return resp.json()
+        async with httpx.AsyncClient(cookies=cookies) as client:
+            resp = await client.post(url, json={"name": req.name}, timeout=5.0)
+            return resp.json()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/wg/clients/{client_id}")
-def delete_client(client_id: str, user: str = Depends(get_current_user)):
-    cookies = get_wgeasy_session()
+async def delete_client(client_id: str, user: str = Depends(get_current_user)):
+    cookies = await get_wgeasy_session()
     if not cookies:
         raise HTTPException(status_code=500, detail="Failed to auth with WG-Easy")
     try:
         url = f"http://{settings.CONTAINER_PREFIX}wg-easy:51821/api/wireguard/client/{client_id}"
-        resp = requests.delete(url, cookies=cookies, timeout=5)
-        return resp.json() if resp.content else {}
+        async with httpx.AsyncClient(cookies=cookies) as client:
+            resp = await client.delete(url, timeout=5.0)
+            return resp.json() if resp.content else {}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/wg/clients/{client_id}/configuration")
-def get_client_config(client_id: str, user: str = Depends(get_current_user)):
-    cookies = get_wgeasy_session()
+async def get_client_config(client_id: str, user: str = Depends(get_current_user)):
+    cookies = await get_wgeasy_session()
     try:
         url = f"http://{settings.CONTAINER_PREFIX}wg-easy:51821/api/wireguard/client/{client_id}/configuration"
-        resp = requests.get(url, cookies=cookies, timeout=5)
-        return Response(content=resp.content, media_type="text/plain")
+        async with httpx.AsyncClient(cookies=cookies) as client:
+            resp = await client.get(url, timeout=5.0)
+            return Response(content=resp.content, media_type="text/plain")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

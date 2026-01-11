@@ -3,7 +3,7 @@ import json
 import secrets
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
-from ..core.security import create_session, session_cleanup_enabled, get_current_user
+from ..core.security import create_session, session_state, get_current_user
 from ..core.config import settings
 from ..utils.logging import log_structured
 
@@ -35,18 +35,15 @@ def verify_admin(request: VerifyAdminRequest):
         
         token = create_session(timeout_seconds)
         # Import global var to get current state
-        from ..core.security import session_cleanup_enabled
-        return {"success": True, "token": token, "cleanup": session_cleanup_enabled}
+        from ..core.security import session_state
+        return {"success": True, "token": token, "cleanup": session_state["cleanup_enabled"]}
     else:
         raise HTTPException(status_code=401, detail="Invalid admin password")
 
 @router.post("/toggle-session-cleanup")
 def toggle_session_cleanup(request: ToggleSessionRequest, user: str = Depends(get_current_user)):
-    from ..core.security import session_cleanup_enabled
-    # Note: Modifying global variable in another module requires care.
-    # We should probably move the state into a singleton or similar, but for now:
-    import app.core.security as security_module
-    security_module.session_cleanup_enabled = request.enabled
+    from ..core.security import session_state
+    session_state["cleanup_enabled"] = request.enabled
     return {"success": True, "enabled": request.enabled}
 
 @router.post("/rotate-api-key")

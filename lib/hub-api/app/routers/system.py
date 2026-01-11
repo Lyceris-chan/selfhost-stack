@@ -31,8 +31,13 @@ def save_total_usage(path, rx, tx):
     except Exception:
         pass
 
+@router.get("/health")
+def health_check():
+    """Lightweight health check for Docker orchestration."""
+    return {"status": "ok"}
+
 @router.get("/status")
-def get_status():
+def get_status(user: str = Depends(get_current_user)):
     try:
         result = run_command([settings.CONTROL_SCRIPT, "status"], check=False)
         output = result.stdout.strip()
@@ -68,7 +73,7 @@ def get_status():
         return {"error": str(e)}
 
 @router.get("/system-health")
-def get_system_health():
+def get_system_health(user: str = Depends(get_current_user)):
     try:
         uptime_seconds = time.time() - psutil.boot_time()
         cpu_usage = psutil.cpu_percent(interval=0.1)
@@ -129,7 +134,7 @@ def get_system_health():
         return {"error": str(e)}
 
 @router.get("/metrics")
-def get_metrics():
+def get_metrics(user: str = Depends(get_current_user)):
     try:
         conn = sqlite3.connect(settings.DB_FILE)
         c = conn.cursor()
@@ -143,7 +148,7 @@ def get_metrics():
         return {"error": str(e)}
 
 @router.get("/containers")
-def get_containers():
+def get_containers(user: str = Depends(get_current_user)):
     try:
         result = run_command(
             ['docker', 'ps', '-a', '--no-trunc', '--format', '{{.Names}}\t{{.ID}}\t{{.Labels}}'],

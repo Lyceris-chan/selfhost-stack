@@ -28,3 +28,4 @@ lib/hub-api/__pycache__/
 # Secrets
 .secrets
 .env
+protonpass_import.csv

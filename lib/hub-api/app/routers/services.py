@@ -3,6 +3,7 @@ import json
 import re
 import subprocess
 import threading
+import concurrent.futures
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
@@ -90,17 +91,31 @@ def update_theme(theme: dict, user: str = Depends(get_current_user)):
     except Exception as e:
         return {"error": str(e)}
 
+def _check_repo_status(repo_name):
+    src_root = "/app/sources"
+    repo_path = os.path.join(src_root, repo_name)
+    if os.path.isdir(os.path.join(repo_path, ".git")):
+        try:
+            res = subprocess.run(["git", "status", "-uno"], cwd=repo_path, capture_output=True, text=True, timeout=10)
+            if "behind" in res.stdout:
+                return repo_name, "Update Available"
+        except Exception:
+            pass
+    return None
+
 @router.get("/updates")
 def check_updates_status(user: str = Depends(get_current_user)):
     updates = {}
     src_root = "/app/sources"
+    
     if os.path.exists(src_root):
-        for repo in os.listdir(src_root):
-            repo_path = os.path.join(src_root, repo)
-            if os.path.isdir(os.path.join(repo_path, ".git")):
-                res = subprocess.run(["git", "status", "-uno"], cwd=repo_path, capture_output=True, text=True, timeout=10)
-                if "behind" in res.stdout:
-                    updates[repo] = "Update Available"
+        repos = [d for d in os.listdir(src_root) if os.path.isdir(os.path.join(src_root, d))]
+        # Run git checks in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            results = executor.map(_check_repo_status, repos)
+            for res in results:
+                if res:
+                    updates[res[0]] = res[1]
     
     updates_file = "/app/data/image_updates.json"
     if os.path.exists(updates_file):

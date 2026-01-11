@@ -10,10 +10,10 @@ import json
 # Consolidated Full Stack Definition
 FULL_STACK = {
     "name": "Full Privacy Hub Stack",
-        "services": "hub-api,dashboard,gluetun,adguard,unbound,wg-easy,redlib,wikiless,rimgo,breezewiki,anonymousoverflow,scribe,invidious,companion,searxng,portainer,memos,odido-booster,cobalt,vert,vertd,immich,watchtower",
+        "services": "hub-api,dashboard,gluetun,adguard,unbound,wg-easy,redlib,wikiless,rimgo,breezewiki,anonymousoverflow,scribe,invidious,companion,searxng,portainer,memos,odido-booster,cobalt,cobalt-web,vert,vertd,immich,watchtower",
     "checks": [
         {"name": "Dashboard", "url": "http://127.0.0.1:8081", "code": 200},
-        {"name": "Hub API", "url": "http://127.0.0.1:55555/status", "code": 200},
+        {"name": "Hub API", "url": "http://127.0.0.1:55555/health", "code": 200},
         {"name": "AdGuard", "url": "http://127.0.0.1:8083", "code": 200},
         {"name": "WireGuard UI", "url": "http://127.0.0.1:51821", "code": 200}
     ]
@@ -25,7 +25,7 @@ TEST_DATA_DIR = os.path.join(TEST_SCRIPT_DIR, "test_data")
 
 def run_command(cmd, cwd=None, ignore_failure=False):
     print(f"Executing: {cmd}")
-    ret = subprocess.call(cmd, shell=True, cwd=cwd)
+    ret = subprocess.call(cmd, shell=True, executable='/bin/bash', cwd=cwd)
     if ret != 0 and not ignore_failure:
         print(f"Command failed: {cmd}")
         sys.exit(1)
@@ -214,7 +214,9 @@ def main():
                         elif current_service == "companion":
                             f.write(f"{indent}ports: [\"127.0.0.1:8282:8282\"]\n")
                         elif current_service == "cobalt":
-                            f.write(f"{indent}ports: [\"127.0.0.1:9001:9001\", \"127.0.0.1:9002:9000\"]\n")
+                            f.write(f"{indent}ports: [\"127.0.0.1:9002:9000\"]\n")
+                        elif current_service == "cobalt-web":
+                            f.write(f"{indent}ports: [\"127.0.0.1:9001:80\"]\n")
                         elif current_service == "adguard":
                             f.write(f"{indent}ports: [\"127.0.0.1:8083:8083\", \"127.0.0.1:5353:53/udp\", \"127.0.0.1:5353:53/tcp\"]\n")
                     
@@ -233,7 +235,8 @@ def main():
 
         print("Pulling and Building...")
         compose_cwd = os.path.join(TEST_DATA_DIR, "data/AppData/privacy-hub-test")
-        env_cmd_prefix = f"set -a; [ -f {PROJECT_ROOT}/test/test_config.env ] && . {PROJECT_ROOT}/test/test_config.env; APP_NAME=privacy-hub-test; PROJECT_ROOT={TEST_DATA_DIR}; set +a; "
+        # Source constants.sh to ensure port variables are available for docker-compose interpolation
+        env_cmd_prefix = f"set -a; [ -f {PROJECT_ROOT}/test/test_config.env ] && . {PROJECT_ROOT}/test/test_config.env; . {PROJECT_ROOT}/lib/constants.sh; APP_NAME=privacy-hub-test; PROJECT_ROOT={TEST_DATA_DIR}; set +a; "
         
         # Explicitly build internal services
         local_builds = ["hub-api", "odido-booster", "scribe", "wikiless"]

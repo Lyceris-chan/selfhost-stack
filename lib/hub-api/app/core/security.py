@@ -4,7 +4,7 @@ import os
 import threading
 import secrets
 import tempfile
-from fastapi import HTTPException, Security, Request, Depends
+from fastapi import HTTPException, Security, Request, Depends, Query
 from fastapi.security.api_key import APIKeyHeader
 from .config import settings
 from ..utils.logging import log_structured
@@ -15,7 +15,7 @@ session_token_header = APIKeyHeader(name="X-Session-Token", auto_error=False)
 # Global session store
 valid_sessions = {}
 session_lock = threading.Lock()
-session_cleanup_enabled = True
+session_state = {"cleanup_enabled": True}
 
 def load_sessions():
     """Load auth sessions from disk and purge expired ones."""
@@ -48,7 +48,7 @@ def cleanup_sessions_thread():
     """Background thread to purge expired auth sessions."""
     global valid_sessions
     while True:
-        if session_cleanup_enabled:
+        if session_state["cleanup_enabled"]:
             now = time.time()
             with session_lock:
                 expired = [t for t, expiry in valid_sessions.items() if now > expiry]
@@ -66,7 +66,8 @@ threading.Thread(target=cleanup_sessions_thread, daemon=True).start()
 async def get_current_user(
     request: Request,
     api_key: str = Security(api_key_header),
-    session_token: str = Security(session_token_header)
+    session_token: str = Security(session_token_header),
+    query_token: str = Query(None, alias="token")
 ):
     # 1. Allow Read-Only Dashboard Endpoints without Auth
     # Note: In FastAPI, this is usually handled by not protecting those routes.
@@ -77,19 +78,21 @@ async def get_current_user(
     if request.url.path.startswith('/watchtower'):
         return "watchtower"
 
-    # 3. Session Token
-    if session_token:
+    # 3. Check Session Token (Header or Query)
+    token_to_check = session_token or query_token
+    if token_to_check:
         with session_lock:
-            if session_token in valid_sessions:
-                if not session_cleanup_enabled or time.time() < valid_sessions[session_token]:
+            if token_to_check in valid_sessions:
+                if not session_cleanup_enabled or time.time() < valid_sessions[token_to_check]:
                     # Refresh session (slide window)
-                    valid_sessions[session_token] = time.time() + 1800
+                    valid_sessions[token_to_check] = time.time() + 1800
                     return "admin"
                 else:
-                    del valid_sessions[session_token]
+                    del valid_sessions[token_to_check]
 
-    # 4. API Key
-    if settings.HUB_API_KEY and api_key and secrets.compare_digest(api_key, settings.HUB_API_KEY):
+    # 4. Check API Key (Header or Query)
+    key_to_check = api_key or query_token
+    if settings.HUB_API_KEY and key_to_check and secrets.compare_digest(key_to_check, settings.HUB_API_KEY):
         return "api_key"
 
     raise HTTPException(status_code=401, detail="Unauthorized")

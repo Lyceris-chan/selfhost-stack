@@ -18,26 +18,26 @@ detect_dockerfile() {
 }
 
 # Core logging functions that output to terminal and persist JSON formatted logs for the dashboard.
+# Uses Python for secure JSON escaping to prevent injection.
+log_to_file() {
+    local level=$1
+    local msg=$2
+    if [ -d "$(dirname "$HISTORY_LOG")" ]; then
+        $PYTHON_CMD -c "import json, datetime; print(json.dumps({'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'level': '$level', 'category': 'SYSTEM', 'source': 'orchestrator', 'message': '$msg'}))" >> "$HISTORY_LOG" 2>/dev/null || true
+    fi
+}
+
 log_info() { 
     echo -e "\e[34m  ➜ [INFO]\e[0m $1"
-    if [ -d "$(dirname "$HISTORY_LOG")" ]; then
-        local msg="${1//\"/\\\"}"
-        printf '{"timestamp": "%s", "level": "INFO", "category": "SYSTEM", "source": "orchestrator", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$msg" >> "$HISTORY_LOG" 2>/dev/null || true
-    fi
+    log_to_file "INFO" "$1"
 }
 log_warn() { 
     echo -e "\e[33m  ⚠️ [WARN]\e[0m $1"
-    if [ -d "$(dirname "$HISTORY_LOG")" ]; then
-        local msg="${1//\"/\\\"}"
-        printf '{"timestamp": "%s", "level": "WARN", "category": "SYSTEM", "source": "orchestrator", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$msg" >> "$HISTORY_LOG" 2>/dev/null || true
-    fi
+    log_to_file "WARN" "$1"
 }
 log_crit() { 
     echo -e "\e[31m  ✖ [CRIT]\e[0m $1"
-    if [ -d "$(dirname "$HISTORY_LOG")" ]; then
-        local msg="${1//\"/\\\"}"
-        printf '{"timestamp": "%s", "level": "CRIT", "category": "SYSTEM", "source": "orchestrator", "message": "%s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$msg" >> "$HISTORY_LOG" 2>/dev/null || true
-    fi
+    log_to_file "CRIT" "$1"
 }
 
 ask_confirm() {
@@ -322,42 +322,6 @@ PATCHES_SCRIPT="$BASE_DIR/patches.sh"
 $SUDO touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
 $SUDO chown 1000:1000 "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage" "$ACTIVE_PROFILE_NAME_FILE" 2>/dev/null || true
 $SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$ASSETS_DIR" 2>/dev/null || true
-
-# Port Definitions
-PORT_DASHBOARD_WEB=8081
-PORT_ADGUARD_WEB=8083
-PORT_PORTAINER=9000
-PORT_WG_WEB=51821
-export PORT_INVIDIOUS=3000
-export PORT_REDLIB=8080
-export PORT_WIKILESS=8180
-export PORT_RIMGO=3002
-export PORT_BREEZEWIKI=8380
-export PORT_ANONYMOUS=8480
-export PORT_SCRIBE=8280
-export PORT_MEMOS=5230
-export PORT_VERT=5555
-export PORT_VERTD=24153
-export PORT_COMPANION=8282
-export PORT_COBALT=9001
-export PORT_COBALT_API=9002
-export PORT_SEARXNG=8082
-export PORT_IMMICH=2283
-
-# Internal Ports
-export PORT_INT_REDLIB=8081
-export PORT_INT_WIKILESS=8180
-export PORT_INT_INVIDIOUS=3000
-export PORT_INT_RIMGO=3002
-export PORT_INT_BREEZEWIKI=10416
-export PORT_INT_ANONYMOUS=8480
-export PORT_INT_VERT=80
-export PORT_INT_VERTD=24153
-export PORT_INT_COMPANION=8282
-export PORT_INT_COBALT=80
-export PORT_INT_COBALT_API=9000
-export PORT_INT_SEARXNG=8080
-export PORT_INT_IMMICH=2283
 
 # --- SECTION 3: DYNAMIC SUBNET ALLOCATION ---
 allocate_subnet() {
@@ -824,4 +788,13 @@ GitHub Scribe Token,https://github.com/settings/tokens,$SCRIBE_GH_USER,$SCRIBE_G
 EOF
     chmod 600 "$export_file"
     log_info "Credential export file created: $export_file"
+    echo ""
+    echo "  ⚠️  SECURITY WARNING ⚠️"
+    echo "  ----------------------------------------------------------------"
+    echo "  The file '$export_file' contains RAW PASSWORDS."
+    echo "  1. Import this file into Proton Pass (or your password manager)."
+    echo "  2. DELETE THIS FILE IMMEDIATELY AFTER IMPORT."
+    echo "     Command: rm \"$export_file\""
+    echo "  ----------------------------------------------------------------"
+    echo ""
 }
