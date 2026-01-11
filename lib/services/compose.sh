@@ -59,7 +59,7 @@ append_hub_api() {
       - DESEC_DOMAIN=$DESEC_DOMAIN
       - DOCKER_CONFIG=/root/.docker
       - DOCKER_HOST=tcp://docker-proxy:2375
-      - CORS_ORIGINS=["http://localhost", "http://${LAN_IP}", "http://${LAN_IP}:${PORT_DASHBOARD_WEB}"${DESEC_DOMAIN:+, "https://${DESEC_DOMAIN}"}]
+      - CORS_ORIGINS='["http://localhost","http://${LAN_IP}","http://${LAN_IP}:${PORT_DASHBOARD_WEB}"${DESEC_DOMAIN:+,"https://${DESEC_DOMAIN}"}]'
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:55555/health || exit 1"]
       interval: 20s
@@ -67,7 +67,7 @@ append_hub_api() {
       retries: 5
     depends_on:
       docker-proxy: {condition: service_started}
-      gluetun: {condition: service_started}
+      gluetun: {condition: service_healthy}
     restart: unless-stopped
     deploy:
       resources:
@@ -191,10 +191,10 @@ append_gluetun() {
       - VPN_SERVICE_PROVIDER=custom
       - VPN_TYPE=wireguard
       - FIREWALL_OUTBOUND_SUBNETS=$DOCKER_SUBNET
-      - FIREWALL_VPN_INPUT_PORTS=10416,8080,8180,3000,3002,8280,8480,80,24153,8282,9000,2283
+      - FIREWALL_VPN_INPUT_PORTS=10416,8080,8081,8085,8180,3000,3002,8280,8480,80,24153,8282,9000,2283
       - HTTPPROXY=on
     healthcheck:
-      test: ["CMD-SHELL", "$(if [ "${MOCK_VERIFICATION:-false}" = "true" ]; then echo "exit 0"; else echo "wget -qO- http://127.0.0.1:8000/status && (nslookup example.com > /dev/null || exit 1)"; fi)"]
+      test: ["CMD-SHELL", "$(if [ "${MOCK_VERIFICATION:-false}" = "true" ]; then echo "exit 0"; else echo "wget -qO- http://127.0.0.1:9999/ || exit 1"; fi)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -671,7 +671,7 @@ $(if [ -n "${VERTD_NVIDIA:-}" ]; then echo "        reservations:
       timeout: 5s
       retries: 3
     depends_on:
-      vertd: {condition: service_started}
+      vertd: {condition: service_healthy}
     restart: unless-stopped
     deploy:
       resources:
@@ -744,6 +744,7 @@ append_searxng() {
       retries: 3
     depends_on:
       searxng-redis: {condition: service_healthy}
+      gluetun: {condition: service_healthy}
     restart: unless-stopped
     deploy:
       resources:
@@ -786,6 +787,7 @@ append_immich() {
     depends_on:
       immich-db: {condition: service_healthy}
       immich-redis: {condition: service_healthy}
+      gluetun: {condition: service_healthy}
     restart: always
     deploy:
       resources:
@@ -831,6 +833,8 @@ append_immich() {
     image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_IMAGE_TAG:-release}
     container_name: ${CONTAINER_PREFIX}immich-ml
     network_mode: "service:gluetun"
+    depends_on:
+      gluetun: {condition: service_healthy}
     volumes:
       - $DATA_DIR/immich-ml-cache:/cache
     restart: always
