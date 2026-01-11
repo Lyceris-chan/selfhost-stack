@@ -13,7 +13,7 @@ append_hub_api() {
     local DOCKERFILE=$(detect_dockerfile "$SRC_DIR/hub-api" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   hub-api:
-    pull_policy: missing
+    pull_policy: build
     build:
       context: $SRC_DIR/hub-api
       dockerfile: $DOCKERFILE
@@ -35,7 +35,6 @@ append_hub_api() {
       - "$CERT_MONITOR_SCRIPT:/usr/local/bin/cert-monitor.sh"
       - "$MIGRATE_SCRIPT:/usr/local/bin/migrate.sh"
       - "$(realpath "$0"):/app/zima.sh"
-      - "$GLUETUN_ENV_FILE:/app/gluetun.env"
       - "$COMPOSE_FILE:/app/docker-compose.yml"
       - "$HISTORY_LOG:/app/deployment.log"
       - "$BASE_DIR/.data_usage:/app/.data_usage"
@@ -86,7 +85,7 @@ append_odido_booster() {
     
     cat >> "$COMPOSE_FILE" <<EOF
   odido-booster:
-    pull_policy: missing
+    pull_policy: build
     build:
       context: $SRC_DIR/odido-bundle-booster
       dockerfile: $DOCKERFILE
@@ -188,10 +187,14 @@ append_gluetun() {
       - "$LAN_IP:8085:8085/tcp"
     volumes:
       - "$ACTIVE_WG_CONF:/gluetun/wireguard/wg0.conf:ro"
-    env_file:
-      - "$GLUETUN_ENV_FILE"
     environment:
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=wireguard
       - FIREWALL_OUTBOUND_SUBNETS=$DOCKER_SUBNET
+      - FIREWALL_VPN_INPUT_PORTS=10416,8080,8180,3000,3002,8280,8480,80,24153,8282,9000,2283
+      - HTTPPROXY=on
+      - DNS_KEEP_NAMESERVERS=on
+      - DNS_ADDRESS=127.0.0.11
     healthcheck:
       test: ["CMD-SHELL", "$(if [ "${MOCK_VERIFICATION:-false}" = "true" ]; then echo "exit 0"; else echo "wget -qO- http://127.0.0.1:8000/status && (nslookup example.com 127.0.0.1 > /dev/null || exit 1)"; fi)"]
       interval: 30s
@@ -220,7 +223,7 @@ DASHEOF
 
     cat >> "$COMPOSE_FILE" <<EOF
   dashboard:
-    pull_policy: missing
+    pull_policy: build
     build:
       context: $SRC_DIR/dashboard
     container_name: ${CONTAINER_PREFIX}dashboard
@@ -407,7 +410,7 @@ append_wikiless() {
     local DOCKERFILE=$(detect_dockerfile "$SRC_DIR/wikiless" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   wikiless:
-    pull_policy: missing
+    pull_policy: build
     build:
       context: "$SRC_DIR/wikiless"
       dockerfile: $DOCKERFILE
@@ -586,7 +589,7 @@ append_scribe() {
     local DOCKERFILE=$(detect_dockerfile "$SRC_DIR/scribe" || echo "Dockerfile")
     cat >> "$COMPOSE_FILE" <<EOF
   scribe:
-    pull_policy: missing
+    pull_policy: build
     build:
       context: "$SRC_DIR/scribe"
       dockerfile: $DOCKERFILE
@@ -675,7 +678,7 @@ append_cobalt() {
     cat >> "$COMPOSE_FILE" <<EOF
   cobalt:
     image: ghcr.io/imputnet/cobalt:\${COBALT_IMAGE_TAG:-latest}
-    container_name: \${CONTAINER_PREFIX}cobalt
+    container_name: ${CONTAINER_PREFIX}cobalt
     init: true
     read_only: true
     network_mode: "service:gluetun"
@@ -696,7 +699,7 @@ append_cobalt_web() {
     local DOCKERFILE="web/Dockerfile"
     cat >> "$COMPOSE_FILE" <<EOF
   cobalt-web:
-    pull_policy: missing
+    pull_policy: build
     build:
       context: $SRC_DIR/cobalt
       dockerfile: $DOCKERFILE
