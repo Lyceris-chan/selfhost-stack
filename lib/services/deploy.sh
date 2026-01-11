@@ -70,7 +70,7 @@ deploy_stack() {
                 GLU_HEALTH="running"
                 
                 if echo "$CORE_SERVICES" | grep -q "hub-api"; then
-                    HUB_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}hub-api 2>/dev/null || echo "unknown")
+                    HUB_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}api 2>/dev/null || echo "unknown")
                 fi
                 if echo "$CORE_SERVICES" | grep -q "gluetun"; then
                     GLU_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}gluetun 2>/dev/null || echo "unknown")
@@ -195,6 +195,9 @@ deploy_stack() {
     echo "   📄 LibRedirect JSON:    $PROJECT_ROOT/libredirect_import.json"
     echo "=========================================================="
     
+    # Configure Cron
+    setup_cron
+
     if [ "$CLEAN_EXIT" = true ]; then
         exit 0
     fi

@@ -17,6 +17,38 @@ generate_scripts() {
         echo "[WARN] templates/wg_control.sh not found at $SCRIPT_DIR/lib/templates/wg_control.sh"
     fi
 
+    # 3. Certificate Monitor Script
+    cat > "$CERT_MONITOR_SCRIPT" <<EOF
+#!/bin/sh
+# Auto-generated certificate monitor
+AGH_CONF_DIR="$AGH_CONF_DIR"
+DESEC_TOKEN="$DESEC_TOKEN"
+DESEC_DOMAIN="$DESEC_DOMAIN"
+DOCKER_CMD="$DOCKER_CMD"
+
+if [ -z "\$DESEC_DOMAIN" ]; then
+    echo "No domain configured. Skipping certificate check."
+    exit 0
+fi
+
+echo "Starting certificate renewal check for \$DESEC_DOMAIN..."
+
+\$DOCKER_CMD run --rm \\
+    -v "\$AGH_CONF_DIR:/acme" \\
+    -e "DESEC_Token=\$DESEC_TOKEN" \\
+    neilpang/acme.sh:latest --cron --home /acme --config-home /acme --cert-home /acme/certs
+
+if [ \$? -eq 0 ]; then
+    echo "Certificate check completed successfully."
+    # Reload services to pick up new certs if they were renewed
+    # We can lazily restart them; checking if file changed is harder in shell without state
+    \$DOCKER_CMD restart ${CONTAINER_PREFIX}dashboard ${CONTAINER_PREFIX}adguard 2>/dev/null || true
+else
+    echo "Certificate check failed."
+fi
+EOF
+    chmod +x "$CERT_MONITOR_SCRIPT"
+
     # 5. Hardware & Services Configuration
     VERTD_DEVICES=""
     GPU_LABEL="GPU Accelerated"

@@ -18,7 +18,7 @@ append_hub_api() {
       context: $SRC_DIR/hub-api
       dockerfile: $DOCKERFILE
     image: selfhost/hub-api:latest
-    container_name: ${CONTAINER_PREFIX}hub-api
+    container_name: ${CONTAINER_PREFIX}api
     labels:
       - "casaos.skip=true"
       - "io.dhi.hardened=true"

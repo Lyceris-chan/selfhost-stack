@@ -532,3 +532,19 @@ perform_backup() {
         done
     fi
 }
+
+setup_cron() {
+    log_info "Configuring scheduled tasks..."
+    local cron_jobs=""
+    
+    # 1. WireGuard IP Monitor (Every 5 mins)
+    cron_jobs="${cron_jobs}*/5 * * * * $MONITOR_SCRIPT >> $IP_LOG_FILE 2>&1
+"
+    
+    # 2. Certificate Monitor (Daily at 03:00)
+    cron_jobs="${cron_jobs}0 3 * * * $CERT_MONITOR_SCRIPT >> $BASE_DIR/cert-monitor.log 2>&1
+"
+
+    # Add to crontab
+    (crontab -l 2>/dev/null | grep -v "wg-ip-monitor" | grep -v "cert-monitor"; echo "$cron_jobs") | crontab -
+}

@@ -7,7 +7,7 @@ export STACK_SERVICES="hub-api odido-booster memos gluetun portainer adguard unb
 export SOURCE_BUILT_SERVICES="hub-api odido-booster scribe dashboard wikiless cobalt-web"
 
 # All container names (without prefix) for cleanup and management
-export ALL_CONTAINERS="gluetun adguard dashboard portainer wg-easy hub-api odido-booster redlib wikiless wikiless-redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd cobalt cobalt-web searxng searxng-redis immich-server immich-db immich-redis immich-ml watchtower docker-proxy"
+export ALL_CONTAINERS="gluetun adguard dashboard portainer wg-easy api odido-booster redlib wikiless wikiless-redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd cobalt cobalt-web searxng searxng-redis immich-server immich-db immich-redis immich-ml watchtower docker-proxy"
 
 # Infrastructure images that should be pre-pulled
 export CRITICAL_IMAGES="nginx:alpine python:3.11-alpine alpine:latest redis:alpine postgres:14-alpine searxng/searxng:latest ghcr.io/imputnet/cobalt:latest ghcr.io/usememos/memos:latest containrrr/watchtower:latest"

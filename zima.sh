@@ -170,3 +170,15 @@ fi
 # 13. Deploy
 deploy_stack
 
+# 14. Final Warnings
+echo ""
+echo "  ⚠️  SECURITY WARNING ⚠️"
+echo "  ----------------------------------------------------------------"
+echo "  The file '$BASE_DIR/protonpass_import.csv' contains RAW PASSWORDS."
+echo "  1. Import this file into Proton Pass (or your password manager)."
+echo "  2. DELETE THIS FILE IMMEDIATELY AFTER IMPORT."
+echo "     Command: rm \"$BASE_DIR/protonpass_import.csv\""
+echo "  ----------------------------------------------------------------"
+echo ""
+
+

@@ -87,7 +87,6 @@ usage() {
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  -p          Auto-Passwords (generates random secure credentials)"
     echo "  -y          Auto-Confirm (non-interactive mode)"
     echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
     echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
@@ -431,6 +430,7 @@ detect_network() {
     else
         log_info "Using existing LAN IP: $LAN_IP"
     fi
+    export LAN_IP
 
     # 2. Public IP Detection
     if [ -n "${PUBLIC_IP:-}" ] && [ "$PUBLIC_IP" != "FAILED" ]; then
@@ -547,22 +547,23 @@ setup_secrets() {
             echo "   2. Create a domain (e.g., myhome.dedyn.io)"
             echo "   3. Create a NEW Token in Token Management (if you lost the old one)"
             echo ""
-            echo -n "3. deSEC Domain (e.g., myhome.dedyn.io${DESEC_DOMAIN:+; current: $DESEC_DOMAIN}, or Enter to skip): "
-            read -r input_domain
-            DESEC_DOMAIN="${input_domain:-$DESEC_DOMAIN}"
-            if [ -n "$DESEC_DOMAIN" ]; then
-                echo -n "4. deSEC API Token${DESEC_TOKEN:+ (current: [HIDDEN])}: "
-                read -rs input_token
-                echo ""
-                DESEC_TOKEN="${input_token:-$DESEC_TOKEN}"
-            else
-                DESEC_TOKEN=""
-                echo "   Skipping deSEC (will use self-signed certificates)"
-            fi
+            
+            while [ -z "$DESEC_DOMAIN" ]; do
+                echo -n "3. deSEC Domain (e.g., myhome.dedyn.io${DESEC_DOMAIN:+; current: $DESEC_DOMAIN}): "
+                read -r input_domain
+                DESEC_DOMAIN="${input_domain:-$DESEC_DOMAIN}"
+                if [ -z "$DESEC_DOMAIN" ]; then
+                     echo "   ⚠️  A deSEC domain is REQUIRED for external access and VERTd HTTPS support."
+                fi
+            done
+            
+            echo -n "4. deSEC API Token${DESEC_TOKEN:+ (current: [HIDDEN])}: "
+            read -rs input_token
+            echo ""
+            DESEC_TOKEN="${input_token:-$DESEC_TOKEN}"
             echo ""
             
             echo "--- Scribe (Medium Frontend) GitHub Integration ---"
-            echo "   Scribe proxies GitHub gists and needs a token to avoid rate limits (60/hr vs 5000/hr)."
             echo "   1. Go to https://github.com/settings/tokens"
             echo "   2. Generate a new 'Classic' token"
             echo "   3. Scopes: Select 'gist' only"
@@ -761,6 +762,13 @@ EOF
     
     # Final export of all variables for use in other scripts
     export VPN_PASS_RAW AGH_PASS_RAW ADMIN_PASS_RAW PORTAINER_PASS_RAW
+    
+    # Persist LAN_IP to .env for Docker Compose
+    if ! grep -q "LAN_IP=" "$DOTENV_FILE" 2>/dev/null; then
+        echo "LAN_IP=$LAN_IP" >> "$DOTENV_FILE"
+    else
+        sed -i "s|^LAN_IP=.*|LAN_IP=$LAN_IP|" "$DOTENV_FILE"
+    fi
     export DESEC_DOMAIN DESEC_TOKEN SCRIBE_GH_USER SCRIBE_GH_TOKEN
     export ODIDO_TOKEN ODIDO_USER_ID ODIDO_API_KEY HUB_API_KEY
     export WG_HASH_CLEAN AGH_PASS_HASH PORTAINER_PASS_HASH
@@ -788,13 +796,4 @@ GitHub Scribe Token,https://github.com/settings/tokens,$SCRIBE_GH_USER,$SCRIBE_G
 EOF
     chmod 600 "$export_file"
     log_info "Credential export file created: $export_file"
-    echo ""
-    echo "  ⚠️  SECURITY WARNING ⚠️"
-    echo "  ----------------------------------------------------------------"
-    echo "  The file '$export_file' contains RAW PASSWORDS."
-    echo "  1. Import this file into Proton Pass (or your password manager)."
-    echo "  2. DELETE THIS FILE IMMEDIATELY AFTER IMPORT."
-    echo "     Command: rm \"$export_file\""
-    echo "  ----------------------------------------------------------------"
-    echo ""
 }

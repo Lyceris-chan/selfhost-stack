@@ -28,7 +28,6 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
   - [Network Configuration](#-network-configuration)
 - [Advanced Setup: OpenWrt & Double NAT](#-advanced-setup-openwrt--double-nat)
 - [Privacy & Architecture](#️-privacy--architecture)
-  - [Surgical Patch Registry](#surgical-patch-registry)
 - [Security Standards](#-security-standards)
 - [System Requirements](#️-system-requirements)
 - [Troubleshooting](#-troubleshooting)
@@ -98,7 +97,7 @@ You'll need:
 
 ---
 
-### Step 2: Get Your Domain Token *(Optional but Recommended)*
+### Step 2: Get Your Domain Token *(Required)*
 
 *This gives your hub a memorable name like `my-home.dedyn.io` instead of an IP address.*
 
@@ -131,12 +130,10 @@ cd selfhost-stack
 
 The script will ask you a few questions:
 1.  **Paste your WireGuard config** (from Step 1)
-2.  **Enter your deSEC domain and token** (from Step 2, or skip if you didn't set this up)
+2.  **Enter your deSEC domain and token** (from Step 2)
 3.  **Choose your password preferences** (auto-generate or set your own)
 
 That's it! Sit back and let it build.
-
-> 💡 **The "I'm in a hurry" Way**: Use `./zima.sh -P` to fast-track setup with automated passwords and parallel deployment.
 
 <a id="customization-flags"></a>
 ### 🛠️ Customization Flags (Optional)
@@ -145,7 +142,6 @@ Before running the installer, you can customize your deployment using these flag
 
 | Flag | Description |
 | :--- | :--- |
-| `-p` | **Auto-Passwords**: Generates random secure credentials automatically. |
 | `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless mode). |
 | `-j` | **Parallel Deploy**: Deploys services in parallel. Faster, but higher CPU usage! |
 | `-s` | **Selective**: Install only specific apps (e.g., `-s invidious,memos`). |
@@ -157,10 +153,10 @@ Before running the installer, you can customize your deployment using these flag
 **Example usage:**
 ```bash
 # Automated deployment with parallel builds
-./zima.sh -p -y -j
+./zima.sh -y -j
 
 # Selective deployment with auto-passwords
-./zima.sh -p -y -s invidious,memos,searxng
+./zima.sh -y -s invidious,memos,searxng
 ```
 
 ---
@@ -235,7 +231,7 @@ Connect your devices securely to your home network:
 3.  **Connect Desktop**: Download the `.conf` file and import it into your WireGuard client.
 
 ### 🔐 Credential Management
-When using the `-p` (Auto-Passwords) flag, the system generates secure, unique credentials for all core infrastructure.
+The system generates secure, unique credentials for all core infrastructure during installation.
 
 | Service | Default Username | Password Type | Note |
 | :--- | :--- | :--- | :--- |
@@ -301,7 +297,6 @@ To ensure peak performance for media-heavy tasks, this stack supports hardware-a
 *   **Immich**: Utilizes Intel Quick Sync (QSV), VA-API, or NVIDIA GPUs for localized image auto-tagging and video transcoding.
 *   **VERT / VERTd**: Optimized for high-speed local file conversion using hardware encoders to minimize CPU load.
 *   **Detection & Provisioning**: The stack automatically identifies your hardware vendor (Intel, AMD, or NVIDIA) during deployment via [lib/scripts.sh](lib/scripts.sh) and provisions the necessary devices (`/dev/dri`, `/dev/vulkan`) or container reservations.
-*   **Surgical Fixes**: Specific optimizations are applied to ensure these drivers function correctly within the container environments.
 *   **Requirements**: Ensure your ZimaOS/host device has the correct drivers installed (e.g., `intel-media-driver` or `nvidia-container-toolkit`).
 
 </details>
@@ -441,6 +436,12 @@ To implement this on your router, refer to the following official guides:
 
 ### 🛡️ Privacy & Architecture
 
+#### Minimalist Source Strategy
+To ensure maximum security and stability, this stack prioritizes official pre-built images for the majority of its services. Only a small number of core components and specific frontends are built from source locally:
+
+*   **Core Logic**: The Hub API and Odido Booster are built from local sources to ensure perfect integration with the host environment.
+*   **Selected Frontends**: Services like Wikiless and Scribe are built from their respective upstream repositories, ensuring you get the exact code intended by the developers while benefiting from local image optimization.
+
 #### Dual-Zone Split Tunneling
 The stack implements an intelligent routing model to balance performance and total privacy:
 - **🔒 VPN Zone (Kill-Switch Protected)**: Services like Invidious, SearXNG, and Redlib are locked inside the VPN. If the tunnel drops, they lose all connectivity instantly, preventing any IP leaks.
@@ -480,7 +481,7 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 This stack uses a hybrid deployment model to balance privacy with system stability.
 
 - **Pre-built Images**: Most services use trusted upstream images to ensure fast deployment and reliable updates.
-- **Local Optimization**: Critical orchestration components like `hub-api` are optimized for your environment.
+- **Local Optimization**: Critical orchestration components and selected frontends are optimized for your environment through local builds.
 
 ### 🛡️ Self-Healing & High Availability
 *   **VPN Monitoring**: Gluetun is continuously monitored. Docker restarts the gateway if the tunnel stalls.
