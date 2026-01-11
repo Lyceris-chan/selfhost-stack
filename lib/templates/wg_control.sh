@@ -266,9 +266,13 @@ WGEDATAEOF
     HEALTH_DETAILS_JSON="{"
     FIRST_SRV=1
     # Added core infrastructure services to the monitoring loop
-    for srv in "invidious:3000" "redlib:8080" "wikiless:8180" "memos:5230" "rimgo:3002" "scribe:8280" "breezewiki:10416" "anonymousoverflow:8480" "vert:80" "vertd:24153" "adguard:8083" "portainer:9000" "wg-easy:51821" "cobalt:9000"; do
-        s_name_real="${CONTAINER_PREFIX}${srv%:*}"
-        s_port=${srv#*:} 
+    for srv in "invidious:3000" "redlib:8081" "wikiless:8180" "memos:5230" "rimgo:3002" "scribe:8280" "breezewiki:10416" "anonymousoverflow:8480" "vert:80" "vertd:24153" "adguard:8083" "portainer:9000" "wg-easy:51821" "cobalt:9000" "searxng:8080" "immich:2283" "odido-booster:8085"; do
+        s_key=${srv%:*}
+        s_port=${srv#*:}
+        s_name_real="${CONTAINER_PREFIX}${s_key}"
+        if [ "$s_key" = "immich" ]; then s_name_real="${CONTAINER_PREFIX}immich-server"; fi
+        if [ "$s_key" = "cobalt" ]; then s_name_real="${CONTAINER_PREFIX}cobalt-web"; fi
+
         [ $FIRST_SRV -eq 0 ] && { SERVICES_JSON="$SERVICES_JSON,"; HEALTH_DETAILS_JSON="$HEALTH_DETAILS_JSON,"; }
         
         # Priority 1: Check Docker container health if it exists
@@ -283,7 +287,6 @@ WGEDATAEOF
         fi
 
         # We keep the JSON key as the original name for dashboard compatibility
-        s_key=${srv%:*} 
         if [ "$HEALTH" = "healthy" ] || [ "$HEALTH" = "running" ]; then
             SERVICES_JSON="${SERVICES_JSON}\"${s_key}\":\"up\""
         elif [ "$HEALTH" = "unhealthy" ] || [ "$HEALTH" = "starting" ]; then
@@ -291,7 +294,11 @@ WGEDATAEOF
             # For services in gluetun network, we check against gluetun container
             TARGET_HOST="$s_name_real"
             case "$s_key" in
-                invidious|redlib|wikiless|rimgo|scribe|breezewiki|anonymousoverflow) TARGET_HOST="${CONTAINER_PREFIX}gluetun" ;; 
+                invidious|redlib|wikiless|rimgo|scribe|breezewiki|anonymousoverflow|cobalt|searxng|immich|odido-booster) 
+                    if docker inspect --format='{{.HostConfig.NetworkMode}}' "$s_name_real" 2>/dev/null | grep -q "gluetun"; then
+                        TARGET_HOST="${CONTAINER_PREFIX}gluetun"
+                    fi
+                    ;; 
             esac
             if nc -z -w 2 "$TARGET_HOST" "$s_port" >/dev/null 2>&1; then
                 SERVICES_JSON="${SERVICES_JSON}\"${s_key}\":\"up\""
@@ -302,7 +309,11 @@ WGEDATAEOF
             # Fallback to network check
             TARGET_HOST="$s_name_real"
             case "$s_key" in
-                invidious|redlib|wikiless|rimgo|scribe|breezewiki|anonymousoverflow) TARGET_HOST="${CONTAINER_PREFIX}gluetun" ;; 
+                invidious|redlib|wikiless|rimgo|scribe|breezewiki|anonymousoverflow|cobalt|searxng|immich|odido-booster) 
+                    if docker inspect --format='{{.HostConfig.NetworkMode}}' "$s_name_real" 2>/dev/null | grep -q "gluetun"; then
+                        TARGET_HOST="${CONTAINER_PREFIX}gluetun"
+                    fi
+                    ;; 
             esac
             
             if nc -z -w 2 "$TARGET_HOST" "$s_port" >/dev/null 2>&1; then

@@ -3,7 +3,7 @@
 # Helper to check if a service should be deployed
 should_deploy() {
     if [ -z "${SELECTED_SERVICES:-}" ]; then return 0; fi
-    if echo "$SELECTED_SERVICES" | grep -qE "(^|,)$1(,|$)ப்புகளை"; then return 0; fi
+    if echo "$SELECTED_SERVICES" | grep -qE "(^|,)$1(,|$)"; then return 0; fi
     return 1
 }
 
@@ -60,7 +60,6 @@ append_hub_api() {
       - DESEC_DOMAIN=$DESEC_DOMAIN
       - DOCKER_CONFIG=/root/.docker
       - DOCKER_HOST=tcp://docker-proxy:2375
-    entrypoint: ["/bin/sh", "-c", "python3 -u /app/server.py"]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:55555/status || exit 1"]
       interval: 20s
@@ -183,6 +182,8 @@ append_gluetun() {
       - "$LAN_IP:$PORT_COMPANION:$PORT_INT_COMPANION/tcp"
       - "$LAN_IP:$PORT_SEARXNG:$PORT_INT_SEARXNG/tcp"
       - "$LAN_IP:$PORT_IMMICH:$PORT_INT_IMMICH/tcp"
+      - "$LAN_IP:$PORT_COBALT:$PORT_INT_COBALT/tcp"
+      - "$LAN_IP:$PORT_COBALT_API:$PORT_INT_COBALT_API/tcp"
       - "$LAN_IP:8085:8085/tcp"
     volumes:
       - "$ACTIVE_WG_CONF:/gluetun/wireguard/wg0.conf:ro"
@@ -452,7 +453,7 @@ append_invidious() {
     environment:
       - INVIDIOUS_DATABASE_URL=postgres://kemal:$INVIDIOUS_DB_PASS_COMPOSE@invidious-db:5432/invidious
       - INVIDIOUS_HMAC_KEY=$IV_HMAC
-    healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1/api/v1/stats || exit 1", interval: 30s, timeout: 5s, retries: 2}
+    healthcheck: {test: "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || exit 1", interval: 30s, timeout: 5s, retries: 2}
     logging:
       options:
         max-size: "1G"
@@ -500,7 +501,7 @@ append_invidious() {
       - no-new-privileges:true
     deploy:
       resources:
-        limits: {cpus: '0.3', memory: 256M}
+        limits: {cpus: '0.3', memory: 512M}
 EOF
 }
 
@@ -672,22 +673,44 @@ append_cobalt() {
     if ! should_deploy "cobalt"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
   cobalt:
-    image: ghcr.io/imputnet/cobalt:${COBALT_IMAGE_TAG:-latest}
-    container_name: ${CONTAINER_PREFIX}cobalt
-    networks: [dhi-frontnet]
-    ports:
-      - "$LAN_IP:$PORT_COBALT:$PORT_INT_COBALT" # Web UI (9001:9000)
-      - "$LAN_IP:9002:9002"                       # API (9002:9002)
+    image: ghcr.io/imputnet/cobalt:\${COBALT_IMAGE_TAG:-latest}
+    container_name: \${CONTAINER_PREFIX}cobalt
+    init: true
+    read_only: true
+    network_mode: "service:gluetun"
     environment:
-      - COBALT_AUTO_UPDATE=false
-      - ALLOW_ALL_DOMAINS=true
-      - API_PORT=9002
-      - WEB_PORT=9000
-      - API_URL=http://$LAN_IP:9002
+      - API_URL=http://\$LAN_IP:\$PORT_COBALT_API
+      - API_PORT=\$PORT_INT_COBALT_API
+    depends_on:
+      gluetun: {condition: service_healthy}
     restart: unless-stopped
     deploy:
       resources:
-        limits: {cpus: '1.0', memory: 512M}
+        limits: {cpus: '2.0', memory: 2G}
+EOF
+}
+
+append_cobalt_web() {
+    if ! should_deploy "cobalt-web"; then return 0; fi
+    local DOCKERFILE="web/Dockerfile"
+    cat >> "$COMPOSE_FILE" <<EOF
+  cobalt-web:
+    pull_policy: missing
+    build:
+      context: $SRC_DIR/cobalt
+      dockerfile: $DOCKERFILE
+      args:
+        - WEB_DEFAULT_API=http://$LAN_IP:$PORT_COBALT_API
+    image: selfhost/cobalt-web:${COBALT_WEB_IMAGE_TAG:-latest}
+    container_name: ${CONTAINER_PREFIX}cobalt-web
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun: {condition: service_healthy}
+      cobalt: {condition: service_started}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.5', memory: 512M}
 EOF
 }
 
@@ -749,7 +772,7 @@ append_immich() {
       - DB_PASSWORD=$IMMICH_DB_PASS_COMPOSE
       - DB_DATABASE_NAME=immich
       - REDIS_HOSTNAME=${CONTAINER_PREFIX}immich-redis
-      - IMMICH_MACHINE_LEARNING_URL=http://${CONTAINER_PREFIX}immich-ml:3003
+      - IMMICH_MACHINE_LEARNING_URL=http://localhost:3003
     depends_on:
       immich-db: {condition: service_healthy}
       immich-redis: {condition: service_healthy}
@@ -842,6 +865,8 @@ generate_compose() {
     AGH_PASS_COMPOSE="${AGH_PASS_RAW//$/\$\$}"
     INVIDIOUS_DB_PASS_COMPOSE="${INVIDIOUS_DB_PASSWORD//$/\$\$}"
     IMMICH_DB_PASS_COMPOSE="${IMMICH_DB_PASSWORD//$/\$\$}"
+    WG_HASH_COMPOSE="${WG_HASH_CLEAN//$/\$\$}"
+    PORTAINER_HASH_COMPOSE="${PORTAINER_PASS_HASH//$/\$\$}"
 
     # Ensure required directories exist
     mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR"
@@ -907,6 +932,7 @@ EOF
     append_odido_booster
     append_vert
     append_cobalt
+    append_cobalt_web
     append_searxng
     append_immich
     append_watchtower

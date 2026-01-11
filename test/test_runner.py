@@ -10,7 +10,7 @@ import json
 # Consolidated Full Stack Definition
 FULL_STACK = {
     "name": "Full Privacy Hub Stack",
-    "services": "hub-api,dashboard,gluetun,adguard,unbound,wg-easy,redlib,wikiless,rimgo,breezewiki,anonymousoverflow,scribe,invidious,invidious-db,companion,searxng,searxng-redis,portainer,memos,odido-booster,cobalt,vert,vertd,immich-server,immich-db,immich-redis,immich-machine-learning,watchtower",
+        "services": "hub-api,dashboard,gluetun,adguard,unbound,wg-easy,redlib,wikiless,rimgo,breezewiki,anonymousoverflow,scribe,invidious,companion,searxng,portainer,memos,odido-booster,cobalt,vert,vertd,immich,watchtower",
     "checks": [
         {"name": "Dashboard", "url": "http://127.0.0.1:8081", "code": 200},
         {"name": "Hub API", "url": "http://127.0.0.1:55555/status", "code": 200},
@@ -138,6 +138,10 @@ def main():
     try:
         # 1. Cleanup
         print("Cleaning environment...")
+        # Force cleanup of potential zombie containers from previous runs
+        run_command("docker ps -aq --filter name=hub- | xargs -r docker rm -f", ignore_failure=True)
+        run_command("docker ps -aq --filter label=io.dhi.hardened=true | xargs -r docker rm -f", ignore_failure=True)
+        
         if os.path.exists(os.path.join(compose_dir, "docker-compose.yml")):
              run_command("docker compose down -v || true", cwd=compose_dir)
         run_command("docker system prune -f --volumes")
@@ -175,8 +179,6 @@ def main():
                             f.write(f"# {line}")
                             continue
                         if in_gluetun_ports:
-                            # Check indentation to see if we are still in ports block
-                            # Ports items usually start with "- " and strictly indented
                             if line.startswith("      -"):
                                 f.write(f"# {line}")
                                 continue
@@ -209,6 +211,22 @@ def main():
                             f.write(f"{indent}ports: [\"127.0.0.1:2283:2283\"]\n")
                         elif current_service == "odido-booster":
                             f.write(f"{indent}ports: [\"127.0.0.1:8085:8085\"]\n")
+                        elif current_service == "companion":
+                            f.write(f"{indent}ports: [\"127.0.0.1:8282:8282\"]\n")
+                        elif current_service == "cobalt":
+                            f.write(f"{indent}ports: [\"127.0.0.1:9001:9001\", \"127.0.0.1:9002:9000\"]\n")
+                        elif current_service == "adguard":
+                            f.write(f"{indent}ports: [\"127.0.0.1:8083:8083\", \"127.0.0.1:5353:53/udp\", \"127.0.0.1:5353:53/tcp\"]\n")
+                    
+                    # Fix internal connections when bypassing VPN
+                    elif current_service == "wikiless" and "REDIS_URL: \"redis://127.0.0.1:6379\"" in line:
+                        f.write(line.replace("127.0.0.1", "hub-wikiless_redis"))
+                    elif current_service == "invidious" and "invidious-db:5432" in line and "hub-" not in line:
+                        f.write(line.replace("invidious-db", "hub-invidious-db"))
+                    elif current_service == "immich-server" and "DB_HOSTNAME=" in line and "hub-" not in line:
+                        f.write(line.replace("DB_HOSTNAME=", "DB_HOSTNAME=hub-immich-db"))
+                    elif current_service == "immich-server" and "REDIS_HOSTNAME=" in line and "hub-" not in line:
+                        f.write(line.replace("REDIS_HOSTNAME=", "REDIS_HOSTNAME=hub-immich-redis"))
                     else:
                         f.write(line)
         # ----------------------------------------------------------
@@ -218,7 +236,7 @@ def main():
         env_cmd_prefix = f"set -a; [ -f {PROJECT_ROOT}/test/test_config.env ] && . {PROJECT_ROOT}/test/test_config.env; APP_NAME=privacy-hub-test; PROJECT_ROOT={TEST_DATA_DIR}; set +a; "
         
         # Explicitly build internal services
-        local_builds = ["hub-api", "odido-booster", "scribe"]
+        local_builds = ["hub-api", "odido-booster", "scribe", "wikiless"]
         for svc in local_builds:
             if svc in services_list:
                 print(f"Building {svc}...")
@@ -243,7 +261,7 @@ def main():
         
         # 5. Unified Puppeteer Verification (Verified + Screenshots)
         print("Waiting for containers to stabilize before UI tests...")
-        time.sleep(90)
+        time.sleep(120)
         print("Running Unified Puppeteer Verification & Screenshots...")
         if not os.path.exists(os.path.join(TEST_SCRIPT_DIR, "node_modules")):
             print("Installing test dependencies...")

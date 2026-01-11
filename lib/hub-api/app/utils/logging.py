@@ -3,7 +3,8 @@ import json
 import time
 import sqlite3
 import threading
-from .config import settings
+import os
+from ..core.config import settings
 
 # Configure standard logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')

@@ -63,9 +63,13 @@ def main():
             f"VPN_ENDPOINT_IP={conf.get('endpoint_ip', '')}",
             f"VPN_ENDPOINT_PORT={conf.get('endpoint_port', '51820')}",
             f"WIREGUARD_PUBLIC_KEY={conf.get('public_key', '')}",
-            f"WIREGUARD_DNS={conf.get('dns', '9.9.9.9')}",
+            f"WIREGUARD_DNS=127.0.0.11",
             "FIREWALL_VPN_INPUT_PORTS=10416,8080,8180,3000,3002,8280,8480,80,24153,8282,9000,2283",
-            "HTTPPROXY=on"
+            "HTTPPROXY=on",
+            "HEALTH_VPN_STATUS=off",
+            "HEALTH_TARGET_ADDRESS=127.0.0.1:8000",
+            "DNS_KEEP_NAMESERVERS=on",
+            "DNS_ADDRESS=127.0.0.11"
         ]
         
         if conf.get("preshared_key"):

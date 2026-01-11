@@ -161,7 +161,30 @@ deploy_stack() {
         fi
     fi
 
-    # --- SECTION 16.2: ASSET LOCALIZATION ---
+    # --- SECTION 16.3: IMMICH INITIAL USER ---
+    if [ "$AUTO_PASSWORD" = true ] && grep -q "immich-server:" "$COMPOSE_FILE"; then
+        log_info "Synchronizing Immich administrative account..."
+        IMMICH_READY=false
+        for _ in {1..20}; do
+            if curl -s --max-time 2 "http://$LAN_IP:$PORT_IMMICH/api/server/info" > /dev/null; then
+                IMMICH_READY=true
+                break
+            fi
+            sleep 5
+        done
+
+        if [ "$IMMICH_READY" = true ]; then
+            log_info "Creating Immich admin user..."
+            # Try to sign up as admin. If it fails (e.g. already exists), it's fine.
+            curl -s -X POST "http://$LAN_IP:$PORT_IMMICH/api/auth/admin-sign-up" \
+                -H "Content-Type: application/json" \
+                -d "{\"email\":\"admin@example.com\",\"password\":\"$IMMICH_ADMIN_PASS_RAW\",\"name\":\"Admin\"}" >/dev/null 2>&1 || true
+        else
+            log_warn "Immich did not become ready in time. Administrative account may need manual setup."
+        fi
+    fi
+
+    # --- SECTION 16.4: ASSET LOCALIZATION ---
     # Download remote assets (fonts, utilities) via Gluetun proxy for privacy
     download_remote_assets
 
@@ -185,6 +208,7 @@ deploy_stack() {
     echo "   • Portainer:    http://$LAN_IP:$PORT_PORTAINER (User: portainer / Pass: $PORTAINER_PASS_RAW)"
     echo "   • WireGuard:    http://$LAN_IP:$PORT_WG_WEB (Pass: $VPN_PASS_RAW)"
     echo "   • AdGuard:      http://$LAN_IP:$PORT_ADGUARD_WEB (User: adguard / Pass: $AGH_PASS_RAW)"
+    echo "   • Immich:       http://$LAN_IP:$PORT_IMMICH (Pass: $IMMICH_ADMIN_PASS_RAW)"
     if [ -n "$ODIDO_TOKEN" ]; then
     echo "   • Odido Boost:  Active (Threshold: 100MB)"
     fi

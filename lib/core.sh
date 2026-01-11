@@ -298,6 +298,7 @@ ANONYMOUS_SECRET=""
 SCRIBE_SECRET=""
 SEARXNG_SECRET=""
 IMMICH_DB_PASSWORD=""
+IMMICH_ADMIN_PASS_RAW=""
 
 # Service Configurations
 NGINX_CONF_DIR="$CONFIG_DIR/nginx"
@@ -327,34 +328,36 @@ PORT_DASHBOARD_WEB=8081
 PORT_ADGUARD_WEB=8083
 PORT_PORTAINER=9000
 PORT_WG_WEB=51821
-PORT_INVIDIOUS=3000
-PORT_REDLIB=8080
-PORT_WIKILESS=8180
-PORT_RIMGO=3002
-PORT_BREEZEWIKI=8380
-PORT_ANONYMOUS=8480
-PORT_SCRIBE=8280
-PORT_MEMOS=5230
-PORT_VERT=5555
-PORT_VERTD=24153
-PORT_COMPANION=8282
-PORT_COBALT=9001
-PORT_SEARXNG=8082
-PORT_IMMICH=2283
+export PORT_INVIDIOUS=3000
+export PORT_REDLIB=8080
+export PORT_WIKILESS=8180
+export PORT_RIMGO=3002
+export PORT_BREEZEWIKI=8380
+export PORT_ANONYMOUS=8480
+export PORT_SCRIBE=8280
+export PORT_MEMOS=5230
+export PORT_VERT=5555
+export PORT_VERTD=24153
+export PORT_COMPANION=8282
+export PORT_COBALT=9001
+export PORT_COBALT_API=9002
+export PORT_SEARXNG=8082
+export PORT_IMMICH=2283
 
 # Internal Ports
-PORT_INT_REDLIB=8081
-PORT_INT_WIKILESS=8180
-PORT_INT_INVIDIOUS=3000
-PORT_INT_RIMGO=3002
-PORT_INT_BREEZEWIKI=10416
-PORT_INT_ANONYMOUS=8480
-PORT_INT_VERT=80
-PORT_INT_VERTD=24153
-PORT_INT_COMPANION=8282
-PORT_INT_COBALT=9000
-PORT_INT_SEARXNG=8080
-PORT_INT_IMMICH=2283
+export PORT_INT_REDLIB=8081
+export PORT_INT_WIKILESS=8180
+export PORT_INT_INVIDIOUS=3000
+export PORT_INT_RIMGO=3002
+export PORT_INT_BREEZEWIKI=10416
+export PORT_INT_ANONYMOUS=8480
+export PORT_INT_VERT=80
+export PORT_INT_VERTD=24153
+export PORT_INT_COMPANION=8282
+export PORT_INT_COBALT=80
+export PORT_INT_COBALT_API=9000
+export PORT_INT_SEARXNG=8080
+export PORT_INT_IMMICH=2283
 
 # --- SECTION 3: DYNAMIC SUBNET ALLOCATION ---
 allocate_subnet() {
@@ -699,6 +702,7 @@ setup_secrets() {
         IV_COMPANION=$(generate_secret 16)
         SEARXNG_SECRET=$(generate_secret 32)
         IMMICH_DB_PASSWORD=$(generate_secret 32)
+        IMMICH_ADMIN_PASS_RAW=$(generate_secret 24)
         INVIDIOUS_DB_PASSWORD=$(generate_secret 32)
 
         cat > "$BASE_DIR/.secrets" <<EOF
@@ -706,6 +710,7 @@ VPN_PASS_RAW="$VPN_PASS_RAW"
 AGH_PASS_RAW="$AGH_PASS_RAW"
 ADMIN_PASS_RAW="$ADMIN_PASS_RAW"
 PORTAINER_PASS_RAW="$PORTAINER_PASS_RAW"
+IMMICH_ADMIN_PASS_RAW="$IMMICH_ADMIN_PASS_RAW"
 DESEC_DOMAIN="$DESEC_DOMAIN"
 DESEC_TOKEN="$DESEC_TOKEN"
 SCRIBE_GH_USER="$SCRIBE_GH_USER"
@@ -745,6 +750,10 @@ EOF
         if [ -z "${PORTAINER_PASS_RAW:-}" ]; then
             PORTAINER_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
             echo "PORTAINER_PASS_RAW=$PORTAINER_PASS_RAW" >> "$BASE_DIR/.secrets"; updated_secrets=true
+        fi
+        if [ -z "${IMMICH_ADMIN_PASS_RAW:-}" ]; then
+            IMMICH_ADMIN_PASS_RAW=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
+            echo "IMMICH_ADMIN_PASS_RAW=$IMMICH_ADMIN_PASS_RAW" >> "$BASE_DIR/.secrets"; updated_secrets=true
         fi
 
         # Generate hashes if missing
@@ -791,7 +800,7 @@ EOF
     fi
     
     # Final export of all variables for use in other scripts
-    export VPN_PASS_RAW AGH_PASS_RAW ADMIN_PASS_RAW PORTAINER_PASS_RAW
+    export VPN_PASS_RAW AGH_PASS_RAW ADMIN_PASS_RAW PORTAINER_PASS_RAW IMMICH_ADMIN_PASS_RAW
     export DESEC_DOMAIN DESEC_TOKEN SCRIBE_GH_USER SCRIBE_GH_TOKEN
     export ODIDO_TOKEN ODIDO_USER_ID ODIDO_API_KEY HUB_API_KEY
     export WG_HASH_CLEAN AGH_PASS_HASH PORTAINER_PASS_HASH
@@ -816,6 +825,7 @@ Odido Booster API,http://$LAN_IP:8085,admin,$ODIDO_API_KEY,API key for dashboard
 Gluetun Control Server,http://$LAN_IP:8000,gluetun,$ADMIN_PASS_RAW,Internal VPN gateway control API.
 deSEC DNS API,https://desec.io,$DESEC_DOMAIN,$DESEC_TOKEN,API token for deSEC dynamic DNS management.
 GitHub Scribe Token,https://github.com/settings/tokens,$SCRIBE_GH_USER,$SCRIBE_GH_TOKEN,GitHub Personal Access Token (Gist Key) for Scribe Medium frontend.
+Immich Admin,http://$LAN_IP:$PORT_IMMICH,admin,$IMMICH_ADMIN_PASS_RAW,Self-hosted photo and video management solution.
 EOF
     chmod 600 "$export_file"
     log_info "Credential export file created: $export_file"

@@ -133,6 +133,28 @@ EOF
     clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster" "$ODIDO_BOOSTER_IMAGE_TAG" & pids="$pids $!"
     clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless" "$WIKILESS_IMAGE_TAG" & pids="$pids $!"
     
+    (
+        if clone_repo "https://github.com/imputnet/cobalt.git" "$SRC_DIR/cobalt" "${COBALT_IMAGE_TAG:-latest}"; then
+            cat > "$SRC_DIR/cobalt/web/Dockerfile" <<'EOF'
+FROM node:24-alpine AS build
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@latest --activate
+COPY . .
+RUN pnpm install --frozen-lockfile
+ARG WEB_DEFAULT_API
+ENV WEB_DEFAULT_API=$WEB_DEFAULT_API
+RUN pnpm --filter=@imput/cobalt-web build
+
+FROM nginx:alpine
+COPY --from=build /app/web/build /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+EOF
+        else
+            exit 1
+        fi
+    ) & pids="$pids $!"
+    
     local success=true
     for pid in $pids; do
         if ! wait "$pid"; then

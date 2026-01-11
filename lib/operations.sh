@@ -193,6 +193,7 @@ clean_environment() {
             if [ "$srv" = "invidious" ]; then ACTUAL_TARGETS="$ACTUAL_TARGETS invidious-db companion"; fi
             if [ "$srv" = "vert" ]; then ACTUAL_TARGETS="$ACTUAL_TARGETS vertd"; fi
             if [ "$srv" = "searxng" ]; then ACTUAL_TARGETS="$ACTUAL_TARGETS searxng-redis"; fi
+            if [ "$srv" = "cobalt" ]; then ACTUAL_TARGETS="$ACTUAL_TARGETS cobalt"; fi
             if [ "$srv" = "immich" ]; then ACTUAL_TARGETS="$ACTUAL_TARGETS immich-server immich-db immich-redis immich-machine-learning"; fi
         done
         CLEAN_LIST="$ACTUAL_TARGETS"

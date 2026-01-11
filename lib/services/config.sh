@@ -80,15 +80,14 @@ generate_scripts() {
     },
     "cobalt": {
       "name": "Cobalt",
-      "description": "Powerful media downloader. Extract content from dozens of platforms with a clean, efficient interface.",
+      "description": "The ultimate media downloader. Clean, efficient web interface for extracting content from dozens of platforms.",
       "category": "apps",
       "order": 30,
       "url": "http://$LAN_IP:$PORT_COBALT",
       "source_url": "https://github.com/imputnet/cobalt",
       "patch_url": "https://github.com/imputnet/cobalt/blob/master/Dockerfile",
       "chips": [
-        {"label": "Local Only", "icon": "lan", "variant": "tertiary"},
-        {"label": "Upstream Image", "icon": "package", "variant": "secondary"}
+        {"label": "Local Only", "icon": "lan", "variant": "tertiary"}
       ]
     },
     "immich": {
@@ -99,7 +98,7 @@ generate_scripts() {
       "url": "http://$LAN_IP:$PORT_IMMICH",
       "source_url": "https://github.com/immich-app/immich",
       "patch_url": "https://github.com/immich-app/immich/blob/main/Dockerfile",
-      "chips": [{"label": "Upstream Image", "icon": "package", "variant": "secondary"}]
+      "chips": []
     },
     "invidious": {
       "name": "Invidious",
@@ -171,7 +170,7 @@ generate_scripts() {
       "url": "http://$LAN_IP:$PORT_SEARXNG",
       "source_url": "https://github.com/searxng/searxng",
       "patch_url": "https://github.com/searxng/searxng/blob/master/Dockerfile",
-      "chips": [{"label": "Upstream Image", "icon": "package", "variant": "secondary"}]
+      "chips": []
     },
     "vert": {
       "name": "VERT",
@@ -467,6 +466,9 @@ EOF
     cat <<EOF | $SUDO tee "$NGINX_CONF" >/dev/null
 error_log /dev/stderr info;
 access_log /dev/stdout;
+set_real_ip_from 172.${FOUND_OCTET}.0.0/16;
+real_ip_header X-Forwarded-For;
+real_ip_recursive on;
 map \$http_host \$backend {
     hostnames;
     default "";
@@ -495,6 +497,38 @@ server {
 EOF
 
     generate_libredirect_export
+
+    # Generate Service Environment Files
+    $SUDO mkdir -p "$ENV_DIR"
+    cat <<EOF | $SUDO tee "$ENV_DIR/scribe.env" >/dev/null
+SECRET_KEY_BASE=$SCRIBE_SECRET
+GITHUB_USER=$SCRIBE_GH_USER
+GITHUB_TOKEN=$SCRIBE_GH_TOKEN
+PORT=8280
+APP_DOMAIN=$LAN_IP:8280
+EOF
+
+    cat <<EOF | $SUDO tee "$ENV_DIR/anonymousoverflow.env" >/dev/null
+APP_SECRET=$ANONYMOUS_SECRET
+JWT_SIGNING_SECRET=$ANONYMOUS_SECRET
+PORT=8480
+APP_URL=http://$LAN_IP:8480
+EOF
+    $SUDO chmod 600 "$ENV_DIR/scribe.env" "$ENV_DIR/anonymousoverflow.env"
+
+    # Generate SearXNG Config
+    $SUDO mkdir -p "$CONFIG_DIR/searxng"
+    cat <<EOF | $SUDO tee "$CONFIG_DIR/searxng/settings.yml" >/dev/null
+use_default_settings: true
+server:
+  secret_key: "$SEARXNG_SECRET"
+  base_url: "http://$LAN_IP:8082/"
+  image_proxy: true
+search:
+  safe_search: 0
+  autocomplete: ""
+EOF
+    $SUDO chmod 644 "$CONFIG_DIR/searxng/settings.yml"
 }
 
 generate_libredirect_export() {

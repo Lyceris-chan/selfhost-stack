@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
 # Centralized list of all services in the Privacy Hub stack
-export STACK_SERVICES="hub-api odido-booster memos gluetun portainer adguard unbound wg-easy redlib wikiless invidious rimgo breezewiki anonymousoverflow scribe vert vertd companion cobalt searxng immich watchtower"
+export STACK_SERVICES="hub-api odido-booster memos gluetun portainer adguard unbound wg-easy redlib wikiless invidious rimgo breezewiki anonymousoverflow scribe vert vertd companion cobalt cobalt-web searxng immich watchtower"
 
 # Services that are built locally from source
-export SOURCE_BUILT_SERVICES="hub-api odido-booster scribe dashboard wikiless"
+export SOURCE_BUILT_SERVICES="hub-api odido-booster scribe dashboard wikiless cobalt-web"
 
 # All container names (without prefix) for cleanup and management
-export ALL_CONTAINERS="gluetun adguard dashboard portainer wg-easy hub-api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd cobalt searxng immich-server immich-db immich-redis immich-machine-learning watchtower"
+export ALL_CONTAINERS="gluetun adguard dashboard portainer wg-easy hub-api odido-booster redlib wikiless wikiless-redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd cobalt cobalt-web searxng searxng-redis immich-server immich-db immich-redis immich-ml watchtower docker-proxy"
 
 # Infrastructure images that should be pre-pulled
 export CRITICAL_IMAGES="nginx:alpine python:3.11-alpine alpine:latest redis:alpine postgres:14-alpine searxng/searxng:latest ghcr.io/imputnet/cobalt:latest ghcr.io/usememos/memos:latest containrrr/watchtower:latest"
@@ -34,4 +34,5 @@ SERVICE_REPOS[redlib]="https://github.com/redlib-org/redlib.git"
 SERVICE_REPOS[companion]="https://github.com/iv-org/invidious-companion.git"
 SERVICE_REPOS[wg-easy]="https://github.com/wg-easy/wg-easy.git"
 SERVICE_REPOS[portainer]="https://github.com/portainer/portainer.git"
+SERVICE_REPOS[cobalt]="https://github.com/imputnet/cobalt.git"
 export SERVICE_REPOS
