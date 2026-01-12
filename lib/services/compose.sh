@@ -265,8 +265,8 @@ DASHEOF
       - "dev.casaos.app.ui.protocol=http"
       - "dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB"
       - "dev.casaos.app.ui.hostname=$LAN_IP"
-      - "dev.casaos.app.ui.icon=http://$LAN_IP:$PORT_DASHBOARD_WEB/assets/$APP_NAME.svg"
-      - "dev.casaos.app.icon=http://$LAN_IP:$PORT_DASHBOARD_WEB/assets/$APP_NAME.svg"
+      - "dev.casaos.app.ui.icon=http://$LAN_IP:$PORT_DASHBOARD_WEB/assets/icon.svg"
+      - "dev.casaos.app.icon=http://$LAN_IP:$PORT_DASHBOARD_WEB/assets/icon.svg"
     depends_on:
       hub-api: {condition: service_healthy}
     healthcheck:
@@ -1206,6 +1206,6 @@ x-casaos:
       instead of renting a false sense of security. Includes WireGuard VPN access,
       recursive DNS with AdGuard filtering, and VPN-isolated privacy frontends
       (Invidious, Redlib, etc.) that reduce tracking and prevent home IP exposure.
-  icon: assets/$APP_NAME.svg
+  icon: assets/icon.svg
 EOF
 }

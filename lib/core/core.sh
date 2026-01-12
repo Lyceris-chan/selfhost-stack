@@ -666,13 +666,27 @@ setup_secrets() {
         ODIDO_API_KEY="$HUB_API_KEY"
         
         # Optimized: Generate all hashes in a single container run to save time
-        # We use alpine:3.21 and install apache2-utils (htpasswd)
+        # We use alpine:3.21 and py3-bcrypt for standard $2b$ hashes (better compatibility than htpasswd $2y$)
         HASH_OUTPUT=$($DOCKER_CMD run --rm alpine:3.21 sh -c '
-            apk add --no-cache apache2-utils >/dev/null 2>&1
+            apk add --no-cache python3 py3-bcrypt apache2-utils >/dev/null 2>&1
             if [ $? -ne 0 ]; then echo "FAILED"; exit 1; fi
-            echo "WG_HASH:$(htpasswd -B -n -b "admin" "$1" | cut -d: -f2)"
+
+            # Helper python script for bcrypt
+            cat > gen_hash.py <<PYEOF
+import bcrypt, sys
+try:
+    user = sys.argv[1].encode()
+    pwd = sys.argv[2].encode()
+    # Generate bcrypt hash (cost 10 default, prefix 2b)
+    h = bcrypt.hashpw(pwd, bcrypt.gensalt())
+    print(h.decode("utf-8"))
+except Exception:
+    sys.exit(1)
+PYEOF
+
+            echo "WG_HASH:$(python3 gen_hash.py "admin" "$1")"
             echo "AGH_HASH:$(htpasswd -B -n -b "$2" "$3" | cut -d: -f2)"
-            echo "PORT_HASH:$(htpasswd -B -n -b "admin" "$4" | cut -d: -f2)"
+            echo "PORT_HASH:$(python3 gen_hash.py "admin" "$4")"
         ' -- "$VPN_PASS_RAW" "$AGH_USER" "$AGH_PASS_RAW" "$PORTAINER_PASS_RAW" 2>/dev/null || echo "FAILED")
 
         if echo "$HASH_OUTPUT" | grep -q "FAILED"; then
@@ -790,7 +804,7 @@ EOF
     fi
     
     # Final export of all variables for use in other scripts
-    export VPN_PASS_RAW AGH_PASS_RAW ADMIN_PASS_RAW PORTAINER_PASS_RAW
+    export VPN_PASS_RAW AGH_PASS_RAW ADMIN_PASS_RAW PORTAINER_PASS_RAW ALLOW_PROTON_VPN
     
     # Persist LAN_IP to .env for Docker Compose
     if ! grep -q "LAN_IP=" "$DOTENV_FILE" 2>/dev/null; then
