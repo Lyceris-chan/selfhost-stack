@@ -351,12 +351,14 @@ download_remote_assets() {
         proxy_ready=true
         proxy=""
     else
-        for i in {1..5}; do
+        log_info "Waiting for Gluetun proxy to stabilize..."
+        for i in {1..30}; do
             if curl --proxy "$proxy" -fsSL --max-time 2 https://fontlay.com -o /dev/null >/dev/null 2>&1; then
                 proxy_ready=true
                 break
             fi
-            sleep 0.5
+            [ $((i % 5)) -eq 0 ] && log_info "Retrying proxy connection ($i/30)..."
+            sleep 1
         done
     fi
 
