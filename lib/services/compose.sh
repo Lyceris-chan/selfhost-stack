@@ -59,7 +59,7 @@ append_hub_api() {
       - "DESEC_DOMAIN=$DESEC_DOMAIN"
       - "DOCKER_CONFIG=/root/.docker"
       - "DOCKER_HOST=tcp://docker-proxy:2375"
-      - "CORS_ORIGINS=[\"http://localhost\",\"http://localhost:${PORT_DASHBOARD_WEB}\",\"http://${LAN_IP}\",\"http://${LAN_IP}:${PORT_DASHBOARD_WEB}\"${DESEC_DOMAIN:+,\"https://${DESEC_DOMAIN}\"}]"
+      - 'CORS_ORIGINS=["http://localhost","http://localhost:${PORT_DASHBOARD_WEB}","http://${LAN_IP}","http://${LAN_IP}:${PORT_DASHBOARD_WEB}"${DESEC_DOMAIN:+,"https://${DESEC_DOMAIN}"}]'
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:55555/health || exit 1"]
       interval: 20s
@@ -100,7 +100,7 @@ EOF
 EOF
     elif [ "$VPN_MODE" = "true" ]; then
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
     depends_on:
       gluetun: {condition: service_healthy}
 EOF
@@ -216,15 +216,11 @@ EOF
 
 append_dashboard() {
     if ! should_deploy "dashboard"; then return 0; fi
-    # Create Dashboard Source Directory and Dockerfile
     $SUDO mkdir -p "$SRC_DIR/dashboard"
     cat <<DASHEOF | $SUDO tee "$SRC_DIR/dashboard/Dockerfile" >/dev/null
-FROM alpine:3.20
-RUN apk add --no-cache nginx \
-    && mkdir -p /usr/share/nginx/html \
-    && chown -R 1000:1000 /var/lib/nginx /var/log/nginx /run/nginx /usr/share/nginx/html
-USER 1000
+FROM nginx:alpine
 COPY . /usr/share/nginx/html
+EXPOSE 8081
 CMD ["nginx", "-g", "daemon off;"]
 DASHEOF
 
@@ -265,7 +261,6 @@ EOF
 
 append_portainer() {
     if ! should_deploy "portainer"; then return 0; fi
-    # Create Portainer Source Directory and Portainer Wrapper
     $SUDO mkdir -p "$SRC_DIR/portainer"
     cat <<PORTEOF | $SUDO tee "$SRC_DIR/portainer/Dockerfile" >/dev/null
 FROM alpine:3.20
@@ -391,8 +386,8 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
-    depends_on: {gluetun: {condition: service_healthy}}
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
+    depends_on: {gluetun: {condition: service_healthy} }
 EOF
     fi
 
@@ -443,7 +438,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
     fi
 
@@ -478,7 +473,9 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
+    depends_on:
+      gluetun: {condition: service_healthy}
 EOF
     fi
 
@@ -514,7 +511,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
     fi
 
@@ -579,7 +576,9 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
+    depends_on:
+      gluetun: {condition: service_healthy}
 EOF
     fi
 
@@ -622,7 +621,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
     fi
 
@@ -644,9 +643,9 @@ EOF
 
 append_breezewiki() {
     if ! should_deploy "breezewiki"; then return 0; fi
-    local BW_ORIGIN="http://$LAN_IP:$PORT_BREEZEWIKI"
-    if [ -n "$DESEC_DOMAIN" ]; then
-        BW_ORIGIN="https://breezewiki.$DESEC_DOMAIN"
+    local BW_ORIGIN="fandom.com"
+    if [ -f "$CONFIG_DIR/breezewiki/breezewiki.ini" ]; then
+        BW_ORIGIN=$(grep "^canonical_origin" "$CONFIG_DIR/breezewiki/breezewiki.ini" | cut -d'=' -f2 | tr -d ' ' || echo "fandom.com")
     fi
 
     cat >> "$COMPOSE_FILE" <<EOF
@@ -662,7 +661,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
     fi
 
@@ -698,7 +697,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
     fi
 
@@ -736,7 +735,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
     fi
 
@@ -831,7 +830,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
     fi
 
@@ -870,7 +869,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
     fi
 
@@ -900,7 +899,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
     fi
 
@@ -945,7 +944,7 @@ append_immich() {
     if ! should_deploy "immich"; then return 0; fi
     local DB_HOST="${CONTAINER_PREFIX}immich-db"
     local REDIS_HOST="${CONTAINER_PREFIX}immich-redis"
-    local ML_URL="http://localhost:3003"
+    local ML_URL="http://127.0.0.1:3003"
     if [ "${TEST_MODE:-false}" = "true" ]; then ML_URL="http://${CONTAINER_PREFIX}immich-ml:3003"; fi
 
     cat >> "$COMPOSE_FILE" <<EOF
@@ -961,7 +960,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
     fi
 
@@ -1032,7 +1031,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
     fi
 
@@ -1078,15 +1077,15 @@ generate_compose() {
     VERT_PUB_HOSTNAME=${VERT_PUB_HOSTNAME:-$LAN_IP}
 
     # Prepare escaped passwords for docker-compose (v2 requires $$ for literal $)
-    ADMIN_PASS_COMPOSE="${ADMIN_PASS_RAW//$/\$\$}"
-    VPN_PASS_COMPOSE="${VPN_PASS_RAW//$/\$\$}"
-    HUB_API_KEY_COMPOSE="${HUB_API_KEY//$/\$\$}"
-    PORTAINER_PASS_COMPOSE="${PORTAINER_PASS_RAW//$/\$\$}"
-    AGH_PASS_COMPOSE="${AGH_PASS_RAW//$/\$\$}"
-    INVIDIOUS_DB_PASS_COMPOSE="${INVIDIOUS_DB_PASSWORD//$/\$\$}"
-    IMMICH_DB_PASS_COMPOSE="${IMMICH_DB_PASSWORD//$/\$\$}"
-    WG_HASH_COMPOSE="${WG_HASH_CLEAN//$/\$\$}"
-    PORTAINER_HASH_COMPOSE="${PORTAINER_PASS_HASH//$/\$\$}"
+    ADMIN_PASS_COMPOSE="${ADMIN_PASS_RAW//$/$$}"
+    VPN_PASS_COMPOSE="${VPN_PASS_RAW//$/$$}"
+    HUB_API_KEY_COMPOSE="${HUB_API_KEY//$/$$}"
+    PORTAINER_PASS_COMPOSE="${PORTAINER_PASS_RAW//$/$$}"
+    AGH_PASS_COMPOSE="${AGH_PASS_RAW//$/$$}"
+    INVIDIOUS_DB_PASS_COMPOSE="${INVIDIOUS_DB_PASSWORD//$/$$}"
+    IMMICH_DB_PASS_COMPOSE="${IMMICH_DB_PASSWORD//$/$$}"
+    WG_HASH_COMPOSE="${WG_HASH_CLEAN//$/$$}"
+    PORTAINER_HASH_COMPOSE="${PORTAINER_PASS_HASH//$/$$}"
 
     # Ensure required directories exist
     mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR"
