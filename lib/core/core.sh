@@ -672,7 +672,9 @@ setup_secrets() {
             if [ $? -ne 0 ]; then echo "FAILED"; exit 1; fi
             echo "WG_HASH:$(htpasswd -B -n -b "admin" "$1" | cut -d: -f2)"
             echo "AGH_HASH:$(htpasswd -B -n -b "$2" "$3" | cut -d: -f2)"
-            echo "PORT_HASH:$(htpasswd -B -n -b "admin" "$4" | cut -d: -f2)"
+            # Portainer typically requires standard bcrypt ($2a/$2b) or robust cost.
+            # Using -C 10 ensures a sufficient cost factor (default 5 might be too weak/incompatible).
+            echo "PORT_HASH:$(htpasswd -B -C 10 -n -b "admin" "$4" | cut -d: -f2)"
         ' -- "$VPN_PASS_RAW" "$AGH_USER" "$AGH_PASS_RAW" "$PORTAINER_PASS_RAW" 2>/dev/null || echo "FAILED")
 
         if echo "$HASH_OUTPUT" | grep -q "FAILED"; then
@@ -790,7 +792,7 @@ EOF
     fi
     
     # Final export of all variables for use in other scripts
-    export VPN_PASS_RAW AGH_PASS_RAW ADMIN_PASS_RAW PORTAINER_PASS_RAW
+    export VPN_PASS_RAW AGH_PASS_RAW ADMIN_PASS_RAW PORTAINER_PASS_RAW ALLOW_PROTON_VPN
     
     # Persist LAN_IP to .env for Docker Compose
     if ! grep -q "LAN_IP=" "$DOTENV_FILE" 2>/dev/null; then

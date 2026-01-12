@@ -325,7 +325,7 @@ EOF
 setup_static_assets() {
     log_info "Initializing local asset directories and icons..."
     $SUDO mkdir -p "$ASSETS_DIR"
-    cat > "$ASSETS_DIR/$APP_NAME.svg" <<EOF
+    cat > "$ASSETS_DIR/icon.svg" <<EOF
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
     <rect width="128" height="128" rx="28" fill="#141218"/>
     <path d="M64 104q-23-6-38-26.5T11 36v-22l53-20 53 20v22q0 25-15 45.5T64 104Zm0-14q17-5.5 28.5-22t11.5-35V21L64 6 24 21v12q0 18.5 11.5 35T64 90Zm0-52Z" fill="#D0BCFF" transform="translate(0, 15) scale(1)"/>
@@ -514,11 +514,26 @@ users: [{name: $AGH_USER, password: $AGH_PASS_HASH}]
 dns:
   upstream_dns: ["$UNBOUND_STATIC_IP"]
   bootstrap_dns: ["$UNBOUND_STATIC_IP"]
+filters:
+  - enabled: true
+    url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/main/blocklist.txt
+    name: Sleepy Blocklist
+    id: 1
+filters_update_interval: 6
 tls:
   enabled: true
   server_name: $DNS_SERVER_NAME
   certificate_path: /opt/adguardhome/conf/ssl.crt
   private_key_path: /opt/adguardhome/conf/ssl.key
+user_rules:
+$(if [ "$ALLOW_PROTON_VPN" = true ]; then
+    echo "  - @@||getproton.me^"
+    echo "  - @@||vpn-api.proton.me^"
+    echo "  - @@||protonstatus.com^"
+    echo "  - @@||protonvpn.ch^"
+    echo "  - @@||protonvpn.com^"
+    echo "  - @@||protonvpn.net^"
+fi)
 EOF
 
     NGINX_REDIRECT=""
