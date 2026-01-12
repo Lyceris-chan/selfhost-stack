@@ -445,7 +445,7 @@ append_invidious() {
           port: 5432
         check_tables: true
         invidious_companion:
-        - private_url: "http://${CONTAINER_PREFIX}companion:8282/companion"
+        - private_url: "http://127.0.0.1:8282/companion"
         invidious_companion_key: "$IV_COMPANION"
         hmac_key: "$IV_HMAC"
     healthcheck:
@@ -611,7 +611,7 @@ append_vert() {
     networks: [frontend]
     ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:24153/api/version"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:24153/api/version"]
       interval: 30s
       timeout: 5s
       retries: 3

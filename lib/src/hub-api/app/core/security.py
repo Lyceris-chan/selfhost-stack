@@ -95,10 +95,10 @@ async def get_api_key_or_query_token(
     raise HTTPException(status_code=401, detail="Unauthorized")
 
 async def get_admin_user(user: str = Depends(get_current_user)):
-    """Enforce admin-only access for sensitive management routes."""
-    if user != "admin":
-        raise HTTPException(status_code=403, detail="Forbidden: Admin session required")
-    return user
+    """Enforce admin or API Key access for sensitive management routes."""
+    if user == "admin" or user == "api_key":
+        return user
+    raise HTTPException(status_code=403, detail="Forbidden: Admin session required")
 
 def create_session(timeout_seconds=1800):
     token = secrets.token_hex(24)

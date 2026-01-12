@@ -23,13 +23,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SCRIPT_DIR
 
 # 1. Core Logic (Utils, Init, Network, Auth) - Defines: log_info, log_warn, log_crit, ask_confirm, pull_with_retry, detect_dockerfile, allocate_subnet, safe_remove_network, detect_network, validate_wg_config, extract_wg_profile_name, setup_secrets, generate_protonpass_export
-source "$SCRIPT_DIR/lib/core.sh"
+source "$SCRIPT_DIR/lib/core/core.sh"
 
 # 2. Service Logic (Sources, Scripts, Configs, Compose, Dashboard) - Defines: sync_sources, generate_scripts, setup_static_assets, download_remote_assets, setup_configs, generate_libredirect_export, generate_compose, generate_dashboard
-source "$SCRIPT_DIR/lib/services.sh"
+source "$SCRIPT_DIR/lib/core/loader.sh"
 
 # 3. Operations Logic (Cleanup, Backup, Deploy) - Defines: check_docker_rate_limit, check_cert_risk, clean_environment, cleanup_build_artifacts, perform_backup, deploy_stack
-source "$SCRIPT_DIR/lib/operations.sh"
+source "$SCRIPT_DIR/lib/core/operations.sh"
 
 # --- Error Handling ---
 failure_handler() {
@@ -128,7 +128,7 @@ else
     fi
     
     $SUDO chmod 600 "$ACTIVE_WG_CONF"
-    $PYTHON_CMD "$SCRIPT_DIR/lib/scripts/format_wg.py" "$ACTIVE_WG_CONF"
+    $PYTHON_CMD "$SCRIPT_DIR/lib/utils/format_wg.py" "$ACTIVE_WG_CONF"
 
     if ! validate_wg_config; then
         log_crit "The pasted WireGuard configuration is invalid."

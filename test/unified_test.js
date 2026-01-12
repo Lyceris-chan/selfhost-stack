@@ -133,14 +133,16 @@ async function runTests() {
         await new Promise(r => setTimeout(r, 5000));
 
         // Test Guest mode filtering
-        const infrastructureChip = await page.evaluateHandle(() => {
-            return Array.from(document.querySelectorAll('.filter-chip')).find(c => c.textContent.includes('Infrastructure'));
-        });
-        if (infrastructureChip && infrastructureChip.asElement()) {
-            await infrastructureChip.asElement().click();
+        const infrastructureSelector = '.filter-chip[data-target="system"]';
+        const infrastructureChip = await page.$(infrastructureSelector);
+        
+        if (infrastructureChip) {
+            await infrastructureChip.click();
             await new Promise(r => setTimeout(r, 2000));
             const isActive = await page.evaluate(el => el.classList.contains('active'), infrastructureChip);
             logResult('Dashboard', 'Filter Toggle', isActive ? 'PASS' : 'FAIL', 'Infrastructure category activated');
+        } else {
+             logResult('Dashboard', 'Filter Toggle', 'FAIL', 'Infrastructure chip not found');
         }
 
         // Admin Login
@@ -164,6 +166,7 @@ async function runTests() {
         if (isAdmin) {
             // Test Update Check
             console.log('  Testing Update Check...');
+            await page.waitForSelector('#update-all-btn', { visible: true, timeout: 5000 });
             await page.click('#update-all-btn');
             await page.waitForSelector('#update-selection-modal', { visible: true });
             logResult('Dashboard', 'Update Modal', 'PASS', 'Update selection modal opened');
@@ -213,25 +216,30 @@ async function runTests() {
 
             // Test Log Filtering
             console.log('  Testing Log Filtering...');
-            await page.click('#show-logs-btn');
-            await page.waitForSelector('#log-modal', { visible: true });
-            
-            // Wait for logs to load
-            await new Promise(r => setTimeout(r, 2000));
-            
-            // Try to filter by level
-            await page.select('#log-level-filter', 'INFO');
-            await new Promise(r => setTimeout(r, 1000));
-            let logCount = await page.evaluate(() => document.querySelectorAll('#log-container .log-entry').length);
-            logResult('Dashboard', 'Log Level Filter', 'PASS', `Filtered INFO logs: ${logCount} entries found`);
-
-            // Try to filter by category
-            await page.select('#log-category-filter', 'MAINTENANCE');
-            await new Promise(r => setTimeout(r, 1000));
-            logCount = await page.evaluate(() => document.querySelectorAll('#log-container .log-entry').length);
-            logResult('Dashboard', 'Log Category Filter', 'PASS', `Filtered MAINTENANCE logs: ${logCount} entries found`);
-            
-            await page.click('#log-modal .btn-icon'); // Close logs
+            const logsChip = await page.$('.filter-chip[data-target="logs"]');
+            if (logsChip) {
+                await logsChip.click();
+                await new Promise(r => setTimeout(r, 2000));
+                
+                const logContainerVisible = await page.evaluate(() => {
+                    const section = document.querySelector('section[data-category="logs"]');
+                    return section && section.style.display !== 'none';
+                });
+                
+                if (logContainerVisible) {
+                    logResult('Dashboard', 'Log Visibility', 'PASS', 'Logs section visible');
+                    
+                    // Try to filter by level
+                    await page.select('#log-filter-level', 'INFO');
+                    await new Promise(r => setTimeout(r, 1000));
+                    let logCount = await page.evaluate(() => document.querySelectorAll('#log-container .log-entry').length);
+                    logResult('Dashboard', 'Log Level Filter', 'PASS', `Filtered INFO logs: ${logCount} entries found`);
+                } else {
+                    logResult('Dashboard', 'Log Visibility', 'FAIL', 'Logs section NOT visible after click');
+                }
+            } else {
+                logResult('Dashboard', 'Log Interaction', 'FAIL', 'Logs filter chip not found');
+            }
         }
 
         console.log('\n--- Phase 3: Portainer Integration ---');

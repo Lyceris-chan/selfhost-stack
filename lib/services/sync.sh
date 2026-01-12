@@ -152,10 +152,10 @@ EOF
     fi
 
     # Hub API (Local Service)
-    if [ -d "$SCRIPT_DIR/lib/hub-api" ]; then
-        $SUDO cp -r "$SCRIPT_DIR/lib/hub-api" "$SRC_DIR/hub-api"
+    if [ -d "$SCRIPT_DIR/lib/src/hub-api" ]; then
+        $SUDO cp -r "$SCRIPT_DIR/lib/src/hub-api" "$SRC_DIR/hub-api"
     else
-        log_crit "Hub API source not found at $SCRIPT_DIR/lib/hub-api"
+        log_crit "Hub API source not found at $SCRIPT_DIR/lib/src/hub-api"
         exit 1
     fi
 

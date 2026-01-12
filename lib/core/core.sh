@@ -1,7 +1,7 @@
 
 # Source Consolidated Constants
 # SCRIPT_DIR is exported from zima.sh
-source "${SCRIPT_DIR}/lib/constants.sh"
+source "${SCRIPT_DIR}/lib/core/constants.sh"
 
 detect_dockerfile() {
     local repo_dir="$1"

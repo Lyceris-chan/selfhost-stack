@@ -286,6 +286,26 @@ Every service in this stack is pulled from a trusted minimal image. All services
 
 </details>
 
+### 🔄 Updates & Lifecycle
+
+This stack employs a dual-strategy for keeping your services secure and up-to-date.
+
+#### 1. Automated Updates (Watchtower)
+For services using pre-built Docker images (like **AdGuard**, **Invidious**, **Redlib**), updates are fully automated.
+*   **Mechanism**: **Watchtower** checks for new upstream images every hour.
+*   **Action**: If a new image is found, Watchtower seamlessly restarts the container with the new version.
+*   **Notification**: Updates are reported to the **Hub API** and logged in the Dashboard's event log, so you always know when a service has been patched.
+
+#### 2. Source-Built Updates (Manual)
+For services built securely from source code to ensure hardware compatibility (like **Wikiless**, **Scribe**, **Odido Booster**):
+*   **Mechanism**: These do not update automatically to prevent build breakages.
+*   **Notification**: The Dashboard will show an "Update Available" badge when the upstream source code changes.
+*   **Action**:
+    1.  Log in to the Dashboard as Admin.
+    2.  Open the Service Settings.
+    3.  Click **"Update Service"**.
+    4.  The system will pull the latest source code, rebuild the container in the background, and restart it once ready.
+
 > **Note**: All "Frontend" services (and Immich/SearXNG/Cobalt) are routed through the VPN tunnel automatically. VERT and core management tools are strictly local-only.
 
 ### ⚡ Hardware Acceleration (GPU/QSV)

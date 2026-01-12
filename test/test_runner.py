@@ -188,7 +188,7 @@ def main():
 
         print("Pulling and Building...")
         compose_cwd = os.path.join(TEST_DATA_DIR, "data/AppData/privacy-hub-test")
-        env_cmd_prefix = f"set -a; [ -f {PROJECT_ROOT}/test/test_config.env ] && . {PROJECT_ROOT}/test/test_config.env; . {PROJECT_ROOT}/lib/constants.sh; LAN_IP={LAN_IP}; APP_NAME=privacy-hub-test; PROJECT_ROOT={TEST_DATA_DIR}; set +a; "
+        env_cmd_prefix = f"set -a; [ -f {PROJECT_ROOT}/test/test_config.env ] && . {PROJECT_ROOT}/test/test_config.env; . {PROJECT_ROOT}/lib/core/constants.sh; LAN_IP={LAN_IP}; APP_NAME=privacy-hub-test; PROJECT_ROOT={TEST_DATA_DIR}; set +a; "
         
         run_command(f"{env_cmd_prefix} docker compose build --no-cache hub-api odido-booster scribe wikiless", cwd=compose_cwd)
         run_command(f"{env_cmd_prefix} docker compose pull", cwd=compose_cwd)
