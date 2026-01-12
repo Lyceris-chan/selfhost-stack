@@ -60,11 +60,11 @@ EOF
     GPU_TOOLTIP="Utilizes local GPU (/dev/dri) for high-performance conversion"
 
     if [ -d "/dev/dri" ]; then
-        VERTD_DEVICES="    devices:
-      - /dev/dri"
+        VERTD_DEVICES="      devices:
+        - /dev/dri"
         if [ -d "/dev/vulkan" ]; then
             VERTD_DEVICES="${VERTD_DEVICES}
-      - /dev/vulkan"
+        - /dev/vulkan"
         fi
         
         if grep -iq "intel" /sys/class/drm/card*/device/vendor 2>/dev/null || (command -v lspci >/dev/null 2>&1 && lspci 2>/dev/null | grep -iq "intel.*graphics"); then
@@ -78,13 +78,13 @@ EOF
 
     VERTD_NVIDIA=""
     if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
-        VERTD_NVIDIA="    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]"
+        VERTD_NVIDIA="      deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: all
+                capabilities: [gpu]"
         GPU_LABEL="NVIDIA NVENC"
         GPU_TOOLTIP="Utilizes NVIDIA NVENC/NVDEC hardware acceleration for high-performance conversion."
     fi
@@ -343,7 +343,8 @@ download_remote_assets() {
         return 0
     fi
 
-    local proxy="http://172.${FOUND_OCTET}.0.254:8888"
+    log_info "Downloading remote assets using proxy on octet ${FOUND_OCTET:-unknown}..."
+    local proxy="http://172.${FOUND_OCTET:-20}.0.254:8888"
     local ua="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
     local proxy_ready=false
@@ -371,32 +372,36 @@ download_remote_assets() {
     URL_CC="https://fontlay.com/css2?family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap"
     URL_MS="https://fontlay.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
 
-    download_css() {
+    download_asset() {
         local dest="$1"
         local url="$2"
-        local curl_args=(-fsSL --max-time 5 -A "$ua")
+        local curl_args=(-fsSL --max-time 10 -A "$ua")
         if [ -n "$proxy" ]; then curl_args+=("--proxy" "$proxy"); fi
-        curl "${curl_args[@]}" "$url" -o "$dest" || return 1
+        for i in {1..3}; do
+            if curl "${curl_args[@]}" "$url" -o "$dest"; then
+                return 0
+            fi
+            log_warn "Retrying download ($i/3): $url"
+            sleep 1
+        done
+        return 1
     }
 
     css_origin() {
         echo "$1" | sed -E 's#(https?://[^/]+).*#\1#'
     }
 
-    download_css "$ASSETS_DIR/gs.css" "$URL_GS" &
-    download_css "$ASSETS_DIR/cc.css" "$URL_CC" &
-    download_css "$ASSETS_DIR/ms.css" "$URL_MS" &
-    wait
+    log_info "Downloading fonts..."
+    download_asset "$ASSETS_DIR/gs.css" "$URL_GS"
+    download_asset "$ASSETS_DIR/cc.css" "$URL_CC"
+    download_asset "$ASSETS_DIR/ms.css" "$URL_MS"
 
     log_info "Downloading libraries..."
     local mcu_url="https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/+esm"
     local qr_url="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"
     
-    local curl_args=(-fsSL --max-time 5 -A "$ua")
-    if [ -n "$proxy" ]; then curl_args+=("--proxy" "$proxy"); fi
-    
-    curl "${curl_args[@]}" "$mcu_url" -o "$ASSETS_DIR/mcu.js"
-    curl "${curl_args[@]}" "$qr_url" -o "$ASSETS_DIR/qrcode.min.js"
+    download_asset "$ASSETS_DIR/mcu.js" "$mcu_url"
+    download_asset "$ASSETS_DIR/qrcode.min.js" "$qr_url"
 
     cd "$ASSETS_DIR"
     declare -A ORIGINS
@@ -416,7 +421,7 @@ download_remote_assets() {
                 if [[ "$url" == //* ]]; then fetch_url="https:$url"
                 elif [[ "$url" == /* ]]; then fetch_url="${origin}${url}"
                 elif [[ "$url" != http* ]]; then fetch_url="${origin}/${url}"; fi
-                curl "${curl_args[@]}" "$fetch_url" -o "$clean_name"
+                download_asset "$clean_name" "$fetch_url"
             fi
             sed -i "s|url(['\"]\{0,1\}$url['\"]\{0,1\})|url($clean_name)|g" "$css_file"
         done

@@ -546,5 +546,5 @@ setup_cron() {
 "
 
     # Add to crontab
-    (crontab -l 2>/dev/null | grep -v "wg-ip-monitor" | grep -v "cert-monitor"; echo "$cron_jobs") | crontab -
+    (crontab -l 2>/dev/null | grep -vE "wg-ip-monitor|cert-monitor|$APP_NAME" || true; echo "$cron_jobs") | crontab -
 }

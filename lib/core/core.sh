@@ -373,6 +373,8 @@ allocate_subnet() {
     fi
 
     DOCKER_SUBNET="$FOUND_SUBNET"
+    export DOCKER_SUBNET
+    export FOUND_OCTET
     log_info "Assigned Virtual Subnet: $DOCKER_SUBNET"
 }
 
