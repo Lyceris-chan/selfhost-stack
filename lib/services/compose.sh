@@ -11,6 +11,28 @@ should_deploy() {
 append_hub_api() {
     if ! should_deploy "hub-api"; then return 0; fi
     local DOCKERFILE=$(detect_dockerfile "$SRC_DIR/hub-api" || echo "Dockerfile")
+
+    # Generate robust JSON for CORS_ORIGINS using Python to avoid string formatting errors
+    local cors_json
+    cors_json=$(LAN_IP="$LAN_IP" PORT_DASHBOARD_WEB="$PORT_DASHBOARD_WEB" DESEC_DOMAIN="$DESEC_DOMAIN" $PYTHON_CMD -c "
+import json, os
+try:
+    lan_ip = os.environ.get('LAN_IP', '127.0.0.1')
+    port = os.environ.get('PORT_DASHBOARD_WEB', '8081')
+    domain = os.environ.get('DESEC_DOMAIN', '')
+    origins = [
+        'http://localhost',
+        'http://localhost:' + port,
+        'http://' + lan_ip,
+        'http://' + lan_ip + ':' + port
+    ]
+    if domain:
+        origins.append('https://' + domain)
+    print(json.dumps(origins))
+except Exception:
+    print('[\"http://localhost\"]')
+")
+
     cat >> "$COMPOSE_FILE" <<EOF
   hub-api:
     pull_policy: build
@@ -59,7 +81,7 @@ append_hub_api() {
       - "DESEC_DOMAIN=$DESEC_DOMAIN"
       - "DOCKER_CONFIG=/root/.docker"
       - "DOCKER_HOST=tcp://docker-proxy:2375"
-      - 'CORS_ORIGINS=["http://localhost","http://localhost:${PORT_DASHBOARD_WEB}","http://${LAN_IP}","http://${LAN_IP}:${PORT_DASHBOARD_WEB}"${DESEC_DOMAIN:+,"https://${DESEC_DOMAIN}"}]'
+      - 'CORS_ORIGINS=$cors_json'
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:55555/health || exit 1"]
       interval: 20s
