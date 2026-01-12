@@ -666,13 +666,15 @@ setup_secrets() {
         ODIDO_API_KEY="$HUB_API_KEY"
         
         # Optimized: Generate all hashes in a single container run to save time
-        # We use alpine:3.21. We use py3-bcrypt for Portainer ($2b$ required) and htpasswd for others.
+        # We use alpine:3.21 and install apache2-utils (htpasswd)
         HASH_OUTPUT=$($DOCKER_CMD run --rm alpine:3.21 sh -c '
-            apk add --no-cache python3 py3-bcrypt apache2-utils >/dev/null 2>&1
+            apk add --no-cache apache2-utils >/dev/null 2>&1
             if [ $? -ne 0 ]; then echo "FAILED"; exit 1; fi
             echo "WG_HASH:$(htpasswd -B -n -b "admin" "$1" | cut -d: -f2)"
             echo "AGH_HASH:$(htpasswd -B -n -b "$2" "$3" | cut -d: -f2)"
-            echo "PORT_HASH:$(python3 -c "import bcrypt,sys; print(bcrypt.hashpw(sys.argv[1].encode(), bcrypt.gensalt()).decode())" "$4")"
+            # Portainer typically requires standard bcrypt ($2a/$2b) or robust cost.
+            # Using -C 10 ensures a sufficient cost factor (default 5 might be too weak/incompatible).
+            echo "PORT_HASH:$(htpasswd -B -C 10 -n -b "admin" "$4" | cut -d: -f2)"
         ' -- "$VPN_PASS_RAW" "$AGH_USER" "$AGH_PASS_RAW" "$PORTAINER_PASS_RAW" 2>/dev/null || echo "FAILED")
 
         if echo "$HASH_OUTPUT" | grep -q "FAILED"; then
