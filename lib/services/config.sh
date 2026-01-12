@@ -60,11 +60,11 @@ EOF
     GPU_TOOLTIP="Utilizes local GPU (/dev/dri) for high-performance conversion"
 
     if [ -d "/dev/dri" ]; then
-        VERTD_DEVICES="      devices:
-        - /dev/dri"
+        VERTD_DEVICES="    devices:
+      - /dev/dri"
         if [ -d "/dev/vulkan" ]; then
             VERTD_DEVICES="${VERTD_DEVICES}
-        - /dev/vulkan"
+      - /dev/vulkan"
         fi
         
         if grep -iq "intel" /sys/class/drm/card*/device/vendor 2>/dev/null || (command -v lspci >/dev/null 2>&1 && lspci 2>/dev/null | grep -iq "intel.*graphics"); then
@@ -78,13 +78,13 @@ EOF
 
     VERTD_NVIDIA=""
     if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
-        VERTD_NVIDIA="      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: all
-                capabilities: [gpu]"
+        VERTD_NVIDIA="    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]"
         GPU_LABEL="NVIDIA NVENC"
         GPU_TOOLTIP="Utilizes NVIDIA NVENC/NVDEC hardware acceleration for high-performance conversion."
     fi
