@@ -189,22 +189,34 @@ This section explains the technical details behind the privacy features listed a
 ### Recursive DNS Engine (Independent Resolution)
 This stack features a hardened, recursive DNS engine built on **Unbound** and **AdGuard Home**, designed to eliminate upstream reliance and prevent data leakage.
 
+*   **AdGuard Home Config**: Generated at `/opt/adguardhome/conf/AdGuardHome.yaml`
+*   **Unbound Config**: Generated at `/etc/unbound/unbound.conf`
+
 <details>
 <summary>🛡️ <strong>Advanced Security & RFC Compliance</strong> (Click to expand)</summary>
 
-*   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: Dramatically improves privacy by only sending the absolute minimum part of a domain name to upstream authoritative servers. [Source: lib/services.sh#L1036]
-*   **DNSSEC Validation ([RFC 4033](https://datatracker.ietf.org/doc/html/rfc4033))**: Protects against DNS spoofing and cache poisoning by cryptographically verifying the authenticity of DNS records. [Source: lib/services.sh#L1042]
-*   **Aggressive Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: Uses NSEC records to generate negative responses locally, reducing traffic to authoritative servers. [Source: lib/services.sh#L1037]
-*   **Recursive Resolution**: Unlike standard DNS which forwards your queries to a "Public" resolver, this engine talks directly to authoritative root servers. [Source: lib/services.sh#L1015]
-*   **Encrypted DNS ([RFC 7858](https://datatracker.ietf.org/doc/html/rfc7858), [RFC 8484](https://datatracker.ietf.org/doc/html/rfc8484), [RFC 9250](https://datatracker.ietf.org/doc/html/rfc9250))**: Supports DNS-over-TLS, DNS-over-HTTPS, and DNS-over-QUIC. [Source: lib/services.sh#L1074]
-*   **0x20 Bit Randomization ([DNS 0x20](https://datatracker.ietf.org/doc/html/draft-vixie-dnsext-dns0x20-00))**: A security technique that mitigates spoofing attempts by randomly varying capitalization. [Source: lib/services.sh#L1040]
-*   **Privacy Considerations ([RFC 7626](https://datatracker.ietf.org/doc/html/rfc7626))**: Implements best practices for DNS privacy, minimizing data leakage. [Source: lib/services.sh#L1015]
-*   **Hardened Access Control ([RFC 1918](https://datatracker.ietf.org/doc/html/rfc1918))**: Restricts resolution to private subnets, preventing unauthorized external usage. [Source: lib/services.sh#L1025]
-*   **RRSET Roundrobin ([RFC 1794](https://datatracker.ietf.org/doc/html/rfc1794))**: Load balances responses for multi-IP domains to ensure optimal traffic distribution. [Source: lib/services.sh#L1038]
-*   **Fingerprint Resistance**: Identity and version queries are explicitly hidden to prevent resolver identification. [Source: lib/services.sh#L1030]
-*   **Cache Prefetching**: Automatically refreshes popular DNS records before they expire. [Source: lib/services.sh#L1034]
-*   **Hardened Glue ([RFC 1034](https://datatracker.ietf.org/doc/html/rfc1034)) & Downgrade Protection**: Prevents cache poisoning by strictly validating "glue" records. [Source: lib/services.sh#L1041]
-*   **Minimal Responses ([RFC 4472](https://datatracker.ietf.org/doc/html/rfc4472))**: Reduces the size of DNS responses to only the essential data. [Source: lib/services.sh#L1039]
+The Unbound configuration (`lib/services/config.sh`) implements the following strict privacy and security standards:
+
+*   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: `qname-minimisation: yes` - Dramatically improves privacy by only sending the absolute minimum part of a domain name to upstream authoritative servers.
+*   **Aggressive Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: `aggressive-nsec: yes` - Uses NSEC records to generate negative responses locally, reducing traffic to authoritative servers.
+*   **DNS 0x20 ([Draft](https://datatracker.ietf.org/doc/html/draft-vixie-dnsext-dns0x20-00))**: `use-caps-for-id: yes` - A security technique that mitigates spoofing attempts by randomly varying capitalization.
+*   **Fingerprint Resistance**: 
+    *   `hide-identity: yes`
+    *   `hide-version: yes`
+    *   Prevents identification of the resolver software and version.
+*   **Load Balancing ([RFC 1794](https://datatracker.ietf.org/doc/html/rfc1794))**: `rrset-roundrobin: yes` - Randomizes the order of records in a response to ensure optimal traffic distribution.
+*   **Data Minimization ([RFC 4472](https://datatracker.ietf.org/doc/html/rfc4472))**: `minimal-responses: yes` - Reduces the size of DNS responses to only the essential data.
+*   **Cache Poisoning Protection ([RFC 1034](https://datatracker.ietf.org/doc/html/rfc1034))**: `harden-glue: yes` - Strictly validates "glue" records to prevent malicious redirection.
+*   **DoS Protection**:
+    *   `harden-large-queries: yes`
+    *   `harden-short-bufsize: yes`
+*   **Downgrade Protection**: `harden-algo-downgrade: yes` - Prevents fallback to weaker cryptographic algorithms.
+
+**Routing Logic**:
+1.  **Client Request**: Your device sends a DNS query to the Hub IP.
+2.  **AdGuard Home**: Filters the request against blocklists (ads/trackers).
+3.  **Unbound**: If allowed, Unbound performs recursive resolution directly with Root Servers.
+4.  **Response**: The clean IP is returned to your device.
 
 </details>
 
@@ -257,30 +269,30 @@ Every service in this stack is pulled from a trusted minimal image. All services
 <details>
 <summary>📋 <strong>View Full Service Catalog & Routing</strong> (Click to expand)</summary>
 
-| Service | Category | 🛡️ Routing | Official Source |
+| Service | Category | 🛡️ Routing | Source / Image |
 | :--- | :--- | :--- | :--- |
-| **Invidious** | Frontend | **🔒 VPN** | [iv-org/invidious](https://github.com/iv-org/invidious) |
-| **Companion** | Helper | **🔒 VPN** | [iv-org/companion](https://github.com/iv-org/invidious-companion) |
-| **Redlib** | Frontend | **🔒 VPN** | [redlib-org/redlib](https://github.com/redlib-org/redlib) |
-| **SearXNG** | Frontend | **🔒 VPN** | [searxng/searxng](https://github.com/searxng/searxng) |
-| **Scribe** | Frontend | **🔒 VPN** | [edwardloveall/scribe](https://github.com/edwardloveall/scribe) |
-| **Rimgo** | Frontend | **🔒 VPN** | [rimgo/rimgo](https://codeberg.org/rimgo/rimgo) |
-| **Wikiless** | Frontend | **🔒 VPN** | [Metastem/Wikiless](https://github.com/Metastem/Wikiless) |
-| **BreezeWiki** | Frontend | **🔒 VPN** | [breezewiki](https://github.com/breezewiki/breezewiki) |
-| **AnonOverflow** | Frontend | **🔒 VPN** | [anonymousoverflow](https://github.com/httpjamesm/anonymousoverflow) |
-| **Cobalt** | Utility | **🔒 VPN** | [imputnet/cobalt](https://github.com/imputnet/cobalt) |
-| **Memos** | Utility | **🔒 VPN** | [usememos/memos](https://github.com/usememos/memos) |
-| **Immich** | Utility | **🔒 VPN*** | [immich-app/immich](https://github.com/immich-app/immich) |
-| **VERT / VERTd** | Utility | **🏠 Local** | [vert-sh/vert](https://github.com/vert-sh/vert) |
-| **AdGuard Home** | Core | **🏠 Local** | [AdGuardHome](https://github.com/AdguardTeam/AdGuardHome) |
-| **Unbound** | Core | **🏠 Local** | [unbound](https://github.com/klutchell/unbound-docker) |
-| **WireGuard** | Core | **🏠 Local** | [wg-easy](https://github.com/wg-easy/wg-easy) |
-| **Gluetun** | Core | **🌍 Exit** | [gluetun](https://github.com/qdm12/gluetun) |
-| **Portainer** | Core | **🏠 Local** | [portainer](https://github.com/portainer/portainer) |
-| **Watchtower** | Core | **🏠 Local** | [watchtower](https://github.com/containrrr/watchtower) |
+| **Invidious** | Frontend | **🔒 VPN** | [Source](https://github.com/iv-org/invidious) / [Image](https://quay.io/repository/invidious/invidious) |
+| **Companion** | Helper | **🔒 VPN** | [Source](https://github.com/iv-org/invidious-companion) / [Image](https://quay.io/repository/invidious/invidious-companion) |
+| **Redlib** | Frontend | **🔒 VPN** | [Source](https://github.com/redlib-org/redlib) / [Image](https://quay.io/repository/redlib/redlib) |
+| **SearXNG** | Frontend | **🔒 VPN** | [Source](https://github.com/searxng/searxng) / [Image](https://hub.docker.com/r/searxng/searxng) |
+| **Scribe** | Frontend | **🔒 VPN** | [Source](https://git.sr.ht/~edwardloveall/scribe) / *(Local Build)* |
+| **Rimgo** | Frontend | **🔒 VPN** | [Source](https://codeberg.org/rimgo/rimgo) / [Image](https://codeberg.org/rimgo/rimgo/packages) |
+| **Wikiless** | Frontend | **🔒 VPN** | [Source](https://github.com/Metastem/Wikiless) / *(Local Build)* |
+| **BreezeWiki** | Frontend | **🔒 VPN** | [Source](https://github.com/breezewiki/breezewiki) / [Image](https://quay.io/repository/pussthecatorg/breezewiki) |
+| **AnonOverflow** | Frontend | **🔒 VPN** | [Source](https://github.com/httpjamesm/anonymousoverflow) / [Image](https://github.com/httpjamesm/AnonymousOverflow/pkgs/container/anonymousoverflow) |
+| **Cobalt** | Utility | **🔒 VPN** | [Source](https://github.com/imputnet/cobalt) / [Image](https://github.com/imputnet/cobalt/pkgs/container/cobalt) |
+| **Memos** | Utility | **🔒 VPN** | [Source](https://github.com/usememos/memos) / [Image](https://github.com/usememos/memos/pkgs/container/memos) |
+| **Immich** | Utility | **🔒 VPN*** | [Source](https://github.com/immich-app/immich) / [Image](https://github.com/immich-app/immich/pkgs/container/immich-server) |
+| **VERT / VERTd** | Utility | **🏠 Local** | [Source](https://github.com/vert-sh/vert) / [Image](https://github.com/vert-sh/vert/pkgs/container/vert) |
+| **AdGuard Home** | Core | **🏠 Local** | [Source](https://github.com/AdguardTeam/AdGuardHome) / [Image](https://hub.docker.com/r/adguard/adguardhome) |
+| **Unbound** | Core | **🏠 Local** | [Source](https://github.com/NLnetLabs/unbound) / [Image](https://hub.docker.com/r/klutchell/unbound) |
+| **WireGuard** | Core | **🏠 Local** | [Source](https://github.com/wg-easy/wg-easy) / [Image](https://github.com/wg-easy/wg-easy/pkgs/container/wg-easy) |
+| **Gluetun** | Core | **🌍 Exit** | [Source](https://github.com/qdm12/gluetun) / [Image](https://hub.docker.com/r/qmcgaw/gluetun) |
+| **Portainer** | Core | **🏠 Local** | [Source](https://github.com/portainer/portainer) / [Image](https://hub.docker.com/r/portainer/portainer-ce) |
+| **Watchtower** | Core | **🏠 Local** | [Source](https://github.com/containrrr/watchtower) / [Image](https://hub.docker.com/r/containrrr/watchtower) |
 | **Dashboard** | Core | **🏠 Local** | [Local Source] |
-| **Hub API** | Core | **🏠 Local** | [Local Source](/hub-api) |
-| **Odido Booster** | Utility | **🏠 Local** | [odido-booster](https://github.com/Lyceris-chan/odido-bundle-booster) |
+| **Hub API** | Core | **🏠 Local** | [Local Source](/lib/src/hub-api) |
+| **Odido Booster** | Utility | **🏠 Local** | [Source](https://github.com/Lyceris-chan/odido-bundle-booster) / *(Local Build)* |
 
 *\*Immich uses the VPN only for specific machine learning model downloads and metadata fetching. Your photos stay local.
 

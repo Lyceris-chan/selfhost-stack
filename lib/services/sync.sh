@@ -160,8 +160,10 @@ EOF
     fi
 
     # Ensure patches.sh exists for volume mounting
-    touch "$PATCHES_SCRIPT"
-    chmod +x "$PATCHES_SCRIPT"
+    if [ ! -f "$PATCHES_SCRIPT" ] || [ ! -s "$PATCHES_SCRIPT" ]; then
+        printf "#!/bin/sh\n" | $SUDO tee "$PATCHES_SCRIPT" >/dev/null
+    fi
+    $SUDO chmod +x "$PATCHES_SCRIPT"
 
     $SUDO chmod -R 755 "$SRC_DIR" "$CONFIG_DIR"
     $SUDO chmod -R 700 "$ENV_DIR" "$WG_PROFILES_DIR"

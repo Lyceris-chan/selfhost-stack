@@ -77,6 +77,7 @@ pull_critical_images
 allocate_subnet
 detect_network
 setup_static_assets
+download_remote_assets
 
 # 6. Auth & Secrets
 setup_secrets

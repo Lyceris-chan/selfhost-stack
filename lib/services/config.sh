@@ -483,6 +483,21 @@ server:
   access-control: 192.168.0.0/16 allow
   access-control: 10.0.0.0/8 allow
   auto-trust-anchor-file: "/var/unbound/root.key"
+
+  # Privacy & Security Settings (RFC Compliance)
+  qname-minimisation: yes          # RFC 7816: Minimize data leakage
+  aggressive-nsec: yes             # RFC 8198: Aggressive Caching
+  use-caps-for-id: yes             # DNS 0x20: Case randomization
+  hide-identity: yes               # Fingerprint Resistance
+  hide-version: yes                # Fingerprint Resistance
+  prefetch: yes                    # Cache Prefetching
+  rrset-roundrobin: yes            # RFC 1794: Load balancing
+  minimal-responses: yes           # RFC 4472: Data minimization
+  harden-glue: yes                 # RFC 1034: Poison protection
+  harden-dnssec-stripped: yes      # DNSSEC Stripping protection
+  harden-algo-downgrade: yes       # Downgrade protection
+  harden-large-queries: yes        # DoS protection
+  harden-short-bufsize: yes        # DoS protection
 UNBOUNDEOF
 
     cat <<EOF | $SUDO tee "$AGH_YAML" >/dev/null

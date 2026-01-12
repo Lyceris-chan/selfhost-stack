@@ -1,7 +1,0 @@
-FROM alpine:3.20
-COPY --from=portainer/portainer-ce:latest /portainer /portainer
-COPY --from=portainer/portainer-ce:latest /public /public
-COPY --from=portainer/portainer-ce:latest /mustache-templates /mustache-templates
-WORKDIR /
-EXPOSE 9000 9443
-ENTRYPOINT ["/portainer"]
