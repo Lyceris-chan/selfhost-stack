@@ -527,11 +527,12 @@ tls:
   private_key_path: /opt/adguardhome/conf/ssl.key
 user_rules:
 $(if [ "$ALLOW_PROTON_VPN" = true ]; then
-    echo "  - @@||protonvpn.com^"
+    echo "  - @@||getproton.me^"
+    echo "  - @@||vpn-api.proton.me^"
+    echo "  - @@||protonstatus.com^"
     echo "  - @@||protonvpn.ch^"
-    echo "  - @@||proton.me^"
-    echo "  - @@||api.protonvpn.ch^"
-    echo "  - @@||api.protonmail.ch^"
+    echo "  - @@||protonvpn.com^"
+    echo "  - @@||protonvpn.net^"
 fi)
 EOF
 
