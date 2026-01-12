@@ -259,7 +259,7 @@ DASHEOF
     volumes:
       - "$ASSETS_DIR:/usr/share/nginx/html/assets:ro"
       - "$DASHBOARD_FILE:/usr/share/nginx/html/index.html:ro"
-      - "$NGINX_CONF:/etc/nginx/http.d/default.conf:ro"
+      - "$NGINX_CONF:/etc/nginx/conf.d/default.conf:ro"
       - "$AGH_CONF_DIR:/etc/adguard/conf:ro"
     labels:
       - "dev.casaos.app.ui.protocol=http"
@@ -267,6 +267,12 @@ DASHEOF
       - "dev.casaos.app.ui.hostname=$LAN_IP"
       - "dev.casaos.app.ui.icon=http://$LAN_IP:$PORT_DASHBOARD_WEB/assets/icon.svg"
       - "dev.casaos.app.icon=http://$LAN_IP:$PORT_DASHBOARD_WEB/assets/icon.svg"
+      - "io.casaos.app.title=Privacy Hub"
+      - "io.casaos.app.icon=http://$LAN_IP:$PORT_DASHBOARD_WEB/assets/icon.svg"
+      - "casaos.icon=http://$LAN_IP:$PORT_DASHBOARD_WEB/assets/icon.svg"
+      - "casaos.title=Privacy Hub"
+      - "casaos.port=$PORT_DASHBOARD_WEB"
+      - "casaos.scheme=http"
     depends_on:
       hub-api: {condition: service_healthy}
     healthcheck:
@@ -1099,15 +1105,15 @@ generate_compose() {
     VERT_PUB_HOSTNAME=${VERT_PUB_HOSTNAME:-$LAN_IP}
 
     # Prepare escaped passwords for docker-compose (v2 requires $$ for literal $)
-    ADMIN_PASS_COMPOSE="${ADMIN_PASS_RAW//$/$$}"
-    VPN_PASS_COMPOSE="${VPN_PASS_RAW//$/$$}"
-    HUB_API_KEY_COMPOSE="${HUB_API_KEY//$/$$}"
-    PORTAINER_PASS_COMPOSE="${PORTAINER_PASS_RAW//$/$$}"
-    AGH_PASS_COMPOSE="${AGH_PASS_RAW//$/$$}"
-    INVIDIOUS_DB_PASS_COMPOSE="${INVIDIOUS_DB_PASSWORD//$/$$}"
-    IMMICH_DB_PASS_COMPOSE="${IMMICH_DB_PASSWORD//$/$$}"
-    WG_HASH_COMPOSE="${WG_HASH_CLEAN//$/$$}"
-    PORTAINER_HASH_COMPOSE="${PORTAINER_PASS_HASH//$/$$}"
+    ADMIN_PASS_COMPOSE="${ADMIN_PASS_RAW//$/\$\$}"
+    VPN_PASS_COMPOSE="${VPN_PASS_RAW//$/\$\$}"
+    HUB_API_KEY_COMPOSE="${HUB_API_KEY//$/\$\$}"
+    PORTAINER_PASS_COMPOSE="${PORTAINER_PASS_RAW//$/\$\$}"
+    AGH_PASS_COMPOSE="${AGH_PASS_RAW//$/\$\$}"
+    INVIDIOUS_DB_PASS_COMPOSE="${INVIDIOUS_DB_PASSWORD//$/\$\$}"
+    IMMICH_DB_PASS_COMPOSE="${IMMICH_DB_PASSWORD//$/\$\$}"
+    WG_HASH_COMPOSE="${WG_HASH_CLEAN//$/\$\$}"
+    PORTAINER_HASH_COMPOSE="${PORTAINER_PASS_HASH//$/\$\$}"
 
     # Ensure required directories exist
     mkdir -p "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR"
@@ -1206,6 +1212,6 @@ x-casaos:
       instead of renting a false sense of security. Includes WireGuard VPN access,
       recursive DNS with AdGuard filtering, and VPN-isolated privacy frontends
       (Invidious, Redlib, etc.) that reduce tracking and prevent home IP exposure.
-  icon: assets/icon.svg
+  icon: http://$LAN_IP:$PORT_DASHBOARD_WEB/assets/icon.svg
 EOF
 }

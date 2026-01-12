@@ -490,8 +490,8 @@ clean_environment() {
 
 cleanup_build_artifacts() {
     log_info "Cleaning up build artifacts to save space..."
-    $DOCKER_CMD image prune -f || true
-    $DOCKER_CMD builder prune -f || true
+    $DOCKER_CMD image prune -f >/dev/null 2>&1 || true
+    $DOCKER_CMD builder prune -f >/dev/null 2>&1 || true
 }
 
 # --- SECTION 17: BACKUP MANAGEMENT ---

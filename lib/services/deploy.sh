@@ -82,8 +82,15 @@ deploy_stack() {
     fi
 
     log_info "Verifying control plane connectivity..."
-    sleep 1
-    API_TEST=$(curl -s -o /dev/null -w "%{http_code}" "http://$LAN_IP:$PORT_DASHBOARD_WEB/api/status" || echo "FAILED")
+    API_TEST="FAILED"
+    for i in {1..10}; do
+        API_TEST=$(curl -s -o /dev/null -w "%{http_code}" "http://$LAN_IP:$PORT_DASHBOARD_WEB/api/status" || echo "FAILED")
+        if [ "$API_TEST" = "200" ] || [ "$API_TEST" = "401" ]; then
+            break
+        fi
+        sleep 1
+    done
+
     if [ "$API_TEST" = "200" ]; then
         log_info "Control plane is reachable."
     elif [ "$API_TEST" = "401" ]; then
@@ -96,15 +103,19 @@ deploy_stack() {
     if [ "$AUTO_PASSWORD" = true ] && grep -q "portainer:" "$COMPOSE_FILE"; then
         log_info "Synchronizing Portainer administrative settings..."
         PORTAINER_READY=false
-        for _ in {1..5}; do
-            if curl -s --max-time 1 "http://$LAN_IP:$PORT_PORTAINER/api/system/status" > /dev/null; then
+        # Increase wait time for Portainer to initialize its database
+        for i in {1..30}; do
+            if curl -s --max-time 2 "http://$LAN_IP:$PORT_PORTAINER/api/system/status" > /dev/null; then
                 PORTAINER_READY=true
                 break
             fi
+            [ $((i % 5)) -eq 0 ] && log_info "Waiting for Portainer API ($i/30)..."
             sleep 1
         done
 
         if [ "$PORTAINER_READY" = true ]; then
+            # Give Portainer another moment to ensure the admin user is created from the CLI flag
+            sleep 2
             # Authenticate to get JWT (user was initialized via --admin-password CLI flag)
             # Try 'admin' first, then 'portainer' (in case it was already renamed in a previous run)
             AUTH_RESPONSE=$(curl -s --max-time 5 -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
@@ -128,20 +139,21 @@ deploy_stack() {
                     -d '{"EnableTelemetry":false}'>/dev/null 2>&1 || true
 
                 # 2. Rename 'admin' user to 'portainer' (Security Best Practice)
-                # First, get user ID of admin (usually 1)
-                ADMIN_ID=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/users/admin/check" 2>/dev/null | sed -n 's/.*"id":\([0-9]*\).*/\1/p' || echo "1")
+                # Get the current user ID (the one we just authenticated as)
+                CURRENT_USER_JSON=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/users/me" 2>/dev/null)
+                ADMIN_ID=$(echo "$CURRENT_USER_JSON" | sed -n 's/.*"Id":\([0-9]*\).*/\1/p' || echo "1")
+                CHECK_USER=$(echo "$CURRENT_USER_JSON" | sed -n 's/.*"Username":"\([^"\'']*\).*/\1/p')
                 
                 # Only rename if not already named 'portainer'
-                CHECK_USER=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/users/$ADMIN_ID" | sed -n 's/.*"Username":"\([^"\'']*\).*/\1/p')
-                if [ "$CHECK_USER" != "portainer" ]; then
-                    log_info "Renaming default 'admin' user to 'portainer'..."
+                if [ "$CHECK_USER" != "portainer" ] && [ "$CHECK_USER" != "" ]; then
+                    log_info "Renaming default '$CHECK_USER' user to 'portainer'..."
                     curl -s --max-time 5 -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/users/$ADMIN_ID" \
                         -H "Authorization: Bearer $PORTAINER_JWT" \
                         -H "Content-Type: application/json" \
                         -d '{"Username":"portainer"}'>/dev/null 2>&1 || true
                 fi
             else
-                log_warn "Failed to authenticate with Portainer API. Manual telemetry disable may be required."
+                log_warn "Failed to authenticate with Portainer API. Manual login may be required."
             fi
         else
             log_warn "Portainer did not become ready in time. Skipping automated configuration."
@@ -152,11 +164,17 @@ deploy_stack() {
     # Download remote assets (fonts, utilities) via Gluetun proxy for privacy
     download_remote_assets
 
+    # Configure Cron
+    setup_cron
+
+    # Cleanup build artifacts to save space after successful deployment
+    cleanup_build_artifacts
+
     # Final Summary
     echo ""
-    echo "=========================================================="
-    echo "✅ DEPLOYMENT COMPLETE"
-    echo "=========================================================="
+    echo -e "\e[1;32m==========================================================\e[0m"
+    echo -e "\e[1;32m✅ DEPLOYMENT COMPLETE\e[0m"
+    echo -e "\e[1;32m==========================================================\e[0m"
     if [ -n "${DESEC_DOMAIN:-}" ] && [ -f "${AGH_CONF_DIR:-}/ssl.crt" ]; then
         echo "   • Dashboard:    https://${DESEC_DOMAIN}:8443"
         echo "                   (Local IP: http://$LAN_IP:$PORT_DASHBOARD_WEB)"
@@ -177,18 +195,23 @@ deploy_stack() {
     echo "   • Odido Boost:  Active (Threshold: 100MB)"
     fi
     echo ""
-    echo "   📁 Credentials saved to: $BASE_DIR/.secrets"
-    echo "   📄 Importable CSV:      $BASE_DIR/protonpass_import.csv"
-    echo "   📄 LibRedirect JSON:    $PROJECT_ROOT/libredirect_import.json"
-    echo "=========================================================="
+    echo "   📁 Credentials: $BASE_DIR/.secrets"
+    echo "   📄 Importable:  $BASE_DIR/protonpass_import.csv"
+    echo "   📄 LibRedirect: $PROJECT_ROOT/libredirect_import.json"
     
-    # Configure Cron
-    setup_cron
+    if [ -f "$BASE_DIR/protonpass_import.csv" ]; then
+        echo ""
+        echo -e "\e[1;31m  ⚠️  SECURITY WARNING\e[0m"
+        echo -e "\e[1;31m  --------------------------------------------------------\e[0m"
+        echo -e "\e[1;31m  The importable CSV contains RAW PASSWORDS.\e[0m"
+        echo -e "\e[1;31m  DELETE IT IMMEDIATELY after importing to Proton Pass.\e[0m"
+        echo -e "\e[1;31m  Command: rm \"$BASE_DIR/protonpass_import.csv\"\e[0m"
+        echo -e "\e[1;31m  --------------------------------------------------------\e[0m"
+    fi
+    echo -e "\e[1;32m==========================================================\e[0m"
+    echo ""
 
     if [ "$CLEAN_EXIT" = true ]; then
         exit 0
     fi
-
-    # Cleanup build artifacts to save space after successful deployment
-    cleanup_build_artifacts
 }
