@@ -3,7 +3,7 @@
 # Helper to check if a service should be deployed
 should_deploy() {
     if [ -z "${SELECTED_SERVICES:-}" ]; then return 0; fi
-    if echo "$SELECTED_SERVICES" | grep -qE "(^|,)$1(,|$)"; then return 0; fi
+    if echo "$SELECTED_SERVICES" | grep -qE "(^|,)$1(,|$)”; then return 0; fi
     return 1
 }
 
@@ -48,17 +48,17 @@ append_hub_api() {
       - "$CONFIG_DIR/services.json:/app/services.json"
       - "$DATA_DIR/hub-api:/app/data"
     environment:
-      - HUB_API_KEY=$HUB_API_KEY_COMPOSE
-      - ADMIN_PASS_RAW=$ADMIN_PASS_COMPOSE
-      - VPN_PASS_RAW=$VPN_PASS_COMPOSE
-      - CONTAINER_PREFIX=${CONTAINER_PREFIX}
-      - APP_NAME=${APP_NAME}
-      - MOCK_VERIFICATION=${MOCK_VERIFICATION:-false}
-      - UPDATE_STRATEGY=$UPDATE_STRATEGY
-      - LAN_IP=$LAN_IP
-      - DESEC_DOMAIN=$DESEC_DOMAIN
-      - DOCKER_CONFIG=/root/.docker
-      - DOCKER_HOST=tcp://docker-proxy:2375
+      - "HUB_API_KEY=$HUB_API_KEY_COMPOSE"
+      - "ADMIN_PASS_RAW=$ADMIN_PASS_COMPOSE"
+      - "VPN_PASS_RAW=$VPN_PASS_COMPOSE"
+      - "CONTAINER_PREFIX=${CONTAINER_PREFIX}"
+      - "APP_NAME=${APP_NAME}"
+      - "MOCK_VERIFICATION=${MOCK_VERIFICATION:-false}"
+      - "UPDATE_STRATEGY=$UPDATE_STRATEGY"
+      - "LAN_IP=$LAN_IP"
+      - "DESEC_DOMAIN=$DESEC_DOMAIN"
+      - "DOCKER_CONFIG=/root/.docker"
+      - "DOCKER_HOST=tcp://docker-proxy:2375"
       - "CORS_ORIGINS=[\"http://localhost\",\"http://localhost:${PORT_DASHBOARD_WEB}\",\"http://${LAN_IP}\",\"http://${LAN_IP}:${PORT_DASHBOARD_WEB}\"${DESEC_DOMAIN:+,\"https://${DESEC_DOMAIN}\"}]"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:55555/health || exit 1"]
@@ -80,7 +80,7 @@ append_odido_booster() {
     local DOCKERFILE=$(detect_dockerfile "$SRC_DIR/odido-bundle-booster" || echo "Dockerfile")
     local VPN_MODE="true"
     if [ -f "$CONFIG_DIR/theme.json" ]; then
-        VPN_MODE=$(grep -o '"odido_use_vpn"[[:space:]]*:[[:space:]]*\(true\|false\)' "$CONFIG_DIR/theme.json" 2>/dev/null | grep -o '\(true\|false\)' || echo "true")
+        VPN_MODE=$(grep -o '"odido_use_vpn"[[:space:]]*:[[:space:]]*\(true\|false\)" "$CONFIG_DIR/theme.json" 2>/dev/null | grep -o '\(true\|false\)' || echo "true")
     fi
     
     cat >> "$COMPOSE_FILE" <<EOF
@@ -100,7 +100,7 @@ EOF
 EOF
     elif [ "$VPN_MODE" = "true" ]; then
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
     depends_on:
       gluetun: {condition: service_healthy}
 EOF
@@ -113,10 +113,10 @@ EOF
 
     cat >> "$COMPOSE_FILE" <<EOF
     environment:
-      - API_KEY=$HUB_API_KEY_COMPOSE
-      - ODIDO_USER_ID=$ODIDO_USER_ID
-      - ODIDO_TOKEN=$ODIDO_TOKEN
-      - PORT=8085
+      - "API_KEY=$HUB_API_KEY_COMPOSE"
+      - "ODIDO_USER_ID=$ODIDO_USER_ID"
+      - "ODIDO_TOKEN=$ODIDO_TOKEN"
+      - "PORT=8085"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8085/docs"]
       interval: 30s
@@ -141,7 +141,7 @@ append_memos() {
     networks: [frontend]
     ports: ["$LAN_IP:$PORT_MEMOS:5230"]
     environment:
-      - MEMOS_MODE=prod
+      - "MEMOS_MODE=prod"
     volumes: ["$MEMOS_HOST_DIR:/var/opt/memos"]
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:5230/"]
@@ -197,11 +197,11 @@ EOF
     volumes:
       - "$ACTIVE_WG_CONF:/gluetun/wireguard/wg0.conf:ro"
     environment:
-      - VPN_SERVICE_PROVIDER=custom
-      - VPN_TYPE=wireguard
-      - FIREWALL_OUTBOUND_SUBNETS=$DOCKER_SUBNET
-      - FIREWALL_VPN_INPUT_PORTS=10416,8080,8081,8085,8180,3000,3002,8280,8480,80,24153,8282,9000,2283
-      - HTTPPROXY=on
+      - "VPN_SERVICE_PROVIDER=custom"
+      - "VPN_TYPE=wireguard"
+      - "FIREWALL_OUTBOUND_SUBNETS=$DOCKER_SUBNET"
+      - "FIREWALL_VPN_INPUT_PORTS=10416,8080,8081,8085,8180,3000,3002,8280,8480,80,24153,8282,9000,2283"
+      - "HTTPPROXY=on"
     healthcheck:
       test: ["CMD-SHELL", "$(if [ "${MOCK_VERIFICATION:-false}" = "true" ]; then echo "exit 0"; else echo "wget -qO- http://127.0.0.1:9999/ || exit 1"; fi)"]
       interval: 30s
@@ -288,10 +288,7 @@ PORTEOF
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
     volumes: ["$DATA_DIR/portainer:/data"]
     healthcheck:
-      test: ["CMD-SHELL", "exit 0"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["NONE"]
     depends_on:
       docker-proxy: {condition: service_started}
     restart: unless-stopped
@@ -363,12 +360,12 @@ append_wg_easy() {
     container_name: ${CONTAINER_PREFIX}wg-easy
     network_mode: "host"
     environment:
-      - PASSWORD_HASH=$WG_HASH_COMPOSE
-      - WG_DEFAULT_DNS=$LAN_IP
-      - WG_ALLOWED_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-      - WG_HOST=$PUBLIC_IP
-      - WG_PORT=51820
-      - WG_PERSISTENT_KEEPALIVE=25
+      - "PASSWORD_HASH=$WG_HASH_COMPOSE"
+      - "WG_DEFAULT_DNS=$LAN_IP"
+      - "WG_ALLOWED_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      - "WG_HOST=$PUBLIC_IP"
+      - "WG_PORT=51820"
+      - "WG_PERSISTENT_KEEPALIVE=25"
     volumes: ["$DATA_DIR/wireguard:/etc/wireguard"]
     cap_add: [NET_ADMIN, SYS_MODULE]
     restart: unless-stopped
@@ -394,20 +391,26 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
     depends_on: {gluetun: {condition: service_healthy}}
 EOF
     fi
 
     cat >> "$COMPOSE_FILE" <<EOF
-    environment: {REDLIB_PORT: 8081, PORT: 8081, REDLIB_ADDRESS: "0.0.0.0", REDLIB_DEFAULT_WIDE: "on", REDLIB_DEFAULT_USE_HLS: "on", REDLIB_DEFAULT_SHOW_NSFW: "on"}
+    environment:
+      - "REDLIB_PORT=8081"
+      - "PORT=8081"
+      - "REDLIB_ADDRESS=0.0.0.0"
+      - "REDLIB_DEFAULT_WIDE=on"
+      - "REDLIB_DEFAULT_USE_HLS=on"
+      - "REDLIB_DEFAULT_SHOW_NSFW=on"
     restart: always
     user: nobody
     read_only: true
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/robots.txt || [ \$\$? -eq 8 ]"]
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8081/robots.txt || [ \$\$? -eq 8 ]"]
       interval: 1m
       timeout: 5s
       retries: 3
@@ -440,18 +443,21 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
     cat >> "$COMPOSE_FILE" <<EOF
-    environment: {DOMAIN: "$LAN_IP:$PORT_WIKILESS", NONSSL_PORT: "$PORT_INT_WIKILESS", REDIS_URL: "$REDIS_URL"}
+    environment:
+      - "DOMAIN=$LAN_IP:$PORT_WIKILESS"
+      - "NONSSL_PORT=$PORT_INT_WIKILESS"
+      - "REDIS_URL=$REDIS_URL"
     healthcheck:
-      test: ["CMD-SHELL", "/nodejs/bin/node -e 'require(\"http\").get(\"http://127.0.0.1:8180\", (r) => {if (r.statusCode !== 200) process.exit(1);}).on(\"error\", () => process.exit(1));' || exit 1"]
+      test: ["CMD", "/nodejs/bin/node", "-e", "require('http').get('http://127.0.0.1:8180', (r) => {if (r.statusCode !== 200) process.exit(1);}).on('error', () => process.exit(1));"]
       interval: 30s
       timeout: 10s
       retries: 3
-    depends_on: 
+    depends_on:
       wikiless_redis: {condition: service_healthy}
       gluetun: {condition: service_healthy}
     restart: always
@@ -472,7 +478,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
@@ -508,7 +514,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
@@ -549,7 +555,10 @@ EOF
     labels:
       - "casaos.skip=true"
     networks: [frontend]
-    environment: {POSTGRES_DB: invidious, POSTGRES_USER: kemal, POSTGRES_PASSWORD: $INVIDIOUS_DB_PASS_COMPOSE}
+    environment:
+      - "POSTGRES_DB=invidious"
+      - "POSTGRES_USER=kemal"
+      - "POSTGRES_PASSWORD=$INVIDIOUS_DB_PASS_COMPOSE"
     volumes:
       - $DATA_DIR/postgres:/var/lib/postgresql/data
       - $SRC_DIR/invidious/config/sql:/config/sql:ro
@@ -570,14 +579,14 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
     cat >> "$COMPOSE_FILE" <<EOF
     environment:
-      - SERVER_SECRET_KEY=$IV_COMPANION
-      - PORT=8282
+      - "SERVER_SECRET_KEY=$IV_COMPANION"
+      - "PORT=8282"
     restart: always
     logging:
       options:
@@ -591,10 +600,7 @@ EOF
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD-SHELL", "wget -nv --tries=1 --spider http://127.0.0.1:8282/companion || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+      test: ["NONE"]
     deploy:
       resources:
         limits: {cpus: '0.3', memory: 512M}
@@ -616,17 +622,18 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
     cat >> "$COMPOSE_FILE" <<EOF
-    environment: {IMGUR_CLIENT_ID: "${RIMGO_IMGUR_CLIENT_ID:-546c25a59c58ad7}", ADDRESS: "0.0.0.0", PORT: "$PORT_INT_RIMGO", PRIVACY_NOT_COLLECTED: "true"}
+    environment:
+      - "IMGUR_CLIENT_ID=${RIMGO_IMGUR_CLIENT_ID:-546c25a59c58ad7}"
+      - "ADDRESS=0.0.0.0"
+      - "PORT=$PORT_INT_RIMGO"
+      - "PRIVACY_NOT_COLLECTED=true"
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:3002/ || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+      test: ["NONE"]
     depends_on: {gluetun: {condition: service_healthy}}
     restart: always
     deploy:
@@ -655,16 +662,16 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
     cat >> "$COMPOSE_FILE" <<EOF
     environment:
-      - PORT=10416
-      - bw_canonical_origin=$BW_ORIGIN
+      - "PORT=10416"
+      - "bw_canonical_origin=$BW_ORIGIN"
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:10416/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:10416/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -691,18 +698,16 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
     cat >> "$COMPOSE_FILE" <<EOF
     env_file: ["$ENV_DIR/anonymousoverflow.env"]
-    environment: {PORT: "$PORT_INT_ANONYMOUS"}
+    environment:
+      - "PORT=$PORT_INT_ANONYMOUS"
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:8480/ || curl -f http://localhost:8480/ || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+      test: ["NONE"]
     depends_on: {gluetun: {condition: service_healthy}}
     restart: always
     deploy:
@@ -731,7 +736,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
@@ -766,7 +771,7 @@ append_vert() {
     labels:
       - "casaos.skip=true"
     environment:
-      - PUBLIC_URL=http://${CONTAINER_PREFIX}vertd:$PORT_INT_VERTD
+      - "PUBLIC_URL=http://${CONTAINER_PREFIX}vertd:$PORT_INT_VERTD"
 $VERTD_DEVICES
     restart: always
     deploy:
@@ -784,15 +789,15 @@ $(if [ -n "${VERTD_NVIDIA:-}" ]; then echo "        reservations:
     labels:
       - "casaos.skip=true"
     environment:
-      - PUB_HOSTNAME=$VERT_PUB_HOSTNAME
-      - PUB_PLAUSIBLE_URL=
-      - PUB_ENV=production
-      - PUB_DISABLE_ALL_EXTERNAL_REQUESTS=true
-      - PUB_DISABLE_FAILURE_BLOCKS=true
-      - PUB_VERTD_URL=http://${CONTAINER_PREFIX}vertd:$PORT_INT_VERTD
-      - PUB_DONATION_URL=
-      - PUB_STRIPE_KEY=
-      - PUB_DISABLE_DONATIONS=true
+      - "PUB_HOSTNAME=$VERT_PUB_HOSTNAME"
+      - "PUB_PLAUSIBLE_URL="
+      - "PUB_ENV=production"
+      - "PUB_DISABLE_ALL_EXTERNAL_REQUESTS=true"
+      - "PUB_DISABLE_FAILURE_BLOCKS=true"
+      - "PUB_VERTD_URL=http://${CONTAINER_PREFIX}vertd:$PORT_INT_VERTD"
+      - "PUB_DONATION_URL="
+      - "PUB_STRIPE_KEY="
+      - "PUB_DISABLE_DONATIONS=true"
     networks: [frontend]
     ports: ["$LAN_IP:$PORT_VERT:$PORT_INT_VERT"]
     healthcheck:
@@ -813,7 +818,7 @@ append_cobalt() {
     if ! should_deploy "cobalt"; then return 0; fi
     cat >> "$COMPOSE_FILE" <<EOF
   cobalt:
-    image: ghcr.io/imputnet/cobalt:\${COBALT_IMAGE_TAG:-latest}
+    image: ghcr.io/imputnet/cobalt:	extvariable{COBALT_IMAGE_TAG:-latest}
     container_name: ${CONTAINER_PREFIX}cobalt
     init: true
     read_only: true
@@ -826,14 +831,14 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
     cat >> "$COMPOSE_FILE" <<EOF
     environment:
-      - API_URL=http://\$LAN_IP:\$PORT_COBALT_API
-      - API_PORT=\$PORT_INT_COBALT_API
+      - "API_URL=http://\$LAN_IP:\\$PORT_COBALT_API"
+      - "API_PORT=\\$PORT_INT_COBALT_API"
     depends_on:
       gluetun: {condition: service_healthy}
     restart: unless-stopped
@@ -865,7 +870,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
@@ -895,7 +900,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
@@ -904,10 +909,10 @@ EOF
       - $CONFIG_DIR/searxng:/etc/searxng
       - $DATA_DIR/searxng-cache:/var/cache/searxng
     environment:
-      - SEARXNG_SECRET=$SEARXNG_SECRET
-      - SEARXNG_BASE_URL=http://$LAN_IP:$PORT_SEARXNG/
+      - "SEARXNG_SECRET=$SEARXNG_SECRET"
+      - "SEARXNG_BASE_URL=http://$LAN_IP:$PORT_SEARXNG/"
     healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 8080 || exit 1"]
+      test: ["CMD-SHELL", "echo -n | nc 127.0.0.1 8080 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -956,7 +961,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
@@ -965,12 +970,12 @@ EOF
       - $DATA_DIR/immich:/data
       - /etc/localtime:/etc/localtime:ro
     environment:
-      - DB_HOSTNAME=$DB_HOST
-      - DB_USERNAME=immich
-      - DB_PASSWORD=$IMMICH_DB_PASS_COMPOSE
-      - DB_DATABASE_NAME=immich
-      - REDIS_HOSTNAME=$REDIS_HOST
-      - IMMICH_MACHINE_LEARNING_URL=$ML_URL
+      - "DB_HOSTNAME=$DB_HOST"
+      - "DB_USERNAME=immich"
+      - "DB_PASSWORD=$IMMICH_DB_PASS_COMPOSE"
+      - "DB_DATABASE_NAME=immich"
+      - "REDIS_HOSTNAME=$REDIS_HOST"
+      - "IMMICH_MACHINE_LEARNING_URL=$ML_URL"
     depends_on:
       immich-db: {condition: service_healthy}
       immich-redis: {condition: service_healthy}
@@ -985,10 +990,10 @@ EOF
     container_name: ${CONTAINER_PREFIX}immich-db
     networks: [frontend]
     environment:
-      - POSTGRES_USER=immich
-      - POSTGRES_PASSWORD=$IMMICH_DB_PASS_COMPOSE
-      - POSTGRES_DB=immich
-      - POSTGRES_INITDB_ARGS=--data-checksums
+      - "POSTGRES_USER=immich"
+      - "POSTGRES_PASSWORD=$IMMICH_DB_PASS_COMPOSE"
+      - "POSTGRES_DB=immich"
+      - "POSTGRES_INITDB_ARGS=--data-checksums"
     volumes:
       - $DATA_DIR/immich-db:/var/lib/postgresql/data
     shm_size: 512mb
@@ -1027,7 +1032,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    network_mode: "service:gluetun"
+    network_mode: \"service:gluetun\"
 EOF
     fi
 
@@ -1054,15 +1059,19 @@ append_watchtower() {
     networks:
       - mgmt
     environment:
-      - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_POLL_INTERVAL=3600
-      - WATCHTOWER_NOTIFICATIONS=shoutrrr
-      - WATCHTOWER_NOTIFICATION_URL=generic+http://hub-api:55555/watchtower?token=$HUB_API_KEY_COMPOSE
+      - "WATCHTOWER_CLEANUP=true"
+      - "WATCHTOWER_POLL_INTERVAL=3600"
+      - "WATCHTOWER_NOTIFICATIONS=shoutrrr"
+      - "WATCHTOWER_NOTIFICATION_URL=generic+http://hub-api:55555/watchtower?token=$HUB_API_KEY_COMPOSE"
     restart: unless-stopped
     deploy:
       resources:
         limits: {cpus: '0.2', memory: 128M}
 EOF
+}
+
+append_companion() {
+    return 0
 }
 
 generate_compose() {
