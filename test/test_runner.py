@@ -7,6 +7,7 @@ import os
 import urllib.request
 import json
 import socket
+import concurrent.futures
 
 # Consolidated Full Stack Definition
 FULL_STACK = {
@@ -16,7 +17,22 @@ FULL_STACK = {
         {"name": "Dashboard", "port": 8081, "path": "/", "code": 200},
         {"name": "Hub API", "port": 55555, "path": "/health", "code": 200},
         {"name": "AdGuard", "port": 8083, "path": "/", "code": 200},
-        {"name": "WireGuard UI", "port": 51821, "path": "/", "code": 200}
+        {"name": "WireGuard UI", "port": 51821, "path": "/", "code": 200},
+        {"name": "Redlib", "port": 8080, "path": "/settings", "code": 200},
+        {"name": "Wikiless", "port": 8180, "path": "/", "code": 200},
+        {"name": "Invidious", "port": 3000, "path": "/api/v1/stats", "code": 200},
+        {"name": "Rimgo", "port": 3002, "path": "/", "code": 200},
+        {"name": "Breezewiki", "port": 8380, "path": "/", "code": 200},
+        {"name": "AnonymousOverflow", "port": 8480, "path": "/", "code": 200},
+        {"name": "Scribe", "port": 8280, "path": "/", "code": 200},
+        {"name": "Memos", "port": 5230, "path": "/", "code": 200},
+        {"name": "Cobalt Web", "port": 9001, "path": "/", "code": 200},
+        {"name": "Cobalt API", "port": 9002, "path": "/api/serverInfo", "code": 200},
+        {"name": "SearXNG", "port": 8082, "path": "/", "code": 200},
+        {"name": "Immich", "port": 2283, "path": "/api/server-info/ping", "code": 200},
+        {"name": "Odido Booster", "port": 8085, "path": "/docs", "code": 200},
+        {"name": "VERT", "port": 5555, "path": "/", "code": 200},
+        {"name": "VERT Daemon", "port": 24153, "path": "/api/version", "code": 200}
     ]
 }
 
@@ -26,7 +42,6 @@ TEST_DATA_DIR = os.path.join(TEST_SCRIPT_DIR, "test_data")
 
 def get_lan_ip():
     try:
-        # Try to get the IP used to reach the internet
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
@@ -46,22 +61,103 @@ def run_command(cmd, cwd=None, ignore_failure=False):
         sys.exit(1)
     return ret
 
-def verify_url(name, url, expected_code=200, retries=30):
-    print(f"Verifying {name} at {url}...")
+def verify_service(check):
+    """Verify a single service with fast-fail if container is down."""
+    name = check['name']
+    port = check['port']
+    path = check['path']
+    expected_code = check['code']
+    url = f"http://{LAN_IP}:{port}{path}"
+    
+    # Map service name to container name
+    container_map = {
+        "Dashboard": "hub-dashboard",
+        "Hub API": "hub-api",
+        "AdGuard": "hub-adguard",
+        "WireGuard UI": "hub-wg-easy",
+        "Redlib": "hub-redlib",
+        "Wikiless": "hub-wikiless",
+        "Invidious": "hub-invidious",
+        "Rimgo": "hub-rimgo",
+        "Breezewiki": "hub-breezewiki",
+        "AnonymousOverflow": "hub-anonymousoverflow",
+        "Scribe": "hub-scribe",
+        "Memos": "hub-memos",
+        "Cobalt Web": "hub-cobalt-web",
+        "Cobalt API": "hub-cobalt",
+        "SearXNG": "hub-searxng",
+        "Immich": "hub-immich-server",
+        "Odido Booster": "hub-odido-booster",
+        "VERT": "hub-vert",
+        "VERT Daemon": "hub-vertd"
+    }
+    
+    container_name = container_map.get(name, f"hub-{name.lower().replace(' ', '-')}")
+    
+    print(f"Verifying {name} ({container_name}) at {url}...")
+    
+    # Retry loop: 20 attempts * 1s sleep
+    # Increase for heavy services
+    retries = 90 if "immich" in name.lower() else 30
+    
     for i in range(retries):
+        # 1. Docker Level Check
         try:
-            code = urllib.request.urlopen(url, timeout=5).getcode()
-            if code == expected_code:
-                print(f"[PASS] {name} is UP (Status {code})")
-                return True
-        except Exception as e:
-            if i == retries - 1:
-                print(f"[WARN] Final retry failed with error: {e}")
+            cmd = f"docker inspect --format '{{{{.State.Status}}}}|{{{{if .State.Health}}}}{{{{.State.Health.Status}}}}{{{{else}}}}none{{{{end}}}}' {container_name}"
+            out = subprocess.check_output(cmd, shell=True, stderr=subprocess.DEVNULL).decode().strip()
+            status, health = out.split('|')
+            
+            if status in ['exited', 'dead', 'paused']:
+                logs = subprocess.check_output(f"docker logs --tail 10 {container_name}", shell=True, stderr=subprocess.STDOUT).decode('utf-8', errors='replace')
+                print(f"[FAIL] {name} container is {status}. Logs:\n{logs}")
+                return False
+            
+            if health == 'healthy':
+                # Container says it's healthy, trust it but confirm port is open?
+                # Sometimes healthy means internal app is up but port mapping/proxy might lag slightly.
+                # Let's try HTTP once fast.
+                try:
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=2) as response:
+                        if response.getcode() == expected_code:
+                            print(f"[PASS] {name} is UP (Healthy + HTTP {expected_code})")
+                            return True
+                except:
+                    pass # Fall through to wait
+            
+            if health == 'unhealthy':
+                 logs = subprocess.check_output(f"docker logs --tail 10 {container_name}", shell=True, stderr=subprocess.STDOUT).decode('utf-8', errors='replace')
+                 print(f"[FAIL] {name} is UNHEALTHY. Logs:\n{logs}")
+                 return False
+
+        except subprocess.CalledProcessError:
+            # Container might not exist yet if pulling
             pass
+
+        # 2. HTTP Fallback Check
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=3) as response:
+                code = response.getcode()
+                if code == expected_code:
+                    print(f"[PASS] {name} is UP (Status {code})")
+                    return True
+        except urllib.error.HTTPError as e:
+            if e.code == expected_code:
+                print(f"[PASS] {name} is UP (Status {e.code})")
+                return True
+        except Exception:
+            pass
+        
         time.sleep(1)
-        if i % 5 == 0:
-            print(f"Waiting for {name}...")
-    print(f"[FAIL] {name} is DOWN")
+        
+    print(f"[FAIL] {name} is DOWN (Timed out)")
+    # Print logs on timeout too
+    try:
+        logs = subprocess.check_output(f"docker logs --tail 10 {container_name}", shell=True, stderr=subprocess.STDOUT).decode('utf-8', errors='replace')
+        print(f"--- Logs for {container_name} ---\n{logs}\n-----------------------------")
+    except:
+        pass
     return False
 
 def verify_logs():
@@ -74,13 +170,11 @@ def verify_logs():
                 print("[WARN] Log file is empty.")
                 return
             
-            # Check for JSON and humanized messages
             humanized_found = False
             for line in lines[-20:]:
                 try:
                     entry = json.loads(line)
                     msg = entry.get('message', '')
-                    # Check if it matches any of the HUMAN_LOGS keys or values
                     if "synchronized" in msg or "initiated" in msg or "retrieved" in msg or "updated" in msg:
                         humanized_found = True
                 except:
@@ -120,7 +214,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--full", action="store_true", help="Run full stack verification")
     args = parser.parse_args()
-
+    
+    start_time = time.time()
     check_puppeteer_deps()
 
     print(f"=== Running Full Stack Verification ===")
@@ -132,63 +227,38 @@ def main():
     try:
         # 1. Cleanup
         print("Cleaning environment...")
-        run_command("docker ps -aq --filter name=hub- | xargs -r docker rm -f", ignore_failure=True)
-        run_command("docker ps -aq --filter name=privacy-hub | xargs -r docker rm -f", ignore_failure=True)
-        run_command("docker ps -aq --filter label=io.dhi.hardened=true | xargs -r docker rm -f", ignore_failure=True)
+        # Broad cleanup of stack-related containers
+        cleanup_filters = ["name=hub-", "name=privacy-hub", "name=odido", "name=wikiless", "name=redlib", "name=invidious", "name=scribe", "name=gluetun"]
+        for f in cleanup_filters:
+            run_command(f"docker ps -aq --filter {f} | xargs -r docker rm -f", ignore_failure=True)
         
         if os.path.exists(os.path.join(compose_dir, "docker-compose.yml")):
              run_command("docker compose down -v --remove-orphans || true", cwd=compose_dir)
         
         # Force remove networks
         run_command("docker network ls --format '{{.Name}}' | grep privacy-hub | xargs -r docker network rm || true", ignore_failure=True)
+        run_command("docker network prune -f", ignore_failure=True)
         
         run_command("docker system prune -f --volumes")
         
+        # Check port 8085 (Odido) specifically as it caused issues
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if s.connect_ex(('127.0.0.1', 8085)) == 0:
+            print("[WARN] Port 8085 is still in use! Attempting to find culprit...")
+            run_command("fuser -k 8085/tcp || lsof -ti :8085 | xargs -r kill -9 || true", ignore_failure=True)
+            run_command("docker ps --format '{{.ID}}' --filter publish=8085 | xargs -r docker rm -f", ignore_failure=True)
+        s.close()
+        
         # 2. Deploy
-        env_vars = f"LAN_IP_OVERRIDE={LAN_IP} APP_NAME=privacy-hub-test PROJECT_ROOT={TEST_DATA_DIR} MOCK_VERIFICATION=true ADMIN_PASS_RAW=admin123 VPN_PASS_RAW=vpn123 FORCE_UPDATE=true"
+        env_vars = f"TEST_MODE=true LAN_IP_OVERRIDE={LAN_IP} APP_NAME=privacy-hub-test PROJECT_ROOT={TEST_DATA_DIR} MOCK_VERIFICATION=true ADMIN_PASS_RAW=admin123 VPN_PASS_RAW=vpn123 FORCE_UPDATE=true"
         
         print("Generating configuration...")
         cmd_gen = f"{env_vars} ./zima.sh -p -y -E test/test_config.env -s {services_list} -G"
         run_command(cmd_gen, cwd=PROJECT_ROOT)
         
-        # Patch for screenshots (Same as before but using LAN_IP)
-        print("Patching compose file to bypass VPN for screenshots...")
-        compose_file = os.path.join(compose_dir, "docker-compose.yml")
-        if os.path.exists(compose_file):
-            with open(compose_file, "r") as f:
-                lines = f.readlines()
-            with open(compose_file, "w") as f:
-                current_service = None
-                for line in lines:
-                    if line.startswith("  ") and not line.startswith("    ") and ":" in line:
-                        current_service = line.strip().split(":")[0]
-                    if "network_mode: \"service:gluetun\"" in line:
-                        f.write(line.replace("network_mode: \"service:gluetun\"", "networks: [dhi-frontnet]"))
-                        # Inject ports - mapping to LAN_IP instead of 127.0.0.1 for external reachability if needed
-                        port_map = {
-                            "redlib": "8080:8081", "wikiless": "8180:8180", "invidious": "3000:3000",
-                            "rimgo": "3002:3002", "scribe": "8280:8280", "breezewiki": "8380:10416",
-                            "anonymousoverflow": "8480:8480", "searxng": "8082:8080", "immich-server": "2283:2283",
-                            "odido-booster": "8085:8085", "companion": "8282:8282", "cobalt": "9002:9000",
-                            "cobalt-web": "9001:80", "adguard": "8083:8083"
-                        }
-                        if current_service in port_map:
-                            f.write(f"    ports: [\"{LAN_IP}:{port_map[current_service]}\"]\n")
-                    # Internal link fixes
-                    elif current_service == "wikiless" and "redis://127.0.0.1" in line:
-                        f.write(line.replace("127.0.0.1", "hub-wikiless_redis"))
-                    elif current_service == "invidious" and "invidious-db:5432" in line and "hub-" not in line:
-                        f.write(line.replace("invidious-db", "hub-invidious-db"))
-                    elif "DB_HOSTNAME=" in line and "hub-" not in line:
-                        f.write(line.replace("DB_HOSTNAME=", "DB_HOSTNAME=hub-"))
-                    elif "REDIS_HOSTNAME=" in line and "hub-" not in line:
-                        f.write(line.replace("REDIS_HOSTNAME=", "REDIS_HOSTNAME=hub-"))
-                    else:
-                        f.write(line)
-
         print("Pulling and Building...")
         compose_cwd = os.path.join(TEST_DATA_DIR, "data/AppData/privacy-hub-test")
-        env_cmd_prefix = f"set -a; [ -f {PROJECT_ROOT}/test/test_config.env ] && . {PROJECT_ROOT}/test/test_config.env; . {PROJECT_ROOT}/lib/core/constants.sh; LAN_IP={LAN_IP}; APP_NAME=privacy-hub-test; PROJECT_ROOT={TEST_DATA_DIR}; set +a; "
+        env_cmd_prefix = f"set -a; TEST_MODE=true; [ -f {PROJECT_ROOT}/test/test_config.env ] && . {PROJECT_ROOT}/test/test_config.env; . {PROJECT_ROOT}/lib/core/constants.sh; LAN_IP={LAN_IP}; APP_NAME=privacy-hub-test; PROJECT_ROOT={TEST_DATA_DIR}; set +a; "
         
         run_command(f"{env_cmd_prefix} docker compose build --no-cache hub-api odido-booster scribe wikiless", cwd=compose_cwd)
         run_command(f"{env_cmd_prefix} docker compose pull", cwd=compose_cwd)
@@ -196,14 +266,22 @@ def main():
         print("Launching stack...")
         run_command(f"{env_cmd_prefix} sudo -E docker compose up -d", cwd=compose_cwd, ignore_failure=True)
 
-        # 3. Verify Basic Connectivity
-        for check in FULL_STACK['checks']:
-            url = f"http://{LAN_IP}:{check['port']}{check['path']}"
-            if not verify_url(check['name'], url, check['code']):
-                all_pass = False
+        # 3. Verify Connectivity for ALL Services (PARALLEL)
+        print("\n--- Verifying Service Connectivity (Parallel) ---")
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_service = {executor.submit(verify_service, check): check for check in FULL_STACK['checks']}
+            for future in concurrent.futures.as_completed(future_to_service):
+                check = future_to_service[future]
+                try:
+                    if not future.result():
+                        all_pass = False
+                except Exception as exc:
+                    print(f"[FAIL] {check['name']} generated an exception: {exc}")
+                    all_pass = False
                 
         # 4. Verify Update Pipeline (With and Without Watchtower)
-        print("Verifying Update Pipeline...")
+        print("\n--- Verifying Update Pipeline ---")
 
         secrets_path = os.path.join(TEST_DATA_DIR, "data/AppData/privacy-hub-test/.secrets")
         api_key = "dummy"
@@ -217,7 +295,12 @@ def main():
         print("  Testing Downgrade and Update for Wikiless...")
         wikiless_src = os.path.join(compose_dir, "sources/wikiless")
         if os.path.exists(wikiless_src):
+            print("    Fetching history for Wikiless...")
+            # Fix for "pathspec 'HEAD~1' did not match"
+            run_command("git fetch --unshallow || git fetch --all", cwd=wikiless_src, ignore_failure=True)
+            
             print("    Downgrading Wikiless source...")
+            run_command("git reset --hard && git clean -fd", cwd=wikiless_src)
             run_command("git checkout HEAD~1", cwd=wikiless_src)
             print("    Rebuilding Wikiless with older source...")
             run_command(f"{env_cmd_prefix} docker compose build wikiless", cwd=compose_cwd)
@@ -232,12 +315,10 @@ def main():
                 with urllib.request.urlopen(req, timeout=30) as resp:
                     if json.loads(resp.read().decode()).get('success'):
                         print("[PASS] Update-service API accepted downgrade-to-latest request.")
-                        # Wait for update to finish in background
                         print("    Waiting for update background task...")
                         time.sleep(30) 
                         # Verify it's back to HEAD
-                        res = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=wikiless_src).decode().strip()
-                        # We don't know the exact hash but we can check if it's NOT the downgraded one if we saved it
+                        # res = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=wikiless_src).decode().strip()
                     else:
                         print("[FAIL] Update-service API rejected request.")
                         all_pass = False
@@ -273,7 +354,7 @@ def main():
             all_pass = False
 
         # 5. Verify Backup/Restore Cycle
-        print("Verifying Backup/Restore Cycle for Invidious...")
+        print("\n--- Verifying Backup/Restore Cycle for Invidious ---")
         try:
             # 1. Backup
             url_backup = f"http://{LAN_IP}:55555/migrate?service=invidious&backup=yes"
@@ -298,8 +379,6 @@ def main():
                 
                 # 3. Restore
                 print(f"  Restoring from {latest_backup}...")
-                # We need to call migrate.sh restore manually or via a new endpoint. 
-                # Let's use docker exec since we don't have a /restore endpoint yet.
                 restore_cmd = f"docker exec hub-api /usr/local/bin/migrate.sh invidious restore {backup_path_in_container}"
                 run_command(restore_cmd)
                 print("[PASS] Restore command executed.")
@@ -311,12 +390,15 @@ def main():
         verify_logs()
         
         # 7. UI Tests & Playback
-        print("Running UI & Playback Tests...")
+        print("\n--- Running UI & Playback Tests ---")
         os.environ['LAN_IP'] = LAN_IP
         run_command(f"LAN_IP={LAN_IP} bun unified_test.js", cwd=TEST_SCRIPT_DIR)
 
     finally:
-        print("Test run complete. Check 'test/screenshots' for results.")
+        end_time = time.time()
+        duration = end_time - start_time
+        print(f"\nTest run complete in {duration:.2f} seconds.")
+        print("Check 'test/screenshots' for results.")
 
     if not all_pass:
         sys.exit(1)

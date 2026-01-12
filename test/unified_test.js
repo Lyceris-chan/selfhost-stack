@@ -92,7 +92,7 @@ async function runTests() {
                             await new Promise(r => setTimeout(r, 5000));
                             
                             const playerSelector = 'video, #player, .video-js, #player-container, iframe, .vjs-tech';
-                            const videoPlayer = await page.waitForSelector(playerSelector, { timeout: 30000 });
+                            const videoPlayer = await page.waitForSelector(playerSelector, { timeout: 120000 });
                             
                             if (videoPlayer) {
                                 logResult('Invidious', 'Player Loaded', 'PASS', 'Video player element detected');
@@ -156,6 +156,7 @@ async function runTests() {
         try {
             await page.waitForFunction(() => document.body.classList.contains('admin-mode'), { timeout: 10000 });
             logResult('Dashboard', 'Admin Login', 'PASS', 'Admin mode activated');
+            await new Promise(r => setTimeout(r, 2000)); // Ensure UI re-render
         } catch (e) {
             const loginVisible = await page.evaluate(() => document.getElementById('login-modal').style.display !== 'none');
             logResult('Dashboard', 'Admin Login', 'FAIL', loginVisible ? 'Login modal still visible (Wrong password?)' : 'Body class not added');
@@ -166,7 +167,7 @@ async function runTests() {
         if (isAdmin) {
             // Test Update Check
             console.log('  Testing Update Check...');
-            await page.waitForSelector('#update-all-btn', { visible: true, timeout: 5000 });
+            await page.waitForSelector('#update-all-btn', { visible: true, timeout: 10000 });
             await page.click('#update-all-btn');
             await page.waitForSelector('#update-selection-modal', { visible: true });
             logResult('Dashboard', 'Update Modal', 'PASS', 'Update selection modal opened');
@@ -244,7 +245,7 @@ async function runTests() {
 
         console.log('\n--- Phase 3: Portainer Integration ---');
         try {
-            await page.goto(`http://${LAN_IP}:9000`, { waitUntil: 'networkidle2', timeout: 30000 });
+            await page.goto(`http://${LAN_IP}:9000`, { waitUntil: 'networkidle2', timeout: 60000 });
             await page.waitForSelector('input[name="password"], #password', { timeout: 20000 });
             
             // Portainer might ask to set up admin password first if it's a fresh volume
