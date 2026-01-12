@@ -4,7 +4,7 @@ import httpx
 import urllib.parse
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
-from ..core.security import get_current_user
+from ..core.security import get_current_user, get_admin_user
 from ..core.config import settings
 
 router = APIRouter()
@@ -22,7 +22,7 @@ async def get_wgeasy_session():
     return None
 
 @router.get("/wg/clients")
-async def get_clients(user: str = Depends(get_current_user)):
+async def get_clients(user: str = Depends(get_admin_user)):
     cookies = await get_wgeasy_session()
     if not cookies:
         raise HTTPException(status_code=500, detail="Failed to auth with WG-Easy")
@@ -38,7 +38,7 @@ class CreateClientRequest(BaseModel):
     name: str
 
 @router.post("/wg/clients")
-async def create_client(req: CreateClientRequest, user: str = Depends(get_current_user)):
+async def create_client(req: CreateClientRequest, user: str = Depends(get_admin_user)):
     cookies = await get_wgeasy_session()
     if not cookies:
         raise HTTPException(status_code=500, detail="Failed to auth with WG-Easy")
@@ -51,7 +51,7 @@ async def create_client(req: CreateClientRequest, user: str = Depends(get_curren
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/wg/clients/{client_id}")
-async def delete_client(client_id: str, user: str = Depends(get_current_user)):
+async def delete_client(client_id: str, user: str = Depends(get_admin_user)):
     cookies = await get_wgeasy_session()
     if not cookies:
         raise HTTPException(status_code=500, detail="Failed to auth with WG-Easy")
@@ -64,7 +64,7 @@ async def delete_client(client_id: str, user: str = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/wg/clients/{client_id}/configuration")
-async def get_client_config(client_id: str, user: str = Depends(get_current_user)):
+async def get_client_config(client_id: str, user: str = Depends(get_admin_user)):
     cookies = await get_wgeasy_session()
     try:
         url = f"http://{settings.CONTAINER_PREFIX}wg-easy:51821/api/wireguard/client/{client_id}/configuration"
@@ -75,7 +75,7 @@ async def get_client_config(client_id: str, user: str = Depends(get_current_user
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/profiles")
-def list_profiles(user: str = Depends(get_current_user)):
+def list_profiles(user: str = Depends(get_admin_user)):
     try:
         files = [f.replace('.conf', '') for f in os.listdir(settings.PROFILES_DIR) if f.endswith('.conf')]
         return {"profiles": files}

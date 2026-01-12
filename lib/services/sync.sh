@@ -24,61 +24,44 @@ sync_sources() {
         local repo_url="$1"
         local target_dir="$2"
         local version="${3:-}"
-        local max_retries=3
-        local attempt=1
-        local delay=5
 
-        while [ $attempt -le $max_retries ]; do
-            if [ ! -d "$target_dir/.git" ]; then 
-                log_info "Cloning $repo_url (Attempt $attempt/$max_retries)..."
-                $SUDO mkdir -p "$target_dir"
-                $SUDO chown "$(whoami)" "$target_dir"
-                # If version is specified, we might not want --depth 1 if it's a specific commit
-                # But for tags and branches --depth 1 usually works if it's recent
-                local clone_opts="--depth 1"
-                if [ -n "$version" ] && [[ "$version" != "latest" ]]; then
-                    clone_opts="--branch $version --depth 1"
-                fi
-                
-                if git clone $clone_opts "$repo_url" "$target_dir"; then
-                    return 0
-                fi
-                
-                # Fallback: if shallow clone fails with branch, try full clone and checkout
-                if [ -n "$version" ] && [[ "$version" != "latest" ]]; then
-                    log_warn "Shallow clone failed for $version. Trying full clone..."
-                    if git clone "$repo_url" "$target_dir"; then
-                        if (cd "$target_dir" && git fetch --all --tags && git checkout "$version"); then
-                            return 0
-                        fi
-                    fi
-                fi
-            else 
-                if [ "${FORCE_UPDATE:-false}" = "true" ]; then
-                    log_info "Updating $target_dir (Attempt $attempt/$max_retries)..."
-                    if (cd "$target_dir" && git fetch --all && git checkout -f "${version:-HEAD}" && git reset --hard "origin/${version:-$(git rev-parse --abbrev-ref HEAD)}" && git pull); then
+        if [ ! -d "$target_dir/.git" ]; then 
+            log_info "Cloning $repo_url..."
+            $SUDO mkdir -p "$target_dir"
+            $SUDO chown "$(whoami)" "$target_dir"
+            local clone_opts="--depth 1"
+            if [ -n "$version" ] && [[ "$version" != "latest" ]]; then
+                clone_opts="--branch $version --depth 1"
+            fi
+            
+            if git clone $clone_opts "$repo_url" "$target_dir"; then
+                return 0
+            fi
+            
+            if [ -n "$version" ] && [[ "$version" != "latest" ]]; then
+                log_warn "Shallow clone failed for $version. Trying full clone..."
+                if git clone "$repo_url" "$target_dir"; then
+                    if (cd "$target_dir" && git fetch --all --tags && git checkout "$version"); then
                         return 0
                     fi
-                else
-                    log_info "Repository exists at $target_dir. Ensuring correct version ($version)..."
-                    if [ -n "$version" ] && [[ "$version" != "latest" ]]; then
-                        (cd "$target_dir" && git fetch --all --tags && git checkout -f "$version") || true
-                    fi
-                    return 0
                 fi
             fi
-
-            log_warn "Repository operation failed for $repo_url."
-            if [[ "$repo_url" == *"codeberg.org"* ]]; then
-                log_warn "Codeberg appears to be having issues. Check status at: https://status.codeberg.org/status/codeberg"
+        else 
+            if [ "${FORCE_UPDATE:-false}" = "true" ]; then
+                log_info "Updating $target_dir..."
+                if (cd "$target_dir" && git fetch --all && git checkout -f "${version:-HEAD}" && git reset --hard "origin/${version:-$(git rev-parse --abbrev-ref HEAD)}" && git pull); then
+                    return 0
+                fi
+            else
+                log_info "Repository exists at $target_dir. Ensuring correct version ($version)..."
+                if [ -n "$version" ] && [[ "$version" != "latest" ]]; then
+                    (cd "$target_dir" && git fetch --all --tags && git checkout -f "$version") || true
+                fi
+                return 0
             fi
-            log_warn "Retrying in ${delay}s..."
-            sleep $delay
-            attempt=$((attempt + 1))
-            delay=$((delay * 2))
-        done
+        fi
 
-        log_crit "Failed to sync repository $repo_url after $max_retries attempts."
+        log_crit "Failed to sync repository $repo_url."
         return 1
     }
 
@@ -132,6 +115,7 @@ EOF
     ) & pids="$pids $!"
     clone_repo "https://github.com/Lyceris-chan/odido-bundle-booster.git" "$SRC_DIR/odido-bundle-booster" "$ODIDO_BOOSTER_IMAGE_TAG" & pids="$pids $!"
     clone_repo "https://github.com/Metastem/Wikiless" "$SRC_DIR/wikiless" "$WIKILESS_IMAGE_TAG" & pids="$pids $!"
+    clone_repo "https://github.com/iv-org/invidious.git" "$SRC_DIR/invidious" "latest" & pids="$pids $!"
     
     (
         if clone_repo "https://github.com/imputnet/cobalt.git" "$SRC_DIR/cobalt" "${COBALT_IMAGE_TAG:-latest}"; then

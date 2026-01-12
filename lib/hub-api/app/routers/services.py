@@ -7,7 +7,7 @@ import concurrent.futures
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from ..core.security import get_current_user
+from ..core.security import get_current_user, get_admin_user
 from ..core.config import settings
 from ..utils.logging import log_structured
 from ..utils.process import run_command, sanitize_service_name
@@ -74,18 +74,30 @@ def update_theme(theme: dict, user: str = Depends(get_current_user)):
         # Sync update_strategy
         strategy = theme.get('update_strategy')
         if strategy:
+            # Security: Sanitize the strategy
+            sanitized_strategy = "".join(c for c in strategy if c.isalnum())
+            if not sanitized_strategy:
+                sanitized_strategy = "stable"
+
             file_secrets = {}
             if os.path.exists(settings.SECRETS_FILE):
                 with open(settings.SECRETS_FILE, 'r') as f:
                     for line in f:
                         if '=' in line:
                             k, v = line.strip().split('=', 1)
+                            v = v.strip("'").strip('"')
                             file_secrets[k] = v
             
-            file_secrets['UPDATE_STRATEGY'] = strategy
-            with open(settings.SECRETS_FILE, 'w') as f:
-                for k, v in file_secrets.items():
-                    f.write(f"{k}={v}\n")
+            file_secrets['UPDATE_STRATEGY'] = sanitized_strategy
+            
+            # Write back with restricted permissions and proper quoting
+            try:
+                fd = os.open(settings.SECRETS_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, 'w') as f:
+                    for k, v in file_secrets.items():
+                        f.write(f"{k}='{v}'\n")
+            except Exception as e:
+                 log_structured("ERROR", f"Failed to sync UPDATE_STRATEGY: {e}", "SYSTEM")
         
         return {"success": True}
     except Exception as e:
@@ -129,7 +141,7 @@ def check_updates_status(user: str = Depends(get_current_user)):
     return {"updates": updates}
 
 @router.get("/check-updates")
-def trigger_check_updates(background_tasks: BackgroundTasks, user: str = Depends(get_current_user)):
+def trigger_check_updates(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
     def _check():
         log_structured("INFO", "Checking for system-wide source updates...", "MAINTENANCE")
         src_root = "/app/sources"
@@ -143,7 +155,7 @@ def trigger_check_updates(background_tasks: BackgroundTasks, user: str = Depends
     return {"success": True, "message": "Source update check initiated"}
 
 @router.post("/update-service")
-def update_single_service(req: ServiceUpdate, background_tasks: BackgroundTasks, user: str = Depends(get_current_user)):
+def update_single_service(req: ServiceUpdate, background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
     service = sanitize_service_name(req.service)
     if not service:
         raise HTTPException(status_code=400, detail="Invalid service name")
@@ -199,7 +211,7 @@ def update_single_service(req: ServiceUpdate, background_tasks: BackgroundTasks,
     return {"success": True, "message": f"Update for {service} started in background"}
 
 @router.post("/batch-update")
-def batch_update_services(req: BatchUpdate, background_tasks: BackgroundTasks, user: str = Depends(get_current_user)):
+def batch_update_services(req: BatchUpdate, background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
     services = [sanitize_service_name(s) for s in req.services if sanitize_service_name(s)]
     if not services:
         raise HTTPException(status_code=400, detail="No valid services provided")
@@ -216,7 +228,7 @@ def batch_update_services(req: BatchUpdate, background_tasks: BackgroundTasks, u
     return {"success": True, "message": "Batch update started"}
 
 @router.post("/migrate")
-def migrate_service(service: str, backup: str = "yes", user: str = Depends(get_current_user)):
+def migrate_service(service: str, backup: str = "yes", user: str = Depends(get_admin_user)):
     service = sanitize_service_name(service)
     if not service:
         raise HTTPException(status_code=400, detail="Invalid service name")
@@ -231,7 +243,7 @@ def migrate_service(service: str, backup: str = "yes", user: str = Depends(get_c
         return {"error": str(e)}
 
 @router.post("/clear-db")
-def clear_db(service: str, backup: str = "yes", user: str = Depends(get_current_user)):
+def clear_db(service: str, backup: str = "yes", user: str = Depends(get_admin_user)):
     service = sanitize_service_name(service)
     if not service:
         raise HTTPException(status_code=400, detail="Invalid service name")
@@ -243,7 +255,7 @@ def clear_db(service: str, backup: str = "yes", user: str = Depends(get_current_
         return {"error": str(e)}
 
 @router.get("/clear-logs")
-def clear_logs(service: str, user: str = Depends(get_current_user)):
+def clear_logs(service: str, user: str = Depends(get_admin_user)):
     service = sanitize_service_name(service)
     if not service:
         raise HTTPException(status_code=400, detail="Invalid service name")
@@ -257,7 +269,7 @@ def clear_logs(service: str, user: str = Depends(get_current_user)):
         return {"error": str(e)}
 
 @router.get("/vacuum")
-def vacuum_db(service: str, user: str = Depends(get_current_user)):
+def vacuum_db(service: str, user: str = Depends(get_admin_user)):
     service = sanitize_service_name(service)
     if not service:
         raise HTTPException(status_code=400, detail="Invalid service name")
@@ -285,7 +297,7 @@ def get_changelog(service: str, user: str = Depends(get_current_user)):
     return {"changelog": "No detailed changelog available for this service."}
 
 @router.post("/master-update")
-def master_update(background_tasks: BackgroundTasks, user: str = Depends(get_current_user)):
+def master_update(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
     def _run():
         log_structured("INFO", "[Update Engine] Starting Master Update...", "MAINTENANCE")
         run_command(["/usr/local/bin/migrate.sh", "all", "backup-all"], timeout=300)

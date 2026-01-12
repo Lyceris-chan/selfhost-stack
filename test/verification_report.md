@@ -1,9 +1,9 @@
-# Verification Report - 1/11/2026, 5:55:06 PM
+# Verification Report - 1/11/2026, 11:39:42 PM
 
 ## Summary
-- **Total Tests:** 26
-- **Passed:** ✅ 24
-- **Failed:** ❌ 2
+- **Total Tests:** 22
+- **Passed:** ✅ 14
+- **Failed:** ❌ 8
 - **Warnings:** ⚠️ 0
 
 ### Connectivity
@@ -17,30 +17,26 @@
 | Memos | ✅ PASS | Reached http://127.0.0.1:5230 |
 | Cobalt | ✅ PASS | Reached http://127.0.0.1:9001 |
 | SearXNG | ✅ PASS | Reached http://127.0.0.1:8082 |
-| Immich | ✅ PASS | Reached http://127.0.0.1:2283 |
-| Redlib | ✅ PASS | Reached http://127.0.0.1:8080 |
+| Immich | ❌ FAIL | net::ERR_CONNECTION_RESET at http://127.0.0.1:2283 |
+| Redlib | ❌ FAIL | net::ERR_CONNECTION_RESET at http://127.0.0.1:8080 |
 | Wikiless | ✅ PASS | Reached http://127.0.0.1:8180 |
-| Invidious | ✅ PASS | Reached http://127.0.0.1:3000 |
+| Invidious | ❌ FAIL | net::ERR_CONNECTION_RESET at http://127.0.0.1:3000 |
 | Rimgo | ✅ PASS | Reached http://127.0.0.1:3002 |
 | Scribe | ✅ PASS | Reached http://127.0.0.1:8280 |
 | Breezewiki | ✅ PASS | Reached http://127.0.0.1:8380 |
 | AnonymousOverflow | ✅ PASS | Reached http://127.0.0.1:8480 |
-| VERT | ✅ PASS | Reached http://127.0.0.1:5555 |
-| Companion | ✅ PASS | Reached http://127.0.0.1:8282/companion |
+| VERT | ❌ FAIL | net::ERR_CONNECTION_REFUSED at http://127.0.0.1:5555 |
+| Companion | ❌ FAIL | net::ERR_CONNECTION_RESET at http://127.0.0.1:8283/companion |
 | OdidoBooster | ✅ PASS | Reached http://127.0.0.1:8085/docs |
-
-### Invidious
-| Test | Outcome | Details |
-|------|---------|---------|
-| Search | ✅ PASS | Search results found |
-| Functionality | ❌ FAIL | Waiting for selector `video, #player, .video-js, #player-container, iframe, .vjs-tech` failed |
 
 ### Dashboard
 | Test | Outcome | Details |
 |------|---------|---------|
 | Filter Toggle | ❌ FAIL | Infrastructure category activated |
-| Admin Login | ✅ PASS | Admin mode activated |
-| Settings Modal | ✅ PASS | Invidious management modal opened |
-| Migrate Dialog | ✅ PASS | Confirmation dialog appeared |
-| Session Policy Toggle | ✅ PASS | Toggled cleanup: true -> false |
+| Admin Login | ❌ FAIL | Login modal still visible (Wrong password?) |
+
+### Portainer
+| Test | Outcome | Details |
+|------|---------|---------|
+| Integration | ❌ FAIL | Navigation timeout of 30000 ms exceeded |
 

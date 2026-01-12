@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/env bash
 
 # Centralized list of all services in the Privacy Hub stack
 export STACK_SERVICES="hub-api odido-booster memos gluetun portainer adguard unbound wg-easy redlib wikiless invidious rimgo breezewiki anonymousoverflow scribe vert vertd companion cobalt cobalt-web searxng immich watchtower"
@@ -30,7 +30,7 @@ export PORT_SCRIBE=8280
 export PORT_MEMOS=5230
 export PORT_VERT=5555
 export PORT_VERTD=24153
-export PORT_COMPANION=8282
+export PORT_COMPANION=8283
 export PORT_COBALT=9001
 export PORT_COBALT_API=9002
 export PORT_SEARXNG=8082
@@ -45,7 +45,7 @@ export PORT_INT_BREEZEWIKI=10416
 export PORT_INT_ANONYMOUS=8480
 export PORT_INT_VERT=80
 export PORT_INT_VERTD=24153
-export PORT_INT_COMPANION=8282
+export PORT_INT_COMPANION=8283
 export PORT_INT_COBALT=80
 export PORT_INT_COBALT_API=9000
 export PORT_INT_SEARXNG=8080

@@ -35,10 +35,5 @@ generate_dashboard() {
     sed -i "s|\$PORT_DASHBOARD_WEB|$PORT_DASHBOARD_WEB|g" "$DASHBOARD_FILE"
     sed -i "s|\$APP_NAME|$APP_NAME|g" "$DASHBOARD_FILE"
     
-    # SECURITY WARNING: This injects the API key into the static dashboard file.
-    # While acceptable for a self-hosted single-user instance on a local network,
-    # ensure this file is not exposed publicly without additional authentication layers.
-    sed -i "s|\$HUB_API_KEY|$HUB_API_KEY|g" "$DASHBOARD_FILE"
-
     log_info "Dashboard generated successfully at $DASHBOARD_FILE"
 }

@@ -4,10 +4,10 @@ import uvicorn
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
-from .core.security import get_current_user
+from .core.security import get_current_user, get_api_key_or_query_token
 from .utils.logging import init_db, log_structured
 from .utils.assets import ensure_assets
-from .routers import auth, system, services, wireguard, logs
+from .routers import auth, system, services, wireguard, logs, odido
 from .services.background import metrics_collector_thread, log_sync_thread, update_metrics_activity
 
 app = FastAPI(title=settings.APP_NAME)
@@ -27,6 +27,7 @@ app.include_router(system.router)
 app.include_router(services.router)
 app.include_router(wireguard.router)
 app.include_router(logs.router)
+app.include_router(odido.router)
 
 @app.on_event("startup")
 def startup_event():
@@ -38,7 +39,7 @@ def startup_event():
     # Note: Session cleanup is started in security.py on import.
 
 @app.post("/watchtower")
-async def watchtower_notification(request: Request, user: str = Depends(get_current_user)):
+async def watchtower_notification(request: Request, user: str = Depends(get_api_key_or_query_token)):
     """Receives notifications from Watchtower and logs them."""
     try:
         data = await request.json()

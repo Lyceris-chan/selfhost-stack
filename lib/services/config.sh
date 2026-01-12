@@ -3,7 +3,10 @@
 generate_scripts() {
     # 1. Migrate Script
     if [ -f "$SCRIPT_DIR/lib/templates/migrate.sh" ]; then
-        sed "s|__CONTAINER_PREFIX__|${CONTAINER_PREFIX}|g; s|__INVIDIOUS_DB_PASSWORD__|${INVIDIOUS_DB_PASSWORD}|g" "$SCRIPT_DIR/lib/templates/migrate.sh" > "$MIGRATE_SCRIPT"
+        safe_replace "$SCRIPT_DIR/lib/templates/migrate.sh" "$MIGRATE_SCRIPT" \
+            "__CONTAINER_PREFIX__" "${CONTAINER_PREFIX}" \
+            "__INVIDIOUS_DB_PASSWORD__" "${INVIDIOUS_DB_PASSWORD}" \
+            "__IMMICH_DB_PASSWORD__" "${IMMICH_DB_PASSWORD}"
         chmod +x "$MIGRATE_SCRIPT"
     else
         echo "[WARN] templates/migrate.sh not found at $SCRIPT_DIR/lib/templates/migrate.sh"
@@ -11,7 +14,9 @@ generate_scripts() {
 
     # 2. WG Control Script
     if [ -f "$SCRIPT_DIR/lib/templates/wg_control.sh" ]; then
-        sed "s|__CONTAINER_PREFIX__|${CONTAINER_PREFIX}|g; s|__ADMIN_PASS_RAW__|${ADMIN_PASS_RAW}|g" "$SCRIPT_DIR/lib/templates/wg_control.sh" > "$WG_CONTROL_SCRIPT"
+        safe_replace "$SCRIPT_DIR/lib/templates/wg_control.sh" "$WG_CONTROL_SCRIPT" \
+            "__CONTAINER_PREFIX__" "${CONTAINER_PREFIX}" \
+            "__ADMIN_PASS_RAW__" "${ADMIN_PASS_RAW}"
         chmod +x "$WG_CONTROL_SCRIPT"
     else
         echo "[WARN] templates/wg_control.sh not found at $SCRIPT_DIR/lib/templates/wg_control.sh"
@@ -346,12 +351,12 @@ download_remote_assets() {
         proxy_ready=true
         proxy=""
     else
-        for i in {1..30}; do
-            if curl --proxy "$proxy" -fsSL --max-time 3 https://fontlay.com -o /dev/null >/dev/null 2>&1; then
+        for i in {1..5}; do
+            if curl --proxy "$proxy" -fsSL --max-time 2 https://fontlay.com -o /dev/null >/dev/null 2>&1; then
                 proxy_ready=true
                 break
             fi
-            sleep 2
+            sleep 0.5
         done
     fi
 
@@ -367,9 +372,9 @@ download_remote_assets() {
     download_css() {
         local dest="$1"
         local url="$2"
-        local curl_opts="-fsSL --max-time 15 -A \"$ua\""
-        if [ -n "$proxy" ]; then curl_opts="$curl_opts --proxy $proxy"; fi
-        eval "curl $curl_opts \"$url\" -o \"$dest\"" || return 1
+        local curl_args=(-fsSL --max-time 5 -A "$ua")
+        if [ -n "$proxy" ]; then curl_args+=("--proxy" "$proxy"); fi
+        curl "${curl_args[@]}" "$url" -o "$dest" || return 1
     }
 
     css_origin() {
@@ -385,11 +390,11 @@ download_remote_assets() {
     local mcu_url="https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/+esm"
     local qr_url="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"
     
-    local curl_opts="-fsSL --max-time 15 -A \"$ua\""
-    if [ -n "$proxy" ]; then curl_opts="$curl_opts --proxy $proxy"; fi
+    local curl_args=(-fsSL --max-time 5 -A "$ua")
+    if [ -n "$proxy" ]; then curl_args+=("--proxy" "$proxy"); fi
     
-    eval "curl $curl_opts \"$mcu_url\" -o \"$ASSETS_DIR/mcu.js\""
-    eval "curl $curl_opts \"$qr_url\" -o \"$ASSETS_DIR/qrcode.min.js\""
+    curl "${curl_args[@]}" "$mcu_url" -o "$ASSETS_DIR/mcu.js"
+    curl "${curl_args[@]}" "$qr_url" -o "$ASSETS_DIR/qrcode.min.js"
 
     cd "$ASSETS_DIR"
     declare -A ORIGINS
@@ -400,9 +405,8 @@ download_remote_assets() {
     for css_file in gs.css cc.css ms.css; do
         if [ ! -s "$css_file" ]; then continue; fi
         local origin="${ORIGINS[$css_file]}"
-        local urls=$(grep -o 'url([^)]*)' "$css_file" | sed 's/url(//;s/)//' | tr -d "'\"" | sort | uniq)
-        
-        for url in $urls; do
+        grep -o 'url([^)]*)' "$css_file" | sed 's/url(//;s/)//' | tr -d "'\"" | sort | uniq | while read -r url; do
+            [ -z "$url" ] && continue
             local filename=$(basename "$url")
             local clean_name="${filename%%	*}"
             if [ ! -f "$clean_name" ]; then
@@ -410,7 +414,7 @@ download_remote_assets() {
                 if [[ "$url" == //* ]]; then fetch_url="https:$url"
                 elif [[ "$url" == /* ]]; then fetch_url="${origin}${url}"
                 elif [[ "$url" != http* ]]; then fetch_url="${origin}/${url}"; fi
-                eval "curl $curl_opts \"$fetch_url\" -o \"$clean_name\""
+                curl "${curl_args[@]}" "$fetch_url" -o "$clean_name"
             fi
             sed -i "s|url(['\"]\{0,1\}$url['\"]\{0,1\})|url($clean_name)|g" "$css_file"
         done
@@ -427,7 +431,7 @@ setup_configs() {
     DNS_SERVER_NAME="$LAN_IP"
     if [ -n "$DESEC_DOMAIN" ] && [ -n "$DESEC_TOKEN" ]; then
         log_info "Configuring deSEC and LE..."
-        DESEC_RESPONSE=$(curl -s --max-time 15 -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
+        DESEC_RESPONSE=$(curl -s --max-time 5 -X PATCH "https://desec.io/api/v1/domains/$DESEC_DOMAIN/rrsets/" \
             -H "Authorization: Token $DESEC_TOKEN" -H "Content-Type: application/json" \
             -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"$PUBLIC_IP\"]}]" 2>&1 || echo "CURL_ERROR")
         
@@ -442,17 +446,22 @@ setup_configs() {
         fi
 
         if [ "$SKIP_CERT_REQ" = false ]; then
-            log_info "Requesting LE cert..."
-            $DOCKER_CMD run --rm -v "$AGH_CONF_DIR:/acme" -e "DESEC_Token=$DESEC_TOKEN" -e "DESEC_DOMAIN=$DESEC_DOMAIN" \
-                neilpang/acme.sh:latest --issue --dns dns_desec --dnssleep 120 -d "$DESEC_DOMAIN" -d "*.$DESEC_DOMAIN" \
-                --keylength ec-256 --server letsencrypt --home /acme --config-home /acme --cert-home /acme/certs > /dev/null 2>&1
-            
-            if [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]; then
-                cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
-                cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
+            if [ "${MOCK_VERIFICATION:-false}" = "true" ]; then
+                log_info "Mock verification enabled: Skipping real LE cert request."
+                $DOCKER_CMD run --rm -v "$AGH_CONF_DIR:/certs" neilpang/acme.sh:latest /bin/sh -c "openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes -keyout /certs/ssl.key -out /certs/ssl.crt -subj '/CN=$DESEC_DOMAIN'" >/dev/null 2>&1
             else
-                log_warn "LE failed, generating self-signed..."
-                $DOCKER_CMD run --rm -v "$AGH_CONF_DIR:/certs" neilpang/acme.sh:latest /bin/sh -c "openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes -keyout /certs/ssl.key -out /certs/ssl.crt -subj '/CN=$DESEC_DOMAIN'" >/dev/null 2>&1
+                log_info "Requesting LE cert..."
+                $DOCKER_CMD run --rm -v "$AGH_CONF_DIR:/acme" -e "DESEC_Token=$DESEC_TOKEN" -e "DESEC_DOMAIN=$DESEC_DOMAIN" \
+                    neilpang/acme.sh:latest --issue --dns dns_desec --dnssleep 10 -d "$DESEC_DOMAIN" -d "*.$DESEC_DOMAIN" \
+                    --keylength ec-256 --server letsencrypt --home /acme --config-home /acme --cert-home /acme/certs > /dev/null 2>&1
+                
+                if [ -f "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]; then
+                    cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "$AGH_CONF_DIR/ssl.crt"
+                    cp "$AGH_CONF_DIR/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "$AGH_CONF_DIR/ssl.key"
+                else
+                    log_warn "LE failed, generating self-signed..."
+                    $DOCKER_CMD run --rm -v "$AGH_CONF_DIR:/certs" neilpang/acme.sh:latest /bin/sh -c "openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes -keyout /certs/ssl.key -out /certs/ssl.crt -subj '/CN=$DESEC_DOMAIN'" >/dev/null 2>&1
+                fi
             fi
         fi
         DNS_SERVER_NAME="$DESEC_DOMAIN"

@@ -7,7 +7,7 @@ import re
 import sqlite3
 import threading
 from fastapi import APIRouter, Depends, BackgroundTasks
-from ..core.security import get_current_user
+from ..core.security import get_current_user, get_admin_user
 from ..core.config import settings
 from ..utils.logging import log_structured
 from ..utils.process import run_command
@@ -26,10 +26,15 @@ def get_total_usage(path):
 
 def save_total_usage(path, rx, tx):
     try:
-        with open(path, 'w') as f:
-            json.dump({'rx': int(rx), 'tx': int(tx)}, f)
+        import tempfile
+        dirname = os.path.dirname(path)
+        with tempfile.NamedTemporaryFile('w', dir=dirname, delete=False) as tf:
+            json.dump({'rx': int(rx), 'tx': int(tx)}, tf)
+            temp_name = tf.name
+        os.replace(temp_name, path)
     except Exception:
-        pass
+        if 'temp_name' in locals() and os.path.exists(temp_name):
+            os.remove(temp_name)
 
 @router.get("/health")
 def health_check():
@@ -169,7 +174,7 @@ def get_containers(user: str = Depends(get_current_user)):
         return {"error": str(e)}
 
 @router.post("/purge-images")
-def purge_images(user: str = Depends(get_current_user)):
+def purge_images(user: str = Depends(get_admin_user)):
     try:
         res = run_command(['docker', 'image', 'prune', '-f'], timeout=60)
         reclaimed_msg = "Unused images and build cache cleared."
@@ -183,7 +188,7 @@ def purge_images(user: str = Depends(get_current_user)):
         return {"error": str(e)}
 
 @router.post("/restart-stack")
-def restart_stack(background_tasks: BackgroundTasks, user: str = Depends(get_current_user)):
+def restart_stack(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
     def _restart():
         time.sleep(2)
         subprocess.run(["docker", "compose", "-f", "/app/docker-compose.yml", "restart"])
@@ -193,7 +198,7 @@ def restart_stack(background_tasks: BackgroundTasks, user: str = Depends(get_cur
     return {"success": True, "message": "Stack restart initiated"}
 
 @router.post("/uninstall")
-def uninstall(background_tasks: BackgroundTasks, user: str = Depends(get_current_user)):
+def uninstall(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
     def _uninstall():
         log_structured("INFO", "Uninstall sequence started", "MAINTENANCE")
         time.sleep(5)

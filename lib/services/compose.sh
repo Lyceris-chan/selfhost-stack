@@ -21,10 +21,9 @@ append_hub_api() {
     container_name: ${CONTAINER_PREFIX}api
     labels:
       - "casaos.skip=true"
-      - "io.dhi.hardened=true"
     networks:
-      - dhi-frontnet
-      - dhi-mgmtnet
+      - frontend
+      - mgmt
     ports: ["$LAN_IP:55555:55555"]
     volumes:
       - "$WG_PROFILES_DIR:/profiles"
@@ -59,7 +58,7 @@ append_hub_api() {
       - DESEC_DOMAIN=$DESEC_DOMAIN
       - DOCKER_CONFIG=/root/.docker
       - DOCKER_HOST=tcp://docker-proxy:2375
-      - CORS_ORIGINS='["http://localhost","http://${LAN_IP}","http://${LAN_IP}:${PORT_DASHBOARD_WEB}"${DESEC_DOMAIN:+,"https://${DESEC_DOMAIN}"}]'
+      - "CORS_ORIGINS=[\"http://localhost\",\"http://localhost:${PORT_DASHBOARD_WEB}\",\"http://${LAN_IP}\",\"http://${LAN_IP}:${PORT_DASHBOARD_WEB}\"${DESEC_DOMAIN:+,\"https://${DESEC_DOMAIN}\"}]"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:55555/health || exit 1"]
       interval: 20s
@@ -91,8 +90,6 @@ append_odido_booster() {
       dockerfile: $DOCKERFILE
     image: selfhost/odido-booster:${ODIDO_BOOSTER_IMAGE_TAG:-latest}
     container_name: ${CONTAINER_PREFIX}odido-booster
-    labels:
-      - "io.dhi.hardened=true"
 EOF
 
     if [ "$VPN_MODE" = "true" ]; then
@@ -103,7 +100,7 @@ EOF
 EOF
     else
         cat >> "$COMPOSE_FILE" <<EOF
-    networks: [dhi-frontnet]
+    networks: [frontend]
     ports: ["$LAN_IP:8085:8085"]
 EOF
     fi
@@ -135,9 +132,7 @@ append_memos() {
     image: ghcr.io/usememos/memos:latest
     container_name: ${CONTAINER_PREFIX}memos
     user: "1000:1000"
-    labels:
-      - "io.dhi.hardened=true"
-    networks: [dhi-frontnet]
+    networks: [frontend]
     ports: ["$LAN_IP:$PORT_MEMOS:5230"]
     environment:
       - MEMOS_MODE=prod
@@ -169,7 +164,7 @@ append_gluetun() {
     devices:
       - /dev/net/tun:/dev/net/tun
     networks:
-      dhi-frontnet:
+      frontend:
         ipv4_address: 172.${FOUND_OCTET}.0.254
     ports:
       - "$LAN_IP:$PORT_REDLIB:$PORT_INT_REDLIB/tcp"
@@ -225,7 +220,7 @@ DASHEOF
     build:
       context: $SRC_DIR/dashboard
     container_name: ${CONTAINER_PREFIX}dashboard
-    networks: [dhi-frontnet]
+    networks: [frontend]
     ports:
       - "$LAN_IP:$PORT_DASHBOARD_WEB:$PORT_DASHBOARD_WEB"
       - "$LAN_IP:8443:8443"
@@ -235,7 +230,6 @@ DASHEOF
       - "$NGINX_CONF:/etc/nginx/http.d/default.conf:ro"
       - "$AGH_CONF_DIR:/etc/adguard/conf:ro"
     labels:
-      - "io.dhi.hardened=true"
       - "dev.casaos.app.ui.protocol=http"
       - "dev.casaos.app.ui.port=$PORT_DASHBOARD_WEB"
       - "dev.casaos.app.ui.hostname=$LAN_IP"
@@ -257,9 +251,9 @@ EOF
 
 append_portainer() {
     if ! should_deploy "portainer"; then return 0; fi
-    # Create Portainer Source Directory and DHI Wrapper
+    # Create Portainer Source Directory and Portainer Wrapper
     $SUDO mkdir -p "$SRC_DIR/portainer"
-    cat <<PORTEOF | $SUDO tee "$SRC_DIR/portainer/Dockerfile.dhi" >/dev/null
+    cat <<PORTEOF | $SUDO tee "$SRC_DIR/portainer/Dockerfile" >/dev/null
 FROM alpine:3.20
 COPY --from=portainer/portainer-ce:latest /portainer /portainer
 COPY --from=portainer/portainer-ce:latest /public /public
@@ -274,11 +268,9 @@ PORTEOF
     image: portainer/portainer-ce:latest
     container_name: ${CONTAINER_PREFIX}portainer
     command: ["-H", "tcp://docker-proxy:2375", "--admin-password", "$PORTAINER_HASH_COMPOSE", "--no-analytics"]
-    labels:
-      - "io.dhi.hardened=true"
     networks:
-      - dhi-frontnet
-      - dhi-mgmtnet
+      - frontend
+      - mgmt
     ports: ["$LAN_IP:$PORT_PORTAINER:9000"]
     volumes: ["$DATA_DIR/portainer:/data"]
     healthcheck:
@@ -301,9 +293,7 @@ append_adguard() {
   adguard:
     image: adguard/adguardhome:latest
     container_name: ${CONTAINER_PREFIX}adguard
-    labels:
-      - "io.dhi.hardened=true"
-    networks: [dhi-frontnet]
+    networks: [frontend]
     ports:
       - "$LAN_IP:53:53/udp"
       - "$LAN_IP:53:53/tcp"
@@ -333,11 +323,9 @@ append_unbound() {
   unbound:
     image: klutchell/unbound:latest
     container_name: ${CONTAINER_PREFIX}unbound
-    labels:
-      - "io.dhi.hardened=true"
     command: ["-d", "-c", "/etc/unbound/unbound.conf"]
     networks:
-      dhi-frontnet:
+      frontend:
         ipv4_address: 172.$FOUND_OCTET.0.250
     volumes:
       - "$UNBOUND_CONF:/etc/unbound/unbound.conf:ro"
@@ -382,8 +370,6 @@ append_redlib() {
   redlib:
     image: quay.io/redlib/redlib:latest
     container_name: ${CONTAINER_PREFIX}redlib
-    labels:
-      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment: {REDLIB_PORT: 8081, PORT: 8081, REDLIB_ADDRESS: "0.0.0.0", REDLIB_DEFAULT_WIDE: "on", REDLIB_DEFAULT_USE_HLS: "on", REDLIB_DEFAULT_SHOW_NSFW: "on"}
     restart: always
@@ -414,8 +400,6 @@ append_wikiless() {
       dockerfile: $DOCKERFILE
     image: selfhost/wikiless:latest
     container_name: ${CONTAINER_PREFIX}wikiless
-    labels:
-      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment: {DOMAIN: "$LAN_IP:$PORT_WIKILESS", NONSSL_PORT: "$PORT_INT_WIKILESS", REDIS_URL: "redis://127.0.0.1:6379"}
     healthcheck:
@@ -434,7 +418,6 @@ append_wikiless() {
     container_name: ${CONTAINER_PREFIX}wikiless_redis
     labels:
       - "casaos.skip=true"
-      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     volumes: ["$DATA_DIR/redis:/data"]
     healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 5}
@@ -451,16 +434,22 @@ append_invidious() {
   invidious:
     image: quay.io/invidious/invidious:latest
     container_name: ${CONTAINER_PREFIX}invidious
-    labels:
-      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
-    volumes:
-      - $CONFIG_DIR/invidious:/app/config:ro
     environment:
-      - INVIDIOUS_DATABASE_URL=postgres://kemal:$INVIDIOUS_DB_PASS_COMPOSE@invidious-db:5432/invidious
-      - INVIDIOUS_HMAC_KEY=$IV_HMAC
+      INVIDIOUS_CONFIG: |
+        db:
+          dbname: invidious
+          user: kemal
+          password: $INVIDIOUS_DB_PASS_COMPOSE
+          host: ${CONTAINER_PREFIX}invidious-db
+          port: 5432
+        check_tables: true
+        invidious_companion:
+        - private_url: "http://${CONTAINER_PREFIX}companion:8282/companion"
+        invidious_companion_key: "$IV_COMPANION"
+        hmac_key: "$IV_HMAC"
     healthcheck:
-      test: ["CMD-SHELL", "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || [ \$\$\$? -eq 8 ]"]
+      test: ["CMD-SHELL", "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || [ \$\$? -eq 8 ]"]
       interval: 30s
       timeout: 5s
       retries: 2
@@ -477,15 +466,16 @@ append_invidious() {
         limits: {cpus: '1.5', memory: 1024M}
 
   invidious-db:
-    image: postgres:14-alpine
+    image: postgres:14
     container_name: ${CONTAINER_PREFIX}invidious-db
     labels:
       - "casaos.skip=true"
-      - "io.dhi.hardened=true"
-    networks: [dhi-frontnet]
+    networks: [frontend]
     environment: {POSTGRES_DB: invidious, POSTGRES_USER: kemal, POSTGRES_PASSWORD: $INVIDIOUS_DB_PASS_COMPOSE}
     volumes:
       - $DATA_DIR/postgres:/var/lib/postgresql/data
+      - $SRC_DIR/invidious/config/sql:/config/sql:ro
+      - $SRC_DIR/invidious/docker/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh:ro
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U kemal -d invidious"], interval: 10s, timeout: 5s, retries: 5}
 
   companion:
@@ -521,8 +511,6 @@ append_rimgo() {
   rimgo:
     image: codeberg.org/rimgo/rimgo:latest
     container_name: ${CONTAINER_PREFIX}rimgo
-    labels:
-      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     environment: {IMGUR_CLIENT_ID: "${RIMGO_IMGUR_CLIENT_ID:-546c25a59c58ad7}", ADDRESS: "0.0.0.0", PORT: "$PORT_INT_RIMGO", PRIVACY_NOT_COLLECTED: "true"}
     healthcheck:
@@ -572,8 +560,6 @@ append_anonymousoverflow() {
   anonymousoverflow:
     image: ghcr.io/httpjamesm/anonymousoverflow:release
     container_name: ${CONTAINER_PREFIX}anonymousoverflow
-    labels:
-      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     env_file: ["$ENV_DIR/anonymousoverflow.env"]
     environment: {PORT: "$PORT_INT_ANONYMOUS"}
@@ -601,8 +587,6 @@ append_scribe() {
       dockerfile: $DOCKERFILE
     image: selfhost/scribe:${SCRIBE_IMAGE_TAG:-latest}
     container_name: ${CONTAINER_PREFIX}scribe
-    labels:
-      - "io.dhi.hardened=true"
     network_mode: "service:gluetun"
     env_file: ["$ENV_DIR/scribe.env"]
     healthcheck:
@@ -624,7 +608,7 @@ append_vert() {
   vertd:
     container_name: ${CONTAINER_PREFIX}vertd
     image: ghcr.io/vert-sh/vertd:latest
-    networks: [dhi-frontnet]
+    networks: [frontend]
     ports: ["$LAN_IP:$PORT_VERTD:$PORT_INT_VERTD"]
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:24153/api/version"]
@@ -633,7 +617,6 @@ append_vert() {
       retries: 3
     labels:
       - "casaos.skip=true"
-      - "io.dhi.hardened=true"
     environment:
       - PUBLIC_URL=http://${CONTAINER_PREFIX}vertd:$PORT_INT_VERTD
 $VERTD_DEVICES
@@ -652,7 +635,6 @@ $(if [ -n "${VERTD_NVIDIA:-}" ]; then echo "        reservations:
     image: ghcr.io/vert-sh/vert:latest
     labels:
       - "casaos.skip=true"
-      - "io.dhi.hardened=true"
     environment:
       - PUB_HOSTNAME=$VERT_PUB_HOSTNAME
       - PUB_PLAUSIBLE_URL=
@@ -663,7 +645,7 @@ $(if [ -n "${VERTD_NVIDIA:-}" ]; then echo "        reservations:
       - PUB_DONATION_URL=
       - PUB_STRIPE_KEY=
       - PUB_DISABLE_DONATIONS=true
-    networks: [dhi-frontnet]
+    networks: [frontend]
     ports: ["$LAN_IP:$PORT_VERT:$PORT_INT_VERT"]
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:80/"]
@@ -753,7 +735,7 @@ append_searxng() {
   searxng-redis:
     image: redis:7-alpine
     container_name: ${CONTAINER_PREFIX}searxng-redis
-    networks: [dhi-frontnet]
+    networks: [frontend]
     command: redis-server --save "" --appendonly no
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -796,7 +778,7 @@ append_immich() {
   immich-db:
     image: ${IMMICH_POSTGRES_IMAGE:-ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0}
     container_name: ${CONTAINER_PREFIX}immich-db
-    networks: [dhi-frontnet]
+    networks: [frontend]
     environment:
       - POSTGRES_USER=immich
       - POSTGRES_PASSWORD=$IMMICH_DB_PASS_COMPOSE
@@ -818,7 +800,7 @@ append_immich() {
   immich-redis:
     image: ${IMMICH_VALKEY_IMAGE:-docker.io/valkey/valkey:9}
     container_name: ${CONTAINER_PREFIX}immich-redis
-    networks: [dhi-frontnet]
+    networks: [frontend]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -853,12 +835,12 @@ append_watchtower() {
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
-      - dhi-mgmtnet
+      - mgmt
     environment:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_POLL_INTERVAL=3600
       - WATCHTOWER_NOTIFICATIONS=shoutrrr
-      - WATCHTOWER_NOTIFICATION_URL=generic+http://hub-api:55555/watchtower
+      - WATCHTOWER_NOTIFICATION_URL=generic+http://hub-api:55555/watchtower?token=$HUB_API_KEY_COMPOSE
     restart: unless-stopped
     deploy:
       resources:
@@ -891,12 +873,12 @@ generate_compose() {
     cat > "$COMPOSE_FILE" <<EOF
 name: ${APP_NAME}
 networks:
-  dhi-frontnet:
+  frontend:
     driver: bridge
     ipam:
       config:
         - subnet: $DOCKER_SUBNET
-  dhi-mgmtnet:
+  mgmt:
     internal: true
     driver: bridge
 
@@ -917,7 +899,7 @@ services:
       - LOGS=1
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-    networks: [dhi-mgmtnet]
+    networks: [mgmt]
     restart: unless-stopped
     deploy:
       resources:

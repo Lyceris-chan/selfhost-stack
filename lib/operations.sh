@@ -305,7 +305,7 @@ clean_environment() {
                 $DOCKER_CMD stop "$c" 2>/dev/null || true
             fi
         done
-        sleep 3
+        sleep 0.5
         
         # ============================================================
         # PHASE 2: Remove all containers

@@ -3,7 +3,7 @@ import json
 import secrets
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
-from ..core.security import create_session, session_state, get_current_user
+from ..core.security import create_session, session_state, get_current_user, get_admin_user
 from ..core.config import settings
 from ..utils.logging import log_structured
 
@@ -41,27 +41,42 @@ def verify_admin(request: VerifyAdminRequest):
         raise HTTPException(status_code=401, detail="Invalid admin password")
 
 @router.post("/toggle-session-cleanup")
-def toggle_session_cleanup(request: ToggleSessionRequest, user: str = Depends(get_current_user)):
+def toggle_session_cleanup(request: ToggleSessionRequest, user: str = Depends(get_admin_user)):
     from ..core.security import session_state
     session_state["cleanup_enabled"] = request.enabled
     return {"success": True, "enabled": request.enabled}
 
 @router.post("/rotate-api-key")
-def rotate_api_key(request: RotateKeyRequest, user: str = Depends(get_current_user)):
+def rotate_api_key(request: RotateKeyRequest, user: str = Depends(get_admin_user)):
     if request.new_key:
+        # Security: Sanitize the key to prevent environment variable injection.
+        # We only allow alphanumeric characters.
+        sanitized_key = "".join(c for c in request.new_key if c.isalnum())
+        if not sanitized_key or len(sanitized_key) < 16:
+            raise HTTPException(status_code=400, detail="Invalid key format. Must be at least 16 alphanumeric characters.")
+
         file_secrets = {}
         if os.path.exists(settings.SECRETS_FILE):
             with open(settings.SECRETS_FILE, 'r') as f:
                 for line in f:
                     if '=' in line:
                         k, v = line.strip().split('=', 1)
+                        # Remove quotes if present to avoid nesting
+                        v = v.strip("'").strip('"')
                         file_secrets[k] = v
         
-        file_secrets['HUB_API_KEY'] = request.new_key
+        file_secrets['HUB_API_KEY'] = sanitized_key
+        # Also update ODIDO_API_KEY for consistency as they are used interchangeably in the stack
+        file_secrets['ODIDO_API_KEY'] = sanitized_key
         
-        with open(settings.SECRETS_FILE, 'w') as f:
-            for k, v in file_secrets.items():
-                f.write(f"{k}={v}\n")
+        # Write back with restricted permissions and proper quoting
+        try:
+            fd = os.open(settings.SECRETS_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w') as f:
+                for k, v in file_secrets.items():
+                    f.write(f"{k}='{v}'\n")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to update secrets: {str(e)}")
         
         log_structured("SECURITY", "Dashboard API key rotated", "AUTH")
         return {"success": True}

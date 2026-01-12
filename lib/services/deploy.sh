@@ -23,25 +23,12 @@ deploy_stack() {
     # Retry wrapper for Docker Compose
     run_compose_up() {
         local args="$*"
-        local max_retries=5
-        local count=0
-        local delay=3
+        if $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d $args; then
+            return 0
+        fi
         
-        while [ $count -lt $max_retries ]; do
-            if $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d $args; then
-                return 0
-            fi
-            
-            exit_code=$?
-            log_warn "Docker Compose failed (Exit Code: $exit_code). Retrying in ${delay}s ($((count+1))/$max_retries)..."
-            
-            # If iptables lock error, wait a bit longer
-            sleep $delay
-            count=$((count + 1))
-            delay=$((delay * 2))
-        done
-        
-        log_crit "Docker Compose failed after $max_retries attempts."
+        exit_code=$?
+        log_crit "Docker Compose failed (Exit Code: $exit_code)."
         return 1
     }
 
@@ -64,8 +51,8 @@ deploy_stack() {
 
         # Wait for critical backends to be healthy before starting Nginx (dashboard) if they were launched
         if echo "$CORE_SERVICES" | grep -q "hub-api" || echo "$CORE_SERVICES" | grep -q "gluetun"; then
-            log_info "Waiting for backend services to stabilize (this may take up to 60s)..."
-            for i in $(seq 1 60); do
+            log_info "Waiting for backend services to stabilize (this may take up to 10s)..."
+            for i in $(seq 1 10); do
                 HUB_HEALTH="healthy"
                 GLU_HEALTH="running"
                 
@@ -80,7 +67,7 @@ deploy_stack() {
                     log_info "Backends are stable. Finalizing stack launch..."
                     break
                 fi
-                [ "$i" -eq 60 ] && log_warn "Backends taking longer than expected to stabilize. Proceeding anyway..."
+                [ "$i" -eq 10 ] && log_warn "Backends taking longer than expected to stabilize. Proceeding anyway..."
                 sleep 1
             done
         fi
@@ -95,7 +82,7 @@ deploy_stack() {
     fi
 
     log_info "Verifying control plane connectivity..."
-    sleep 5
+    sleep 1
     API_TEST=$(curl -s -o /dev/null -w "%{http_code}" "http://$LAN_IP:$PORT_DASHBOARD_WEB/api/status" || echo "FAILED")
     if [ "$API_TEST" = "200" ]; then
         log_info "Control plane is reachable."
@@ -109,12 +96,12 @@ deploy_stack() {
     if [ "$AUTO_PASSWORD" = true ] && grep -q "portainer:" "$COMPOSE_FILE"; then
         log_info "Synchronizing Portainer administrative settings..."
         PORTAINER_READY=false
-        for _ in {1..12}; do
-            if curl -s --max-time 2 "http://$LAN_IP:$PORT_PORTAINER/api/system/status" > /dev/null; then
+        for _ in {1..5}; do
+            if curl -s --max-time 1 "http://$LAN_IP:$PORT_PORTAINER/api/system/status" > /dev/null; then
                 PORTAINER_READY=true
                 break
             fi
-            sleep 5
+            sleep 1
         done
 
         if [ "$PORTAINER_READY" = true ]; then

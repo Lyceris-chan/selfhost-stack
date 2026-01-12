@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck disable=SC2154
 set -euo pipefail
 SERVICE=$1
 ACTION=$2
@@ -11,98 +12,119 @@ DATA_DIR="/app/data"
 log() {
     echo "[MIGRATE] $1"
     if [ -f "/app/deployment.log" ]; then
-        printf '{"timestamp": "%s", "level": "INFO", "category": "MAINTENANCE", "source": "orchestrator", "message": "[MIGRATE] %s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
+        # Humanized style for direct file logs
+        printf '{"timestamp": "%s", "level": "INFO", "category": "MAINTENANCE", "source": "orchestrator", "message": "Service maintenance: %s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
     fi
 }
 warn() {
     echo "[MIGRATE] ⚠️  WARNING: $1"
     if [ -f "/app/deployment.log" ]; then
-        printf '{"timestamp": "%s", "level": "WARN", "category": "MAINTENANCE", "source": "orchestrator", "message": "[MIGRATE] %s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
+        printf '{"timestamp": "%s", "level": "WARN", "category": "MAINTENANCE", "source": "orchestrator", "message": "Maintenance warning: %s"}\n' "$(date +"%Y-%m-%d %H:%M:%S")" "$1" >> "/app/deployment.log"
     fi
 }
 mkdir -p "$BACKUP_DIR"
 
-# Display warning for destructive actions
-if [ "$ACTION" = "clear" ] || [ "$ACTION" = "clear-logs" ]; then
-    echo ""
-    echo "┌─────────────────────────────────────────────────────────────────┐"
-    echo "│  ⚠️  DATA DELETION WARNING                                       │"
-    echo "├─────────────────────────────────────────────────────────────────┤"
-    echo "│  You are about to DELETE data from: $SERVICE"
-    echo "│                                                                 │"
-    echo "│  This may include personal notes, subscriptions, preferences,   │"
-    echo "│  photos, or other data you have stored in this service.         │"
-    echo "│                                                                 │"
-    echo "│  If you have not backed up your data, consider doing so now:    │"
-    echo "│  Backups are stored in: $BACKUP_DIR"
-    echo "└─────────────────────────────────────────────────────────────────┘"
-    echo ""
-    if [ "$BACKUP" = "no" ]; then
-        warn "Backup is DISABLED. Your data will be permanently lost!"
+# Helper for generic service backup
+do_backup() {
+    local svc=$1
+    log "Initiating database backup for $svc..."
+    if [ "$svc" = "invidious" ]; then
+        if PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql" 2>/dev/null; then
+            log "Invidious database backup secured."
+        else
+            warn "Invidious database backup failed."
+        fi
+    elif [ "$svc" = "memos" ]; then
+        if cp -r "$DATA_DIR/memos" "$BACKUP_DIR/memos_$TIMESTAMP" 2>/dev/null; then
+            log "Memos data assets archived."
+        else
+            warn "Memos data archival failed."
+        fi
+    elif [ "$svc" = "immich" ]; then
+        if PGPASSWORD="__IMMICH_DB_PASSWORD__" docker exec -e PGPASSWORD="__IMMICH_DB_PASSWORD__" ${CONTAINER_PREFIX}immich-db pg_dump -U immich immich > "$BACKUP_DIR/immich_$TIMESTAMP.sql" 2>/dev/null; then
+            log "Immich database backup secured."
+        else
+            warn "Immich database backup failed."
+        fi
     else
-        log "A backup will be created before deletion."
+        log "No specialized backup required for $svc."
     fi
+}
+
+# Helper for generic service restore
+do_restore() {
+    local svc=$1
+    local file=$2
+    log "Initiating data restoration for $svc from $file..."
+    if [ ! -f "$file" ]; then
+        warn "Restore failed: Source file $file not found."
+        return 1
+    fi
+
+    if [ "$svc" = "invidious" ]; then
+        if PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -i -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db psql -U kemal invidious < "$file" 2>/dev/null; then
+            log "Invidious database restoration complete."
+        else
+            warn "Invidious database restoration failed."
+        fi
+    elif [ "$svc" = "memos" ]; then
+        rm -rf "$DATA_DIR/memos"
+        if cp -r "$file" "$DATA_DIR/memos" 2>/dev/null; then
+            log "Memos data assets restored."
+        else
+            warn "Memos data restoration failed."
+        fi
+    else
+        log "No specialized restore logic for $svc."
+    fi
+}
+
+# Route actions
+if [ "$ACTION" = "backup" ]; then
+    do_backup "$SERVICE"
+    exit 0
+elif [ "$ACTION" = "restore" ]; then
+    do_restore "$SERVICE" "$3"
+    exit 0
+elif [ "$ACTION" = "backup-all" ]; then
+    log "Initiating full stack maintenance backup..."
+    for s in invidious memos immich; do
+        do_backup "$s"
+    done
+    log "Full stack maintenance backup completed."
+    exit 0
 fi
 
 if [ "$SERVICE" = "invidious" ]; then
-
-            if [ "$ACTION" = "clear" ]; then
-            log "CLEARING Invidious database (resetting to defaults)..."
-            warn "This will delete ALL your Invidious subscriptions, watch history, and preferences!"
-            if [ "$BACKUP" != "no" ]; then
-                log "Creating safety backup..."
-                PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
-                log "Backup saved to: $BACKUP_DIR/invidious_BEFORE_CLEAR_$TIMESTAMP.sql"
-            fi
-            # Drop and recreate
-            PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db dropdb -U kemal invidious
-            PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db createdb -U kemal invidious
-            PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh
-            log "Invidious database cleared."
-        elif [ "$ACTION" = "migrate" ]; then
-            log "Starting Invidious migration..."
-            # 1. Backup existing data
-            if [ "$BACKUP" != "no" ]; then
-                log "Backing up Invidious database..."
-                # Use a temporary file and check if it succeeds
-                if PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db pg_dump -U kemal invidious > "$BACKUP_DIR/invidious_$TIMESTAMP.sql"; then
-                    log "Backup saved to: $BACKUP_DIR/invidious_$TIMESTAMP.sql"
-                else
-                    warn "Database backup failed. Proceeding with migration anyway..."
-                fi
-            fi
-            # 2. Run migrations
-            log "Applying schema updates..."
-            PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
-            log "Invidious migration complete."
-        elif [ "$ACTION" = "vacuum" ]; then
-             log "Invidious (Postgres) handles vacuuming automatically. Skipping."
-        fi
-    elif [ "$SERVICE" = "adguard" ]; then
-        if [ "$ACTION" = "clear-logs" ]; then
-            log "Clearing AdGuard Home query logs..."
-            warn "This will delete all DNS query history!"
-            find "$DATA_DIR/adguard-work" -name "querylog.json" -exec truncate -s 0 {} + 
-            log "AdGuard logs cleared."
-        fi
-    elif [ "$SERVICE" = "memos" ]; then
-        if [ "$ACTION" = "vacuum" ]; then
-            log "Optimizing Memos database (VACUUM)..."
-            docker exec ${CONTAINER_PREFIX}memos sqlite3 /var/opt/memos/memos_prod.db "VACUUM;" 2>/dev/null || log "Memos container not ready or sqlite3 missing."
-            log "Memos database optimized."
-        elif [ "$ACTION" = "clear" ]; then
-            warn "This will delete ALL your Memos notes and attachments!"
-            if [ "$BACKUP" != "no" ]; then
-                log "Creating safety backup..."
-                cp -r "$DATA_DIR/../memos" "$BACKUP_DIR/memos_BEFORE_CLEAR_$TIMESTAMP" 2>/dev/null || true
-                log "Backup saved to: $BACKUP_DIR/memos_BEFORE_CLEAR_$TIMESTAMP"
-            fi
-            log "Clear action for Memos requires manual intervention."
-        fi
-    else
-        if [ "$ACTION" = "vacuum" ]; then
-            log "Vacuum not required/supported for $SERVICE."
-        else
-            log "No custom migration logic defined for $SERVICE."
-        fi
+    if [ "$ACTION" = "clear" ]; then
+        log "Resetting Invidious database to factory defaults..."
+        if [ "$BACKUP" != "no" ]; then do_backup "invidious"; fi
+        PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db dropdb -U kemal invidious || true
+        PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db createdb -U kemal invidious
+        PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh
+        log "Invidious database reset successful."
+    elif [ "$ACTION" = "migrate" ] || [ "$ACTION" = "migrate-no-backup" ]; then
+        log "Synchronizing Invidious database schema..."
+        if [ "$ACTION" = "migrate" ]; then do_backup "invidious"; fi
+        PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" docker exec -e PGPASSWORD="__INVIDIOUS_DB_PASSWORD__" ${CONTAINER_PREFIX}invidious-db /bin/sh /docker-entrypoint-initdb.d/init-invidious-db.sh 2>&1 | grep -v "already exists" || true
+        log "Invidious schema synchronization complete."
     fi
+elif [ "$SERVICE" = "adguard" ]; then
+    if [ "$ACTION" = "clear-logs" ]; then
+        log "Purging AdGuard Home query telemetry..."
+        find "$DATA_DIR/adguard-work" -name "querylog.json" -exec truncate -s 0 {} + 
+        log "AdGuard telemetry purge complete."
+    fi
+elif [ "$SERVICE" = "memos" ]; then
+    if [ "$ACTION" = "vacuum" ]; then
+        log "Optimizing Memos database storage..."
+        docker exec ${CONTAINER_PREFIX}memos sqlite3 /var/opt/memos/memos_prod.db "VACUUM;" 2>/dev/null || log "Memos container busy or sqlite3 unavailable."
+        log "Memos storage optimization complete."
+    elif [ "$ACTION" = "clear" ]; then
+        log "Resetting Memos database to factory defaults..."
+        if [ "$BACKUP" != "no" ]; then do_backup "memos"; fi
+        log "Resetting Memos requires manual container restart."
+    fi
+else
+    log "Maintenance action $ACTION for $SERVICE skipped (not applicable)."
+fi

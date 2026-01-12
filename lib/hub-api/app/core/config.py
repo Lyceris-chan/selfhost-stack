@@ -1,5 +1,8 @@
 import os
-from pydantic_settings import BaseSettings
+import json
+from typing import List, Union, Optional
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     CONTAINER_PREFIX: str = os.environ.get('CONTAINER_PREFIX', 'hub-')
@@ -22,14 +25,32 @@ class Settings(BaseSettings):
     # Network
     LAN_IP: str = os.environ.get('LAN_IP', '127.0.0.1')
     DESEC_DOMAIN: str = os.environ.get('DESEC_DOMAIN', '')
-    CORS_ORIGINS: list[str] = ["http://localhost", f"http://{LAN_IP}"]  # Production: Override with specific origins via env var (JSON list)
+    CORS_ORIGINS: List[str] = ["http://localhost", "http://127.0.0.1"]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+        if isinstance(v, str):
+            if not v.strip():
+                return ["http://localhost", "http://127.0.0.1"]
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    return json.loads(v)
+                except json.JSONDecodeError:
+                    pass
+            # Fallback to comma-separated
+            return [i.strip() for i in v.split(",") if i.strip()]
+        return v
 
     # Auth
-    HUB_API_KEY: str | None = os.environ.get('HUB_API_KEY')
-    ADMIN_PASS_RAW: str | None = os.environ.get('ADMIN_PASS_RAW')
-    VPN_PASS_RAW: str | None = os.environ.get('VPN_PASS_RAW')
+    HUB_API_KEY: Optional[str] = os.environ.get('HUB_API_KEY')
+    ADMIN_PASS_RAW: Optional[str] = os.environ.get('ADMIN_PASS_RAW')
+    VPN_PASS_RAW: Optional[str] = os.environ.get('VPN_PASS_RAW')
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding='utf-8',
+        extra='ignore'
+    )
 
 settings = Settings()

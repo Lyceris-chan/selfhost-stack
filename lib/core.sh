@@ -23,7 +23,7 @@ log_to_file() {
     local level=$1
     local msg=$2
     if [ -d "$(dirname "$HISTORY_LOG")" ]; then
-        $PYTHON_CMD -c "import json, datetime; print(json.dumps({'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'level': '$level', 'category': 'SYSTEM', 'source': 'orchestrator', 'message': '$msg'}))" >> "$HISTORY_LOG" 2>/dev/null || true
+        $PYTHON_CMD -c "import json, datetime, sys; print(json.dumps({'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'level': sys.argv[1], 'category': 'SYSTEM', 'source': 'orchestrator', 'message': sys.argv[2]}))" "$level" "$msg" >> "$HISTORY_LOG" 2>/dev/null || true
     fi
 }
 
@@ -51,19 +51,47 @@ ask_confirm() {
 
 pull_with_retry() {
     local img=$1
-    local max_retries=3
-    local count=0
-    while [ $count -lt $max_retries ]; do
-        if $DOCKER_CMD pull "$img" >/dev/null 2>&1; then
-            log_info "Successfully pulled $img"
-            return 0
-        fi
-        count=$((count + 1))
-        log_warn "Failed to pull $img. Retrying ($count/$max_retries)..."
-        sleep 1
-    done
-    log_crit "Failed to pull critical image $img after $max_retries attempts."
+    if $DOCKER_CMD pull "$img" >/dev/null 2>&1; then
+        log_info "Successfully pulled $img"
+        return 0
+    fi
+    log_crit "Failed to pull critical image $img."
     return 1
+}
+
+authenticate_registries() {
+    if [ -n "${REG_USER:-}" ] && [ -n "${REG_TOKEN:-}" ]; then
+        log_info "Authenticating with Docker Registry..."
+        # Use printf to avoid issues with special characters in token
+        if printf "%s" "$REG_TOKEN" | $DOCKER_CMD login -u "$REG_USER" --password-stdin >/dev/null 2>&1; then
+            log_info "Registry authentication successful."
+            return 0
+        else
+            log_warn "Registry authentication failed. Continuing as anonymous."
+            return 1
+        fi
+    fi
+    return 0
+}
+
+safe_replace() {
+    local template_file="$1"
+    local output_file="$2"
+    shift 2
+    if [ ! -f "$template_file" ]; then
+        log_warn "Template file not found: $template_file"
+        return 1
+    fi
+    local content
+    content=$(cat "$template_file")
+    while [ $# -gt 0 ]; do
+        local placeholder="$1"
+        local value="$2"
+        # Use bash parameter expansion for global replacement
+        content="${content//$placeholder/$value}"
+        shift 2
+    done
+    printf "%s" "$content" > "$output_file"
 }
 
 generate_secret() {

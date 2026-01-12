@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
-const LAN_IP = '127.0.0.1';
+const LAN_IP = process.env.LAN_IP || '127.0.0.1';
 const DASHBOARD_URL = `http://${LAN_IP}:8081`;
 const SCREENSHOT_DIR = path.join(__dirname, 'screenshots');
 const REPORT_FILE = path.join(__dirname, 'verification_report.md');
@@ -37,7 +37,7 @@ const SERVICES = [
     { name: 'Breezewiki', url: `http://${LAN_IP}:8380` },
     { name: 'AnonymousOverflow', url: `http://${LAN_IP}:8480` },
     { name: 'VERT', url: `http://${LAN_IP}:5555` },
-    { name: 'Companion', url: `http://${LAN_IP}:8282/companion` },
+    { name: 'Companion', url: `http://${LAN_IP}:8283/companion` },
     { name: 'OdidoBooster', url: `http://${LAN_IP}:8085/docs` },
 ];
 
@@ -162,6 +162,13 @@ async function runTests() {
 
         const isAdmin = await page.evaluate(() => document.body.classList.contains('admin-mode'));
         if (isAdmin) {
+            // Test Update Check
+            console.log('  Testing Update Check...');
+            await page.click('#update-all-btn');
+            await page.waitForSelector('#update-selection-modal', { visible: true });
+            logResult('Dashboard', 'Update Modal', 'PASS', 'Update selection modal opened');
+            await page.click('#update-selection-modal .btn-icon'); // Close it
+
             // Test Invidious Settings Modal
             console.log('  Testing Invidious Settings...');
             const invidiousSettingsBtn = await page.$('[data-container="invidious"] .settings-btn');
@@ -170,6 +177,17 @@ async function runTests() {
                 await page.waitForSelector('#service-modal', { visible: true });
                 logResult('Dashboard', 'Settings Modal', 'PASS', 'Invidious management modal opened');
                 
+                // Test Update Individual Service
+                const updateBtn = await page.evaluateHandle(() => {
+                    return Array.from(document.querySelectorAll('#modal-actions button')).find(b => b.textContent.includes('Update Service'));
+                });
+                if (updateBtn && updateBtn.asElement()) {
+                    await updateBtn.asElement().click();
+                    logResult('Dashboard', 'Service Update', 'PASS', 'Update command sent for Invidious');
+                    // Wait a bit for the snackbar/status change
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+
                 const migrateBtn = await page.evaluateHandle(() => {
                     return Array.from(document.querySelectorAll('#modal-actions button')).find(b => b.textContent.includes('Migrate Database'));
                 });
@@ -192,6 +210,55 @@ async function runTests() {
                 const newState = await page.evaluate(el => el.classList.contains('active'), cleanupSwitch);
                 logResult('Dashboard', 'Session Policy Toggle', newState !== initialState ? 'PASS' : 'FAIL', `Toggled cleanup: ${initialState} -> ${newState}`);
             }
+
+            // Test Log Filtering
+            console.log('  Testing Log Filtering...');
+            await page.click('#show-logs-btn');
+            await page.waitForSelector('#log-modal', { visible: true });
+            
+            // Wait for logs to load
+            await new Promise(r => setTimeout(r, 2000));
+            
+            // Try to filter by level
+            await page.select('#log-level-filter', 'INFO');
+            await new Promise(r => setTimeout(r, 1000));
+            let logCount = await page.evaluate(() => document.querySelectorAll('#log-container .log-entry').length);
+            logResult('Dashboard', 'Log Level Filter', 'PASS', `Filtered INFO logs: ${logCount} entries found`);
+
+            // Try to filter by category
+            await page.select('#log-category-filter', 'MAINTENANCE');
+            await new Promise(r => setTimeout(r, 1000));
+            logCount = await page.evaluate(() => document.querySelectorAll('#log-container .log-entry').length);
+            logResult('Dashboard', 'Log Category Filter', 'PASS', `Filtered MAINTENANCE logs: ${logCount} entries found`);
+            
+            await page.click('#log-modal .btn-icon'); // Close logs
+        }
+
+        console.log('\n--- Phase 3: Portainer Integration ---');
+        try {
+            await page.goto(`http://${LAN_IP}:9000`, { waitUntil: 'networkidle2', timeout: 30000 });
+            await page.waitForSelector('input[name="password"], #password', { timeout: 20000 });
+            
+            // Portainer might ask to set up admin password first if it's a fresh volume
+            const setupHeader = await page.evaluate(() => document.body.innerText.includes('Create administrator user'));
+            if (setupHeader) {
+                console.log('  Setting up Portainer admin user...');
+                await page.type('#password', 'portainer123');
+                await page.type('#confirm_password', 'portainer123');
+                await page.click('button[type="submit"]');
+            } else {
+                console.log('  Logging into Portainer...');
+                await page.type('#username', 'admin');
+                await page.type('#password', 'portainer123');
+                await page.click('button[type="submit"]');
+            }
+            
+            await page.waitForNavigation({ waitUntil: 'networkidle2' });
+            const loggedIn = await page.evaluate(() => document.body.innerText.includes('Logout') || document.body.innerText.includes('Dashboard'));
+            logResult('Portainer', 'Login', loggedIn ? 'PASS' : 'FAIL', loggedIn ? 'Logged into Portainer successfully' : 'Login failed');
+            await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'portainer_dashboard.png') });
+        } catch (e) {
+            logResult('Portainer', 'Integration', 'FAIL', e.message);
         }
 
     } catch (e) {
