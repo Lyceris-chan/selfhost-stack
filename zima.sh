@@ -121,6 +121,7 @@ else
         exit 1
     else
         echo "PASTE YOUR WIREGUARD .CONF CONTENT BELOW."
+        echo "(Press Ctrl+D when finished)"
         echo "----------------------------------------------------------"
         cat | $SUDO tee "$ACTIVE_WG_CONF" >/dev/null
         echo "" | $SUDO tee -a "$ACTIVE_WG_CONF" >/dev/null
