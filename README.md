@@ -773,7 +773,8 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
 | **Git Repositories** | Cloning source code (GitHub/Codeberg) | **🏠 Home IP** (Direct) |
 | **DNS Blocklists** | AdGuard filter updates | **🔒 VPN IP** (Gluetun) |
 | **deSEC.io** | SSL DNS Challenges | **🏠 Home IP** (Direct) |
-| **Odido API** | Mobile Data fetching | **🏠 Home IP** (Direct) |
+| **Odido API (Setup)** | Initial User ID retrieval | **🏠 Home IP** (Direct) |
+| **Odido API (Active)** | Mobile Data fetching | **🔒 VPN IP** (Gluetun) |
 | **Cobalt** | Media downloads | **🔒 VPN IP** (Gluetun) |
 | **SearXNG / Immich** | Search & Media sync | **🔒 VPN IP** (Gluetun) |
 
@@ -796,7 +797,7 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
   - [Gitdab](https://gitdab.com/) (Source cloning via **🏠 Home IP**)
 - **Data Providers**:
   - [DNS Blocklists (GitHub)](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) (Fetched via **🔒 VPN IP**)
-  - [Odido API](https://www.odido.nl/privacy) (Automated data via **🏠 Home IP**)
+  - [Odido API](https://www.odido.nl/privacy) (ID retrieval via **🏠 Home IP** during setup; automated data via **🔒 VPN IP**)
   - [Immich Privacy Policy](https://docs.immich.app/privacy-policy) (Note: Immich does not collect any data unless you choose to support the project via buy.immich.app, where data is used strictly for tax calculations.)
 
 </details>
