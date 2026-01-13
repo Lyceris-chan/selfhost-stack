@@ -2,7 +2,7 @@
 
 **Stop being the product.**
 
-A comprehensive, self-hosted privacy infrastructure designed for digital independence. Route your traffic through secure VPNs, eliminate tracking with isolated frontends, and manage everything from a unified **Material Design 3** dashboard.
+The ZimaOS Privacy Hub is a comprehensive, self-hosted privacy infrastructure designed for digital independence. Route your traffic through secure VPNs, eliminate tracking with isolated frontends, and manage everything from a unified **Material Design 3** dashboard.
 
 ---
 
@@ -19,15 +19,15 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
 - [How It Works (Architecture)](#️-how-it-works-architecture)
   - [Recursive DNS Engine](#recursive-dns-engine-independent-resolution)
   - [Why Self-Host?](#-why-self-host-the-trust-gap)
-- [Dashboard & Services](#️-dashboard--services)
+- [Dashboard and Services](#️-dashboard--services)
   - [WireGuard Client Management](#-wireguard-client-management)
   - [Credential Management](#-credential-management)
   - [LibRedirect Integration](#-libredirect-integration)
   - [Included Privacy Services](#included-privacy-services)
   - [Hardware Acceleration](#-hardware-acceleration-gpuqsv)
   - [Network Configuration](#-network-configuration)
-- [Advanced Setup: OpenWrt & Double NAT](#-advanced-setup-openwrt--double-nat)
-- [Privacy & Architecture](#️-privacy--architecture)
+- [Advanced Setup: OpenWrt and Double NAT](#-advanced-setup-openwrt--double-nat)
+- [Privacy and Architecture](#️-privacy--architecture)
 - [Security Standards](#-security-standards)
 - [System Requirements](#️-system-requirements)
 - [Troubleshooting](#-troubleshooting)
@@ -37,29 +37,29 @@ A comprehensive, self-hosted privacy infrastructure designed for digital indepen
 
 ## 🚀 Key Features
 
-*   **🔒 Data Independence**: Host your own frontends (Invidious, Redlib, etc.) to stop upstream giants like Google and Reddit from profiling you.
-*   **🚫 Ad-Free by Design**: Network-wide ad blocking via AdGuard Home + native removal of sponsored content in video/social feeds.
-*   **🕵️ VPN-Gated Privacy**: All external requests are routed through a **Gluetun VPN** tunnel. Upstream providers only see your VPN IP, keeping your home identity hidden.
-*   **📺 No Adblock Nags (Invidious)**: Watch YouTube without annoying "please disable your adblocker" popups. Invidious fetches video data server-side, so YouTube never knows you're using an adblocker-because you're not even using their website.
-*   **📱 Frictionless Browsing (Redlib)**: Redlib eliminates aggressive "Open in App" prompts and mobile-web trackers. Enjoy a fast, premium Reddit experience on any device without being forced into the official app's data-harvesting ecosystem.
-*   **🚀 Faster & Safer**: Self-hosted frontends strip out tracking scripts, telemetry, and bloated JavaScript. The result? Pages load faster and your browser isn't executing code designed to spy on you.
-*   **🔑 Easy Remote Access**: Built-in **WireGuard** management. Generate client configs and **QR codes** directly from the dashboard to connect your phone or laptop securely.
+*   **🔒 Data Independence**: Host your own frontends (Invidious, Redlib, etc.) to prevent upstream entities like Google and Reddit from profiling you.
+*   **🚫 Ad-free by Design**: Network-wide ad blocking through AdGuard Home and native removal of sponsored content in video and social feeds.
+*   **🕵️ VPN-gated Privacy**: All external requests route through a **Gluetun VPN** tunnel. Upstream providers only see your VPN IP, keeping your home identity hidden.
+*   **📺 No Adblock Nags (Invidious)**: Watch YouTube without ad-blocking popups. Invidious fetches video data server-side, so YouTube does not detect your ad-blocking tools.
+*   **📱 Frictionless Browsing (Redlib)**: Redlib eliminates "Open in App" prompts and mobile-web trackers. Enjoy a fast Reddit experience on any device without using the official app.
+*   **🚀 Faster and Safer**: Self-hosted frontends remove tracking scripts, telemetry, and bloated JavaScript. This results in faster page loads and improved browser security.
+*   **🔑 Easy Remote Access**: Built-in **WireGuard** management. Generate client configurations and **QR codes** directly from the dashboard to connect your phone or laptop securely.
 *   **⚡ Hardware Performance**: Automatically detects and provisions GPU acceleration (Intel QSV, AMD VA-API, or NVIDIA) for media-heavy services like Immich and VERT.
-*   **🎨 Material Design 3**: A beautiful, responsive dashboard with dynamic theming and real-time health metrics.
+*   **🎨 Material Design 3**: A responsive dashboard with dynamic theming and real-time health metrics.
 
-> ⚠️ **Heads Up: The Cat-and-Mouse Game**  
-> Companies like Google and Reddit **actively try to break** these privacy frontends. Why? Because every user on Invidious or Redlib is a user they can't track, monetize, or serve ads to. They regularly change their APIs, add new anti-bot measures, and modify their page structures specifically to break these tools. This stack uses **pre-built images** and automated updates so we can apply fixes quickly-but occasional outages are part of the privacy game. It's worth it.
+> ⚠️ **Heads up: The cat-and-mouse game**  
+> Companies like Google and Reddit **actively try to break** these privacy frontends. Why? Because every user on Invidious or Redlib is a user they can't track, monetize, or serve ads to. They regularly change their APIs, add new anti-bot measures, and modify their page structures specifically to break these tools. This stack uses **pre-built images** and automated updates so we can apply fixes quickly—but occasional outages are part of the privacy game. It's worth it.
 
-> 🔌 **Service Availability & Redundancy**  
+> 🔌 **Service availability and redundancy**  
 > These services are **only available** while the device you are hosting on is powered on and network-accessible. In the event of a power outage, network failure, or hardware issue, access to your self-hosted services will be lost. We strongly recommend exploring redundancy options (such as UPS backups or secondary failover nodes) to ensure continuous access to your privacy infrastructure. Be aware that you are your own "cloud provider" now!
 
 ---
 
 ## 🚀 Deployment
 
-**Don't worry-this is easier than it looks!** The Privacy Hub guides you through everything. Just follow these steps, and you'll have your own private internet in about **2-5 minutes**.
+**Don't worry—this is easier than it looks!** The Privacy Hub guides you through everything. Just follow these steps, and you'll have your own private internet in about **2–5 minutes**.
 
-### Before You Start (Checklist)
+### Before you start (checklist)
 
 You'll need:
 - [ ] A modern 64-bit computer (ZimaBoard, Raspberry Pi 5, NUC, or any PC)
@@ -70,7 +70,7 @@ You'll need:
 
 ---
 
-### Step 1: Get Your VPN Configuration
+### Step 1: Get your VPN configuration
 
 *Think of this as getting the "key" to your secret tunnel.*
 
@@ -80,11 +80,11 @@ You'll need:
 4.  Click **Create** and choose any server (Netherlands or Switzerland are good for privacy)
 5.  **⚠️ IMPORTANT**: Ensure **NAT-PMP (Port Forwarding)** is set to **OFF** (see warning below)
 6.  Click **Download** to save the `.conf` file
-7.  **Open** the downloaded file in a text editor-you'll paste its contents during setup
+7.  **Open** the downloaded file in a text editor—you'll paste its contents during setup
 
 > 📝 **What you're getting**: This file contains your personal "tunnel key" that lets your hub connect to ProtonVPN's servers. Your real home IP stays hidden!
 
-> ⚠️ **NAT-PMP WARNING**: Do **NOT** enable NAT-PMP (Port Forwarding) when generating your WireGuard config!
+> ⚠️ **NAT-PMP warning**: Do **NOT** enable NAT-PMP (Port Forwarding) when generating your WireGuard configuration!
 >
 > **Why?** NAT-PMP opens a port on Proton's VPN server that forwards traffic directly to your Privacy Hub. This means:
 > - Your services become **publicly accessible** on the internet
@@ -97,7 +97,7 @@ You'll need:
 
 ---
 
-### Step 2: Get Your Domain Token *(Required)*
+### Step 2: Get your domain token *(Required)*
 
 *This gives your hub a memorable name like `my-home.dedyn.io` instead of an IP address.*
 
@@ -105,15 +105,15 @@ You'll need:
 2.  Verify your email and log in
 3.  Click **"+ Add Domain"** and create a subdomain (e.g., `my-privacy-hub.dedyn.io`)
 4.  Go to **Token Management** → **"+"** to create a new token
-5.  **Copy and save this token**-you'll need it during setup
+5.  **Copy and save this token**—you'll need it during setup
 
 > 📝 **What you're getting**: This token lets the installer automatically set up SSL certificates so your connection is encrypted.
 
-> ⚠️ **Why you need this for HTTPS**: Without a domain, your browser will show scary "Your connection is not private" warnings because SSL certificates can only be issued for domain names, not IP addresses. The deSEC domain + token allows the installer to automatically obtain a free **Let's Encrypt** certificate, so your dashboard and services load securely without any browser warnings. If you skip this step, you'll need to click through security warnings every time you access your hub.
+> ⚠️ **Why you need this for HTTPS**: Without a domain, your browser will show scary "Your connection is not private" warnings because SSL certificates can only be issued for domain names, not IP addresses. The deSEC domain and token allows the installer to automatically obtain a free **Let's Encrypt** certificate, so your dashboard and services load securely without any browser warnings. If you skip this step, you'll need to click through security warnings every time you access your hub.
 
 ---
 
-### Step 3: Download and Run the Installer
+### Step 3: Download and run the installer
 
 Now the fun part! Open a terminal on your hub computer and run:
 
@@ -129,14 +129,14 @@ cd selfhost-stack
 ```
 
 The script will ask you a few questions:
-1.  **Paste your WireGuard config** (from Step 1)
+1.  **Paste your WireGuard configuration** (from Step 1)
 2.  **Enter your deSEC domain and token** (from Step 2)
 3.  **Choose your password preferences** (auto-generate or set your own)
 
 That's it! Sit back and let it build.
 
 <a id="customization-flags"></a>
-### 🛠️ Customization Flags (Optional)
+### 🛠️ Customization flags (optional)
 
 Before running the installer, you can customize your deployment using these flags:
 
@@ -161,113 +161,113 @@ Before running the installer, you can customize your deployment using these flag
 
 ---
 
-### What Happens Next?
+### What happens next?
 
-1.  **🚀 Instant Deployment**: The system pulls and starts your private apps.
-2.  **✅ Ready to Use**: You get a link to your dashboard (e.g., `http://192.168.1.100:8081`).
-3.  **🔐 Credential Export**: Your passwords are saved for safe keeping.
-4.  **🔀 Instant Redirection**: A `libredirect_import.json` is created-import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically redirect YouTube/Reddit to your hub.
+1.  **🚀 Instant deployment**: The system pulls and starts your private apps.
+2.  **✅ Ready to use**: You get a link to your dashboard (e.g., `http://192.168.1.100:8081`).
+3.  **🔐 Credential export**: Your passwords are saved for safekeeping.
+4.  **🔀 Instant redirection**: A `libredirect_import.json` is created—import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically redirect YouTube and Reddit to your hub.
 
 ---
 
-## 🖥️ System Requirements
+## 🖥️ System requirements
 
-To ensure a smooth experience, your "hub" should meet the following minimum specifications:
+To ensure a smooth experience, your hub should meet the following minimum specifications:
 
-*   **Operating System**: 64-bit Linux (ZimaOS, Ubuntu 22.04+, or Debian 12+).
+*   **Operating system**: 64-bit Linux (ZimaOS, Ubuntu 22.04+, or Debian 12+).
 *   **Processor**: x86_64 or ARM64 (ZimaBoard, Raspberry Pi 5, NUC, or any modern PC).
-*   **Memory**: 2GB RAM minimum (4GB+ highly recommended for optimal performance with Immich/SearXNG).
-*   **Storage**: 16GB+ available space on a fast SSD/NVMe (plus additional space for your personal data/media).
+*   **Memory**: 2GB RAM minimum (4GB+ highly recommended for optimal performance with Immich and SearXNG).
+*   **Storage**: 16GB+ available space on a fast SSD/NVMe (plus additional space for your personal data and media).
 *   **Network**: Stable internet connection. Public IP only required for remote access via WireGuard.
 
 ---
 
-## 🛡️ How It Works (Architecture)
+## 🛡️ How it works (architecture)
 
 This section explains the technical details behind the privacy features listed above.
 
-### Recursive DNS Engine (Independent Resolution)
+### Recursive DNS engine (independent resolution)
 This stack features a hardened, recursive DNS engine built on **Unbound** and **AdGuard Home**, designed to eliminate upstream reliance and prevent data leakage.
 
-*   **AdGuard Home Config**: Generated at `/opt/adguardhome/conf/AdGuardHome.yaml`
-*   **Unbound Config**: Generated at `/etc/unbound/unbound.conf`
+*   **AdGuard Home configuration**: Generated at `/opt/adguardhome/conf/AdGuardHome.yaml`
+*   **Unbound configuration**: Generated at `/etc/unbound/unbound.conf`
 
 <details>
-<summary>🛡️ <strong>Advanced Security & RFC Compliance</strong> (Click to expand)</summary>
+<summary>🛡️ <strong>Advanced security and RFC compliance</strong> (Click to expand)</summary>
 
 The Unbound configuration (`lib/services/config.sh`) implements the following strict privacy and security standards:
 
-*   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: `qname-minimisation: yes` - Dramatically improves privacy by only sending the absolute minimum part of a domain name to upstream authoritative servers.
-*   **Aggressive Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: `aggressive-nsec: yes` - Uses NSEC records to generate negative responses locally, reducing traffic to authoritative servers.
-*   **DNS 0x20 ([Draft](https://datatracker.ietf.org/doc/html/draft-vixie-dnsext-dns0x20-00))**: `use-caps-for-id: yes` - A security technique that mitigates spoofing attempts by randomly varying capitalization.
-*   **Fingerprint Resistance**: 
+*   **QNAME minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: `qname-minimisation: yes`—Dramatically improves privacy by only sending the absolute minimum part of a domain name to upstream authoritative servers.
+*   **Aggressive caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: `aggressive-nsec: yes`—Uses NSEC records to generate negative responses locally, reducing traffic to authoritative servers.
+*   **DNS 0x20 ([Draft](https://datatracker.ietf.org/doc/html/draft-vixie-dnsext-dns0x20-00))**: `use-caps-for-id: yes`—A security technique that mitigates spoofing attempts by randomly varying capitalization.
+*   **Fingerprint resistance**: 
     *   `hide-identity: yes`
     *   `hide-version: yes`
     *   Prevents identification of the resolver software and version.
-*   **Load Balancing ([RFC 1794](https://datatracker.ietf.org/doc/html/rfc1794))**: `rrset-roundrobin: yes` - Randomizes the order of records in a response to ensure optimal traffic distribution.
-*   **Data Minimization ([RFC 4472](https://datatracker.ietf.org/doc/html/rfc4472))**: `minimal-responses: yes` - Reduces the size of DNS responses to only the essential data.
-*   **Cache Poisoning Protection ([RFC 1034](https://datatracker.ietf.org/doc/html/rfc1034))**: `harden-glue: yes` - Strictly validates "glue" records to prevent malicious redirection.
-*   **DoS Protection**:
+*   **Load balancing ([RFC 1794](https://datatracker.ietf.org/doc/html/rfc1794))**: `rrset-roundrobin: yes`—Randomizes the order of records in a response to ensure optimal traffic distribution.
+*   **Data minimization ([RFC 4472](https://datatracker.ietf.org/doc/html/rfc4472))**: `minimal-responses: yes`—Reduces the size of DNS responses to only the essential data.
+*   **Cache poisoning protection ([RFC 1034](https://datatracker.ietf.org/doc/html/rfc1034))**: `harden-glue: yes`—Strictly validates "glue" records to prevent malicious redirection.
+*   **DoS protection**:
     *   `harden-large-queries: yes`
     *   `harden-short-bufsize: yes`
-*   **Downgrade Protection**: `harden-algo-downgrade: yes` - Prevents fallback to weaker cryptographic algorithms.
+*   **Downgrade protection**: `harden-algo-downgrade: yes`—Prevents fallback to weaker cryptographic algorithms.
 
-**Routing Logic**:
-1.  **Client Request**: Your device sends a DNS query to the Hub IP.
-2.  **AdGuard Home**: Filters the request against blocklists (ads/trackers).
+**Routing logic**:
+1.  **Client request**: Your device sends a DNS query to the Hub IP.
+2.  **AdGuard Home**: Filters the request against blocklists (ads and trackers).
 3.  **Unbound**: If allowed, Unbound performs recursive resolution directly with Root Servers.
 4.  **Response**: The clean IP is returned to your device.
 
 </details>
 
-### 🔍 Why Self-Host? (The "Trust Gap")
+### 🔍 Why self-host? (the "trust gap")
 If you don't own the hardware and the code running your network, you don't own your privacy. 
-*   **The Google Profile**: Google's DNS (8.8.8.8) turns you into a data source for profiling your health, finances, and interests.
-*   **The Cloudflare Illusion**: Even "neutral" providers can be forced to censor or log content.
-*   **ISP Predation**: ISPs log and sell your browsing history to data brokers.
-*   **Search Engine Isolation**: By routing **SearXNG** through the VPN tunnel, upstream search engines (Google, Bing) see queries coming from a generic VPN IP shared by thousands, making it impossible to profile your individual search behavior or serve targeted ads.
+*   **The Google profile**: Google's DNS (8.8.8.8) turns you into a data source for profiling your health, finances, and interests.
+*   **The Cloudflare illusion**: Even "neutral" providers can be forced to censor or log content.
+*   **ISP predation**: ISPs log and sell your browsing history to data brokers.
+*   **Search engine isolation**: By routing **SearXNG** through the VPN tunnel, upstream search engines (Google, Bing) see queries coming from a generic VPN IP shared by thousands, making it impossible to profile your individual search behavior or serve targeted ads.
 
-> 📚 **Trusted Sources**: For more on why these measures matter, see the **EFF's [Surveillance Self-Defense](https://ssd.eff.org/)** and their guide on **[DNS Privacy](https://www.eff.org/deeplinks/2020/12/dns-privacy-all-way-root-your-lan)**.
+> 📚 **Trusted sources**: For more on why these measures matter, see the **EFF's [Surveillance Self-Defense](https://ssd.eff.org/)** and their guide on **[DNS Privacy](https://www.eff.org/deeplinks/2020/12/dns-privacy-all-way-root-your-lan)**.
 
 ---
 
 <a id="dashboard--services"></a>
-## 🖥️ Dashboard & Services
+## 🖥️ Dashboard and services
 
 Access your unified control center at `http://<LAN_IP>:8081`.
 
-### 🔑 WireGuard Client Management
+### 🔑 WireGuard client management
 Connect your devices securely to your home network:
-1.  **Add Client**: Click "New Client" in the dashboard.
-2.  **Connect Mobile**: Click the **QR Code** icon and scan it with the WireGuard app on your phone.
-3.  **Connect Desktop**: Download the `.conf` file and import it into your WireGuard client.
+1.  **Add client**: Click "New client" in the dashboard.
+2.  **Connect mobile**: Click the **QR code** icon and scan it with the WireGuard app on your phone.
+3.  **Connect desktop**: Download the `.conf` file and import it into your WireGuard client.
 
-### 🔐 Credential Management
+### 🔐 Credential management
 The system generates secure, unique credentials for all core infrastructure during installation.
 
-| Service | Default Username | Password Type | Note |
+| Service | Default username | Password type | Note |
 | :--- | :--- | :--- | :--- |
 | **Management Dashboard** | `admin` | Auto-generated | Protects the main control plane. |
 | **AdGuard Home** | `adguard` | Auto-generated | DNS management and filtering rules. |
-| **WireGuard (Web UI)** | `admin` | Auto-generated | Required to manage VPN peers/clients. |
+| **WireGuard (web UI)** | `admin` | Auto-generated | Required to manage VPN peers and clients. |
 | **Portainer** | `portainer` | Auto-generated | System-level container orchestration. |
 | **Odido Booster** | `admin` | Auto-generated | API key for mobile data automation. |
 
 > 📁 **Where are they?**: All generated credentials are saved to `data/AppData/privacy-hub/.secrets` and exported to `data/AppData/privacy-hub/protonpass_import.csv` for easy importing into your password manager.
 
-### 🔀 LibRedirect Integration
+### 🔀 LibRedirect integration
 To automatically redirect your browser from big-tech sites to your private Hub:
 1.  Install the **LibRedirect** extension ([Firefox](https://addons.mozilla.org/en-US/firefox/addon/libredirect/) / [Chrome](https://chromewebstore.google.com/detail/libredirect/pobhoodpcdojmedmielocclicpfbednh)).
-2.  Open the extension settings and go to **Backup/Restore**.
-3.  Click **Import Settings** and select the `libredirect_import.json` file found in your project root.
+2.  Open the extension settings and go to **Backup/restore**.
+3.  Click **Import settings** and select the `libredirect_import.json` file found in your project root.
 4.  Your browser will now automatically use your local instances for YouTube, Reddit, Wikipedia, and more.
 
-### Included Privacy Services
+### Included privacy services
 
-Every service in this stack is pulled from a trusted minimal image. All services marked with **🔒 VPN** are locked inside the VPN tunnel-they cannot "see" the real internet, and the real internet cannot "see" them.
+Every service in this stack is pulled from a trusted minimal image. All services marked with **🔒 VPN** are locked inside the VPN tunnel—they cannot "see" the real internet, and the real internet cannot "see" them.
 
 <details>
-<summary>📋 <strong>View Full Service Catalog & Routing</strong> (Click to expand)</summary>
+<summary>📋 <strong>View full service catalog and routing</strong> (Click to expand)</summary>
 
 | Service | Category | 🛡️ Routing | Source / Image |
 | :--- | :--- | :--- | :--- |
@@ -275,9 +275,9 @@ Every service in this stack is pulled from a trusted minimal image. All services
 | **Companion** | Helper | **🔒 VPN** | [Source](https://github.com/iv-org/invidious-companion) / [Image](https://quay.io/repository/invidious/invidious-companion) |
 | **Redlib** | Frontend | **🔒 VPN** | [Source](https://github.com/redlib-org/redlib) / [Image](https://quay.io/repository/redlib/redlib) |
 | **SearXNG** | Frontend | **🔒 VPN** | [Source](https://github.com/searxng/searxng) / [Image](https://hub.docker.com/r/searxng/searxng) |
-| **Scribe** | Frontend | **🔒 VPN** | [Source](https://git.sr.ht/~edwardloveall/scribe) / *(Local Build)* |
+| **Scribe** | Frontend | **🔒 VPN** | [Source](https://git.sr.ht/~edwardloveall/scribe) / *(local build)* |
 | **Rimgo** | Frontend | **🔒 VPN** | [Source](https://codeberg.org/rimgo/rimgo) / [Image](https://codeberg.org/rimgo/rimgo/packages) |
-| **Wikiless** | Frontend | **🔒 VPN** | [Source](https://github.com/Metastem/Wikiless) / *(Local Build)* |
+| **Wikiless** | Frontend | **🔒 VPN** | [Source](https://github.com/Metastem/Wikiless) / *(local build)* |
 | **BreezeWiki** | Frontend | **🔒 VPN** | [Source](https://github.com/breezewiki/breezewiki) / [Image](https://quay.io/repository/pussthecatorg/breezewiki) |
 | **AnonOverflow** | Frontend | **🔒 VPN** | [Source](https://github.com/httpjamesm/anonymousoverflow) / [Image](https://github.com/httpjamesm/AnonymousOverflow/pkgs/container/anonymousoverflow) |
 | **Cobalt** | Utility | **🔒 VPN** | [Source](https://github.com/imputnet/cobalt) / [Image](https://github.com/imputnet/cobalt/pkgs/container/cobalt) |
@@ -290,75 +290,75 @@ Every service in this stack is pulled from a trusted minimal image. All services
 | **Gluetun** | Core | **🌍 Exit** | [Source](https://github.com/qdm12/gluetun) / [Image](https://hub.docker.com/r/qmcgaw/gluetun) |
 | **Portainer** | Core | **🏠 Local** | [Source](https://github.com/portainer/portainer) / [Image](https://hub.docker.com/r/portainer/portainer-ce) |
 | **Watchtower** | Core | **🏠 Local** | [Source](https://github.com/containrrr/watchtower) / [Image](https://hub.docker.com/r/containrrr/watchtower) |
-| **Dashboard** | Core | **🏠 Local** | [Local Source] |
-| **Hub API** | Core | **🏠 Local** | [Local Source](/lib/src/hub-api) |
-| **Odido Booster** | Utility | **🏠 Local** | [Source](https://github.com/Lyceris-chan/odido-bundle-booster) / *(Local Build)* |
+| **Dashboard** | Core | **🏠 Local** | [local source] |
+| **Hub API** | Core | **🏠 Local** | [local source](/lib/src/hub-api) |
+| **Odido Booster** | Utility | **🏠 Local** | [Source](https://github.com/Lyceris-chan/odido-bundle-booster) / *(local build)* |
 
 *\*Immich uses the VPN only for specific machine learning model downloads and metadata fetching. Your photos stay local.
 
 </details>
 
-### 🔄 Updates & Lifecycle
+### 🔄 Updates and lifecycle
 
 This stack employs a dual-strategy for keeping your services secure and up-to-date.
 
-#### 1. Automated Updates (Watchtower)
+#### 1. Automated updates (Watchtower)
 For services using pre-built Docker images (like **AdGuard**, **Invidious**, **Redlib**), updates are fully automated.
 *   **Mechanism**: **Watchtower** checks for new upstream images every hour.
 *   **Action**: If a new image is found, Watchtower seamlessly restarts the container with the new version.
-*   **Notification**: Updates are reported to the **Hub API** and logged in the Dashboard's event log, so you always know when a service has been patched.
+*   **Notification**: Updates are reported to the **Hub API** and logged in the dashboard's event log, so you always know when a service has been patched.
 
-#### 2. Source-Built Updates (Manual)
+#### 2. Source-built updates (manual)
 For services built securely from source code to ensure hardware compatibility (like **Wikiless**, **Scribe**, **Odido Booster**):
 *   **Mechanism**: These do not update automatically to prevent build breakages.
-*   **Notification**: The Dashboard will show an "Update available" badge when the upstream source code changes.
+*   **Notification**: The dashboard will show an "Update available" badge when the upstream source code changes.
 *   **Action**:
-    1.  Log in to the Dashboard as Admin.
-    2.  Open the Service Settings.
-    3.  Click **"Update Service"**.
+    1.  Sign in to the dashboard as administrator.
+    2.  Open the **Service settings**.
+    3.  Click **"Update service"**.
     4.  The system will pull the latest source code, rebuild the container in the background, and restart it once ready.
 
-> **Note**: All "Frontend" services (and Immich/SearXNG/Cobalt) are routed through the VPN tunnel automatically. VERT and core management tools are strictly local-only.
+> **Note**: All "frontend" services (and Immich, SearXNG, and Cobalt) are routed through the VPN tunnel automatically. VERT and core management tools are strictly local-only.
 
-### ⚡ Hardware Acceleration (GPU/QSV)
+### ⚡ Hardware acceleration (GPU and QSV)
 To ensure peak performance for media-heavy tasks, this stack supports hardware-accelerated transcoding and machine learning:
 
 <details>
-<summary>🚀 <strong>View Hardware Acceleration Details</strong> (Click to expand)</summary>
+<summary>🚀 <strong>View hardware acceleration details</strong> (Click to expand)</summary>
 
 *   **Immich**: Utilizes Intel Quick Sync (QSV), VA-API, or NVIDIA GPUs for localized image auto-tagging and video transcoding.
 *   **VERT / VERTd**: Optimized for high-speed local file conversion using hardware encoders to minimize CPU load.
-*   **Detection & Provisioning**: The stack automatically identifies your hardware vendor (Intel, AMD, or NVIDIA) during deployment via [lib/scripts.sh](lib/scripts.sh) and provisions the necessary devices (`/dev/dri`, `/dev/vulkan`) or container reservations.
-*   **Requirements**: Ensure your ZimaOS/host device has the correct drivers installed (e.g., `intel-media-driver` or `nvidia-container-toolkit`).
+*   **Detection and provisioning**: The stack automatically identifies your hardware vendor (Intel, AMD, or NVIDIA) during deployment via [lib/scripts.sh](lib/scripts.sh) and provisions the necessary devices (`/dev/dri`, `/dev/vulkan`) or container reservations.
+*   **Requirements**: Ensure your ZimaOS or host device has the correct drivers installed (e.g., `intel-media-driver` or `nvidia-container-toolkit`).
 
 </details>
 
-### 🌐 Network Configuration
+## 🌐 Network configuration
 
 These settings help you get the most out of your Privacy Hub on your local network.
 
-#### 1. Remote Access (VPN)
+#### 1. Remote access (VPN)
 **Stop! You probably don't need to do anything here.**
-*   **Default State**: Your hub is invisible to the internet. This is the safest way to live.
-*   **Remote Access**: Forward **UDP Port 51820** on your router *only* if you want to connect to your hub while away from home. 
-*   **Why No Other Ports?**: Every other service (Dashboard, AdGuard, etc.) is reached *through* this WireGuard tunnel once you're connected. Opening more ports is like leaving your back door open when you already have a key to the front door.
+*   **Default state**: Your hub is invisible to the internet. This is the safest way to live.
+*   **Remote access**: Forward **UDP port 51820** on your router *only* if you want to connect to your hub while away from home. 
+*   **Why no other ports?**: Every other service (Dashboard, AdGuard, etc.) is reached *through* this WireGuard tunnel once you're connected. Opening more ports is like leaving your back door open when you already have a key to the front door.
 
-#### 2. DNS Protection
-Your hub runs its own **recursive DNS resolver** (Unbound + AdGuard Home). This means:
-*   **No third-party DNS**: Your queries go directly to authoritative root servers, not Google or Cloudflare
-*   **Built-in ad blocking**: Network-wide filtering for all devices on your network
-*   **Encrypted queries**: Supports DNS-over-TLS, DNS-over-HTTPS, and DNS-over-QUIC
+#### 2. DNS protection
+Your hub runs its own **recursive DNS resolver** (Unbound and AdGuard Home). This means:
+*   **No third-party DNS**: Your queries go directly to authoritative root servers, not Google or Cloudflare.
+*   **Built-in ad blocking**: Network-wide filtering for all devices on your network.
+*   **Encrypted queries**: Supports DNS-over-TLS, DNS-over-HTTPS, and DNS-over-QUIC.
 
 To use it, point your router's DHCP settings to hand out your hub's IP as the DNS server for all devices.
 
-#### 3. Split Tunnel Architecture
+#### 3. Split tunnel architecture
 
-This stack uses a **Dual Split Tunnel** architecture to balance privacy, performance, and reliability. Traffic is intelligently routed through three distinct zones:
+This stack uses a **dual split tunnel** architecture to balance privacy, performance, and reliability. Traffic is intelligently routed through three distinct zones:
 
 <details>
-<summary>🗺️ <strong>View Routing Zones & Logic</strong> (Click to expand)</summary>
+<summary>🗺️ <strong>View routing zones and logic</strong> (Click to expand)</summary>
 
-##### Zone 1: VPN-Isolated Services (Gluetun Tunnel)
+##### Zone 1: VPN-isolated services (Gluetun tunnel)
 Privacy frontends and external-facing services are routed exclusively through the VPN tunnel:
 
 | Service | Purpose | Benefit |
@@ -376,9 +376,9 @@ Privacy frontends and external-facing services are routed exclusively through th
 | **Cobalt** | Media downloader | Downloads anonymized through VPN |
 | **Memos** | Note taking | Version checks and metadata fetched via VPN |
 
-**Kill Switch Protection**: If the VPN tunnel fails, these services lose internet access entirely-they cannot accidentally expose your home IP.
+**Kill switch protection**: If the VPN tunnel fails, these services lose internet access entirely—they cannot accidentally expose your home IP.
 
-##### Zone 2: Remote Access (WireGuard Tunnel)
+##### Zone 2: Remote access (WireGuard tunnel)
 When connecting from outside your home network (phone, laptop), traffic flows through your personal WireGuard tunnel:
 
 - **DNS requests** → Routed to your home AdGuard for ad-blocking everywhere
@@ -387,10 +387,10 @@ When connecting from outside your home network (phone, laptop), traffic flows th
 
 **Benefit**: Your phone stays fast (Netflix doesn't lag) while you still get network-wide ad-blocking and access to your private services.
 
-##### Zone 3: Local-Only Services
+##### Zone 3: Local-only services
 Management tools and utilities that never touch the internet:
 
-| Service | Purpose | Why Local |
+| Service | Purpose | Why local |
 | :--- | :--- | :--- |
 | **Dashboard** | Unified control center | No external dependencies |
 | **AdGuard Home** | DNS filtering | Must be accessible even if VPN fails |
@@ -406,16 +406,16 @@ Management tools and utilities that never touch the internet:
 ---
 
 <a id="advanced-setup"></a>
-## 📡 Advanced Setup: OpenWrt & Double NAT
+## 📡 Advanced setup: OpenWrt and double NAT
 
-If you are running a real router like **OpenWrt** behind your ISP modem, you are in a **Double NAT** situation. You need to fix the routing so your packets actually arrive.
+If you are running a real router like **OpenWrt** behind your ISP modem, you are in a **double NAT** situation. You need to fix the routing so your packets actually arrive.
 
-### 1. Static IP & WAN Configuration
-*   **Static Hub Lease**: Assign a static lease on your **OpenWrt** router so your Privacy Hub remains at a fixed internal IP (e.g., `192.168.69.206`).
-*   **Static Router WAN**: In a Double NAT setup (ISP Modem -> OpenWrt -> Hub), ensure your OpenWrt router has a **Static IP** (e.g., `192.168.1.209`) assigned by the ISP modem on its WAN interface. This ensures the port forwarding rule on the ISP modem remains stable.
+### 1. Static IP and WAN configuration
+*   **Static hub lease**: Assign a static lease on your **OpenWrt** router so your Privacy Hub remains at a fixed internal IP (e.g., `192.168.69.206`).
+*   **Static router WAN**: In a double NAT setup (ISP Modem -> OpenWrt -> Hub), ensure your OpenWrt router has a **static IP** (e.g., `192.168.1.209`) assigned by the ISP modem on its WAN interface. This ensures the port forwarding rule on the ISP modem remains stable.
 
 <details>
-<summary>💻 <strong>CLI: UCI Commands for Static Lease</strong> (Click to expand)</summary>
+<summary>💻 <strong>CLI: UCI commands for static lease</strong> (Click to expand)</summary>
 
 ```bash
 # Add the static lease on OpenWrt (Replace MAC with your hardware's values)
@@ -428,14 +428,14 @@ uci commit dhcp
 ```
 </details>
 
-### 2. Port Forwarding & Firewall
+### 2. Port forwarding and firewall
 OpenWrt is the gatekeeper. Point the traffic to your machine and then actually open the door.
 
 <details>
-<summary>💻 <strong>CLI: UCI Commands for Firewall</strong> (Click to expand)</summary>
+<summary>💻 <strong>CLI: UCI commands for firewall</strong> (Click to expand)</summary>
 
 ```bash
-# 1. Add Port Forwarding (Replace dest_ip with your ZimaOS machine's IP)
+# 1. Add port forwarding (Replace dest_ip with your ZimaOS machine's IP)
 uci add firewall redirect
 uci set firewall.@redirect[-1].name='Forward-WireGuard'
 uci set firewall.@redirect[-1].src='wan'
@@ -445,7 +445,7 @@ uci set firewall.@redirect[-1].dest_ip='192.168.69.206' # <--- HUB LAN IP
 uci set firewall.@redirect[-1].dest_port='51820'
 uci set firewall.@redirect[-1].target='DNAT'
 
-# 2. Add Traffic Rule (Allowance)
+# 2. Add traffic rule (allowance)
 uci add firewall rule
 uci set firewall.@rule[-1].name='Allow-WireGuard-Inbound'
 uci set firewall.@rule[-1].src='wan'
@@ -459,75 +459,75 @@ uci commit firewall
 ```
 </details>
 
-### 3. DNS Hijacking (Force Compliance)
-Some devices (IoT, Smart TVs) hardcode DNS servers (like `8.8.8.8`) to bypass your filters. You can force them to comply using a **NAT Redirect** rule.
+### 3. DNS hijacking (force compliance)
+Some devices (IoT, smart TVs) hardcode DNS servers (like `8.8.8.8`) to bypass your filters. You can force them to comply using a **NAT redirect** rule.
 
 To implement this on your router, refer to the following official guides:
-*   [OpenWrt Guide: Intercepting DNS](https://openwrt.org/docs/guide-user/firewall/fw3_configurations/intercept_dns) (Step-by-step NAT Redirection)
+*   [OpenWrt Guide: Intercepting DNS](https://openwrt.org/docs/guide-user/firewall/fw3_configurations/intercept_dns) (Step-by-step NAT redirection)
 *   [OpenWrt Guide: Blocking DoH (banIP)](https://openwrt.org/docs/guide-user/firewall/firewall_configuration/ban_ip) (Preventing filter bypass via encrypted DNS)
 
-### 🛡️ Privacy & Architecture
+### 🛡️ Privacy and architecture
 
-#### Minimalist Source Strategy
+#### Minimalist source strategy
 To ensure maximum security and stability, this stack prioritizes official pre-built images for the majority of its services. Only a small number of core components and specific frontends are built from source locally:
 
-*   **Core Logic**: The Hub API and Odido Booster are built from local sources to ensure perfect integration with the host environment.
-*   **Selected Frontends**: Services like Wikiless and Scribe are built from their respective upstream repositories, ensuring you get the exact code intended by the developers while benefiting from local image optimization.
+*   **Core logic**: The Hub API and Odido Booster are built from local sources to ensure perfect integration with the host environment.
+*   **Selected frontends**: Services like Wikiless and Scribe are built from their respective upstream repositories, ensuring you get the exact code intended by the developers while benefiting from local image optimization.
 
-#### Dual-Zone Split Tunneling
+#### Dual-zone split tunneling
 The stack implements an intelligent routing model to balance performance and total privacy:
-- **🔒 VPN Zone (Kill-Switch Protected)**: Services like Invidious, SearXNG, and Redlib are locked inside the VPN. If the tunnel drops, they lose all connectivity instantly, preventing any IP leaks.
-- **🏠 Home Zone (Direct Access)**: Management tools (Dashboard, AdGuard, Portainer) are accessible directly via your LAN IP or WireGuard remote access tunnel for maximum reliability.
+- **🔒 VPN zone (kill-switch protected)**: Services like Invidious, SearXNG, and Redlib are locked inside the VPN. If the tunnel drops, they lose all connectivity instantly, preventing any IP leaks.
+- **🏠 Home zone (direct access)**: Management tools (Dashboard, AdGuard, Portainer) are accessible directly via your LAN IP or WireGuard remote access tunnel for maximum reliability.
 
-#### DNS Subdomain Mapping & HTTPS
+#### DNS subdomain mapping and HTTPS
 When a **deSEC** domain is configured, the system automatically provisions:
-- **Wildcard DNS Rewrites**: `*.yourdomain.dedyn.io` resolves automatically to your hub's internal IP.
-- **Nginx Subdomain Routing**: Each service is reachable via its own secure subdomain (e.g., `invidious.yourdomain.dedyn.io`).
-- **End-to-End Encryption**: Valid Let's Encrypt certificates are automatically managed and applied to all subdomain endpoints on port `8443`.
+- **Wildcard DNS rewrites**: `*.yourdomain.dedyn.io` resolves automatically to your hub's internal IP.
+- **Nginx subdomain routing**: Each service is reachable via its own secure subdomain (e.g., `invidious.yourdomain.dedyn.io`).
+- **End-to-end encryption**: Valid Let's Encrypt certificates are automatically managed and applied to all subdomain endpoints on port `8443`.
 
-#### Unified Deployment & Continuous Updates
-This stack uses a **Unified Deployment** model combined with **Watchtower** for automated updates, ensuring you always have the latest privacy fixes without manual intervention.
+#### Unified deployment and continuous updates
+This stack uses a **unified deployment** model combined with **Watchtower** for automated updates, ensuring you always have the latest privacy fixes without manual intervention.
 
-- **Latest-Stable Strategy**: By default, all service frontends pull the `latest` stable image.
-- **Automated Lifecycle**: Watchtower monitors your containers and performs graceful restarts when new upstream security patches are released.
-- **Single-Stage Verification**: The integrated test suite verifies the entire stack in one pass, ensuring inter-service dependencies are validated.
+- **Latest-stable strategy**: By default, all service frontends pull the `latest` stable image.
+- **Automated lifecycle**: Watchtower monitors your containers and performs graceful restarts when new upstream security patches are released.
+- **Single-stage verification**: The integrated test suite verifies the entire stack in one pass, ensuring inter-service dependencies are validated.
 
-#### Zero-Leaks Asset Architecture
+#### Zero-leaks asset architecture
 External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN proxy** and served locally. Your public home IP is never exposed to CDNs.
 
-**Privacy Enforcement Logic:**
-1.  **Container Initiation**: When the Hub API container starts, it initiates an asset verification check.
-2.  **Proxy Routing**: If assets are missing, the Hub API routes download requests through the Gluetun VPN container (acting as an HTTP proxy on port 8888).
-3.  **Encapsulated Fetching**: All requests to external CDNs occur *inside* the VPN tunnel. Upstream providers only see the VPN IP.
-4.  **Local Persistence**: Assets are saved to a persistent Docker volume (`/assets`).
-5.  **Offline Serving**: The Management Dashboard serves all UI resources exclusively from this local volume.
+**Privacy enforcement logic:**
+1.  **Container initiation**: When the Hub API container starts, it initiates an asset verification check.
+2.  **Proxy routing**: If assets are missing, the Hub API routes download requests through the Gluetun VPN container (acting as an HTTP proxy on port 8888).
+3.  **Encapsulated fetching**: All requests to external CDNs occur *inside* the VPN tunnel. Upstream providers only see the VPN IP.
+4.  **Local persistence**: Assets are saved to a persistent Docker volume (`/assets`).
+5.  **Offline serving**: The Management Dashboard serves all UI resources exclusively from this local volume.
 
 ---
 
-### 🛡️ Blocklist Information & DNS Filtering
+### 🛡️ Blocklist information & DNS Filtering
 *   **Source**: Blocklists are generated using the [Lyceris-chan DNS Blocklist Generator](https://github.com/Lyceris-chan/dns-blocklist-generator/).
 *   **Composition**: Based on **Hagezi Pro++**, curated for performance and dutch users.
 *   **Note**: This blocklist is **aggressive** by design.
 
-### 🛡️ Deployment Strategy
+### 🛡️ Deployment strategy
 This stack uses a hybrid deployment model to balance privacy with system stability.
 
 - **Pre-built Images**: Most services use trusted upstream images to ensure fast deployment and reliable updates.
 - **Local Optimization**: Critical orchestration components and selected frontends are optimized for your environment through local builds.
 
-### 🛡️ Self-Healing & High Availability
+### 🛡️ Self-healing & High availability
 *   **VPN Monitoring**: Gluetun is continuously monitored. Docker restarts the gateway if the tunnel stalls.
 *   **Frontend Auto-Recovery**: Privacy frontends utilize `restart: always`.
 *   **Health-Gated Launch**: Infrastructure services must be `healthy` before frontends start.
 
-### Data Minimization & Anonymity
+### Data minimization & anonymity
 *   **Specific User-Agent Signatures**: Requests use industry-standard signatures to blend in.
 *   **Zero Personal Data**: No API keys or hardware IDs are transmitted during checks.
 *   **Isolated Environment**: Requests execute from within containers without host-level access.
 
 ---
 
-## 🛠️ Production Deployment & Disaster Recovery
+## 🛠️ Production deployment & disaster recovery
 
 ### Production Best Practices
 For a stable, long-term deployment, follow these guidelines:
@@ -537,7 +537,7 @@ For a stable, long-term deployment, follow these guidelines:
 3.  **Uninterruptible Power Supply (UPS)**: Protect against data corruption during power outages.
 4.  **Automatic Backups**: Schedule regular backups of the `data/AppData/privacy-hub` directory.
 
-### Disaster Recovery
+### disaster recovery
 
 #### Scenario 1: The system is slow or glitchy
 Run the maintenance command to recreate containers without losing data:
@@ -559,17 +559,17 @@ To wipe everything and start over (Warning: IRREVERSIBLE):
 
 ---
 
-## 🛡️ Security Standards
+## 🛡️ Security standards
 
-### Hardened Security Baseline
+### Hardened security baseline
 We prioritize minimal, security-focused images for all services.
 *   **The Benefit**: Minimal images reduce the attack surface by removing unnecessary binaries and libraries, following the principle of least privilege. (Concept based on [CIS Benchmarks](https://www.cisecurity.org/benchmark/docker) and minimal base image best practices).
 
 ### The "Silent" Security Model
 Opening a port for WireGuard does **not** expose your home to scanning.
 *   **Silent Drop**: WireGuard does not respond to packets it doesn't recognize. To a scanner, the port looks closed.
-*   **DDoS Mitigation**: Because it's silent to unauthenticated packets, it is inherently resistant to flooding attacks.
-*   **Cryptographic Ownership**: You can't "guess" a password. You need a valid 256-bit key.
+*   **DDoS mitigation**: Because it's silent to unauthenticated packets, it is inherently resistant to flooding attacks.
+*   **Cryptographic ownership**: You can't "guess" a password. You need a valid 256-bit key.
 
 ---
 
@@ -636,10 +636,10 @@ tar -czf immich-backup.tar.gz /data/AppData/privacy-hub/immich
 
 ---
 
-## 🧩 Advanced Usage
+## 🧩 Advanced usage
 
 <details>
-<summary><strong>🧪 Staged Headless Verification</strong> (CI/CD & Automation)</summary>
+<summary><strong>🧪 Staged headless verification</strong> (CI/CD & Automation)</summary>
 
 For developers and advanced users, the Privacy Hub includes a staged, headless verification system designed for rigorous CI/CD environments and automated stability testing. This system utilizes a state-aware orchestrator to manage multi-stage deployments with automatic crash recovery.
 
@@ -652,7 +652,7 @@ To execute the full verification suite in headless mode:
 ./test/manual_verification.sh
 ```
 
-### Key Features
+### Key features
 
 *   **🧱 Multi-Stage Testing**: Tests are divided into logical stages (Core, Frontends, Management, etc.) to isolate failure points.
 *   **🔄 Auto-Resume Logic**: If the verification is interrupted (e.g., system crash, timeout), simply running the script again will automatically resume from the last pending stage.
@@ -667,7 +667,7 @@ To execute the full verification suite in headless mode:
 
 The stack uses a modular generation system. To add a new service, you will need to modify the generator scripts in the `lib/` directory.
 
-### 1) Add to Compose (`lib/compose_gen.sh`)
+### 1) Add to compose (`lib/compose_gen.sh`)
 
 Locate the `generate_compose` function and add your service block:
 
@@ -685,7 +685,7 @@ EOF
 
 If you want the service to run through the VPN, use `network_mode: "service:gluetun"` and `depends_on: gluetun`.
 
-### 2) Monitoring & Health (`lib/scripts.sh`)
+### 2) Monitoring and health (`lib/scripts.sh`)
 
 Update the service status loop inside the `generate_scripts` function (specifically the `wg_api.py` generation block or `wg_control.sh` template).
 
@@ -706,7 +706,7 @@ The dashboard catalog is generated in `lib/scripts.sh`. Find the `cat > "$SERVIC
 }
 ```
 
-### 4) Watchtower Updates
+### 4) Watchtower updates
 
 - To opt out, add `com.centurylinklabs.watchtower.enable=false` under the service labels.
 - For build-based services, the dashboard's "Update" feature handles the rebuild process.
@@ -714,7 +714,7 @@ The dashboard catalog is generated in `lib/scripts.sh`. Find the `cat > "$SERVIC
 </details>
 
 <details>
-<summary><strong>🧪 Automated Verification</strong> (Click to expand)</summary>
+<summary><strong>🧪 Automated verification</strong> (Click to expand)</summary>
 
 To ensure a "set and forget" experience, every release undergoes a rigorous automated verification pipeline.
 *   **Interaction Audit**: Puppeteer-based suite simulates real user behavior.
@@ -724,9 +724,9 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
 </details>
 
 <details>
-<summary><strong>🌐 Connection Exposure Map & Privacy Policies</strong> (Click to expand)</summary>
+<summary><strong>🌐 Connection exposure map & Privacy Policies</strong> (Click to expand)</summary>
 
-### Connection Exposure Map
+### Connection exposure map
 
 | Service / Domain | Purpose | Exposure |
 | :--- | :--- | :--- |
@@ -743,7 +743,7 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
 | **Cobalt** | Media downloads | **🔒 VPN IP** (Gluetun) |
 | **SearXNG / Immich** | Search & Media sync | **🔒 VPN IP** (Gluetun) |
 
-### Detailed Privacy Policies
+### Detailed privacy policies
 
 - **Public IP Detection & Health**:
   - [ipify.org](https://www.ipify.org/) (Used to display VPN status; exposes **🔒 VPN IP**)

@@ -118,6 +118,7 @@ usage() {
     echo "  -y          Auto-Confirm (non-interactive mode)"
     echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
     echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
+    echo "  -o          Skip Odido Bundle Booster deployment"
     echo "  -c          Maintenance (recreates containers, preserves data)"
     echo "  -E <file>   Load Environment Variables from file"
     echo "  -G          Generate Only (stops before deployment)"
@@ -139,7 +140,7 @@ PERSONAL_MODE=false
 REG_TOKEN=""
 REG_USER=""
 
-while getopts "cxpyas:j hE:G" opt; do
+while getopts "cxpyas:j hE:Go" opt; do
     case ${opt} in
         c) RESET_ENV=true; FORCE_CLEAN=true ;;
         x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
@@ -147,6 +148,7 @@ while getopts "cxpyas:j hE:G" opt; do
         y) AUTO_CONFIRM=true; AUTO_PASSWORD=true ;;
         a) ALLOW_PROTON_VPN=true ;;
         s) SELECTED_SERVICES="${OPTARG}" ;;
+        o) SKIP_ODIDO=true ;;
         j) PARALLEL_DEPLOY=true ;;
         E) ENV_FILE="${OPTARG}" ;;
         G) GENERATE_ONLY=true ;;
@@ -158,6 +160,19 @@ while getopts "cxpyas:j hE:G" opt; do
     esac
 done
 shift $((OPTIND -1))
+
+SKIP_ODIDO="${SKIP_ODIDO:-false}"
+
+# Handle odido-booster exclusion logic
+if [ "$SKIP_ODIDO" = true ]; then
+    if [ -z "$SELECTED_SERVICES" ]; then
+        # Dynamically remove odido-booster from the full stack list
+        SELECTED_SERVICES=$(echo "$STACK_SERVICES" | sed 's/\bodido-booster\b//g' | sed 's/  */ /g' | sed 's/^ //;s/ $//' | tr ' ' ',')
+    else
+        # Remove odido-booster from the list if it's there
+        SELECTED_SERVICES=$(echo "$SELECTED_SERVICES" | sed 's/\bodido-booster\b//g' | sed 's/,,/,/g' | sed 's/^,//' | sed 's/,$//')
+    fi
+fi
 
 # --- LOAD EXTERNAL ENV FILE ---
 if [ -n "$ENV_FILE" ]; then
@@ -345,7 +360,7 @@ MIGRATE_SCRIPT="$BASE_DIR/migrate.sh"
 PATCHES_SCRIPT="$BASE_DIR/patches.sh"
 
 # Ensure root-level data files are writable by the container user (UID 1000)
-    touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
+    $SUDO touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
     if [ ! -f "$ACTIVE_PROFILE_NAME_FILE" ]; then echo "Initial-Setup" | $SUDO tee "$ACTIVE_PROFILE_NAME_FILE" >/dev/null; fi
     $SUDO chmod 666 "$HISTORY_LOG" 2>/dev/null || true
     $SUDO chmod 644 "$ACTIVE_PROFILE_NAME_FILE" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
@@ -618,49 +633,64 @@ setup_secrets() {
             echo "   Obtain the OAuth Token using https://github.com/GuusBackup/Odido.Authenticator"
             echo "   (works on any platform with .NET, no Apple device needed)"
             echo ""
-            echo "   Steps:"
-            echo "   1. Clone and run: git clone --recursive https://github.com/GuusBackup/Odido.Authenticator.git"
-            echo "   2. Run: dotnet run --project Odido.Authenticator"
-            echo "   3. Follow the login flow and get the OAuth Token"
-            echo "   4. Enter the OAuth Token below - the script will fetch your User ID automatically"
-            echo ""
-            echo -n "Odido Access Token (OAuth Token from Authenticator, or Enter to skip): "
-            read -rs ODIDO_TOKEN
-            echo ""
-            if [ -n "$ODIDO_TOKEN" ]; then
-                log_info "Fetching Odido User ID automatically..."
-                # Use curl with -L to follow redirects and capture the effective URL
-                # We pass the Authorization header and a mobile User-Agent to mimic the app
-                ODIDO_REDIRECT_URL=$(curl -sL --max-time 10 -o /dev/null -w '%{url_effective}' \
-                    -H "Authorization: Bearer $ODIDO_TOKEN" \
-                    -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
-                    "https://capi.odido.nl/account/current" || echo "FAILED")
-                
-                # Extract User ID from URL path - it's a 12-character hex string after capi.odido.nl/ 
-                # Format: https://capi.odido.nl/{12-char-hex-userid}/account/...
-                # Note: grep may not find a match, so we use || true to prevent pipeline failure with set -euo pipefail
-                ODIDO_USER_ID=$(echo "$ODIDO_REDIRECT_URL" | grep -oiE 'capi\.odido\.nl/[0-9a-f]{12}' | sed 's|capi\.odido\.nl/||I' | head -1 || true)
-                
-                # Fallback: try to extract first path segment if hex pattern doesn't match
-                if [ -z "$ODIDO_USER_ID" ]; then
-                    ODIDO_USER_ID=$(echo "$ODIDO_REDIRECT_URL" | sed -n 's|https://capi.odido.nl/\([^/]*\)/.*|\1|p')
-                fi
-                
-                if [ -n "$ODIDO_USER_ID" ] && [ "$ODIDO_USER_ID" != "account" ]; then
-                    log_info "Successfully retrieved Odido User ID: $ODIDO_USER_ID"
-                else
-                    log_warn "Could not automatically retrieve User ID from Odido API"
-                    log_warn "The API may be temporarily unavailable or the token may be invalid"
-                    echo -n "   Enter Odido User ID manually (or Enter to skip): "
-                    read -r ODIDO_USER_ID
+            
+            if ask_confirm "Do you want to set up Odido Bundle Booster integration?"; then
+                echo "   Steps:"
+                echo "   1. Clone and run: git clone --recursive https://github.com/GuusBackup/Odido.Authenticator.git"
+                echo "   2. Run: dotnet run --project Odido.Authenticator"
+                echo "   3. Follow the login flow and get the OAuth Token"
+                echo "   4. Enter the OAuth Token below - the script will fetch your User ID automatically"
+                echo ""
+                echo -n "Odido Access Token (OAuth Token from Authenticator, or Enter to skip): "
+                read -rs ODIDO_TOKEN
+                echo ""
+                if [ -n "$ODIDO_TOKEN" ]; then
+                    log_info "Fetching Odido User ID automatically..."
+                    # Use curl with -L to follow redirects and capture the effective URL
+                    # We pass the Authorization header and a mobile User-Agent to mimic the app
+                    ODIDO_REDIRECT_URL=$(curl -sL --max-time 10 -o /dev/null -w '%{url_effective}' \
+                        -H "Authorization: Bearer $ODIDO_TOKEN" \
+                        -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
+                        "https://capi.odido.nl/account/current" || echo "FAILED")
+                    
+                    # Extract User ID from URL path - it's a 12-character hex string after capi.odido.nl/ 
+                    # Format: https://capi.odido.nl/{12-char-hex-userid}/account/...
+                    # Note: grep may not find a match, so we use || true to prevent pipeline failure with set -euo pipefail
+                    ODIDO_USER_ID=$(echo "$ODIDO_REDIRECT_URL" | grep -oiE 'capi\.odido\.nl/[0-9a-f]{12}' | sed 's|capi\.odido\.nl/||I' | head -1 || true)
+                    
+                    # Fallback: try to extract first path segment if hex pattern doesn't match
                     if [ -z "$ODIDO_USER_ID" ]; then
-                        log_warn "No User ID provided, skipping Odido integration"
-                        ODIDO_TOKEN=""
+                        ODIDO_USER_ID=$(echo "$ODIDO_REDIRECT_URL" | sed -n 's|https://capi.odido.nl/\([^/]*\)/.*|\1|p')
                     fi
+                    
+                    if [ -n "$ODIDO_USER_ID" ] && [ "$ODIDO_USER_ID" != "account" ]; then
+                        log_info "Successfully retrieved Odido User ID: $ODIDO_USER_ID"
+                    else
+                        log_warn "Could not automatically retrieve User ID from Odido API"
+                        log_warn "The API may be temporarily unavailable or the token may be invalid"
+                        echo -n "   Enter Odido User ID manually (or Enter to skip): "
+                        read -r ODIDO_USER_ID
+                        if [ -z "$ODIDO_USER_ID" ]; then
+                            log_warn "No User ID provided, skipping Odido integration"
+                            ODIDO_TOKEN=""
+                        fi
+                    fi
+                else
+                    ODIDO_USER_ID=""
+                    echo "   Skipping Odido API integration (manual mode only)"
                 fi
             else
                 ODIDO_USER_ID=""
-                echo "   Skipping Odido API integration (manual mode only)"
+                ODIDO_TOKEN=""
+                SKIP_ODIDO=true
+                # Remove odido-booster from the list if it's there
+                if [ -z "$SELECTED_SERVICES" ]; then
+                    # Dynamically remove odido-booster from the full stack list
+                    SELECTED_SERVICES=$(echo "$STACK_SERVICES" | sed 's/\bodido-booster\b//g' | sed 's/  */ /g' | sed 's/^ //;s/ $//' | tr ' ' ',')
+                else
+                    SELECTED_SERVICES=$(echo "$SELECTED_SERVICES" | sed 's/\bodido-booster\b//g' | sed 's/,,/,/g' | sed 's/^,//' | sed 's/,$//')
+                fi
+                echo "   Skipping Odido Bundle Booster setup."
             fi
         fi
         
@@ -731,6 +761,7 @@ IV_HMAC='$IV_HMAC'
 IV_COMPANION='$IV_COMPANION'
 EOF
         $SUDO chmod 600 "$BASE_DIR/.secrets"
+        $SUDO chown 1000:1000 "$BASE_DIR/.secrets"
     else
         source "$BASE_DIR/.secrets"
         # Ensure all secrets are loaded/regenerated if missing

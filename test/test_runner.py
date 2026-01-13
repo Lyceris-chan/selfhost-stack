@@ -289,7 +289,7 @@ def main():
             with open(secrets_path, 'r') as f:
                 for line in f:
                     if "HUB_API_KEY=" in line:
-                        api_key = line.split("=")[1].strip().strip('"')
+                        api_key = line.split("=")[1].strip().strip('"').strip("'")
         
         # Test Downgrade and Update
         print("  Testing Downgrade and Update for Wikiless...")

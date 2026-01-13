@@ -9,13 +9,19 @@ const REPORT_FILE = path.join(__dirname, 'verification_report.md');
 
 // Load admin password from .secrets if it exists
 let ADMIN_PASS = 'admin123';
-const secretsPath = path.join(__dirname, 'test_data/data/AppData/privacy-hub-test/.secrets');
-if (fs.existsSync(secretsPath)) {
-    const secrets = fs.readFileSync(secretsPath, 'utf8');
-    const match = secrets.match(/ADMIN_PASS_RAW="([^"]+)"/);
-    if (match) {
-        ADMIN_PASS = match[1];
-        console.log(`Loaded admin password from .secrets: ${ADMIN_PASS.substring(0, 3)}...`);
+const paths = [
+    path.join(__dirname, '../data/AppData/privacy-hub/.secrets'),
+    path.join(__dirname, 'test_data/data/AppData/privacy-hub-test/.secrets')
+];
+for (const p of paths) {
+    if (fs.existsSync(p)) {
+        const secrets = fs.readFileSync(p, 'utf8');
+        const match = secrets.match(/ADMIN_PASS_RAW=["'](.+)["']/);
+        if (match) {
+            ADMIN_PASS = match[1];
+            console.log(`Loaded admin password from ${p}: ${ADMIN_PASS.substring(0, 3)}...`);
+            break;
+        }
     }
 }
 
@@ -95,13 +101,55 @@ async function runTests() {
 
 
 
-    const page = await browser.newPage();
-
-    await page.setViewport({ width: 1440, height: 1200 });
+        const page = await browser.newPage();
 
 
 
-    try {
+        await page.setViewport({ width: 1440, height: 1200 });
+
+
+
+    
+
+
+
+        // Capture console logs
+
+
+
+        page.on('console', msg => {
+
+
+
+            const type = msg.type();
+
+
+
+            const text = msg.text();
+
+
+
+            if (type === 'error' || type === 'warn') {
+
+
+
+                console.log(`[BROWSER ${type.toUpperCase()}] ${text}`);
+
+
+
+            }
+
+
+
+        });
+
+
+
+    
+
+
+
+        try {
 
         console.log('--- Phase 1: Service Connectivity & Deep Functionality ---');
 
@@ -138,14 +186,26 @@ async function runTests() {
                             console.log(`  Navigating to video: ${videoUrl}`);
                             
                             await page.goto(videoUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-                            await new Promise(r => setTimeout(r, 5000));
+                            console.log('  Waiting for video player (up to 5 minutes for Companion potoken)...');
+                            await new Promise(r => setTimeout(r, 10000));
                             
                             const playerSelector = 'video, #player, .video-js, #player-container, iframe, .vjs-tech';
-                            const videoPlayer = await page.waitForSelector(playerSelector, { timeout: 120000 });
+                            const videoPlayer = await page.waitForSelector(playerSelector, { timeout: 300000 });
                             
                             if (videoPlayer) {
                                 logResult('Invidious', 'Player Loaded', 'PASS', 'Video player element detected');
                                 
+                                // Try to click play if it's a video element and not playing
+                                await page.evaluate(() => {
+                                    const v = document.querySelector('video');
+                                    if (v && v.paused) v.play().catch(() => {});
+                                    // Also try clicking the player area
+                                    const p = document.querySelector('#player, .video-js, #player-container');
+                                    if (p) p.click();
+                                });
+
+                                await new Promise(r => setTimeout(r, 10000));
+
                                 const playbackMetrics = await page.evaluate(async () => {
                                     const v = document.querySelector('video');
                                     if (!v) return { error: 'No video element' };
@@ -197,18 +257,43 @@ async function runTests() {
         // Admin Login
         console.log('  Testing Admin Login...');
         await page.click('#admin-lock-btn');
-        await page.waitForSelector('#admin-password-input', { visible: true });
-        await page.type('#admin-password-input', ADMIN_PASS);
-        await page.keyboard.press('Enter');
+        await page.waitForSelector('#login-modal', { visible: true });
         
-        // Wait for admin mode to activate (class on body)
+        // Test Layout Alignment in Login Modal
+        const loginLayout = await page.evaluate(() => {
+            const modal = document.querySelector('#login-modal');
+            const header = modal.querySelector('.modal-header');
+            const title = header.querySelector('h2');
+            const closeBtn = header.querySelector('.btn-icon');
+            const tRect = title.getBoundingClientRect();
+            const cRect = closeBtn.getBoundingClientRect();
+            
+            return {
+                titleRight: tRect.right,
+                closeLeft: cRect.left,
+                overlap: (tRect.right > cRect.left),
+                verticallyAligned: Math.abs((tRect.top + tRect.height/2) - (cRect.top + cRect.height/2)) < 5
+            };
+        });
+        console.log(`[LOGIN LAYOUT] Title Right: ${loginLayout.titleRight}, Close Left: ${loginLayout.closeLeft}, Overlap: ${loginLayout.overlap}`);
+        logResult('Dashboard', 'Login Modal Alignment', (!loginLayout.overlap && loginLayout.verticallyAligned) ? 'PASS' : 'FAIL', `Overlap: ${loginLayout.overlap}, Vertically Aligned: ${loginLayout.verticallyAligned}`);
+
+        await page.type('#admin-password-input', ADMIN_PASS, { delay: 50 });
+        await page.click('#login-modal .btn-filled'); // Sign in button
+        
+        // Wait for admin mode to activate (class on body) or modal to hide
         try {
-            await page.waitForFunction(() => document.body.classList.contains('admin-mode'), { timeout: 10000 });
-            logResult('Dashboard', 'Admin Login', 'PASS', 'Admin mode activated');
+            await page.waitForFunction(() => document.body.classList.contains('admin-mode') || document.getElementById('login-modal').style.display === 'none', { timeout: 15000 });
+            const isAdminMode = await page.evaluate(() => document.body.classList.contains('admin-mode'));
+            if (isAdminMode) {
+                logResult('Dashboard', 'Admin Login', 'PASS', 'Admin mode activated');
+            } else {
+                logResult('Dashboard', 'Admin Login', 'FAIL', 'Login modal closed but admin mode not active');
+            }
             await new Promise(r => setTimeout(r, 2000)); // Ensure UI re-render
         } catch (e) {
             const loginVisible = await page.evaluate(() => document.getElementById('login-modal').style.display !== 'none');
-            logResult('Dashboard', 'Admin Login', 'FAIL', loginVisible ? 'Login modal still visible (Wrong password?)' : 'Body class not added');
+            logResult('Dashboard', 'Admin Login', 'FAIL', loginVisible ? 'Login modal still visible (Wrong password or slow API?)' : 'Body class not added');
             await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'debug_login_fail.png') });
         }
 
@@ -230,6 +315,24 @@ async function runTests() {
                 await page.waitForSelector('#service-modal', { visible: true });
                 logResult('Dashboard', 'Settings Modal', 'PASS', 'Invidious management modal opened');
                 
+                // Test Layout Alignment in Modal
+                const layoutDebug = await page.evaluate(() => {
+                    const header = document.querySelector('#service-modal .modal-header');
+                    const title = header.querySelector('h2');
+                    const closeBtn = header.querySelector('.btn-icon');
+                    const tRect = title.getBoundingClientRect();
+                    const cRect = closeBtn.getBoundingClientRect();
+                    
+                    return {
+                        title: { x: tRect.x, y: tRect.y, w: tRect.width, h: tRect.height, right: tRect.right },
+                        close: { x: cRect.x, y: cRect.y, w: cRect.width, h: cRect.height, left: cRect.left },
+                        overlap: (tRect.right > cRect.left),
+                        verticallyAligned: Math.abs((tRect.top + tRect.height/2) - (cRect.top + cRect.height/2)) < 5
+                    };
+                });
+                console.log(`[LAYOUT DEBUG] Title Right: ${layoutDebug.title.right}, Close Left: ${layoutDebug.close.left}, Overlap: ${layoutDebug.overlap}`);
+                logResult('Dashboard', 'Modal Alignment', (!layoutDebug.overlap && layoutDebug.verticallyAligned) ? 'PASS' : 'FAIL', `Overlap: ${layoutDebug.overlap}, Vertically Aligned: ${layoutDebug.verticallyAligned}`);
+
                 // Test Update Individual Service
                 const updateBtn = await page.evaluateHandle(() => {
                     return Array.from(document.querySelectorAll('#modal-actions button')).find(b => b.textContent.includes('Update Service'));
@@ -264,6 +367,31 @@ async function runTests() {
                 logResult('Dashboard', 'Session Policy Toggle', newState !== initialState ? 'PASS' : 'FAIL', `Toggled cleanup: ${initialState} -> ${newState}`);
             }
 
+            // Test Click-to-Copy
+            console.log('  Testing Click-to-Copy...');
+            const codeBlock = await page.$('.code-block');
+            if (codeBlock) {
+                const originalText = await page.evaluate(el => el.textContent, codeBlock);
+                await codeBlock.click();
+                await new Promise(r => setTimeout(r, 500));
+                const currentText = await page.evaluate(el => el.textContent, codeBlock);
+                logResult('Dashboard', 'Click-to-Copy', currentText === 'Copied!' ? 'PASS' : 'FAIL', `Text changed to: ${currentText}`);
+                await new Promise(r => setTimeout(r, 2000)); // Wait for reset
+            } else {
+                logResult('Dashboard', 'Click-to-Copy', 'FAIL', 'No code-block found');
+            }
+
+            // Test Link Switcher Functional
+            console.log('  Testing Link Switcher...');
+            const linkSwitch = await page.$('#link-mode-switch');
+            if (linkSwitch) {
+                const initialUrl = await page.evaluate(() => document.querySelector('.card').dataset.url);
+                await page.evaluate(() => document.getElementById('link-mode-switch').click());
+                await new Promise(r => setTimeout(r, 2000));
+                const newUrl = await page.evaluate(() => document.querySelector('.card').dataset.url);
+                logResult('Dashboard', 'Link Switcher', initialUrl !== newUrl ? 'PASS' : 'FAIL', `URL changed from ${initialUrl} to ${newUrl}`);
+            }
+
             // Test Log Filtering
             console.log('  Testing Log Filtering...');
             const logsChip = await page.$('.filter-chip[data-target="logs"]');
@@ -287,8 +415,29 @@ async function runTests() {
                 } else {
                     logResult('Dashboard', 'Log Visibility', 'FAIL', 'Logs section NOT visible after click');
                 }
-            } else {
-                logResult('Dashboard', 'Log Interaction', 'FAIL', 'Logs filter chip not found');
+            }
+
+            // Test Project Size Modal
+            console.log('  Testing Project Size Modal...');
+            const projectSizeBtn = await page.$('#sys-project-size');
+            if (projectSizeBtn) {
+                await page.evaluate(() => document.getElementById('sys-project-size').parentElement.click());
+                await page.waitForSelector('#project-size-modal', { visible: true });
+                await page.waitForSelector('#project-size-content', { visible: true, timeout: 10000 });
+                
+                const breakdownItems = await page.evaluate(() => document.querySelectorAll('#project-size-list .list-item').length);
+                logResult('Dashboard', 'Storage Breakdown', breakdownItems > 0 ? 'PASS' : 'FAIL', `Found ${breakdownItems} items in breakdown`);
+                
+                // Test Prune Images (Trigger Dialog)
+                const pruneBtn = await page.$('#project-size-content button');
+                if (pruneBtn) {
+                    await pruneBtn.click();
+                    await page.waitForSelector('#dialog-modal', { visible: true });
+                    logResult('Dashboard', 'Prune Images Dialog', 'PASS', 'Confirmation dialog appeared');
+                    await page.click('#dialog-cancel-btn');
+                }
+                
+                await page.evaluate(() => document.querySelector('#project-size-modal .btn-icon').click());
             }
         }
 

@@ -1,24 +1,644 @@
-# Progress Report
+- the UI is still messed up with e.g the cross to close a dialogue appearing under the A in Admin Admin Authentication  
+- ensure for the UI that we strictly adhere to m3.material.io
+- ensure that the wording in the code, readme, dashboard and everywhere else follows https://developers.google.com/style and the other pages it talks about
+- ensure the UI is rigoursly tested for alignment and other problems to ensure everything is proper production ready following m3.material.io rules for everything spacing etc etc
+- 
+- verify there arent any other problems by inspecting the browser console logs for the nginx dashboard we host and by checking the container logs for all services
+- ensure we setup searxng properly following https://docs.searxng.org/admin/installation-searxng.html#configuration
+- set everything to the defaults they provide and set autocomplete to google and set image proxy to on
+- the domain IP link switcher doesnt work
+- things like these should be in a click to copy codebox to allow easy usage 
+Standard IPv4 (Local LAN Only)
+192.168.69.206:53
+Secure DOQ (Modern Clients)
+quic://192.168.69.206
+Secure DOH (Browsers)
+https://sleepybunny.dedyn.io/dns-query
+Secure DOT (Android / System)
+sleepybunny.dedyn.io:853
 
-## Fixed Issues
-- [x] **AdGuard Configuration Error**: Fixed YAML syntax generation in `lib/services/config.sh`. `user_rules` now correctly handles empty lists.
-- [x] **Hub API Permission Error**: Updated `lib/core/core.sh` to ensure `deployment.log` is writable (`chmod 666`) by the container user.
-- [x] **Dashboard Console Error**: Fixed `TypeError: palette.get is not a function` in `lib/templates/assets/dashboard.js` by updating method call to `palette.tone()` to match the `material-color-utilities` library version.
-- [x] **Services not showing**: Resolved by fixing Hub API permissions (allowing API startup) and Dashboard JS error (allowing frontend rendering).
+adguard container logs:
+root@ZimaOS:/DATA/AppData/selfhost-stack ➜ # docker logs hub-adguard
+2026/01/13 03:16:54 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:16:54 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:16:54.141772 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/13 03:16:54.142009 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 19: found character that cannot start any token"
+2026/01/13 03:16:54 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:16:54 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:16:54.580918 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/13 03:16:54.581090 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 19: found character that cannot start any token"
+2026/01/13 03:16:55 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:16:55 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:16:55.010399 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/13 03:16:55.010578 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 19: found character that cannot start any token"
+2026/01/13 03:16:55 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:16:55 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:16:55.638684 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/13 03:16:55.638881 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 19: found character that cannot start any token"
+2026/01/13 03:16:56 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:16:56 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:16:56.673699 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/13 03:16:56.673877 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 19: found character that cannot start any token"
+2026/01/13 03:16:58 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:16:58 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:16:58.490377 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/13 03:16:58.490592 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 19: found character that cannot start any token"
+2026/01/13 03:17:01 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:17:01 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:17:01.928337 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/13 03:17:01.928539 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 19: found character that cannot start any token"
+2026/01/13 03:17:08 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:17:08 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:17:08.613535 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/13 03:17:08.613786 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 19: found character that cannot start any token"
+2026/01/13 03:17:21 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:17:21 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:17:21.668962 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/13 03:17:21.669146 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 19: found character that cannot start any token"
+2026/01/13 03:17:47 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:17:47 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:17:47.497831 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/13 03:17:47.498104 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 19: found character that cannot start any token"
+2026/01/13 03:18:38 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:18:38 [error] Couldn't get logging settings from the configuration: yaml: line 19: found character that cannot start any token
+2026/01/13 03:18:38.947375 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/13 03:18:38.947613 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 19: found character that cannot start any token"
+root@ZimaOS:/DATA/AppData/selfhost-stack ➜ #
 
-## UI & Writing Improvements
-- [x] **Material Design 3**: Verified CSS tokens and responsiveness.
-- [x] **Writing Style**: Updated `dashboard.html` and `dashboard.js` to follow Google Developer Style Guide.
-    - Removed "Please" and "We".
-    - Simplified jargon (e.g., "FQDN" -> "domain name").
-    - Switched to active voice where possible.
-    - Standardized sentence case for headings.
 
-## Original Potato Content
-- Improve the UI of the project and take screenshots and measure and investistigate spacing and all other UI factors to ensure we strictly follow m3.material.io and that it doesnt break when the window gets resized
-- improve the writing and wording used to follow  https://developers.google.com/style 
-- adguard is still broken
-- services dont show in admin / regular mode  
-dashboard console logs
-(index):3904 Uncaught TypeError: palette.get is not a function
-...
+console logs nginx dashboard:
+content.js:2 Uncaught 
+content.js:2 Uncaught 
+content.js:2 Uncaught 
+content.js:2 Uncaught 
+content.js:2 Uncaught 
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+Denying load of <URL>. Resources must be listed in the web_accessible_resources manifest key in order to be loaded by pages outside the extension.
+containers:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+status:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+updates:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+:8443/api/certificate-status:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+metrics:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+system-health:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+ Health fetch error: 
+fetchSystemHealth @ (index):4629
+events:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+status:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+ Status fetch error: 
+fetchStatus @ (index):3045
+:8443/api/profiles:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+ Profile fetch error: 
+fetchProfiles @ (index):3339
+status:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+updates:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+containers:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+ Container fetch error: 
+fetchContainerIds @ (index):2791
+metrics:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+events:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+  POST https://192.168.69.206:8443/api/theme 401 (Unauthorized)
+apiCall @ (index):2267
+syncSettings @ (index):3995
+toggleTheme @ (index):4287
+onclick @ (index):898
+  POST https://192.168.69.206:8443/api/theme 401 (Unauthorized)
+apiCall @ (index):2267
+syncSettings @ (index):3995
+toggleTheme @ (index):4287
+onclick @ (index):898
+  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+ Status fetch error: 
+fetchStatus @ (index):3045
+  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+ Health fetch error: 
+fetchSystemHealth @ (index):4629
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+  GET https://192.168.69.206:8443/api/containers 401 (Unauthorized)
+apiCall @ (index):2267
+renderDynamicGrid @ (index):1738
+  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+ Status fetch error: 
+fetchStatus @ (index):3045
+  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+ Health fetch error: 
+fetchSystemHealth @ (index):4629
+  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+renderDynamicGrid @ (index):1811
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+ Health fetch error: 
+fetchSystemHealth @ (index):4629
+  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+ Status fetch error: 
+fetchStatus @ (index):3045
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+  GET https://192.168.69.206:8443/api/updates 401 (Unauthorized)
+apiCall @ (index):2267
+fetchUpdates @ (index):2313
+  GET https://192.168.69.206:8443/api/containers 401 (Unauthorized)
+apiCall @ (index):2267
+renderDynamicGrid @ (index):1738
+  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+ Status fetch error: 
+fetchStatus @ (index):3045
+  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+ Health fetch error: 
+fetchSystemHealth @ (index):4629
+  GET https://192.168.69.206:8443/api/odido-proxy/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchOdidoStatus @ (index):3072
+  GET https://192.168.69.206:8443/api/containers 401 (Unauthorized)
+apiCall @ (index):2267
+fetchContainerIds @ (index):2760
+ Container fetch error: 
+fetchContainerIds @ (index):2791
+  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+renderDynamicGrid @ (index):1811
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+(index):4629 Health fetch error: Error: 401
+    at fetchSystemHealth ((index):4574:47)
+fetchSystemHealth @ (index):4629
+(index):2267  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+(index):3045 Status fetch error: Error: 401 Unauthorized
+    at fetchStatus ((index):2891:27)
+fetchStatus @ (index):3045
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+(index):3045 Status fetch error: Error: 401 Unauthorized
+    at fetchStatus ((index):2891:27)
+fetchStatus @ (index):3045
+(index):2267  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+(index):2267  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+(index):4629 Health fetch error: Error: 401
+    at fetchSystemHealth ((index):4574:47)
+fetchSystemHealth @ (index):4629
+(index):2267  GET https://192.168.69.206:8443/api/containers 401 (Unauthorized)
+apiCall @ (index):2267
+renderDynamicGrid @ (index):1738
+(index):2267  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+renderDynamicGrid @ (index):1811
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+(index):3045 Status fetch error: Error: 401 Unauthorized
+    at fetchStatus ((index):2891:27)
+fetchStatus @ (index):3045
+(index):2267  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+(index):4629 Health fetch error: Error: 401
+    at fetchSystemHealth ((index):4574:47)
+fetchSystemHealth @ (index):4629
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+(index):3045 Status fetch error: Error: 401 Unauthorized
+    at fetchStatus ((index):2891:27)
+fetchStatus @ (index):3045
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/updates 401 (Unauthorized)
+apiCall @ (index):2267
+fetchUpdates @ (index):2313
+(index):2267  GET https://192.168.69.206:8443/api/containers 401 (Unauthorized)
+apiCall @ (index):2267
+renderDynamicGrid @ (index):1738
+(index):2267  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+(index):2267  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+(index):4629 Health fetch error: Error: 401
+    at fetchSystemHealth ((index):4574:47)
+fetchSystemHealth @ (index):4629
+(index):2267  GET https://192.168.69.206:8443/api/odido-proxy/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchOdidoStatus @ (index):3072
+(index):2267  GET https://192.168.69.206:8443/api/containers 401 (Unauthorized)
+apiCall @ (index):2267
+fetchContainerIds @ (index):2760
+(index):2791 Container fetch error: Error: API 401
+    at fetchContainerIds ((index):2761:36)
+fetchContainerIds @ (index):2791
+(index):2267  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+renderDynamicGrid @ (index):1811
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+(index):3045 Status fetch error: Error: 401 Unauthorized
+    at fetchStatus ((index):2891:27)
+fetchStatus @ (index):3045
+(index):2267  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+(index):4629 Health fetch error: Error: 401
+    at fetchSystemHealth ((index):4574:47)
+fetchSystemHealth @ (index):4629
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/containers 401 (Unauthorized)
+apiCall @ (index):2267
+renderDynamicGrid @ (index):1738
+(index):2267  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+(index):2267  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+(index):3045 Status fetch error: Error: 401 Unauthorized
+    at fetchStatus ((index):2891:27)
+fetchStatus @ (index):3045
+(index):2267  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+(index):4629 Health fetch error: Error: 401
+    at fetchSystemHealth ((index):4574:47)
+fetchSystemHealth @ (index):4629
+(index):2267  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+renderDynamicGrid @ (index):1811
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+(index):4629 Health fetch error: Error: 401
+    at fetchSystemHealth ((index):4574:47)
+fetchSystemHealth @ (index):4629
+(index):2267  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+(index):3045 Status fetch error: Error: 401 Unauthorized
+    at fetchStatus ((index):2891:27)
+fetchStatus @ (index):3045
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/containers 401 (Unauthorized)
+apiCall @ (index):2267
+renderDynamicGrid @ (index):1738
+(index):2267  GET https://192.168.69.206:8443/api/updates 401 (Unauthorized)
+apiCall @ (index):2267
+fetchUpdates @ (index):2313
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/odido-proxy/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchOdidoStatus @ (index):3072
+(index):2267  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+(index):2267  GET https://192.168.69.206:8443/api/containers 401 (Unauthorized)
+apiCall @ (index):2267
+fetchContainerIds @ (index):2760
+(index):2791 Container fetch error: Error: API 401
+    at fetchContainerIds ((index):2761:36)
+fetchContainerIds @ (index):2791
+(index):2267  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+renderDynamicGrid @ (index):1811
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+(index):3045 Status fetch error: Error: 401 Unauthorized
+    at fetchStatus ((index):2891:27)
+fetchStatus @ (index):3045
+(index):2267  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+(index):4629 Health fetch error: Error: 401
+    at fetchSystemHealth ((index):4574:47)
+fetchSystemHealth @ (index):4629
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/updates 401 (Unauthorized)
+apiCall @ (index):2267
+fetchUpdates @ (index):2313
+events:1  GET https://192.168.69.206:8443/api/events 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/odido-proxy/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchOdidoStatus @ (index):3072
+(index):2267  GET https://192.168.69.206:8443/api/containers 401 (Unauthorized)
+apiCall @ (index):2267
+fetchContainerIds @ (index):2760
+(index):2791 Container fetch error: Error: API 401
+    at fetchContainerIds ((index):2761:36)
+fetchContainerIds @ (index):2791
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+(index):3045 Status fetch error: Error: 401 Unauthorized
+    at fetchStatus ((index):2891:27)
+fetchStatus @ (index):3045
+(index):2267  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+(index):4629 Health fetch error: Error: 401
+    at fetchSystemHealth ((index):4574:47)
+fetchSystemHealth @ (index):4629
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/containers 401 (Unauthorized)
+apiCall @ (index):2267
+renderDynamicGrid @ (index):1738
+(index):2267  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+(index):2267  GET https://192.168.69.206:8443/api/metrics 401 (Unauthorized)
+apiCall @ (index):2267
+fetchMetrics @ (index):2198
+renderDynamicGrid @ (index):1811
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+events:1  GET https://192.168.69.206:8443/api/events net::ERR_ABORTED 401 (Unauthorized)
+(index):2267  GET https://192.168.69.206:8443/api/system-health 401 (Unauthorized)
+apiCall @ (index):2267
+fetchSystemHealth @ (index):4573
+(index):4629 Health fetch error: Error: 401
+    at fetchSystemHealth ((index):4574:47)
+fetchSystemHealth @ (index):4629
+(index):2267  GET https://192.168.69.206:8443/api/status 401 (Unauthorized)
+apiCall @ (index):2267
+fetchStatus @ (index):2887
+(index):3045 Status fetch error: Error: 401 Unauthorized
+    at fetchStatus ((index):2891:27)
+fetchStatus @ (index):3045
+events:1  GET https://192.168.69.206:8443/api/events 401 (Unauthorized)
+
+
+root@ZimaOS:/DATA/AppData/selfhost-stack ➜ # docker logs hub-api
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+Log File Error: [Errno 13] Permission denied: '/app/deployment.log'
+INFO:     Uvicorn running on http://0.0.0.0:55555 (Press CTRL+C to quit)
+[ERROR] SYSTEM
+INFO:     127.0.0.1:42794 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:55962 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:39900 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:56772 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56786 - "GET /services HTTP/1.0" 200 OK
+INFO:     172.22.0.11:56796 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56800 - "GET /updates HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56806 - "GET /odido-proxy/status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56810 - "GET /certificate-status HTTP/1.0" 404 Not Found
+INFO:     172.22.0.11:56812 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56828 - "GET /theme?_=1768274187054 HTTP/1.0" 200 OK
+INFO:     172.22.0.11:56838 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56842 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56854 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56870 - "GET /profiles HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56874 - "GET /updates HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56886 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56898 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:51598 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:56910 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56922 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:60660 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:60668 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:60670 - "POST /theme HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:60678 - "POST /theme HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:60692 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:60690 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:60710 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:60714 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:36630 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:33494 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:36636 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:49626 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:49634 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:49636 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:49656 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:49654 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:49678 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:49686 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:49688 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:46856 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:46662 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:46868 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:46882 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:46884 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:35430 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:35446 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:35458 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:55016 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:55034 - "GET /updates HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:55022 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:55036 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:55040 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:55050 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:55066 - "GET /odido-proxy/status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:55080 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:55086 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:55100 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:60796 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:55114 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:47024 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:47030 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:47044 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:47042 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:47052 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:40892 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:51092 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:40904 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:35888 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:35910 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:35902 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:35924 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:35922 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:35942 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:35948 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:35960 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:36756 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:39230 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:36764 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:36770 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:36762 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:54778 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:54792 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:54804 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:46116 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:46120 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:46118 - "GET /updates HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:46134 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:46142 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:46154 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:46168 - "GET /odido-proxy/status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:46178 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:46194 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:53624 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:46210 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42274 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42286 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42290 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42292 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42306 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:41642 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:49514 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:41644 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56410 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56426 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56440 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56446 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56454 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56460 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56468 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:56470 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:34314 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:51794 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:34326 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:34332 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:34330 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:33996 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:34010 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:34020 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:34392 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:34396 - "GET /updates HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:34400 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:34406 - "GET /odido-proxy/status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:34404 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:34410 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:34426 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:49006 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:34428 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:51310 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:51330 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:51322 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:51336 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:51342 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:38688 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:50172 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:38692 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42252 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42268 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42280 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:50488 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:53184 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:50496 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42572 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42582 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42594 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42532 - "GET /updates HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42522 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42544 - "GET /odido-proxy/status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:42542 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:43236 - "GET /health HTTP/1.1" 200 OK
+Log File Error: [Errno 13] Permission denied: '/app/deployment.log'
+[ERROR] SYSTEM
+INFO:     172.22.0.11:42558 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:37516 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:37514 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:37542 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:37538 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:37558 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:37566 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:37568 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:37582 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:37590 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:37592 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:37600 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:45024 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     127.0.0.1:46200 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.22.0.11:45030 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:39000 - "GET /events HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:39012 - "GET /status HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:39010 - "GET /containers HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:39008 - "GET /system-health HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:39028 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:39038 - "GET /metrics HTTP/1.0" 401 Unauthorized
+INFO:     172.22.0.11:39048 - "GET /events HTTP/1.0" 401 Unauthorized
+root@ZimaOS:/DATA/AppData/selfhost-stack ➜ #

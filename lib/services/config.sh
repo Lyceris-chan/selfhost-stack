@@ -510,7 +510,7 @@ UNBOUNDEOF
     cat <<EOF | $SUDO tee "$AGH_YAML" >/dev/null
 schema_version: 29
 http: {address: 0.0.0.0:$PORT_ADGUARD_WEB}
-users: [{name: $AGH_USER, password: $AGH_PASS_HASH}]
+users: [{name: "$AGH_USER", password: "$AGH_PASS_HASH"}]
 dns:
   upstream_dns: ["$UNBOUND_STATIC_IP"]
   bootstrap_dns: ["$UNBOUND_STATIC_IP"]
@@ -522,17 +522,17 @@ filters:
 filters_update_interval: 6
 tls:
   enabled: true
-  server_name: $DNS_SERVER_NAME
+  server_name: "$DNS_SERVER_NAME"
   certificate_path: /opt/adguardhome/conf/ssl.crt
   private_key_path: /opt/adguardhome/conf/ssl.key
 $(if [ "$ALLOW_PROTON_VPN" = true ]; then
     echo "user_rules:"
-    echo "  - @@||getproton.me^"
-    echo "  - @@||vpn-api.proton.me^"
-    echo "  - @@||protonstatus.com^"
-    echo "  - @@||protonvpn.ch^"
-    echo "  - @@||protonvpn.com^"
-    echo "  - @@||protonvpn.net^"
+    echo "  - \"@@||getproton.me^\""
+    echo "  - \"@@||vpn-api.proton.me^\""
+    echo "  - \"@@||protonstatus.com^\""
+    echo "  - \"@@||protonvpn.ch^\""
+    echo "  - \"@@||protonvpn.com^\""
+    echo "  - \"@@||protonvpn.net^\""
 else
     echo "user_rules: []"
 fi)
@@ -606,7 +606,7 @@ server:
   image_proxy: true
 search:
   safe_search: 0
-  autocomplete: ""
+  autocomplete: "google"
 EOF
     $SUDO chmod 644 "$CONFIG_DIR/searxng/settings.yml"
 }

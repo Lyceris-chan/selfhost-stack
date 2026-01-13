@@ -241,6 +241,11 @@ append_dashboard() {
     $SUDO mkdir -p "$SRC_DIR/dashboard"
     cat <<DASHEOF | $SUDO tee "$SRC_DIR/dashboard/Dockerfile" >/dev/null
 FROM nginx:alpine
+RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run/nginx /usr/share/nginx/html && \
+    chown -R 1000:1000 /var/cache/nginx /var/log/nginx /var/run/nginx /usr/share/nginx/html && \
+    chmod -R 755 /usr/share/nginx/html && \
+    sed -i 's|/var/run/nginx.pid|/tmp/nginx.pid|g' /etc/nginx/nginx.conf
+USER 1000
 COPY . /usr/share/nginx/html
 EXPOSE 8081
 CMD ["nginx", "-g", "daemon off;"]
@@ -391,6 +396,11 @@ append_wg_easy() {
       - "WG_PERSISTENT_KEEPALIVE=25"
     volumes: ["$DATA_DIR/wireguard:/etc/wireguard"]
     cap_add: [NET_ADMIN, SYS_MODULE]
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:51821/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
     deploy:
       resources:
@@ -699,9 +709,9 @@ EOF
       - "bw_canonical_origin=$BW_ORIGIN"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:10416/ || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+      interval: 60s
+      timeout: 20s
+      retries: 5
     depends_on: {gluetun: {condition: service_healthy}}
     restart: always
     deploy:
@@ -1003,6 +1013,11 @@ EOF
       - "DB_DATABASE_NAME=immich"
       - "REDIS_HOSTNAME=$REDIS_HOST"
       - "IMMICH_MACHINE_LEARNING_URL=$ML_URL"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2283/api/server-info/ping"]
+      interval: 60s
+      timeout: 20s
+      retries: 5
     depends_on:
       immich-db: {condition: service_healthy}
       immich-redis: {condition: service_healthy}

@@ -77,12 +77,26 @@ async def get_current_user(
                     return "admin"
                 else:
                     del valid_sessions[session_token]
+            else:
+                # Log invalid session token for debugging
+                log_structured("WARN", f"Invalid session token attempted: {session_token[:8]}...", "AUTH")
 
     # 2. Check API Key (Header) - API Key Privileges
     if settings.HUB_API_KEY and api_key and secrets.compare_digest(api_key, settings.HUB_API_KEY):
         return "api_key"
 
     raise HTTPException(status_code=401, detail="Unauthorized")
+
+async def get_optional_user(
+    request: Request,
+    api_key: str = Security(api_key_header),
+    session_token: str = Security(session_token_header)
+):
+    """Dependency that returns 'guest' if no valid auth is found, instead of raising 401."""
+    try:
+        return await get_current_user(request, api_key, session_token)
+    except HTTPException:
+        return "guest"
 
 async def get_api_key_or_query_token(
     api_key: str = Security(api_key_header),
