@@ -59,17 +59,21 @@
             <div class="header-row">
                 <div>
                     <div style="display: flex; align-items: center; gap: 12px;">
+                        <img src="assets/icon.svg" style="width: 32px; height: 32px;" alt="Logo">
                         <h1 class="display-small" style="color: var(--md-sys-color-primary); margin: 0;">Privacy Hub</h1>
                     </div>
                     <div class="subtitle body-large" style="color: var(--md-sys-color-on-surface-variant); margin-top: 8px;">Self-hosted network security and private service infrastructure.</div>
                 </div>
                 <div class="header-actions">
-                    <div id="https-badge" class="chip vpn" style="gap:4px; display:none; height: 32px; padding: 0 12px; border-radius: 16px; flex: 0 0 auto;" data-tooltip="Connection is secured with end-to-end encryption.">
-                        <span class="material-symbols-rounded" style="font-size:18px;">lock</span>
-                        <span style="font-size: 12px; font-weight: 600;">Secure HTTPS</span>
-                    </div>
+
                     <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics for privacy">
-                        <span class="label-large">Safe Display Mode</span>
+                        <span class="label-large">Safe display mode</span>
+                        <div class="switch-track">
+                            <div class="switch-thumb"></div>
+                        </div>
+                    </div>
+                    <div class="switch-container admin-only" id="link-mode-switch" onclick="toggleLinkMode()" data-tooltip="Toggle between IP and Domain links">
+                        <span class="label-large" id="link-mode-label">IP links</span>
                         <div class="switch-track">
                             <div class="switch-thumb"></div>
                         </div>
@@ -89,36 +93,36 @@
         </header>
 
         <div class="filter-bar" id="category-filters">
-            <div class="chip filter-chip active" data-target="all" onclick="filterCategory('all')">All Services</div>
+            <div class="chip filter-chip active" data-target="all" onclick="filterCategory('all')">All services</div>
             <div class="chip filter-chip" data-target="apps" onclick="filterCategory('apps')">Applications</div>
             <div class="chip filter-chip" data-target="system" onclick="filterCategory('system')">Infrastructure</div>
             <div class="chip filter-chip" data-target="dns" onclick="filterCategory('dns')">DNS & Security</div>
             <div class="chip filter-chip" data-target="tools" onclick="filterCategory('tools')">Utilities</div>
-            <div class="chip filter-chip admin-only" data-target="logs" onclick="filterCategory('logs')">System Logs</div>
+            <div class="chip filter-chip admin-only" data-target="logs" onclick="filterCategory('logs')">System & Logs</div>
         </div>
 
         <div id="update-banner" class="admin-only mb-32" style="display:none;">
             <div class="card card-primary" style="min-height: auto;">
                 <div class="flex-row justify-between align-center gap-24 flex-wrap">
                     <div>
-                        <h3 class="title-medium m-0" style="color: inherit;">Updates Available</h3>
+                        <h3 class="title-medium m-0" style="color: inherit;">Updates available</h3>
                         <p class="body-medium mt-8" id="update-list" style="color: inherit; opacity: 0.9;">New versions detected for some services.</p>
                     </div>
                     <div class="flex-row gap-12">
-                        <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Pull latest source code and rebuild containers for all pending services.">Update All</button>
+                        <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Pull latest source code and rebuild containers for all pending services.">Update all</button>
                         <button onclick="dismissUpdateBanner()" class="btn btn-outlined" style="border-color: currentColor; color: inherit;">Dismiss</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div id="mac-advisory" class="mb-32">
+        <div id="mac-advisory" class="mb-32" style="display:none;">
             <div class="card card-error" style="min-height: auto; padding: 16px 24px;">
                 <div class="flex-row justify-between align-start gap-24">
                     <div class="flex-row gap-16 align-start">
                         <span class="material-symbols-rounded mt-8">warning</span>
                         <div>
-                            <h3 class="title-medium m-0" style="color: inherit;">Critical Network Advisory</h3>
+                            <h3 class="title-medium m-0" style="color: inherit;">Critical network advisory</h3>
                             <p class="body-medium mt-8" style="color: inherit; opacity: 0.9;">
                                 To ensure firewall persistence and static IP reliability, you <strong>must disable Dynamic/Random MAC addresses</strong> in your host device's network settings.
                             </p>
@@ -179,7 +183,7 @@
         <div class="section-label title-medium">DNS Configuration</div>
         <div class="grid">
             <div class="card">
-                <h3 class="title-medium">Certificate Status</h3>
+                <h3 class="title-medium">Certificate status</h3>
                 <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
                     <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label label-medium">Type</span><span class="stat-value title-small" id="cert-type">Checking...</span></div>
                     <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label label-medium">Domain</span><span class="stat-value title-small sensitive" id="cert-subject">Checking...</span></div>
@@ -208,7 +212,7 @@
                 </div>
             </div>
             <div class="card admin-only">
-                <h3 class="title-medium">deSEC Configuration</h3>
+                <h3 class="title-medium">deSEC configuration</h3>
                 <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
                 <form onsubmit="saveDesecConfig(); return false;">
                     <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. yourname.dedyn.io)" style="margin-bottom:12px;" autocomplete="username" data-tooltip="Enter your registered deSEC domain (e.g. yourname.dedyn.io). You can create one for free at desec.io.">
@@ -217,12 +221,12 @@
                         Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
                     </p>
                     <div style="text-align:right;">
-                        <button type="submit" class="btn btn-tonal">Save deSEC Config</button>
+                        <button type="submit" class="btn btn-tonal">Save deSEC config</button>
                     </div>
                 </form>
             </div>
             <div class="card">
-                <h3 class="title-medium">Device DNS Settings</h3>
+                <h3 class="title-medium">Device DNS settings</h3>
                 <p class="body-medium description">Utilize these RFC-compliant encrypted endpoints to maintain digital independence:</p>
                 <div class="code-label" data-tooltip="Standard unencrypted DNS (Port 53). Recommended only for use within your local LAN.">Standard IPv4 (Local LAN Only)</div>
                 <div class="code-block sensitive">$LAN_IP:53</div>
@@ -245,7 +249,7 @@
                 </p>
             </div>
             <div class="card">
-                <h3 class="title-medium">Endpoint Provisioning</h3>
+                <h3 class="title-medium">Endpoint provisioning</h3>
                 <div id="dns-setup-trusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
                     <p class="body-medium description">Globally trusted SSL is active via Let's Encrypt and deSEC. This enables zero-trust encrypted DNS on mobile devices without requiring certificate installation.</p>
                     <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
@@ -316,7 +320,7 @@
         <div class="grid">
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <h3 class="title-medium">Odido Status</h3>
+                    <h3 class="title-medium">Odido status</h3>
                     <div id="odido-speed-indicator" class="body-small" style="color: var(--md-sys-color-primary); font-weight: 500; display:none;">0 Mb/s</div>
                 </div>
                 <div id="odido-status-container" style="display: flex; flex-direction: column; height: 100%;">
@@ -360,8 +364,8 @@
 
                         <div id="odido-buy-status" class="body-small" style="text-align: center; margin-top: 8px; font-weight: 500;"></div>
                         <div class="btn-group" style="justify-content:center; margin-top: 16px;">
-                            <button onclick="buyOdidoBundle()" class="btn btn-tertiary admin-only" id="odido-buy-btn">Buy Bundle</button>
-                            <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh Status</button>
+                            <button onclick="buyOdidoBundle()" class="btn btn-tertiary admin-only" id="odido-buy-btn">Buy bundle</button>
+                            <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh status</button>
                             <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
                         </div>
                     </div>
@@ -413,7 +417,7 @@
                     
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
                         <div id="odido-config-status" class="body-small" style="font-weight: 500;"></div>
-                        <button type="submit" class="btn btn-tonal">Save Configuration</button>
+                        <button type="submit" class="btn btn-tonal">Save configuration</button>
                     </div>
                 </form>
             </div>
@@ -424,10 +428,10 @@
         <div class="grid admin-only">
             <div class="card" style="grid-column: span 2;">
                 <div class="card-header">
-                    <h3 class="title-medium">Registered Clients</h3>
+                    <h3 class="title-medium">Registered clients</h3>
                     <div class="card-header-actions">
                         <button onclick="openAddClientModal()" class="btn btn-filled" data-tooltip="Create a new client configuration">
-                            <span class="material-symbols-rounded">add</span> New Client
+                            <span class="material-symbols-rounded">add</span> New client
                         </button>
                     </div>
                 </div>
@@ -473,10 +477,10 @@
         <div class="section-label admin-only">WireGuard Profiles</div>
         <div class="grid admin-only">
             <div class="card admin-only">
-                <h3 class="title-medium">Upload Profile</h3>
+                <h3 class="title-medium">Upload profile</h3>
                 <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;" data-tooltip="Give your profile a recognizable name.">
                 <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..." style="margin-bottom:16px;" data-tooltip="Paste the contents of your WireGuard .conf file."></textarea>
-                <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile. The VPN service will automatically restart to apply the new configuration (~15 seconds).">Upload & Activate</button></div>
+                <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile. The VPN service will automatically restart to apply the new configuration (~15 seconds).">Upload & activate</button></div>
             </div>
             <div class="card profile-card admin-only">
                 <h3 data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available Profiles</h3>
@@ -494,7 +498,7 @@
         <div class="grid">
             <div class="card admin-only">
                 <div class="card-header">
-                    <h3 class="title-medium">Theme Customization</h3>
+                    <h3 class="title-medium">Theme customization</h3>
                     <div class="card-header-actions">
                         <button onclick="localStorage.removeItem('theme_seed'); location.reload();" class="btn btn-icon" data-tooltip="Reset theme to default"><span class="material-symbols-rounded">refresh</span></button>
                     </div>
@@ -548,12 +552,12 @@
                     </div>
 
                     <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
-                        <button onclick="saveThemeSettings()" class="btn btn-tonal" style="flex-grow: 1;"><span class="material-symbols-rounded">save</span> Save Theme</button>
+                        <button onclick="saveThemeSettings()" class="btn btn-tonal" style="flex-grow: 1;"><span class="material-symbols-rounded">save</span> Save theme</button>
                     </div>
                 </div>
             </div>
             <div class="card admin-only">
-                <h3 class="title-medium">Security & Privacy</h3>
+                <h3 class="title-medium">Security & privacy</h3>
                 <p class="body-medium description">Manage administrative session behavior and authentication security.</p>
                 <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
                     <div id="session-cleanup-warning" class="chip admin" style="display: flex; width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-highest); color: var(--md-sys-color-on-surface-variant); border: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 4px; transition: all 0.3s ease;">
@@ -595,7 +599,7 @@
                 </div>
             </div>
             <div class="card">
-                <h3 class="title-medium">System Information</h3>
+                <h3 class="title-medium">System information</h3>
                 <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
                 <div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1;">
                     <div class="stat-row"><span class="stat-label label-medium">Secrets Location</span><span class="stat-value title-small monospace" style="font-size: 12px;">$BASE_DIR/.secrets</span></div>
@@ -605,16 +609,16 @@
                 </div>
                 <div class="admin-only" style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
                     <button onclick="checkUpdates()" class="btn btn-tonal" data-tooltip="Check for updates" style="width: 100%; justify-content: flex-start;">
-                        <span class="material-symbols-rounded">system_update_alt</span> Check for Updates
+                        <span class="material-symbols-rounded">system_update_alt</span> Check for updates
                     </button>
                     <button id="update-all-btn" onclick="updateAllServices()" class="btn btn-tonal" data-tooltip="Update all services" style="width: 100%; justify-content: flex-start; background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);">
-                        <span class="material-symbols-rounded">upgrade</span> Update All Services
+                        <span class="material-symbols-rounded">upgrade</span> Update all services
                     </button>
                     <button onclick="restartStack()" class="btn btn-tonal" style="width: 100%; justify-content: flex-start; background: var(--md-sys-color-surface-container-highest);">
-                        <span class="material-symbols-rounded">restart_alt</span> Restart Stack
+                        <span class="material-symbols-rounded">restart_alt</span> Restart stack
                     </button>
                     <button onclick="uninstallStack()" class="btn btn-tonal" style="width: 100%; justify-content: flex-start; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Permanently remove all containers and data.">
-                        <span class="material-symbols-rounded">delete_forever</span> Uninstall System
+                        <span class="material-symbols-rounded">delete_forever</span> Uninstall system
                     </button>
                 </div>
             </div>
@@ -626,7 +630,7 @@
         <div class="grid">
             <div class="card">
                 <div class="card-header">
-                    <h3 class="title-medium">System Health</h3>
+                    <h3 class="title-medium">System health</h3>
                     <div class="card-header-actions">
                         <div class="chip" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 0 12px; height: 28px; font-weight: 500; gap: 6px; box-shadow: var(--md-sys-elevation-1);">
                             <span class="material-symbols-rounded" id="health-icon" style="font-size: 16px;">check_circle</span>
@@ -669,7 +673,7 @@
             </div>
             <div class="card">
                 <div class="card-header">
-                    <h3 class="title-medium">System & Deployment Logs</h3>
+                    <h3 class="title-medium">System & deployment logs</h3>
                     <div class="card-header-actions">
                         <select id="log-filter-level" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
                             <option value="ALL">All Levels</option>
@@ -834,7 +838,7 @@
                     <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; flex-direction: column; gap: 12px;">
                         <button onclick="purgeUnusedImages(event)" class="btn btn-filled" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
                             <span class="material-symbols-rounded">delete_sweep</span>
-                            <span>Cleanup System Assets</span>
+                            <span>Prune Unused Images</span>
                         </button>
                         <p class="body-small" style="opacity: 0.7; text-align: center;">Safe removal of dangling images and unused build cache.</p>
                     </div>

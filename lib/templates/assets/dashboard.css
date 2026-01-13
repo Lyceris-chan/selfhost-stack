@@ -387,7 +387,7 @@
                 /* MD3 Component Refinements - Elevated Cards */
                 .card {
                     background: var(--md-sys-color-surface-container-low);
-                    border-radius: var(--md-sys-shape-corner-extra-large);
+                    border-radius: var(--md-sys-shape-corner-large);
                     padding: 24px;
                     text-decoration: none;
                     color: inherit;

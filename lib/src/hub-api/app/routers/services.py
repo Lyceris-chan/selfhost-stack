@@ -51,7 +51,7 @@ def get_update_strategy():
     return strategy
 
 @router.get("/services")
-def get_services(user: str = Depends(get_current_user)):
+def get_services():
     return {"services": load_services()}
 
 @router.get("/theme")
@@ -110,7 +110,7 @@ def _check_repo_status(repo_name):
         try:
             res = subprocess.run(["git", "status", "-uno"], cwd=repo_path, capture_output=True, text=True, timeout=10)
             if "behind" in res.stdout:
-                return repo_name, "Update Available"
+                return repo_name, "Update available"
         except Exception:
             pass
     return None

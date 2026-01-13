@@ -311,7 +311,7 @@ For services using pre-built Docker images (like **AdGuard**, **Invidious**, **R
 #### 2. Source-Built Updates (Manual)
 For services built securely from source code to ensure hardware compatibility (like **Wikiless**, **Scribe**, **Odido Booster**):
 *   **Mechanism**: These do not update automatically to prevent build breakages.
-*   **Notification**: The Dashboard will show an "Update Available" badge when the upstream source code changes.
+*   **Notification**: The Dashboard will show an "Update available" badge when the upstream source code changes.
 *   **Action**:
     1.  Log in to the Dashboard as Admin.
     2.  Open the Service Settings.
