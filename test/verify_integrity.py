@@ -112,7 +112,7 @@ class IntegrityChecker:
     def verify_service_configs(self):
         print("\n--- Verifying Service Configurations ---")
         # 1. SearXNG
-        self.check_pattern("lib/services/config.sh", r'autocomplete: \"google\"', "SearXNG autocomplete set to Google")
+        self.check_pattern("lib/services/config.sh", r'autocomplete: \"duckduckgo\"', "SearXNG autocomplete set to DuckDuckGo")
         self.check_pattern("lib/services/config.sh", r'image_proxy: true', "SearXNG image proxy enabled")
         
         # 2. AdGuard Home

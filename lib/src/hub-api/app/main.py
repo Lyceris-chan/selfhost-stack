@@ -8,9 +8,22 @@ from .core.security import get_current_user, get_api_key_or_query_token
 from .utils.logging import init_db, log_structured
 from .utils.assets import ensure_assets
 from .routers import auth, system, services, wireguard, logs, odido
+from contextlib import asynccontextmanager
 from .services.background import metrics_collector_thread, log_sync_thread, update_metrics_activity, odido_retrieval_thread
 
-app = FastAPI(title=settings.APP_NAME)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    init_db()
+    ensure_assets()
+    # Start background threads
+    threading.Thread(target=metrics_collector_thread, daemon=True).start()
+    threading.Thread(target=log_sync_thread, daemon=True).start()
+    threading.Thread(target=odido_retrieval_thread, daemon=True).start()
+    yield
+    # Shutdown logic (if any) can go here
+
+app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
 # CORS
 app.add_middleware(
@@ -28,16 +41,6 @@ app.include_router(services.router)
 app.include_router(wireguard.router)
 app.include_router(logs.router)
 app.include_router(odido.router)
-
-@app.on_event("startup")
-def startup_event():
-    init_db()
-    ensure_assets()
-    # Start background threads
-    threading.Thread(target=metrics_collector_thread, daemon=True).start()
-    threading.Thread(target=log_sync_thread, daemon=True).start()
-    threading.Thread(target=odido_retrieval_thread, daemon=True).start()
-    # Note: Session cleanup is started in security.py on import.
 
 @app.post("/watchtower")
 async def watchtower_notification(request: Request, user: str = Depends(get_api_key_or_query_token)):

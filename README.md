@@ -164,7 +164,7 @@ Before running the installer, you can customize your deployment using these flag
 ### What happens next?
 
 1.  **🚀 Instant deployment**: The system pulls and starts your private apps.
-2.  **✅ Ready to use**: You get a link to your dashboard (e.g., `http://192.168.1.100:8081`).
+2.  **✅ Ready to use**: You get a link to your dashboard (e.g., `http://192.168.1.100:8088`).
 3.  **🔐 Credential export**: Your passwords are saved for safekeeping.
 4.  **🔀 Instant redirection**: A `libredirect_import.json` is created—import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically redirect YouTube and Reddit to your hub.
 
@@ -193,30 +193,25 @@ This stack features a hardened, recursive DNS engine built on **Unbound** and **
 *   **Unbound configuration**: Generated at `/etc/unbound/unbound.conf`
 
 <details>
-<summary>🛡️ <strong>Advanced security and RFC compliance</strong> (Click to expand)</summary>
+<summary>🛡️ <strong>Production Service Overrides and RFC Compliance</strong> (Click to expand)</summary>
 
-The Unbound configuration (`lib/services/config.sh`) implements the following strict privacy and security standards:
+To achieve "Gold Standard" security and performance, this stack implements specific overrides for core infrastructure services. These choices are grounded in established Internet Engineering Task Force (IETF) standards.
 
-*   **QNAME minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: `qname-minimisation: yes`—Dramatically improves privacy by only sending the absolute minimum part of a domain name to upstream authoritative servers.
-*   **Aggressive caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: `aggressive-nsec: yes`—Uses NSEC records to generate negative responses locally, reducing traffic to authoritative servers.
-*   **DNS 0x20 ([Draft](https://datatracker.ietf.org/doc/html/draft-vixie-dnsext-dns0x20-00))**: `use-caps-for-id: yes`—A security technique that mitigates spoofing attempts by randomly varying capitalization.
-*   **Fingerprint resistance**: 
-    *   `hide-identity: yes`
-    *   `hide-version: yes`
-    *   Prevents identification of the resolver software and version.
-*   **Load balancing ([RFC 1794](https://datatracker.ietf.org/doc/html/rfc1794))**: `rrset-roundrobin: yes`—Randomizes the order of records in a response to ensure optimal traffic distribution.
-*   **Data minimization ([RFC 4472](https://datatracker.ietf.org/doc/html/rfc4472))**: `minimal-responses: yes`—Reduces the size of DNS responses to only the essential data.
-*   **Cache poisoning protection ([RFC 1034](https://datatracker.ietf.org/doc/html/rfc1034))**: `harden-glue: yes`—Strictly validates "glue" records to prevent malicious redirection.
-*   **DoS protection**:
-    *   `harden-large-queries: yes`
-    *   `harden-short-bufsize: yes`
-*   **Downgrade protection**: `harden-algo-downgrade: yes`—Prevents fallback to weaker cryptographic algorithms.
+### Unbound (Recursive DNS)
+The Unbound configuration (`lib/services/config.sh`) is hardened beyond default settings to ensure maximum privacy:
 
-**Routing logic**:
-1.  **Client request**: Your device sends a DNS query to the Hub IP.
-2.  **AdGuard Home**: Filters the request against blocklists (ads and trackers).
-3.  **Unbound**: If allowed, Unbound performs recursive resolution directly with Root Servers.
-4.  **Response**: The clean IP is returned to your device.
+*   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: `qname-minimisation: yes`. This prevents authoritative servers from seeing the full query. For example, when resolving `mail.example.com`, the `.com` TLD servers only see a request for `example.com`.
+*   **Aggressive NSEC Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: `aggressive-nsec: yes`. Uses DNSSEC information to synthesize negative responses for non-existent names, reducing load on authoritative servers and mitigating certain DoS vectors.
+*   **DNS 0x20 Entropy**: `use-caps-for-id: yes`. Implements bit-flip randomization in query names to protect against DNS cache poisoning attacks by increasing the entropy of the request.
+*   **Data Minimization ([RFC 4472](https://datatracker.ietf.org/doc/html/rfc4472))**: `minimal-responses: yes`. Only includes essential information in responses to reduce packet size and prevent information leakage.
+*   **Trust Anchor Management ([RFC 5011](https://datatracker.ietf.org/doc/html/rfc5011))**: `auto-trust-anchor-file`. Ensures that the DNSSEC root key is automatically updated, maintaining the integrity of the chain of trust.
+
+### AdGuard Home (Filtering & TLS)
+AdGuard Home acts as the primary gateway and policy engine:
+
+*   **Upstream Consolidation**: All queries are routed exclusively to the local Unbound instance via a dedicated Docker network bridge, ensuring no plain-text queries ever leave the host.
+*   **DNS-over-QUIC (DoQ) ([RFC 9250](https://datatracker.ietf.org/doc/html/rfc9250))**: Supports the latest high-performance encrypted DNS standard, providing lower latency than DoH/DoT in lossy network conditions (like mobile).
+*   **Certificate Pinning Resistance**: By utilizing globally trusted Let's Encrypt certificates (via deSEC), the hub ensures compatibility with native Android/iOS security models without requiring manual root CA installation.
 
 </details>
 
@@ -234,7 +229,7 @@ If you don't own the hardware and the code running your network, you don't own y
 <a id="dashboard--services"></a>
 ## 🖥️ Dashboard and services
 
-Access your unified control center at `http://<LAN_IP>:8081`.
+Access your unified control center at `http://<LAN_IP>:8088`.
 
 ### 🔑 WireGuard client management
 Connect your devices securely to your home network:

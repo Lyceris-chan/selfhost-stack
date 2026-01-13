@@ -14,7 +14,7 @@ FULL_STACK = {
     "name": "Full Privacy Hub Stack",
     "services": "hub-api,dashboard,gluetun,adguard,unbound,wg-easy,redlib,wikiless,rimgo,breezewiki,anonymousoverflow,scribe,invidious,companion,searxng,portainer,memos,odido-booster,cobalt,cobalt-web,vert,vertd,immich,watchtower",
     "checks": [
-        {"name": "Dashboard", "port": 8081, "path": "/", "code": 200},
+        {"name": "Dashboard", "port": 8088, "path": "/", "code": 200},
         {"name": "Hub API", "port": 55555, "path": "/health", "code": 200},
         {"name": "AdGuard", "port": 8083, "path": "/", "code": 200},
         {"name": "WireGuard UI", "port": 51821, "path": "/", "code": 200},
@@ -43,7 +43,8 @@ TEST_DATA_DIR = os.path.join(TEST_SCRIPT_DIR, "test_data")
 def get_lan_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
+        # Use Quad9 (9.9.9.9) instead of Google (8.8.8.8)
+        s.connect(("9.9.9.9", 80))
         ip = s.getsockname()[0]
         s.close()
         return ip

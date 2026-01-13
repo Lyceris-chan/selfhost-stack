@@ -2,84 +2,82 @@
 # Execute system deployment and verify global infrastructure integrity.
 
 deploy_stack() {
-    if command -v modprobe >/dev/null 2>&1; then
-        $SUDO modprobe tun || true
+  if command -v modprobe >/dev/null 2>&1; then
+    "${SUDO}" modprobe tun || true
+  fi
+
+  # Pre-flight Check: Port 53
+  if is_service_enabled "adguard"; then
+    log_info "Verifying port 53 availability..."
+    if ! check_port_availability 53 "tcp" || ! check_port_availability 53 "udp"; then
+      log_warn "Port 53 is already in use on this host."
+      log_warn "This will likely cause AdGuard Home to fail."
+      log_warn "Please disable systemd-resolved (systemctl disable --now systemd-resolved) or other DNS services."
+      if ! ask_confirm "Attempt deployment anyway?"; then
+        log_crit "Deployment aborted due to port conflict."
+        exit 1
+      fi
+    fi
+  fi
+
+  # Retry wrapper for Docker Compose
+  run_compose_up() {
+    local args="$*"
+    if "${DOCKER_COMPOSE_FINAL_CMD}" -f "${COMPOSE_FILE}" up -d ${args}; then
+      return 0
     fi
 
-    # Pre-flight Check: Port 53
-    if is_service_enabled "adguard"; then
-        log_info "Verifying port 53 availability..."
-        if ! check_port_availability 53 "tcp" || ! check_port_availability 53 "udp"; then
-            log_warn "Port 53 is already in use on this host."
-            log_warn "This will likely cause AdGuard Home to fail."
-            log_warn "Please disable systemd-resolved (systemctl disable --now systemd-resolved) or other DNS services."
-            if ! ask_confirm "Attempt deployment anyway?"; then
-                log_crit "Deployment aborted due to port conflict."
-                exit 1
-            fi
-        fi
+    local exit_code=$?
+    log_crit "Docker Compose failed (Exit Code: ${exit_code})."
+    return 1
+  }
+
+  if [[ "${PARALLEL_DEPLOY}" == "true" ]]; then
+    log_info "Parallel Mode Enabled: Launching full stack immediately..."
+    run_compose_up --remove-orphans
+  else
+    # Explicitly launch core infrastructure services first
+    local core_services=""
+    for srv in hub-api adguard unbound gluetun; do
+      if grep -q "^  ${srv}:" "${COMPOSE_FILE}"; then
+        core_services="${core_services} ${srv}"
+      fi
+    done
+
+    if [[ -n "${core_services}" ]]; then
+      log_info "Launching core infrastructure services:${core_services}..."
+      run_compose_up ${core_services}
     fi
 
-    # Retry wrapper for Docker Compose
-    run_compose_up() {
-        local args="$*"
-        if $DOCKER_COMPOSE_FINAL_CMD -f "$COMPOSE_FILE" up -d $args; then
-            return 0
+    # Wait for critical backends to stabilize
+    if echo "${core_services}" | grep -qE "hub-api|gluetun"; then
+      log_info "Waiting for backend services to stabilize..."
+      for i in {1..10}; do
+        local hub_health="healthy"
+        local glu_health="healthy"
+
+        if echo "${core_services}" | grep -q "hub-api"; then
+          hub_health=$("${DOCKER_CMD}" inspect --format='{{.State.Health.Status}}' "${CONTAINER_PREFIX}api" 2>/dev/null || echo "unknown")
         fi
-        
-        exit_code=$?
-        log_crit "Docker Compose failed (Exit Code: $exit_code)."
-        return 1
-    }
-
-    if [ "$PARALLEL_DEPLOY" = true ]; then
-        log_info "Parallel Mode Enabled: Launching full stack immediately..."
-        run_compose_up --remove-orphans
-    else
-        # Explicitly launch core infrastructure services first if they are present
-        CORE_SERVICES=""
-        for srv in hub-api adguard unbound gluetun; do
-            if grep -q "^  $srv:" "$COMPOSE_FILE"; then
-                CORE_SERVICES="$CORE_SERVICES $srv"
-            fi
-        done
-
-        if [ -n "$CORE_SERVICES" ]; then
-            log_info "Launching core infrastructure services:$CORE_SERVICES..."
-            run_compose_up $CORE_SERVICES
+        if echo "${core_services}" | grep -q "gluetun"; then
+          glu_health=$("${DOCKER_CMD}" inspect --format='{{.State.Health.Status}}' "${CONTAINER_PREFIX}gluetun" 2>/dev/null || echo "unknown")
         fi
 
-        # Wait for critical backends to be healthy before starting Nginx (dashboard) if they were launched
-        if echo "$CORE_SERVICES" | grep -q "hub-api" || echo "$CORE_SERVICES" | grep -q "gluetun"; then
-            log_info "Waiting for backend services to stabilize (this may take up to 10s)..."
-            for i in $(seq 1 10); do
-                HUB_HEALTH="healthy"
-                GLU_HEALTH="running"
-                
-                if echo "$CORE_SERVICES" | grep -q "hub-api"; then
-                    HUB_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}api 2>/dev/null || echo "unknown")
-                fi
-                if echo "$CORE_SERVICES" | grep -q "gluetun"; then
-                    GLU_HEALTH=$($DOCKER_CMD inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}gluetun 2>/dev/null || echo "unknown")
-                fi
-                
-                if [ "$HUB_HEALTH" = "healthy" ] && [ "$GLU_HEALTH" = "healthy" ]; then
-                    log_info "Backends are stable. Finalizing stack launch..."
-                    break
-                fi
-                [ "$i" -eq 10 ] && log_warn "Backends taking longer than expected to stabilize. Proceeding anyway..."
-                sleep 1
-            done
+        if [[ "${hub_health}" == "healthy" ]] && [[ "${glu_health}" == "healthy" ]]; then
+          log_info "Backends are stable."
+          break
         fi
-
-        # Launch the rest of the stack
-        # Use --remove-orphans only if we are doing a full deployment
-        ORPHAN_FLAG="--remove-orphans"
-        if [ -n "$SELECTED_SERVICES" ]; then
-            ORPHAN_FLAG=""
-        fi
-        run_compose_up $ORPHAN_FLAG
+        [[ "${i}" -eq 10 ]] && log_warn "Backends taking longer than expected to stabilize."
+        sleep 1
+      done
     fi
+
+    local orphan_flag="--remove-orphans"
+    if [[ -n "${SELECTED_SERVICES}" ]]; then
+      orphan_flag=""
+    fi
+    run_compose_up ${orphan_flag}
+  fi
 
     log_info "Verifying control plane connectivity..."
     API_TEST="FAILED"

@@ -1,55 +1,92 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 
 # Centralized list of all services in the Privacy Hub stack
-export STACK_SERVICES="hub-api odido-booster memos gluetun portainer adguard unbound wg-easy redlib wikiless invidious rimgo breezewiki anonymousoverflow scribe vert vertd companion cobalt cobalt-web searxng immich watchtower"
+readonly STACK_SERVICES="hub-api odido-booster memos gluetun portainer adguard unbound wg-easy redlib wikiless invidious rimgo breezewiki anonymousoverflow scribe vert vertd companion cobalt cobalt-web searxng immich watchtower"
+export STACK_SERVICES
 
 # Services that are built locally from source
-export SOURCE_BUILT_SERVICES="hub-api odido-booster scribe dashboard wikiless cobalt-web"
+readonly SOURCE_BUILT_SERVICES="hub-api odido-booster scribe dashboard wikiless cobalt-web"
+export SOURCE_BUILT_SERVICES
 
 # All container names (without prefix) for cleanup and management
-export ALL_CONTAINERS="gluetun adguard dashboard portainer wg-easy api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd cobalt cobalt-web searxng searxng-redis immich-server immich-db immich-redis immich-ml watchtower docker-proxy unbound"
+readonly ALL_CONTAINERS="gluetun adguard dashboard portainer wg-easy api odido-booster redlib wikiless wikiless_redis invidious invidious-db companion memos rimgo breezewiki anonymousoverflow scribe vert vertd cobalt cobalt-web searxng searxng-redis immich-server immich-db immich-redis immich-ml watchtower docker-proxy unbound"
+export ALL_CONTAINERS
 
 # Infrastructure images that should be pre-pulled
-export CRITICAL_IMAGES="nginx:alpine python:3.11-alpine alpine:latest redis:alpine postgres:14-alpine searxng/searxng:latest ghcr.io/imputnet/cobalt:latest ghcr.io/usememos/memos:latest containrrr/watchtower:latest"
+readonly CRITICAL_IMAGES="nginx:alpine python:3.11-alpine alpine:latest redis:alpine postgres:14-alpine searxng/searxng:latest ghcr.io/imputnet/cobalt:latest ghcr.io/usememos/memos:latest containrrr/watchtower:latest"
+export CRITICAL_IMAGES
 
 # Default tags for specific services
-export IMMICH_DEFAULT_TAG="release"
+readonly IMMICH_DEFAULT_TAG="release"
+export IMMICH_DEFAULT_TAG
 
 # Port Definitions
-export PORT_DASHBOARD_WEB=8081
-export PORT_ADGUARD_WEB=8083
-export PORT_PORTAINER=9000
-export PORT_WG_WEB=51821
-export PORT_INVIDIOUS=3000
-export PORT_REDLIB=8080
-export PORT_WIKILESS=8180
-export PORT_RIMGO=3002
-export PORT_BREEZEWIKI=8380
-export PORT_ANONYMOUS=8480
-export PORT_SCRIBE=8280
-export PORT_MEMOS=5230
-export PORT_VERT=5555
-export PORT_VERTD=24153
-export PORT_COMPANION=8283
-export PORT_COBALT=9001
-export PORT_COBALT_API=9002
-export PORT_SEARXNG=8082
-export PORT_IMMICH=2283
+readonly PORT_DASHBOARD_WEB=8088
+export PORT_DASHBOARD_WEB
+readonly PORT_ADGUARD_WEB=8083
+export PORT_ADGUARD_WEB
+readonly PORT_PORTAINER=9000
+export PORT_PORTAINER
+readonly PORT_WG_WEB=51821
+export PORT_WG_WEB
+readonly PORT_INVIDIOUS=3000
+export PORT_INVIDIOUS
+readonly PORT_REDLIB=8080
+export PORT_REDLIB
+readonly PORT_WIKILESS=8180
+export PORT_WIKILESS
+readonly PORT_RIMGO=3002
+export PORT_RIMGO
+readonly PORT_BREEZEWIKI=8380
+export PORT_BREEZEWIKI
+readonly PORT_ANONYMOUS=8480
+export PORT_ANONYMOUS
+readonly PORT_SCRIBE=8280
+export PORT_SCRIBE
+readonly PORT_MEMOS=5230
+export PORT_MEMOS
+readonly PORT_VERT=5555
+export PORT_VERT
+readonly PORT_VERTD=24153
+export PORT_VERTD
+readonly PORT_COMPANION=8283
+export PORT_COMPANION
+readonly PORT_COBALT=9001
+export PORT_COBALT
+readonly PORT_COBALT_API=9002
+export PORT_COBALT_API
+readonly PORT_SEARXNG=8082
+export PORT_SEARXNG
+readonly PORT_IMMICH=2283
+export PORT_IMMICH
 
 # Internal Ports
-export PORT_INT_REDLIB=8081
-export PORT_INT_WIKILESS=8180
-export PORT_INT_INVIDIOUS=3000
-export PORT_INT_RIMGO=3002
-export PORT_INT_BREEZEWIKI=10416
-export PORT_INT_ANONYMOUS=8480
-export PORT_INT_VERT=80
-export PORT_INT_VERTD=24153
-export PORT_INT_COMPANION=8282
-export PORT_INT_COBALT=80
-export PORT_INT_COBALT_API=9000
-export PORT_INT_SEARXNG=8080
-export PORT_INT_IMMICH=2283
+readonly PORT_INT_REDLIB=8081
+export PORT_INT_REDLIB
+readonly PORT_INT_WIKILESS=8180
+export PORT_INT_WIKILESS
+readonly PORT_INT_INVIDIOUS=3000
+export PORT_INT_INVIDIOUS
+readonly PORT_INT_RIMGO=3002
+export PORT_INT_RIMGO
+readonly PORT_INT_BREEZEWIKI=10416
+export PORT_INT_BREEZEWIKI
+readonly PORT_INT_ANONYMOUS=8480
+export PORT_INT_ANONYMOUS
+readonly PORT_INT_VERT=80
+export PORT_INT_VERT
+readonly PORT_INT_VERTD=24153
+export PORT_INT_VERTD
+readonly PORT_INT_COMPANION=8282
+export PORT_INT_COMPANION
+readonly PORT_INT_COBALT=80
+export PORT_INT_COBALT
+readonly PORT_INT_COBALT_API=9000
+export PORT_INT_COBALT_API
+readonly PORT_INT_SEARXNG=8080
+export PORT_INT_SEARXNG
+readonly PORT_INT_IMMICH=2283
+export PORT_INT_IMMICH
 
 # Service Repository Mapping for dynamic tag resolution
 declare -A SERVICE_REPOS
@@ -62,7 +99,7 @@ SERVICE_REPOS[vertd]="https://github.com/VERT-sh/vertd.git"
 SERVICE_REPOS[rimgo]="https://codeberg.org/rimgo/rimgo.git"
 SERVICE_REPOS[breezewiki]="https://github.com/PussTheCat-org/docker-breezewiki-quay.git"
 SERVICE_REPOS[anonymousoverflow]="https://github.com/httpjamesm/AnonymousOverflow.git"
-SERVICE_REPOS[gluetun]="https://github.com/qdm12/gluetun.git"
+SERVICE_REPOS[gluetun]="https://github.com/gluetun/gluetun.git"
 SERVICE_REPOS[adguard]="https://github.com/AdguardTeam/AdGuardHome.git"
 SERVICE_REPOS[unbound]="https://github.com/klutchell/unbound-docker.git"
 SERVICE_REPOS[memos]="https://github.com/usememos/memos.git"

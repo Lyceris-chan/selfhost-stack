@@ -1,5 +1,10 @@
-FROM alpine:3.20
-RUN apk add --no-cache nginx     && mkdir -p /usr/share/nginx/html     && chown -R 1000:1000 /var/lib/nginx /var/log/nginx /run/nginx /usr/share/nginx/html
+FROM nginx:alpine
+RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run/nginx /var/lib/nginx /usr/share/nginx/html && \
+    chown -R 1000:1000 /var/cache/nginx /var/log/nginx /var/run/nginx /var/lib/nginx /usr/share/nginx/html && \
+    chmod -R 755 /usr/share/nginx/html && \
+    sed -i 's/^user/#user/' /etc/nginx/nginx.conf && \
+    sed -i 's|pid .*|pid /tmp/nginx.pid;|g' /etc/nginx/nginx.conf
 USER 1000
 COPY . /usr/share/nginx/html
+EXPOSE 8081
 CMD ["nginx", "-g", "daemon off;"]

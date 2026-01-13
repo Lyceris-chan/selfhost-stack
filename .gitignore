@@ -1,31 +1,82 @@
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+
 # Core
 node_modules/
-.DS_Store
+dist/
+build/
+.cache/
+.parcel-cache/
+.next/
+.idea/
+.vscode/
 *.log
-tmp/
+*.tmp
+*.bak
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.env
+.venv
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Node/Frontend
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+.eslintcache
+.stylelintcache
+
+# Git
+.gitignore.bak
+
+# Stack Specific Data
+data/
+DATA/
+**/data/
+sources/
+**/sources/
+**/config/
+**/env/
+**/.secrets
+**/.env
+**/.docker/
+**/.data_usage
+**/.wge_data_usage
+**/.active_profile_name
+**/active-wg.conf
+**/deployment.log
+**/dashboard.html
+**/protonpass_import.csv
+**/libredirect_import.json
 
 # Test Artifacts
-test/VERIFICATION_REPORT.md
-test/USER_INTERACTIONS_REPORT.md
-test/SERVICE_VERIFICATION_REPORT.md
-test/screenshot_*.png
 test/screenshots/
 test/test_data/
 test/test_config.env
+test/VERIFICATION_REPORT.md
+test/USER_INTERACTIONS_REPORT.md
+test/SERVICE_VERIFICATION_REPORT.md
 test/deployment_todos.json
-test/assets/
-test/dashboard.html
-test_data_ab/
-
-# App Data
-DATA/
-data/
-src/data/
-lib/hub-api/__pycache__/
-
-# Secrets
-.secrets
-.env
-protonpass_import.csv
+test/ui_report.md
+ui_report.md
+*.png
+!lib/templates/assets/*.png

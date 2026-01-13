@@ -18,7 +18,7 @@ append_hub_api() {
 import json, os
 try:
     lan_ip = os.environ.get('LAN_IP', '127.0.0.1')
-    port = os.environ.get('PORT_DASHBOARD_WEB', '8081')
+    port = os.environ.get('PORT_DASHBOARD_WEB', '8088')
     domain = os.environ.get('DESEC_DOMAIN', '')
     origins = [
         'http://localhost',
@@ -65,7 +65,6 @@ except Exception:
       - "$DOCKER_AUTH_DIR:/root/.docker:ro"
       - "$ASSETS_DIR:/assets"
       - "$SRC_DIR:/app/sources"
-      - "$BASE_DIR:/project_root:ro"
       - "$CONFIG_DIR/theme.json:/app/theme.json"
       - "$CONFIG_DIR/services.json:/app/services.json"
       - "$DATA_DIR/hub-api:/app/data"
@@ -241,13 +240,14 @@ append_dashboard() {
     $SUDO mkdir -p "$SRC_DIR/dashboard"
     cat <<DASHEOF | $SUDO tee "$SRC_DIR/dashboard/Dockerfile" >/dev/null
 FROM nginx:alpine
-RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run/nginx /usr/share/nginx/html && \
-    chown -R 1000:1000 /var/cache/nginx /var/log/nginx /var/run/nginx /usr/share/nginx/html && \
+RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run/nginx /var/lib/nginx /usr/share/nginx/html && \
+    chown -R 1000:1000 /var/cache/nginx /var/log/nginx /var/run/nginx /var/lib/nginx /usr/share/nginx/html && \
     chmod -R 755 /usr/share/nginx/html && \
-    sed -i 's|/var/run/nginx.pid|/tmp/nginx.pid|g' /etc/nginx/nginx.conf
+    sed -i 's/^user/#user/' /etc/nginx/nginx.conf && \
+    sed -i 's|pid .*|pid /tmp/nginx.pid;|g' /etc/nginx/nginx.conf
 USER 1000
 COPY . /usr/share/nginx/html
-EXPOSE 8081
+EXPOSE $PORT_DASHBOARD_WEB
 CMD ["nginx", "-g", "daemon off;"]
 DASHEOF
 
@@ -281,7 +281,7 @@ DASHEOF
     depends_on:
       hub-api: {condition: service_healthy}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:$PORT_DASHBOARD_WEB/"]
       interval: 30s
       timeout: 5s
       retries: 3
