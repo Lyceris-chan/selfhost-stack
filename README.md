@@ -176,7 +176,8 @@ Before running the installer, you can customize your deployment using these flag
 
 ---
 
-## 🖥️ System requirements
+<details>
+<summary>🖥️ <strong>System requirements</strong> (Click to expand)</summary>
 
 To ensure a smooth experience, your hub should meet the following minimum specifications:
 
@@ -186,9 +187,12 @@ To ensure a smooth experience, your hub should meet the following minimum specif
 *   **Storage**: 16GB+ available space on a fast SSD/NVMe (plus additional space for your personal data and media).
 *   **Network**: Stable internet connection. Public IP only required for remote access via WireGuard.
 
+</details>
+
 ---
 
-## 🛡️ How it works (architecture)
+<details>
+<summary>🛡️ <strong>How it works (Architecture)</strong> (Click to expand)</summary>
 
 This section explains the technical details behind the privacy features listed above.
 
@@ -201,7 +205,7 @@ This stack features a hardened, recursive DNS engine built on **Unbound** and **
 <details>
 <summary>🛡️ <strong>Production Service Overrides and RFC Compliance</strong> (Click to expand)</summary>
 
-To achieve "Gold Standard" security and performance, this stack implements specific overrides for core infrastructure services. These choices are grounded in established Internet Engineering Task Force (IETF) standards.
+To achieve high-standard security and performance, this stack implements specific overrides for core infrastructure services. These choices are grounded in established Internet Engineering Task Force (IETF) standards.
 
 ### Unbound (Recursive DNS)
 The Unbound configuration ([lib/services/config.sh:285](lib/services/config.sh#L285)) is hardened beyond default settings to ensure maximum privacy and protection against common DNS-based attacks:
@@ -344,6 +348,11 @@ To ensure peak performance for media-heavy tasks, this stack supports hardware-a
 *   **Requirements**: Ensure your ZimaOS or host device has the correct drivers installed (e.g., `intel-media-driver` or `nvidia-container-toolkit`).
 
 </details>
+
+---
+
+<details>
+<summary>🌐 <strong>Network & Advanced Configuration</strong> (Click to expand)</summary>
 
 ## 🌐 Network configuration
 
@@ -505,6 +514,13 @@ This stack uses a **unified deployment** model combined with **Watchtower** for 
 - **Automated lifecycle**: Watchtower monitors your containers and performs graceful restarts when new upstream security patches are released.
 - **Single-stage verification**: The integrated test suite verifies the entire stack in one pass, ensuring inter-service dependencies are validated.
 
+#### Human-Readable Event Logging
+To simplify system administration, the dashboard includes a real-time event stream that translates technical API logs into human-readable actions.
+
+- **Intelligent Translation**: Technical events (e.g., `POST /verify-admin`) are automatically humanized (e.g., "Administrative session authorized") before being displayed.
+- **Categorized Auditing**: Logs are tagged by category (Network, Security, Maintenance, Orchestration) with corresponding Material Design icons for rapid visual scanning.
+- **Live Stream**: The dashboard maintains a persistent EventSource connection to the Hub API, ensuring zero-latency visibility into system operations.
+
 #### Zero-leaks asset architecture
 External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN proxy** and served locally. Your public home IP is never exposed to CDNs.
 
@@ -545,6 +561,10 @@ This stack uses a hybrid deployment model to balance privacy with system stabili
 *   **Zero Personal Data**: No API keys or hardware IDs are transmitted during checks.
 *   **Isolated Environment**: Requests execute from within containers without host-level access.
 
+</details>
+
+---
+
 ---
 
 ## 🛠️ Production deployment & disaster recovery
@@ -579,6 +599,11 @@ To wipe everything and start over (Warning: IRREVERSIBLE):
 
 ---
 
+---
+
+<details>
+<summary>🛡️ <strong>Security and Networking</strong> (Click to expand)</summary>
+
 ## 🛡️ Security and networking
 
 ### Hardened security baseline
@@ -596,7 +621,12 @@ The stack uses a split-tunneling architecture. Only the WireGuard port (UDP 5182
 ### HTTPS and deSEC requirements
 A valid SSL certificate (obtained via deSEC) is necessary for DNS-over-HTTPS (DoH) and DNS-over-QUIC (DoQ) to function correctly. Additionally, VERT requires HTTPS to connect securely with its daemon API.
 
+</details>
+
 ---
+
+<details>
+<summary>🔧 <strong>Troubleshooting</strong> (Click to expand)</summary>
 
 ## 🔧 Troubleshooting
 
@@ -609,9 +639,13 @@ A valid SSL certificate (obtained via deSEC) is necessary for DNS-over-HTTPS (Do
 
 > 💡 **Pro-Tip**: Use `docker ps` to verify all containers are `Up (healthy)`. If a container is stuck, use `docker logs <name>` to see why.
 
+</details>
+
 ---
 
-<a id="maintenance"></a>
+<details>
+<summary>💾 <strong>Maintenance and Restoration</strong> (Click to expand)</summary>
+
 ## 💾 Maintenance
 
 ### ⚠️ IMPORTANT: Back Up Your Data
@@ -628,23 +662,7 @@ Before performing any maintenance operations, **always back up your data first**
 
 > ⚠️ **WARNING**: Using `-x` (Factory Reset) or clearing service databases **permanently deletes all data**. This action **cannot be undone**!
 
-**Backup commands:**
-
-> 💡 **Note**: Replace `/data/AppData/privacy-hub` with your actual installation path. The default path is shown below, but yours may differ based on your system configuration.
-
-```bash
-# Full backup of all Privacy Hub data
-# Adjust the path to match your installation (check your BASE_DIR)
-tar -czf privacy-hub-backup-$(date +%Y%m%d).tar.gz /data/AppData/privacy-hub
-
-# Backup only secrets and configs (minimal)
-cp /data/AppData/privacy-hub/.secrets ~/privacy-hub-secrets-backup.txt
-cp -r /data/AppData/privacy-hub/config ~/privacy-hub-config-backup/
-
-# Backup specific service data
-tar -czf memos-backup.tar.gz /data/AppData/privacy-hub/memos
-tar -czf immich-backup.tar.gz /data/AppData/privacy-hub/immich
-```
+**Backup and Restore:**
 
 *   **Update**: Click "Check Updates" in the dashboard or run `./zima.sh` again.
 *   **Backup**:
@@ -664,6 +682,10 @@ tar -czf immich-backup.tar.gz /data/AppData/privacy-hub/immich
     ./zima.sh -x
     ```
     *(Note: This **only** removes the containers and volumes created by this specific privacy stack. Your personal documents, photos, and unrelated Docker containers are **never** touched.)*
+
+</details>
+
+---
 
 ---
 

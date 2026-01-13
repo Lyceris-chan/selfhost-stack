@@ -218,7 +218,7 @@ def audit_docker_logs():
     all_pass = True
     
     # Common ignorable warnings (e.g., from dev environments or specific known non-critical issues)
-    # but for a "Gold Standard" we should be strict.
+    # but for a production-grade environment we should be strict.
     
     for container in containers:
         if not container.startswith("hub-"):
