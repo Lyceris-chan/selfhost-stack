@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 # --- SECTION 18: IMAGE MANAGEMENT ---
 
 resolve_service_tags() {
@@ -6,6 +9,7 @@ resolve_service_tags() {
   local var_name
   local default_var_name
   local val
+  local srv
 
   for srv in ${STACK_SERVICES}; do
     srv_upper=$(echo "${srv//-/_}" | tr '[:lower:]' '[:upper:]')
@@ -26,12 +30,14 @@ resolve_service_tags() {
 pull_critical_images() {
   log_info "Pre-pulling core infrastructure images in parallel..."
   local pids=()
+  local img
   for img in ${CRITICAL_IMAGES}; do
     pull_with_retry "${img}" &
     pids+=($!)
   done
 
   local success=true
+  local pid
   for pid in "${pids[@]}"; do
     if ! wait "${pid}"; then
       success=false

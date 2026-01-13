@@ -48,7 +48,7 @@ The ZimaOS Privacy Hub is a comprehensive, self-hosted privacy infrastructure de
 *   **🎨 Material Design 3**: A responsive dashboard with dynamic theming and real-time health metrics.
 
 > ⚠️ **Heads up: The cat-and-mouse game**  
-> Companies like Google and Reddit **actively try to break** these privacy frontends. Why? Because every user on Invidious or Redlib is a user they can't track, monetize, or serve ads to. They regularly change their APIs, add new anti-bot measures, and modify their page structures specifically to break these tools. This stack uses **pre-built images** and automated updates so we can apply fixes quickly—but occasional outages are part of the privacy game. It's worth it.
+> Companies like Google and Reddit **actively try to break** these privacy frontends. Why? Because every user on Invidious or Redlib is a user they can't track, monetize, or serve ads to. They regularly change their APIs, add new anti-bot measures, and modify their page structures specifically to break these tools. This stack uses **pre-built images** and automated updates so we can apply fixes quickly. Occasional outages are part of the privacy game. It's worth it.
 
 > 🔌 **Service availability and redundancy**  
 > These services are **only available** while the device you are hosting on is powered on and network-accessible. In the event of a power outage, network failure, or hardware issue, access to your self-hosted services will be lost. We strongly recommend exploring redundancy options (such as UPS backups or secondary failover nodes) to ensure continuous access to your privacy infrastructure. Be aware that you are your own "cloud provider" now!
@@ -57,7 +57,9 @@ The ZimaOS Privacy Hub is a comprehensive, self-hosted privacy infrastructure de
 
 ## 🚀 Deployment
 
-**Don't worry—this is easier than it looks!** The Privacy Hub guides you through everything. Just follow these steps, and you'll have your own private internet in about **2–5 minutes**.
+**Don't worry: this is easier than it looks!** The Privacy Hub guides you through everything.
+
+ Just follow these steps, and you'll have your own private internet in about **2–5 minutes**.
 
 ### Before you start (checklist)
 
@@ -80,7 +82,7 @@ You'll need:
 4.  Click **Create** and choose any server (Netherlands or Switzerland are good for privacy)
 5.  **⚠️ IMPORTANT**: Ensure **NAT-PMP (Port Forwarding)** is set to **OFF** (see warning below)
 6.  Click **Download** to save the `.conf` file
-7.  **Open** the downloaded file in a text editor—you'll paste its contents during setup
+7.  **Open** the downloaded file in a text editor. You will paste its contents during setup
 
 > 📝 **What you're getting**: This file contains your personal "tunnel key" that lets your hub connect to ProtonVPN's servers. Your real home IP stays hidden!
 
@@ -102,14 +104,18 @@ You'll need:
 *This gives your hub a memorable name like `my-home.dedyn.io` instead of an IP address.*
 
 1.  Register at [deSEC.io](https://desec.io) (it's free and privacy-focused)
-2.  Verify your email and log in
+2.  Verify your email and sign in
 3.  Click **"+ Add Domain"** and create a subdomain (e.g., `my-privacy-hub.dedyn.io`)
 4.  Go to **Token Management** → **"+"** to create a new token
-5.  **Copy and save this token**—you'll need it during setup
+5.  **Copy and save this token**. You will need it during setup
 
 > 📝 **What you're getting**: This token lets the installer automatically set up SSL certificates so your connection is encrypted.
 
-> ⚠️ **Why you need this for HTTPS**: Without a domain, your browser will show scary "Your connection is not private" warnings because SSL certificates can only be issued for domain names, not IP addresses. The deSEC domain and token allows the installer to automatically obtain a free **Let's Encrypt** certificate, so your dashboard and services load securely without any browser warnings. If you skip this step, you'll need to click through security warnings every time you access your hub.
+> ⚠️ **Why you need this for HTTPS**: Without a domain, your browser will show scary "Your connection is not private" warnings because SSL certificates can only be issued for domain names, not IP addresses. The deSEC domain and token allow the installer to automatically obtain a free **Let's Encrypt** certificate, so your dashboard and services load securely without any browser warnings. If you skip this step, you will need to click through security warnings every time you access your hub.
+>
+> **Mandatory for DNS-over-HTTPS (DoH) and DNS-over-QUIC (DoQ)**: A valid, globally trusted certificate is mandatory for DoH and DoQ to function correctly on modern devices. Without it, your phone or browser will refuse to use your hub as a secure DNS provider.
+>
+> **VERT Requirement**: VERT requires a valid HTTPS connection for secure communication with its daemon API (VERTd).
 
 ---
 
@@ -142,7 +148,7 @@ Before running the installer, you can customize your deployment using these flag
 
 | Flag | Description |
 | :--- | :--- |
-| `-y` | **Auto-Confirm**: Skips yes/no prompts (Headless mode). |
+| `-y` | **Auto-Confirm**: Skips yes/no prompts. Reserved for automated testing. |
 | `-j` | **Parallel Deploy**: Deploys services in parallel. Faster, but higher CPU usage! |
 | `-s` | **Selective**: Install only specific apps (e.g., `-s invidious,memos`). |
 | `-c` | **Maintenance**: Recreates containers and networks to fix glitches while **preserving** your persistent data. |
@@ -166,7 +172,7 @@ Before running the installer, you can customize your deployment using these flag
 1.  **🚀 Instant deployment**: The system pulls and starts your private apps.
 2.  **✅ Ready to use**: You get a link to your dashboard (e.g., `http://192.168.1.100:8088`).
 3.  **🔐 Credential export**: Your passwords are saved for safekeeping.
-4.  **🔀 Instant redirection**: A `libredirect_import.json` is created—import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically redirect YouTube and Reddit to your hub.
+4.  **🔀 Instant redirection**: A `libredirect_import.json` is created. Import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically redirect YouTube and Reddit to your hub.
 
 ---
 
@@ -212,6 +218,12 @@ AdGuard Home acts as the primary gateway and policy engine:
 *   **Upstream Consolidation**: All queries are routed exclusively to the local Unbound instance via a dedicated Docker network bridge, ensuring no plain-text queries ever leave the host.
 *   **DNS-over-QUIC (DoQ) ([RFC 9250](https://datatracker.ietf.org/doc/html/rfc9250))**: Supports the latest high-performance encrypted DNS standard, providing lower latency than DoH/DoT in lossy network conditions (like mobile).
 *   **Certificate Pinning Resistance**: By utilizing globally trusted Let's Encrypt certificates (via deSEC), the hub ensures compatibility with native Android/iOS security models without requiring manual root CA installation.
+
+### SearXNG (Privacy Search)
+SearXNG is configured to ensure total query anonymity:
+
+*   **Image Proxy Enabled**: All images in search results are proxied through your hub. This prevents source websites from tracking your IP address when you view results.
+*   **VPN Routing**: SearXNG exits exclusively through the VPN tunnel, ensuring search engines only see the VPN shared IP.
 
 </details>
 
@@ -259,7 +271,8 @@ To automatically redirect your browser from big-tech sites to your private Hub:
 
 ### Included privacy services
 
-Every service in this stack is pulled from a trusted minimal image. All services marked with **🔒 VPN** are locked inside the VPN tunnel—they cannot "see" the real internet, and the real internet cannot "see" them.
+Services marked with 🔒 VPN are routed through a secure tunnel. These services only access the internet via the VPN gateway, and they are not reachable from the public internet. Every service in this stack is pulled from a trusted minimal image.
+
 
 <details>
 <summary>📋 <strong>View full service catalog and routing</strong> (Click to expand)</summary>
@@ -322,7 +335,7 @@ To ensure peak performance for media-heavy tasks, this stack supports hardware-a
 <summary>🚀 <strong>View hardware acceleration details</strong> (Click to expand)</summary>
 
 *   **Immich**: Utilizes Intel Quick Sync (QSV), VA-API, or NVIDIA GPUs for localized image auto-tagging and video transcoding.
-*   **VERT / VERTd**: Optimized for high-speed local file conversion using hardware encoders to minimize CPU load.
+*   **VERT / VERTd**: Optimized for high-speed local file conversion using hardware encoders to minimize CPU load. **Note: VERT requires an HTTPS connection to securely communicate with VERTd.**
 *   **Detection and provisioning**: The stack automatically identifies your hardware vendor (Intel, AMD, or NVIDIA) during deployment via [lib/scripts.sh](lib/scripts.sh) and provisions the necessary devices (`/dev/dri`, `/dev/vulkan`) or container reservations.
 *   **Requirements**: Ensure your ZimaOS or host device has the correct drivers installed (e.g., `intel-media-driver` or `nvidia-container-toolkit`).
 
@@ -332,11 +345,12 @@ To ensure peak performance for media-heavy tasks, this stack supports hardware-a
 
 These settings help you get the most out of your Privacy Hub on your local network.
 
-#### 1. Remote access (VPN)
-**Stop! You probably don't need to do anything here.**
-*   **Default state**: Your hub is invisible to the internet. This is the safest way to live.
-*   **Remote access**: Forward **UDP port 51820** on your router *only* if you want to connect to your hub while away from home. 
-*   **Why no other ports?**: Every other service (Dashboard, AdGuard, etc.) is reached *through* this WireGuard tunnel once you're connected. Opening more ports is like leaving your back door open when you already have a key to the front door.
+#### 1. Remote access and split-tunneling
+**Stop: you probably do not need to do anything here.**
+*   **Default state**: Your hub remains invisible to the internet. This is the safest way to live.
+*   **Remote access**: Forward **UDP port 51820** on your router only if you want to connect to your hub while away from home. Valid public/private keys are required for access.
+*   **Split-tunneling**: We use split-tunneling to ensure your connection remains fast. Only DNS requests and hub services route through the tunnel, while other traffic exits directly from your device.
+*   **Why no other ports?**: Every other service (Dashboard, AdGuard, etc.) is reached through this WireGuard tunnel once you are connected. Opening more ports is like leaving your back door open when you already have a key to the front door. This is essential for users to securely access their DNS and services outside their home network.
 
 #### 2. DNS protection
 Your hub runs its own **recursive DNS resolver** (Unbound and AdGuard Home). This means:
@@ -371,7 +385,7 @@ Privacy frontends and external-facing services are routed exclusively through th
 | **Cobalt** | Media downloader | Downloads anonymized through VPN |
 | **Memos** | Note taking | Version checks and metadata fetched via VPN |
 
-**Kill switch protection**: If the VPN tunnel fails, these services lose internet access entirely—they cannot accidentally expose your home IP.
+**Kill switch protection**: If the VPN tunnel fails, these services lose internet access entirely. They cannot accidentally expose your home IP.
 
 ##### Zone 2: Remote access (WireGuard tunnel)
 When connecting from outside your home network (phone, laptop), traffic flows through your personal WireGuard tunnel:

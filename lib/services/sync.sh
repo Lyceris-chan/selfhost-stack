@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 # --- SECTION 11: SOURCE REPOSITORY SYNCHRONIZATION ---
 # Initialize or update external source code for locally-built application containers.
 
@@ -53,9 +56,10 @@ sync_sources() {
   log_info "Verifying connectivity to source repositories..."
   local check_failed=false
   local repo_hosts=("https://github.com" "https://git.sr.ht" "https://codeberg.org")
-  for repo in "${repo_hosts[@]}"; do
-    if ! curl -s --max-time 5 "${repo}" -o /dev/null >/dev/null 2>&1; then
-      log_warn "Could not reach ${repo}. Sync may fail."
+  local repo_host
+  for repo_host in "${repo_hosts[@]}"; do
+    if ! curl -s --max-time 5 "${repo_host}" -o /dev/null >/dev/null 2>&1; then
+      log_warn "Could not reach ${repo_host}. Sync may fail."
       check_failed=true
     fi
   done
@@ -139,6 +143,7 @@ EOF
   ) & pids+=($!)
 
   local success=true
+  local pid
   for pid in "${pids[@]}"; do
     if ! wait "${pid}"; then
       success=false

@@ -18,7 +18,7 @@ async def get_wgeasy_session():
             if resp.status_code in (200, 204):
                 return resp.cookies
     except Exception as e:
-        print(f"WG Login Error: {e}")
+        print(f"WG Sign in Error: {e}")
     return None
 
 @router.get("/wg/clients")

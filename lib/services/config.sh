@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 # --- SECTION 12: ADMINISTRATIVE CONTROL ARTIFACTS ---
 
 generate_scripts() {
@@ -32,21 +35,28 @@ readonly DESEC_TOKEN="${DESEC_TOKEN}"
 readonly DESEC_DOMAIN="${DESEC_DOMAIN}"
 readonly DOCKER_CMD="${DOCKER_CMD}"
 
-if [[ -z "\${DESEC_DOMAIN}" ]]; then
+if [[ -z "
+${DESEC_DOMAIN}" ]]; then
   echo "No domain configured. Skipping certificate check."
   exit 0
 fi
 
-echo "Starting certificate renewal check for \${DESEC_DOMAIN}..."
+echo "Starting certificate renewal check for 
+${DESEC_DOMAIN}..."
 
-\${DOCKER_CMD} run --rm \\
-  -v "\${AGH_CONF_DIR}:/acme" \\
-  -e "DESEC_Token=\${DESEC_TOKEN}" \\
+
+${DOCKER_CMD} run --rm \
+  -v "
+${AGH_CONF_DIR}:/acme" \
+  -e "DESEC_Token=
+${DESEC_TOKEN}" \
   neilpang/acme.sh:latest --cron --home /acme --config-home /acme --cert-home /acme/certs
 
-if [[ \$? -eq 0 ]]; then
+if [[ 
+$? -eq 0 ]]; then
   echo "Certificate check completed successfully."
-  \${DOCKER_CMD} restart ${CONTAINER_PREFIX}dashboard ${CONTAINER_PREFIX}adguard 2>/dev/null || true
+  
+${DOCKER_CMD} restart ${CONTAINER_PREFIX}dashboard ${CONTAINER_PREFIX}adguard 2>/dev/null || true
 else
   echo "Certificate check failed."
 fi
@@ -62,7 +72,8 @@ EOF
     vertd_devices="    devices:
       - /dev/dri"
     if [[ -d "/dev/vulkan" ]]; then
-      vertd_devices="${vertd_devices}
+      vertd_devices="
+${vertd_devices}
       - /dev/vulkan"
     fi
 
@@ -88,7 +99,9 @@ EOF
     gpu_tooltip="Utilizes NVIDIA NVENC/NVDEC hardware acceleration."
   fi
 
-  if [[ ! -f "${CONFIG_DIR}/theme.json" ]]; then echo "{}" | "${SUDO}" tee "${CONFIG_DIR}/theme.json" >/dev/null; fi
+  if [[ ! -f "${CONFIG_DIR}/theme.json" ]]; then
+    echo "{}" | "${SUDO}" tee "${CONFIG_DIR}/theme.json" >/dev/null
+  fi
   "${SUDO}" chmod 644 "${CONFIG_DIR}/theme.json"
   readonly SERVICES_JSON="${CONFIG_DIR}/services.json"
   readonly CUSTOM_SERVICES_JSON="${PROJECT_ROOT}/custom_services.json"
@@ -156,7 +169,7 @@ EOF
 setup_static_assets() {
   log_info "Initializing local asset directories and icons..."
   "${SUDO}" mkdir -p "${ASSETS_DIR}"
-  local svg_content="<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 128 128\">
+  local svg_content="<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 128 128">
     <rect width=\"128\" height=\"128\" rx=\"28\" fill=\"#141218\"/>
     <path d=\"M64 104q-23-6-38-26.5T11 36v-22l53-20 53 20v22q0 25-15 45.5T64 104Zm0-14q17-5.5 28.5-22t11.5-35V21L64 6 24 21v12q0 18.5 11.5 35T64 90Zm0-52Z\" fill=\"#D0BCFF\"/>
 </svg>"
@@ -173,7 +186,8 @@ download_remote_assets() {
     return 0
   fi
 
-  local proxy="http://172.${FOUND_OCTET:-20}.0.254:8888"
+  local found_octet_val="${FOUND_OCTET:-20}"
+  local proxy="http://172.${found_octet_val}.0.254:8888"
   local ua="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
   local proxy_ready=false
@@ -204,7 +218,9 @@ download_remote_assets() {
     local dest="$1"
     local url="$2"
     local curl_args=(-fsSL --max-time 10 -A "${ua}")
-    if [[ -n "${proxy}" ]]; then curl_args+=("--proxy" "${proxy}"); fi
+    if [[ -n "${proxy}" ]]; then
+      curl_args+=("--proxy" "${proxy}")
+    fi
     for i in {1..3}; do
       if curl "${curl_args[@]}" "${url}" -o "${dest}"; then
         return 0
@@ -228,7 +244,9 @@ download_remote_assets() {
 setup_configs() {
   log_info "Compiling Infrastructure Configs..."
   touch "${HISTORY_LOG}" "${ACTIVE_WG_CONF}" "${BASE_DIR}/.data_usage" "${BASE_DIR}/.wge_data_usage"
-  if [[ ! -f "${ACTIVE_PROFILE_NAME_FILE}" ]]; then echo "Initial-Setup" | "${SUDO}" tee "${ACTIVE_PROFILE_NAME_FILE}" >/dev/null; fi
+  if [[ ! -f "${ACTIVE_PROFILE_NAME_FILE}" ]]; then
+    echo "Initial-Setup" | "${SUDO}" tee "${ACTIVE_PROFILE_NAME_FILE}" >/dev/null
+  fi
   "${SUDO}" chmod 644 "${ACTIVE_PROFILE_NAME_FILE}" "${HISTORY_LOG}" "${BASE_DIR}/.data_usage" "${BASE_DIR}/.wge_data_usage"
 
   local dns_server_name="${LAN_IP}"
@@ -258,7 +276,8 @@ setup_configs() {
     "${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/certs" neilpang/acme.sh:latest /bin/sh -c "openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes -keyout /certs/ssl.key -out /certs/ssl.crt -subj '/CN=${LAN_IP}'" >/dev/null 2>&1
   fi
 
-  local unbound_static_ip="172.${FOUND_OCTET}.0.250"
+  local found_octet_val="${FOUND_OCTET:-20}"
+  local unbound_static_ip="172.${found_octet_val}.0.250"
   "${SUDO}" mkdir -p "$(dirname "${UNBOUND_CONF}")" "$(dirname "${NGINX_CONF}")" "${AGH_CONF_DIR}" "${DATA_DIR}/hub-api"
   "${SUDO}" chown -R 1000:1000 "${DATA_DIR}/hub-api"
 
@@ -308,16 +327,21 @@ EOF
 
   local nginx_redirect=""
   if [[ -n "${DESEC_DOMAIN}" ]]; then
-    nginx_redirect="if (\$http_host = '${DESEC_DOMAIN}') { return 301 https://\$host:8443\$request_uri; }"
+    nginx_redirect="if (
+$http_host = '${DESEC_DOMAIN}') { return 301 https://
+$host:8443
+$request_uri; }"
   fi
 
   cat <<EOF | "${SUDO}" tee "${NGINX_CONF}" >/dev/null
 error_log /dev/stderr info;
 access_log /dev/stdout;
-set_real_ip_from 172.${FOUND_OCTET}.0.0/16;
+set_real_ip_from 172.${found_octet_val}.0.0/16;
 real_ip_header X-Forwarded-For;
 real_ip_recursive on;
-map \$http_host \$backend {
+map 
+$http_host 
+$backend {
     hostnames;
     default "";
     adguard.${DESEC_DOMAIN}    http://${CONTAINER_PREFIX}adguard:8083;
@@ -329,8 +353,11 @@ server {
     ssl_certificate_key /etc/adguard/conf/ssl.key;
     location / {
         ${nginx_redirect}
-        proxy_set_header Host \$host;
-        if (\$backend != "") { proxy_pass \$backend; break; }
+        proxy_set_header Host 
+$host;
+        if (
+$backend != "") { proxy_pass 
+$backend; break; }
         root /usr/share/nginx/html;
         index index.html;
     }
@@ -374,31 +401,20 @@ EOF
 }
 
 generate_libredirect_export() {
-  if [[ -z "${DESEC_DOMAIN}" ]] || [[ ! -f "${AGH_CONF_DIR}/ssl.crt" ]]; then return 0; fi
+  if [[ -z "${DESEC_DOMAIN:-}" ]] || [[ ! -f "${AGH_CONF_DIR}/ssl.crt" ]]; then
+    return 0
+  fi
   local export_file="${BASE_DIR}/libredirect_import.json"
   local template_file="${SCRIPT_DIR}/lib/templates/libredirect_template.json"
-  [[ ! -f "${template_file}" ]] && return 0
+  if [[ ! -f "${template_file}" ]]; then
+    return 0
+  fi
 
   local host="${DESEC_DOMAIN}"
   local port=":8443"
   jq --arg inv "https://invidious.${host}${port}" \
      --arg red "https://redlib.${host}${port}" \
      --arg wiki "https://wikiless.${host}${port}" \
-     '.invidious = [$inv] | .redlib = [$red] | .wikiless = [$wiki] | .youtube.enabled = true | .reddit.enabled = true | .wikipedia.enabled = true' \
+     '.invidious = [${inv}] | .redlib = [${red}] | .wikiless = [${wiki}] | .youtube.enabled = true | .reddit.enabled = true | .wikipedia.enabled = true'
      "${template_file}" > "${export_file}"
-}
-
-generate_libredirect_export() {
-    if [ -z "$DESEC_DOMAIN" ] || [ ! -f "$AGH_CONF_DIR/ssl.crt" ]; then return 0; fi
-    local export_file="$BASE_DIR/libredirect_import.json"
-    local template_file="$SCRIPT_DIR/lib/templates/libredirect_template.json"
-    [ ! -f "$template_file" ] && return 0
-
-    local host="$DESEC_DOMAIN"
-    local port=":8443"
-    jq --arg inv "https://invidious.${host}${port}" \
-       --arg red "https://redlib.${host}${port}" \
-       --arg wiki "https://wikiless.${host}${port}" \
-       '.invidious = [$inv] | .redlib = [$red] | .wikiless = [$wiki] | .youtube.enabled = true | .reddit.enabled = true | .wikipedia.enabled = true' \
-       "$template_file" > "$export_file"
 }

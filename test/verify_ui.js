@@ -34,11 +34,11 @@ async function runAudit() {
     // 3. Admin Login & Interaction
     console.log('  Testing Admin Authentication...');
     await page.click('#admin-lock-btn');
-    await page.waitForSelector('#login-modal', { visible: true });
+    await page.waitForSelector('#signin-modal', { visible: true });
     
     // Layout check for M3 Modal
     const modalOverlap = await page.evaluate(() => {
-      const header = document.querySelector('#login-modal .modal-header');
+      const header = document.querySelector('#signin-modal .modal-header');
       const title = header.querySelector('h2');
       const closeBtn = header.querySelector('.btn-icon');
       return (title.getBoundingClientRect().right > closeBtn.getBoundingClientRect().left);
@@ -46,7 +46,7 @@ async function runAudit() {
     logResult('Dashboard', 'Modal Layout', !modalOverlap ? 'PASS' : 'FAIL', 'No component overlap detected');
 
     await page.type('#admin-password-input', adminPass);
-    await page.click('#login-modal .btn-filled');
+    await page.click('#signin-modal .btn-filled');
     await page.waitForFunction(() => document.body.classList.contains('admin-mode'), { timeout: 10000 });
     logResult('Dashboard', 'Admin Login', 'PASS', 'Authenticated successfully');
 

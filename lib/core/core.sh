@@ -281,28 +281,28 @@ $SUDO chown "$(whoami)" "$BASE_DIR"
 BASE_DIR="$(cd "$BASE_DIR" && pwd)"
 
 # Paths
-SRC_DIR="$BASE_DIR/sources"
-ENV_DIR="$BASE_DIR/env"
-CONFIG_DIR="$BASE_DIR/config"
-DATA_DIR="$BASE_DIR/data"
-COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
-DASHBOARD_FILE="$BASE_DIR/dashboard.html"
-SECRETS_FILE="$BASE_DIR/.secrets"
-BACKUP_DIR="$BASE_DIR/backups"
-ASSETS_DIR="$BASE_DIR/assets"
-HISTORY_LOG="$BASE_DIR/deployment.log"
-CERT_BACKUP_DIR="$PROJECT_ROOT/data/AppData/.cert-backups/$APP_NAME"
+readonly SRC_DIR="$BASE_DIR/sources"
+readonly ENV_DIR="$BASE_DIR/env"
+readonly CONFIG_DIR="$BASE_DIR/config"
+readonly DATA_DIR="$BASE_DIR/data"
+readonly COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
+readonly DASHBOARD_FILE="$BASE_DIR/dashboard.html"
+readonly SECRETS_FILE="$BASE_DIR/.secrets"
+readonly BACKUP_DIR="$BASE_DIR/backups"
+readonly ASSETS_DIR="$BASE_DIR/assets"
+readonly HISTORY_LOG="$BASE_DIR/deployment.log"
+readonly CERT_BACKUP_DIR="$PROJECT_ROOT/data/AppData/.cert-backups/$APP_NAME"
 CERT_RESTORE=false
 CERT_PROTECT=false
 
 # Memos storage
-MEMOS_HOST_DIR="$PROJECT_ROOT/data/AppData/memos"
+readonly MEMOS_HOST_DIR="$PROJECT_ROOT/data/AppData/memos"
 
 # WireGuard & Profiles
-WG_PROFILES_DIR="$BASE_DIR/wg-profiles"
-ACTIVE_WG_CONF="$BASE_DIR/active-wg.conf"
-ACTIVE_PROFILE_NAME_FILE="$BASE_DIR/.active_profile_name"
-DOTENV_FILE="$BASE_DIR/.env"
+readonly WG_PROFILES_DIR="$BASE_DIR/wg-profiles"
+readonly ACTIVE_WG_CONF="$BASE_DIR/active-wg.conf"
+readonly ACTIVE_PROFILE_NAME_FILE="$BASE_DIR/.active_profile_name"
+readonly DOTENV_FILE="$BASE_DIR/.env"
 
 init_directories() {
     log_info "Initializing project directories..."
@@ -379,22 +379,22 @@ IMMICH_DB_PASSWORD=""
 IMMICH_ADMIN_PASS_RAW=""
 
 # Service Configurations
-NGINX_CONF_DIR="$CONFIG_DIR/nginx"
-NGINX_CONF="$NGINX_CONF_DIR/default.conf"
-UNBOUND_CONF="$CONFIG_DIR/unbound/unbound.conf"
-BREEZEWIKI_CONF="$CONFIG_DIR/breezewiki/breezewiki.ini"
-AGH_CONF_DIR="$CONFIG_DIR/adguard"
-AGH_YAML="$AGH_CONF_DIR/AdGuardHome.yaml"
+readonly NGINX_CONF_DIR="$CONFIG_DIR/nginx"
+readonly NGINX_CONF="$NGINX_CONF_DIR/default.conf"
+readonly UNBOUND_CONF="$CONFIG_DIR/unbound/unbound.conf"
+readonly BREEZEWIKI_CONF="$CONFIG_DIR/breezewiki/breezewiki.ini"
+readonly AGH_CONF_DIR="$CONFIG_DIR/adguard"
+readonly AGH_YAML="$AGH_CONF_DIR/AdGuardHome.yaml"
 
 # Scripts
-MONITOR_SCRIPT="$BASE_DIR/wg-ip-monitor.sh"
-IP_LOG_FILE="$BASE_DIR/wg-ip-monitor.log"
-CURRENT_IP_FILE="$BASE_DIR/.current_public_ip"
-WG_CONTROL_SCRIPT="$BASE_DIR/wg-control.sh"
-WG_API_SCRIPT="$BASE_DIR/wg-api.py"
-CERT_MONITOR_SCRIPT="$BASE_DIR/cert-monitor.sh"
-MIGRATE_SCRIPT="$BASE_DIR/migrate.sh"
-PATCHES_SCRIPT="$BASE_DIR/patches.sh"
+readonly MONITOR_SCRIPT="$BASE_DIR/wg-ip-monitor.sh"
+readonly IP_LOG_FILE="$BASE_DIR/wg-ip-monitor.log"
+readonly CURRENT_IP_FILE="$BASE_DIR/.current_public_ip"
+readonly WG_CONTROL_SCRIPT="$BASE_DIR/wg-control.sh"
+readonly WG_API_SCRIPT="$BASE_DIR/wg-api.py"
+readonly CERT_MONITOR_SCRIPT="$BASE_DIR/cert-monitor.sh"
+readonly MIGRATE_SCRIPT="$BASE_DIR/migrate.sh"
+readonly PATCHES_SCRIPT="$BASE_DIR/patches.sh"
 
 # Ensure root-level data files are writable by the container user (UID 1000)
     $SUDO touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
@@ -591,47 +591,20 @@ setup_secrets() {
     echo " CREDENTIAL CONFIGURATION"
     echo "========================================"
 
-    if [[ "${AUTO_PASSWORD}" == "true" ]]; then
-      log_info "Automated password generation initialized."
-      if [[ "${FORCE_CLEAN}" == "false" ]] && [[ -d "${DATA_DIR}/portainer" ]] && [[ -n "$(ls -A "${DATA_DIR}/portainer")" ]]; then
-        log_warn "Portainer data directory already exists. Portainer's security policy only allows setting the admin password on the FIRST deployment."
-      fi
-      VPN_PASS_RAW="${VPN_PASS_RAW:-$(generate_secret 24)}"
-      AGH_PASS_RAW="${AGH_PASS_RAW:-$(generate_secret 24)}"
-      ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-$(generate_secret 24)}"
-      PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-$(generate_secret 24)}"
-      log_info "Credentials generated and will be displayed upon completion."
-      echo ""
-    else
-      echo "--- MANUAL CREDENTIAL PROVISIONING ---"
-      echo "Security Note: Please use strong, unique passwords for each service."
-      echo ""
-      echo -n "1. VPN Web UI Password (Protecting peer management): "
-      read -rs VPN_PASS_RAW
-      echo ""
-      echo -n "2. AdGuard Home Password (Protecting DNS filters): "
-      read -rs AGH_PASS_RAW
-      echo ""
-      echo -n "3. Management Dashboard Password (Primary control plane): "
-      read -rs ADMIN_PASS_RAW
-      echo ""
-      if [[ "${FORCE_CLEAN}" == "false" ]] && [[ -d "${DATA_DIR}/portainer" ]]; then
-        echo "   [!] NOTICE: Portainer already initialized. New passwords will not affect existing Portainer admin account."
-      fi
-      echo -n "4. Portainer Password (Infrastructure orchestration): "
-      read -rs PORTAINER_PASS_RAW
-      echo ""
-    fi
-
     if [[ "${AUTO_CONFIRM}" == "true" ]]; then
       log_info "Auto-confirm enabled: Skipping interactive deSEC/GitHub/Odido setup."
       if [[ "${PERSONAL_MODE:-false}" == "true" ]]; then
         log_info "Personal Mode: Applying user-specific defaults."
       fi
+      
+      VPN_PASS_RAW="${VPN_PASS_RAW:-$(generate_secret 24)}"
+      AGH_PASS_RAW="${AGH_PASS_RAW:-$(generate_secret 24)}"
+      ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-$(generate_secret 24)}"
+      PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-$(generate_secret 24)}"
     else
       echo "--- deSEC Domain & Certificate Setup ---"
       while [[ -z "${DESEC_DOMAIN}" ]]; do
-        echo -n "3. deSEC Domain (e.g., myhome.dedyn.io): "
+        echo -n "1. deSEC Domain (e.g., myhome.dedyn.io): "
         read -r input_domain
         DESEC_DOMAIN="${input_domain:-$DESEC_DOMAIN}"
         if [[ -z "${DESEC_DOMAIN}" ]]; then
@@ -639,16 +612,45 @@ setup_secrets() {
         fi
       done
 
-      echo -n "4. deSEC API Token: "
+      echo -n "2. deSEC API Token: "
       read -rs input_token
       echo ""
       DESEC_TOKEN="${input_token:-$DESEC_TOKEN}"
       echo ""
 
+      echo "--- MANUAL CREDENTIAL PROVISIONING ---"
+      echo "Security Note: Please use strong, unique passwords for each service."
+      echo ""
+      
+      if [[ "${AUTO_PASSWORD}" == "true" ]]; then
+        log_info "Automated password generation initialized."
+        VPN_PASS_RAW="${VPN_PASS_RAW:-$(generate_secret 24)}"
+        AGH_PASS_RAW="${AGH_PASS_RAW:-$(generate_secret 24)}"
+        ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-$(generate_secret 24)}"
+        PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-$(generate_secret 24)}"
+        log_info "Credentials generated and will be displayed upon completion."
+      else
+        echo -n "3. VPN Web UI Password (Protecting peer management): "
+        read -rs VPN_PASS_RAW
+        echo ""
+        echo -n "4. AdGuard Home Password (Protecting DNS filters): "
+        read -rs AGH_PASS_RAW
+        echo ""
+        echo -n "5. Management Dashboard Password (Primary control plane): "
+        read -rs ADMIN_PASS_RAW
+        echo ""
+        if [[ "${FORCE_CLEAN}" == "false" ]] && [[ -d "${DATA_DIR}/portainer" ]]; then
+          echo "   [!] NOTICE: Portainer already initialized. New passwords will not affect existing Portainer admin account."
+        fi
+        echo -n "6. Portainer Password (Infrastructure orchestration): "
+        read -rs PORTAINER_PASS_RAW
+        echo ""
+      fi
+
       echo "--- Scribe (Medium Frontend) GitHub Integration ---"
-      echo -n "5. GitHub Username: "
+      echo -n "7. GitHub Username: "
       read -r SCRIBE_GH_USER
-      echo -n "6. GitHub Personal Access Token: "
+      echo -n "8. GitHub Personal Access Token: "
       read -rs SCRIBE_GH_TOKEN
       echo ""
 

@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
 
 # --- SECTION 2: CLEANUP & ENVIRONMENT RESET ---
 # Functions to clear out existing garbage for a clean start.
@@ -134,6 +136,7 @@ clean_environment() {
   local clean_list
   if [[ -n "${SELECTED_SERVICES}" ]]; then
     local actual_targets=""
+    local srv
     for srv in ${SELECTED_SERVICES//,/ }; do
       actual_targets="${actual_targets} ${srv}"
       [[ "${srv}" == "wikiless" ]] && actual_targets="${actual_targets} wikiless_redis"
@@ -145,6 +148,7 @@ clean_environment() {
   fi
 
   local found_containers=""
+  local c
   for c in ${clean_list}; do
     if "${DOCKER_CMD}" ps -a --format '{{.Names}}' | grep -qE "^(${CONTAINER_PREFIX}${c}|${c})$"; then
       local name
@@ -197,6 +201,7 @@ perform_backup() {
   log_info "Creating system backup: ${backup_name}..."
 
   local targets=""
+  local t
   for t in .secrets config env; do
     [[ -e "${BASE_DIR}/${t}" ]] && targets="${targets} ${t}"
   done

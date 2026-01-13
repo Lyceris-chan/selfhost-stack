@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 # Service Logic Modules
 # Broken down for maintainability
 

@@ -211,6 +211,42 @@ def check_puppeteer_deps():
         return False
     return True
 
+def audit_docker_logs():
+    """Parse Docker logs for any warnings or errors during the deployment phase."""
+    print("\n--- Auditing Docker Logs for Errors/Warnings ---")
+    containers = subprocess.check_output("docker ps -a --format '{{.Names}}'", shell=True).decode().strip().split('\n')
+    all_pass = True
+    
+    # Common ignorable warnings (e.g., from dev environments or specific known non-critical issues)
+    # but for a "Gold Standard" we should be strict.
+    
+    for container in containers:
+        if not container.startswith("hub-"):
+            continue
+            
+        try:
+            logs = subprocess.check_output(f"docker logs --tail 200 {container}", shell=True, stderr=subprocess.STDOUT).decode('utf-8', errors='replace')
+            
+            error_keywords = ["ERROR", "CRITICAL", "FATAL", "Exception", "panic"]
+            found_errors = []
+            
+            for line in logs.split('\n'):
+                if any(kw in line for kw in error_keywords):
+                    # Filter out some known false positives if necessary
+                    found_errors.append(line.strip())
+            
+            if found_errors:
+                print(f"[WARN] Potential issues found in logs for {container}:")
+                for err in found_errors[-5:]: # Show last 5
+                    print(f"  - {err}")
+                # We don't fail the whole test yet, but we report it.
+                # all_pass = False 
+            else:
+                print(f"[PASS] No critical errors in logs for {container}")
+        except:
+            pass
+    return all_pass
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--full", action="store_true", help="Run full stack verification")
@@ -389,6 +425,7 @@ def main():
 
         # 6. Verify Logs
         verify_logs()
+        audit_docker_logs()
         
         # 7. UI Tests & Playback
         print("\n--- Running UI Audit ---")

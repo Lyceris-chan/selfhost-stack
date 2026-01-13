@@ -66,10 +66,6 @@ main() {
   detect_network
   setup_static_assets
 
-  # 6. Auth & Secrets
-  setup_secrets
-  setup_configs
-
   # 7. WireGuard Config
   echo ""
   echo "==========================================================="
@@ -109,6 +105,10 @@ main() {
     fi
   fi
 
+  # 6. Auth & Secrets
+  setup_secrets
+  setup_configs
+
   # 8. Extract Profile Name
   local initial_profile_name
   initial_profile_name=$(extract_wg_profile_name "${ACTIVE_WG_CONF}" || echo "Initial-Setup")
@@ -146,68 +146,5 @@ main() {
 }
 
 main "$@"
-se
-    if [ -f "$ACTIVE_WG_CONF" ] && [ -s "$ACTIVE_WG_CONF" ]; then
-        log_warn "Existing WireGuard config was invalid/empty. Removed."
-        rm "$ACTIVE_WG_CONF"
-    fi
-
-    if [ -n "${WG_CONF_B64:-}" ]; then
-        log_info "WireGuard configuration provided in environment. Decoding..."
-        echo "$WG_CONF_B64" | base64 -d | $SUDO tee "$ACTIVE_WG_CONF" >/dev/null
-    elif [ "$AUTO_CONFIRM" = true ]; then
-        log_crit "Auto-confirm active but no WireGuard configuration provided via environment (WG_CONF_B64)."
-        exit 1
-    else
-        echo "PASTE YOUR WIREGUARD .CONF CONTENT BELOW."
-        echo "Press Enter, then Ctrl+D (or Cmd+D on some Mac terminals) to finish."
-        echo "----------------------------------------------------------"
-        cat | $SUDO tee "$ACTIVE_WG_CONF" >/dev/null
-        echo "" | $SUDO tee -a "$ACTIVE_WG_CONF" >/dev/null
-        echo "----------------------------------------------------------"
-    fi
-    
-    $SUDO chmod 600 "$ACTIVE_WG_CONF"
-    $PYTHON_CMD "$SCRIPT_DIR/lib/utils/format_wg.py" "$ACTIVE_WG_CONF"
-
-    if ! validate_wg_config; then
-        log_crit "The pasted WireGuard configuration is invalid."
-        exit 1
-    fi
-fi
-
-# 8. Extract Profile Name
-INITIAL_PROFILE_NAME=$(extract_wg_profile_name "$ACTIVE_WG_CONF" || true)
-if [ -z "$INITIAL_PROFILE_NAME" ]; then INITIAL_PROFILE_NAME="Initial-Setup"; fi
-
-INITIAL_PROFILE_NAME_SAFE=$(echo "$INITIAL_PROFILE_NAME" | tr -cd 'a-zA-Z0-9-_#')
-if [ -z "$INITIAL_PROFILE_NAME_SAFE" ]; then INITIAL_PROFILE_NAME_SAFE="Initial-Setup"; fi
-
-$SUDO mkdir -p "$WG_PROFILES_DIR"
-$SUDO cp "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
-$SUDO chmod 600 "$ACTIVE_WG_CONF" "$WG_PROFILES_DIR/${INITIAL_PROFILE_NAME_SAFE}.conf"
-echo "$INITIAL_PROFILE_NAME_SAFE" | $SUDO tee "$ACTIVE_PROFILE_NAME_FILE" >/dev/null
-
-# 9. Sync Sources
-sync_sources
-
-# 10. Generate Scripts & Dashboard
-generate_scripts
-generate_dashboard
-
-# 11. Generate Compose
-generate_compose
-
-# 12. Setup Exports
-generate_protonpass_export
-generate_libredirect_export
-
-if [ "$GENERATE_ONLY" = true ]; then
-    log_info "Generation complete. Skipping deployment (-G flag active)."
-    exit 0
-fi
-
-# 13. Deploy
-deploy_stack
 
 

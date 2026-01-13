@@ -1,8 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 # --- SECTION 16: STACK ORCHESTRATION & DEPLOYMENT ---
 # Execute system deployment and verify global infrastructure integrity.
 
 deploy_stack() {
-  if command -v modprobe >/dev/null 2>&1; then
+  if command -v modprobe >/dev/null 2>&1;
+then
     "${SUDO}" modprobe tun || true
   fi
 
@@ -38,6 +42,7 @@ deploy_stack() {
   else
     # Explicitly launch core infrastructure services first
     local core_services=""
+    local srv
     for srv in hub-api adguard unbound gluetun; do
       if grep -q "^  ${srv}:" "${COMPOSE_FILE}"; then
         core_services="${core_services} ${srv}"
@@ -52,6 +57,7 @@ deploy_stack() {
     # Wait for critical backends to stabilize
     if echo "${core_services}" | grep -qE "hub-api|gluetun"; then
       log_info "Waiting for backend services to stabilize..."
+      local i
       for i in {1..10}; do
         local hub_health="healthy"
         local glu_health="healthy"
@@ -80,78 +86,84 @@ deploy_stack() {
   fi
 
     log_info "Verifying control plane connectivity..."
-    API_TEST="FAILED"
+    local api_test="FAILED"
+    local i
     for i in {1..10}; do
-        API_TEST=$(curl -s -o /dev/null -w "%{http_code}" "http://$LAN_IP:$PORT_DASHBOARD_WEB/api/status" || echo "FAILED")
-        if [ "$API_TEST" = "200" ] || [ "$API_TEST" = "401" ]; then
+        api_test=$(curl -s -o /dev/null -w "% {http_code}" "http://${LAN_IP}:${PORT_DASHBOARD_WEB}/api/status" || echo "FAILED")
+        if [[ "${api_test}" == "200" ]] || [[ "${api_test}" == "401" ]]; then
             break
         fi
         sleep 1
     done
 
-    if [ "$API_TEST" = "200" ]; then
+    if [[ "${api_test}" == "200" ]]; then
         log_info "Control plane is reachable."
-    elif [ "$API_TEST" = "401" ]; then
+    elif [[ "${api_test}" == "401" ]]; then
         log_info "Control plane is reachable (Security handshake verified)."
     else
-        log_warn "Control plane returned status $API_TEST. The dashboard may show 'Offline (API Error)' initially."
+        log_warn "Control plane returned status ${api_test}. The dashboard may show 'Offline (API Error)' initially."
     fi
 
     # --- SECTION 16.1: PORTAINER AUTOMATION ---
-    if [ "$AUTO_PASSWORD" = true ] && grep -q "portainer:" "$COMPOSE_FILE"; then
+    if [[ "${AUTO_PASSWORD}" == "true" ]] && grep -q "portainer:" "${COMPOSE_FILE}"; then
         log_info "Synchronizing Portainer administrative settings..."
-        PORTAINER_READY=false
+        local portainer_ready=false
+        local i
         # Increase wait time for Portainer to initialize its database
         for i in {1..30}; do
-            if curl -s --max-time 2 "http://$LAN_IP:$PORT_PORTAINER/api/system/status" > /dev/null; then
-                PORTAINER_READY=true
+            if curl -s --max-time 2 "http://${LAN_IP}:${PORT_PORTAINER}/api/system/status" > /dev/null;
+            then
+                portainer_ready=true
                 break
             fi
-            [ $((i % 5)) -eq 0 ] && log_info "Waiting for Portainer API ($i/30)..."
+            [[ $((i % 5)) -eq 0 ]] && log_info "Waiting for Portainer API ($i/30)..."
             sleep 1
         done
 
-        if [ "$PORTAINER_READY" = true ]; then
+        if [[ "${portainer_ready}" == "true" ]]; then
             # Give Portainer another moment to ensure the admin user is created from the CLI flag
             sleep 2
             # Authenticate to get JWT (user was initialized via --admin-password CLI flag)
-            # Try 'admin' first, then 'portainer' (in case it was already renamed in a previous run)
-            AUTH_RESPONSE=$(curl -s --max-time 5 -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
+            local auth_response
+            auth_response=$(curl -s --max-time 5 -X POST "http://${LAN_IP}:${PORT_PORTAINER}/api/auth" \
                 -H "Content-Type: application/json" \
-                -d "{\"Username\":\"admin\",\"Password\":\"$PORTAINER_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
+                -d "{"Username":"admin","Password":"${PORTAINER_PASS_RAW}"}" 2>&1 || echo "CURL_ERROR")
             
-            if ! echo "$AUTH_RESPONSE" | grep -q "jwt"; then
-                AUTH_RESPONSE=$(curl -s --max-time 5 -X POST "http://$LAN_IP:$PORT_PORTAINER/api/auth" \
+            if ! echo "${auth_response}" | grep -q "jwt"; then
+                auth_response=$(curl -s --max-time 5 -X POST "http://${LAN_IP}:${PORT_PORTAINER}/api/auth" \
                     -H "Content-Type: application/json" \
-                    -d "{\"Username\":\"portainer\",\"Password\":\"$PORTAINER_PASS_RAW\"}" 2>&1 || echo "CURL_ERROR")
+                    -d "{"Username":"portainer","Password":"${PORTAINER_PASS_RAW}"}" 2>&1 || echo "CURL_ERROR")
             fi
             
-            if echo "$AUTH_RESPONSE" | grep -q "jwt"; then
-                PORTAINER_JWT=$(echo "$AUTH_RESPONSE" | sed -n 's/.*"jwt":"\([^"\'']*\).*/\1/p')
+            if echo "${auth_response}" | grep -q "jwt"; then
+                local portainer_jwt
+                portainer_jwt=$(echo "${auth_response}" | sed -n 's/.*"jwt":"\([^"\'']*\).*/\1/p')
                 
                 # 1. Disable Telemetry/Analytics
                 log_info "Disabling Portainer anonymous telemetry..."
-                curl -s --max-time 5 -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/settings" \
-                    -H "Authorization: Bearer $PORTAINER_JWT" \
+                curl -s --max-time 5 -X PUT "http://${LAN_IP}:${PORT_PORTAINER}/api/settings" \
+                    -H "Authorization: Bearer ${portainer_jwt}" \
                     -H "Content-Type: application/json" \
                     -d '{"EnableTelemetry":false}'>/dev/null 2>&1 || true
 
                 # 2. Rename 'admin' user to 'portainer' (Security Best Practice)
-                # Get the current user ID (the one we just authenticated as)
-                CURRENT_USER_JSON=$(curl -s -H "Authorization: Bearer $PORTAINER_JWT" "http://$LAN_IP:$PORT_PORTAINER/api/users/me" 2>/dev/null)
-                ADMIN_ID=$(echo "$CURRENT_USER_JSON" | sed -n 's/.*"Id":\([0-9]*\).*/\1/p' || echo "1")
-                CHECK_USER=$(echo "$CURRENT_USER_JSON" | sed -n 's/.*"Username":"\([^"\'']*\).*/\1/p')
+                local current_user_json
+                current_user_json=$(curl -s -H "Authorization: Bearer ${portainer_jwt}" "http://${LAN_IP}:${PORT_PORTAINER}/api/users/me" 2>/dev/null)
+                local admin_id
+                admin_id=$(echo "${current_user_json}" | sed -n 's/.*"Id":\([0-9]*\).*/\1/p' || echo "1")
+                local check_user
+                check_user=$(echo "${current_user_json}" | sed -n 's/.*"Username":"\([^"\'']*\).*/\1/p')
                 
                 # Only rename if not already named 'portainer'
-                if [ "$CHECK_USER" != "portainer" ] && [ "$CHECK_USER" != "" ]; then
-                    log_info "Renaming default '$CHECK_USER' user to 'portainer'..."
-                    curl -s --max-time 5 -X PUT "http://$LAN_IP:$PORT_PORTAINER/api/users/$ADMIN_ID" \
-                        -H "Authorization: Bearer $PORTAINER_JWT" \
+                if [[ "${check_user}" != "portainer" ]] && [[ "${check_user}" != "" ]]; then
+                    log_info "Renaming default '${check_user}' user to 'portainer'..."
+                    curl -s --max-time 5 -X PUT "http://${LAN_IP}:${PORT_PORTAINER}/api/users/${admin_id}" \
+                        -H "Authorization: Bearer ${portainer_jwt}" \
                         -H "Content-Type: application/json" \
                         -d '{"Username":"portainer"}'>/dev/null 2>&1 || true
                 fi
             else
-                log_warn "Failed to authenticate with Portainer API. Manual login may be required."
+                log_warn "Failed to authenticate with Portainer API. Manual sign in may be required."
             fi
         else
             log_warn "Portainer did not become ready in time. Skipping automated configuration."
@@ -173,43 +185,43 @@ deploy_stack() {
     echo -e "\e[1;32m==========================================================\e[0m"
     echo -e "\e[1;32m✅ DEPLOYMENT COMPLETE\e[0m"
     echo -e "\e[1;32m==========================================================\e[0m"
-    if [ -n "${DESEC_DOMAIN:-}" ] && [ -f "${AGH_CONF_DIR:-}/ssl.crt" ]; then
+    if [[ -n "${DESEC_DOMAIN:-}" ]] && [[ -f "${AGH_CONF_DIR:-}/ssl.crt" ]]; then
         echo "   • Dashboard:    https://${DESEC_DOMAIN}:8443"
-        echo "                   (Local IP: http://$LAN_IP:$PORT_DASHBOARD_WEB)"
-        echo "   • Secure DNS:   https://$DESEC_DOMAIN/dns-query"
+        echo "                   (Local IP: http://${LAN_IP}:${PORT_DASHBOARD_WEB})"
+        echo "   • Secure DNS:   https://${DESEC_DOMAIN}/dns-query"
         echo "   • Note:         VERT requires HTTPS to function correctly."
     else
-        echo "   • Dashboard:    http://$LAN_IP:$PORT_DASHBOARD_WEB"
-        if [ -n "${DESEC_DOMAIN:-}" ]; then
-            echo "   • Secure DNS:   https://$DESEC_DOMAIN/dns-query"
+        echo "   • Dashboard:    http://${LAN_IP}:${PORT_DASHBOARD_WEB}"
+        if [[ -n "${DESEC_DOMAIN:-}" ]]; then
+            echo "   • Secure DNS:   https://${DESEC_DOMAIN}/dns-query"
         fi
     fi
-    echo "   • Admin Pass:   $ADMIN_PASS_RAW"
-    echo "   • Portainer:    http://$LAN_IP:$PORT_PORTAINER (User: portainer / Pass: $PORTAINER_PASS_RAW)"
-    echo "   • WireGuard:    http://$LAN_IP:$PORT_WG_WEB (Pass: $VPN_PASS_RAW)"
-    echo "   • AdGuard:      http://$LAN_IP:$PORT_ADGUARD_WEB (User: adguard / Pass: $AGH_PASS_RAW)"
-    echo "   • Immich:       http://$LAN_IP:$PORT_IMMICH"
-    if [ -n "$ODIDO_TOKEN" ]; then
+    echo "   • Admin Pass:   ${ADMIN_PASS_RAW}"
+    echo "   • Portainer:    http://${LAN_IP}:${PORT_PORTAINER} (User: portainer / Pass: ${PORTAINER_PASS_RAW})"
+    echo "   • WireGuard:    http://${LAN_IP}:${PORT_WG_WEB} (Pass: ${VPN_PASS_RAW})"
+    echo "   • AdGuard:      http://${LAN_IP}:${PORT_ADGUARD_WEB} (User: adguard / Pass: ${AGH_PASS_RAW})"
+    echo "   • Immich:       http://${LAN_IP}:${PORT_IMMICH}"
+    if [[ -n "${ODIDO_TOKEN:-}" ]]; then
     echo "   • Odido Boost:  Active (Threshold: 100MB)"
     fi
     echo ""
-    echo "   📁 Credentials: $BASE_DIR/.secrets"
-    echo "   📄 Importable:  $BASE_DIR/protonpass_import.csv"
-    echo "   📄 LibRedirect: $PROJECT_ROOT/libredirect_import.json"
+    echo "   📁 Credentials: ${BASE_DIR}/.secrets"
+    echo "   📄 Importable:  ${BASE_DIR}/protonpass_import.csv"
+    echo "   📄 LibRedirect: ${PROJECT_ROOT}/libredirect_import.json"
     
-    if [ -f "$BASE_DIR/protonpass_import.csv" ]; then
+    if [[ -f "${BASE_DIR}/protonpass_import.csv" ]]; then
         echo ""
         echo -e "\e[1;31m  ⚠️  SECURITY WARNING\e[0m"
         echo -e "\e[1;31m  --------------------------------------------------------\e[0m"
         echo -e "\e[1;31m  The importable CSV contains RAW PASSWORDS.\e[0m"
         echo -e "\e[1;31m  DELETE IT IMMEDIATELY after importing to Proton Pass.\e[0m"
-        echo -e "\e[1;31m  Command: rm \"$BASE_DIR/protonpass_import.csv\"\e[0m"
+        echo -e "\e[1;31m  Command: rm \"${BASE_DIR}/protonpass_import.csv\"\e[0m"
         echo -e "\e[1;31m  --------------------------------------------------------\e[0m"
     fi
     echo -e "\e[1;32m==========================================================\e[0m"
     echo ""
 
-    if [ "$CLEAN_EXIT" = true ]; then
+    if [[ "${CLEAN_EXIT:-false}" == "true" ]]; then
         exit 0
     fi
 }

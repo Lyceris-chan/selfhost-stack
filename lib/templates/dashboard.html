@@ -140,7 +140,7 @@
         <section data-category="apps">
         <div class="section-label">Applications</div>
         <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span class="chip category-badge" data-tooltip="Services isolated within a secure VPN tunnel (Gluetun). This allows you to host your own private instances—removing the need to trust third-party hosts—while ensuring your home IP stays hidden from service providers."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
+            <span class="chip category-badge" data-tooltip="Services isolated within a secure VPN tunnel (Gluetun). This allows you to host your own private instances: removing the need to trust third-party hosts, while ensuring your home IP stays hidden from service providers."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
             <span class="chip category-badge" data-tooltip="Local services accessed directly through the internal network interface."><span class="material-symbols-rounded">lan</span> Direct Access</span>
             <span class="chip category-badge" data-tooltip="Manage advanced infrastructure and container telemetry with Portainer."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
         </div>
@@ -786,20 +786,20 @@
         </div>
     </div>
 
-    <!-- Login modal -->
-    <div id="login-modal" class="modal-overlay">
+    <!-- Sign-in modal -->
+    <div id="signin-modal" class="modal-overlay">
         <div class="modal-card">
             <div class="modal-header">
                 <h2 class="headline-small">Admin sign-in</h2>
-                <button onclick="closeLoginModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+                <button onclick="closeSignInModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
             </div>
             <p class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant);">Enter your administrator password to unlock management features.</p>
-            <form onsubmit="submitLogin(); return false;">
+            <form onsubmit="submitSignIn(); return false;">
                 <!-- Hidden username field for accessibility/autofill -->
                 <input type="text" name="username" value="admin" style="display:none" autocomplete="username">
                 <input type="password" id="admin-password-input" name="password" class="text-field" placeholder="Password" style="margin-bottom: 24px; border-radius: 4px;" autocomplete="current-password">
                 <div style="display: flex; justify-content: flex-end; gap: 12px;">
-                    <button type="button" onclick="closeLoginModal()" class="btn btn-outlined">Cancel</button>
+                    <button type="button" onclick="closeSignInModal()" class="btn btn-outlined">Cancel</button>
                     <button type="submit" class="btn btn-filled">Sign in</button>
                 </div>
             </form>

@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 generate_dashboard() {
   log_info "Generating Dashboard UI from template..."
 
