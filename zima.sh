@@ -45,28 +45,20 @@ trap 'failure_handler ${LINENO} "$BASH_COMMAND"' ERR
 # --- Main Execution Flow ---
 
 main() {
-  # 1. Cleanup & Reset
+  # 1. Cleanup & Reset (Immediate Exit)
   if [[ "${CLEAN_ONLY}" == "true" ]]; then
     clean_environment
     log_info "Clean-only mode enabled. Deployment skipped."
     exit 0
   fi
 
-  # 2. Clean Environment
-  clean_environment
+  # 2. Initialization & Network Detection
+  # Required for subsequent prompts (e.g., deSEC needs PUBLIC_IP)
   init_directories
-
-  # 4. Pre-pull Critical Images
-  log_info "Pre-pulling core infrastructure images in parallel..."
-  resolve_service_tags
-  pull_critical_images
-
-  # 5. Network & Directories
   allocate_subnet
   detect_network
-  setup_static_assets
 
-  # 7. WireGuard Config
+  # 3. WireGuard Configuration Prompt (Requirement 1)
   echo ""
   echo "==========================================================="
   echo " PROTON WIREGUARD CONFIGURATION"
@@ -105,11 +97,23 @@ main() {
     fi
   fi
 
-  # 6. Auth & Secrets
+  # 4. Auth & Secrets Prompt (Requirements 2 & 3: deSEC and Passwords)
   setup_secrets
+
+  # 5. Background Operations (Now that user interaction is complete)
+  log_info "Interactions complete. Starting background infrastructure preparation..."
+  
+  clean_environment
+  setup_static_assets
+  
+  log_info "Pre-pulling core infrastructure images in parallel..."
+  resolve_service_tags
+  pull_critical_images
+
+  # 6. Configuration Compilation
   setup_configs
 
-  # 8. Extract Profile Name
+  # 7. Extract Profile Name
   local initial_profile_name
   initial_profile_name=$(extract_wg_profile_name "${ACTIVE_WG_CONF}" || echo "Initial-Setup")
 
@@ -122,17 +126,17 @@ main() {
   ${SUDO} chmod 600 "${ACTIVE_WG_CONF}" "${WG_PROFILES_DIR}/${initial_profile_name_safe}.conf"
   echo "${initial_profile_name_safe}" | ${SUDO} tee "${ACTIVE_PROFILE_NAME_FILE}" >/dev/null
 
-  # 9. Sync Sources
+  # 8. Sync Sources
   sync_sources
 
-  # 10. Generate Scripts & Dashboard
+  # 9. Generate Scripts & Dashboard
   generate_scripts
   generate_dashboard
 
-  # 11. Generate Compose
+  # 10. Generate Compose
   generate_compose
 
-  # 12. Setup Exports
+  # 11. Setup Exports
   generate_protonpass_export
   generate_libredirect_export
 
@@ -141,7 +145,7 @@ main() {
     exit 0
   fi
 
-  # 13. Deploy
+  # 12. Deploy
   deploy_stack
 }
 

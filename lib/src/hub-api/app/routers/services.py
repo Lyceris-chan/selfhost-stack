@@ -17,6 +17,9 @@ router = APIRouter()
 class ServiceUpdate(BaseModel):
     service: str
 
+class RollbackRequest(BaseModel):
+    service: str
+
 class BatchUpdate(BaseModel):
     services: List[str]
 
@@ -90,6 +93,10 @@ def update_theme(theme: dict, user: str = Depends(get_current_user)):
             
             file_secrets['UPDATE_STRATEGY'] = sanitized_strategy
             
+            # Sync rollback_backup
+            rollback_enabled = theme.get('rollback_backup', False)
+            file_secrets['ROLLBACK_BACKUP_ENABLED'] = 'true' if rollback_enabled else 'false'
+
             # Write back with restricted permissions and proper quoting
             try:
                 fd = os.open(settings.SECRETS_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -171,6 +178,21 @@ def update_single_service(req: ServiceUpdate, background_tasks: BackgroundTasks,
 
             log_structured("INFO", f"[Update Engine] Starting update for {service} (Strategy: {strategy})...", "MAINTENANCE")
             
+            # 0. Rollback Preparation
+            rollback_enabled = os.environ.get('ROLLBACK_BACKUP_ENABLED', 'false') == 'true'
+            repo_path = f"/app/sources/{service}"
+            if rollback_enabled and os.path.exists(os.path.join(repo_path, ".git")):
+                try:
+                    res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_path, capture_output=True, text=True)
+                    if res.returncode == 0:
+                        prev_hash = res.stdout.strip()
+                        state_file = f"/app/data/rollback_{service}.json"
+                        with open(state_file, 'w') as f:
+                            json.dump({"hash": prev_hash, "timestamp": str(threading.Event())}, f)
+                        log_structured("INFO", f"[Rollback Engine] Saved previous state for {service}: {prev_hash[:8]}", "MAINTENANCE")
+                except Exception as e:
+                    log_structured("ERROR", f"[Rollback Engine] Failed to save state: {e}", "MAINTENANCE")
+
             # 1. Backup
             run_command(["/usr/local/bin/migrate.sh", service, "backup"], timeout=120)
 
@@ -209,6 +231,51 @@ def update_single_service(req: ServiceUpdate, background_tasks: BackgroundTasks,
 
     background_tasks.add_task(_run_update)
     return {"success": True, "message": f"Update for {service} started in background"}
+
+@router.post("/rollback-service")
+def rollback_single_service(req: RollbackRequest, background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+    service = sanitize_service_name(req.service)
+    if not service:
+        raise HTTPException(status_code=400, detail="Invalid service name")
+
+    state_file = f"/app/data/rollback_{service}.json"
+    if not os.path.exists(state_file):
+        raise HTTPException(status_code=404, detail="No rollback state found for this service")
+
+    def _run_rollback():
+        try:
+            with open(state_file, 'r') as f:
+                state = json.load(f)
+            target_hash = state.get("hash")
+            if not target_hash:
+                raise ValueError("Invalid state file: missing hash")
+
+            log_structured("INFO", f"[Rollback Engine] Reverting {service} to {target_hash[:8]}...", "MAINTENANCE")
+            
+            repo_path = f"/app/sources/{service}"
+            if os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, ".git")):
+                run_command(["git", "checkout", "-f", target_hash], cwd=repo_path, timeout=60)
+                log_structured("INFO", f"[Rollback Engine] Source code reverted.", "MAINTENANCE")
+
+            # Rebuild
+            run_command(['docker', 'compose', '-f', '/app/docker-compose.yml', 'up', '-d', '--build', service], timeout=600)
+            
+            # Optional: Data restore if migrate.sh supports specific backup files
+            # run_command(["/usr/local/bin/migrate.sh", service, "restore-latest"], timeout=300)
+
+            log_structured("INFO", f"[Rollback Engine] {service} rollback completed.", "MAINTENANCE")
+            os.remove(state_file) # State used
+        except Exception as e:
+            log_structured("ERROR", f"[Rollback Engine] {service} rollback failed: {e}", "MAINTENANCE")
+
+    background_tasks.add_task(_run_rollback)
+    return {"success": True, "message": f"Rollback for {service} started in background"}
+
+@router.get("/rollback-status")
+def check_rollback_status(service: str, user: str = Depends(get_current_user)):
+    service = sanitize_service_name(service)
+    state_file = f"/app/data/rollback_{service}.json"
+    return {"available": os.path.exists(state_file)}
 
 @router.post("/batch-update")
 def batch_update_services(req: BatchUpdate, background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):

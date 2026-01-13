@@ -204,20 +204,24 @@ This stack features a hardened, recursive DNS engine built on **Unbound** and **
 To achieve "Gold Standard" security and performance, this stack implements specific overrides for core infrastructure services. These choices are grounded in established Internet Engineering Task Force (IETF) standards.
 
 ### Unbound (Recursive DNS)
-The Unbound configuration (`lib/services/config.sh`) is hardened beyond default settings to ensure maximum privacy:
+The Unbound configuration (`lib/services/config.sh`) is hardened beyond default settings to ensure maximum privacy and protection against common DNS-based attacks:
 
-*   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: `qname-minimisation: yes`. This prevents authoritative servers from seeing the full query. For example, when resolving `mail.example.com`, the `.com` TLD servers only see a request for `example.com`.
-*   **Aggressive NSEC Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: `aggressive-nsec: yes`. Uses DNSSEC information to synthesize negative responses for non-existent names, reducing load on authoritative servers and mitigating certain DoS vectors.
-*   **DNS 0x20 Entropy**: `use-caps-for-id: yes`. Implements bit-flip randomization in query names to protect against DNS cache poisoning attacks by increasing the entropy of the request.
-*   **Data Minimization ([RFC 4472](https://datatracker.ietf.org/doc/html/rfc4472))**: `minimal-responses: yes`. Only includes essential information in responses to reduce packet size and prevent information leakage.
-*   **Trust Anchor Management ([RFC 5011](https://datatracker.ietf.org/doc/html/rfc5011))**: `auto-trust-anchor-file`. Ensures that the DNSSEC root key is automatically updated, maintaining the integrity of the chain of trust.
+*   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: `qname-minimisation: yes`. Prevents authoritative servers from seeing the full query, protecting user browsing patterns.
+*   **Aggressive NSEC Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: `aggressive-nsec: yes`. Mitigates certain DoS vectors and reduces load on authoritative servers.
+*   **DNS 0x20 Entropy**: `use-caps-for-id: yes`. Randomizes query name case to protect against DNS cache poisoning.
+*   **Data Minimization ([RFC 4472](https://datatracker.ietf.org/doc/html/rfc4472))**: `minimal-responses: yes`. Reduces packet size and information leakage.
+*   **Round Robin Selection ([RFC 1794](https://datatracker.ietf.org/doc/html/rfc1794))**: `rrset-roundrobin: yes`. Distributes load and improves reliability.
+*   **Harden Glue ([RFC 1034](https://datatracker.ietf.org/doc/html/rfc1034))**: `harden-glue: yes`. Prevents cache poisoning by trusting only records within the authoritative zone.
+*   **Trust Anchor Management ([RFC 5011](https://datatracker.ietf.org/doc/html/rfc5011))**: `auto-trust-anchor-file`. Maintains DNSSEC integrity through automated root key updates.
+*   **Performance Tuning**: `prefetch: yes` and `prefetch-key: yes` are enabled to ensure low-latency resolution by refreshing popular records before they expire.
 
 ### AdGuard Home (Filtering & TLS)
 AdGuard Home acts as the primary gateway and policy engine:
 
-*   **Upstream Consolidation**: All queries are routed exclusively to the local Unbound instance via a dedicated Docker network bridge, ensuring no plain-text queries ever leave the host.
-*   **DNS-over-QUIC (DoQ) ([RFC 9250](https://datatracker.ietf.org/doc/html/rfc9250))**: Supports the latest high-performance encrypted DNS standard, providing lower latency than DoH/DoT in lossy network conditions (like mobile).
-*   **Certificate Pinning Resistance**: By utilizing globally trusted Let's Encrypt certificates (via deSEC), the hub ensures compatibility with native Android/iOS security models without requiring manual root CA installation.
+*   **Upstream Consolidation**: All queries are routed exclusively to the local Unbound instance (`172.x.0.250`) via a dedicated Docker network bridge.
+*   **Encrypted DNS Standard ([RFC 9250](https://datatracker.ietf.org/doc/html/rfc9250))**: Full support for **DNS-over-QUIC (DoQ)**, providing superior performance and privacy on mobile networks compared to traditional DoH/DoT.
+*   **Automated TLS Pipeline**: Integrates with `acme.sh` and deSEC to manage valid Let's Encrypt certificates, ensuring native compatibility with Android/iOS encrypted DNS.
+*   **Dutch-Curated Filtering**: Uses a specialized blocklist based on **Hagezi Pro++**, optimized for performance and privacy.
 
 ### SearXNG (Privacy Search)
 SearXNG is configured to ensure total query anonymity:
@@ -298,7 +302,7 @@ Services marked with 🔒 VPN are routed through a secure tunnel. These services
 | **Gluetun** | Core | **🌍 Exit** | [Source](https://github.com/qdm12/gluetun) / [Image](https://hub.docker.com/r/qmcgaw/gluetun) |
 | **Portainer** | Core | **🏠 Local** | [Source](https://github.com/portainer/portainer) / [Image](https://hub.docker.com/r/portainer/portainer-ce) |
 | **Watchtower** | Core | **🏠 Local** | [Source](https://github.com/containrrr/watchtower) / [Image](https://hub.docker.com/r/containrrr/watchtower) |
-| **Dashboard** | Core | **🏠 Local** | [local source] |
+| **Dashboard** | Core | **🏠 Local** | [local source](/lib/templates/assets) |
 | **Hub API** | Core | **🏠 Local** | [local source](/lib/src/hub-api) |
 | **Odido Booster** | Utility | **🏠 Local** | [Source](https://github.com/Lyceris-chan/odido-bundle-booster) / *(local build)* |
 
@@ -568,17 +572,22 @@ To wipe everything and start over (Warning: IRREVERSIBLE):
 
 ---
 
-## 🛡️ Security standards
+## 🛡️ Security and networking
 
 ### Hardened security baseline
 We prioritize minimal, security-focused images for all services.
 *   **The Benefit**: Minimal images reduce the attack surface by removing unnecessary binaries and libraries, following the principle of least privilege. (Concept based on [CIS Benchmarks](https://www.cisecurity.org/benchmark/docker) and minimal base image best practices).
 
-### The "Silent" Security Model
-Opening a port for WireGuard does **not** expose your home to scanning.
-*   **Silent Drop**: WireGuard does not respond to packets it doesn't recognize. To a scanner, the port looks closed.
-*   **DDoS mitigation**: Because it's silent to unauthenticated packets, it is inherently resistant to flooding attacks.
-*   **Cryptographic ownership**: You can't "guess" a password. You need a valid 256-bit key.
+### Split-tunneling architecture
+The stack uses a split-tunneling architecture. Only the WireGuard port (UDP 51820) is exposed to the public internet. 
+
+*   **Key-Based Access**: Access is strictly gated by WireGuard public and private keys. This is required to allow users to securely use their DNS and services outside their home network.
+*   **Silent Drop**: WireGuard does not respond to packets it does not recognize. To a scanner, the port looks closed.
+*   **DDoS mitigation**: Because it is silent to unauthenticated packets, it is inherently resistant to flooding attacks.
+*   **Cryptographic ownership**: You cannot "guess" a password. You need a valid 256-bit key.
+
+### HTTPS and deSEC requirements
+A valid SSL certificate (obtained via deSEC) is necessary for DNS-over-HTTPS (DoH) and DNS-over-QUIC (DoQ) to function correctly. Additionally, VERT requires HTTPS to connect securely with its daemon API.
 
 ---
 
@@ -676,34 +685,32 @@ To execute the full verification suite in headless mode:
 
 The stack uses a modular generation system. To add a new service, you will need to modify the generator scripts in the `lib/` directory.
 
-### 1) Add to compose (`lib/compose_gen.sh`)
+### 1) Registry and constants (`lib/core/constants.sh`)
 
-Locate the `generate_compose` function and add your service block:
+Add your service ID to `STACK_SERVICES` and `ALL_CONTAINERS`. If it's a source-built service, add it to `SOURCE_BUILT_SERVICES`.
+
+### 2) Add to compose (`lib/services/compose.sh`)
+
+Create an `append_myservice` function and call it within `generate_compose`.
 
 ```bash
-    if should_deploy "myservice"; then
-    cat >> "$COMPOSE_FILE" <<EOF
+append_myservice() {
+  if ! should_deploy "myservice"; then return 0; fi
+  cat >> "${COMPOSE_FILE}" <<EOF
   myservice:
     image: my-image:latest
-    container_name: myservice
-    networks: [frontnet]
+    container_name: \${CONTAINER_PREFIX}myservice
+    networks: [frontend]
     restart: unless-stopped
 EOF
-    fi
+}
 ```
 
-If you want the service to run through the VPN, use `network_mode: "service:gluetun"` and `depends_on: gluetun`.
+If you want the service to run through the VPN, use `network_mode: "container:\${CONTAINER_PREFIX}gluetun"` and `depends_on: gluetun`.
 
-### 2) Monitoring and health (`lib/scripts.sh`)
+### 3) Configuration and dashboard (`lib/services/config.sh`)
 
-Update the service status loop inside the `generate_scripts` function (specifically the `wg_api.py` generation block or `wg_control.sh` template).
-
-- Add `"myservice:1234"` to the service list in the API handler.
-- If routed through Gluetun, map it to the `gluetun` target host.
-
-### 3) Dashboard UI (`lib/scripts.sh`)
-
-The dashboard catalog is generated in `lib/scripts.sh`. Find the `cat > "$SERVICES_JSON"` block and add your entry:
+Add your service metadata to the `SERVICES_JSON` block inside `generate_scripts`. This enables the service to appear on the dashboard.
 
 ```json
 "myservice": {
@@ -715,10 +722,28 @@ The dashboard catalog is generated in `lib/scripts.sh`. Find the `cat > "$SERVIC
 }
 ```
 
-### 4) Watchtower updates
+### 4) Automated updates and rollbacks
 
-- To opt out, add `com.centurylinklabs.watchtower.enable=false` under the service labels.
-- For build-based services, the dashboard's "Update" feature handles the rebuild process.
+*   **Watchtower**: To opt out, add `com.centurylinklabs.watchtower.enable=false` under the service labels in `compose.sh`.
+*   **Rollback support**: Enabled automatically for source-built services if "Rollback Support" is toggled ON in the dashboard settings.
+
+</details>
+
+<details>
+<summary><strong>⏪ Version Rollback System</strong> (Recovery)</summary>
+
+To ensure production stability, the Hub includes a version rollback system for services built from source (e.g., Wikiless, Scribe).
+
+### How it works
+1.  **Snapshot**: If "Rollback Support" is enabled in settings (Default: OFF), the system captures the current Git commit hash before performing any update.
+2.  **Backup**: A service-specific state file is saved to `data/hub-api/rollback_<service>.json`.
+3.  **Revert**: If an update causes issues, a "Rollback version" button appears in the service management modal.
+4.  **Restoration**: Clicking "Rollback" checks out the previously saved Git hash and rebuilds the container immediately.
+
+### Limitations
+*   **Source-only**: Rollback is currently only available for services built from local Git repositories.
+*   **Single-stage**: Only the version immediately preceding the current one is preserved.
+*   **Data integrity**: Rollback reverts the application code but does not automatically revert database migrations unless specified in the service's migration logic.
 
 </details>
 

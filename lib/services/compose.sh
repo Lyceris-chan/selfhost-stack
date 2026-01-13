@@ -9,7 +9,7 @@ should_deploy() {
   if [[ -z "${SELECTED_SERVICES:-}" ]]; then
     return 0
   fi
-  if echo "${SELECTED_SERVICES}" | grep -qE "(^|,)$srv(,|$)”; then
+  if echo "${SELECTED_SERVICES}" | grep -qE "(^|,)$srv(,|$)"; then
     return 0
   fi
   return 1
@@ -17,14 +17,15 @@ should_deploy() {
 
 # Service definition functions
 append_hub_api() {
+  local dockerfile=""
+  local cors_json=""
+
   if ! should_deploy "hub-api"; then
     return 0
   fi
-  local dockerfile
   dockerfile=$(detect_dockerfile "${SRC_DIR}/hub-api" || echo "Dockerfile")
 
   # Generate robust JSON for CORS_ORIGINS using Python to avoid string formatting errors
-  local cors_json
   cors_json=$(LAN_IP="${LAN_IP}" PORT_DASHBOARD_WEB="${PORT_DASHBOARD_WEB}" DESEC_DOMAIN="${DESEC_DOMAIN}" "${PYTHON_CMD}" -c "
 import json, os
 try:
@@ -69,7 +70,7 @@ except Exception:
       - "$(realpath "$0"):/app/zima.sh:ro"
       - "${COMPOSE_FILE}:/app/docker-compose.yml:ro"
       - "${HISTORY_LOG}:/app/deployment.log"
-      - "${SECRETS_FILE}:/app/.secrets"
+      - "${SERETS_FILE}:/app/.secrets"
       - "${BASE_DIR}/.data_usage:/app/.data_usage"
       - "${BASE_DIR}/.wge_data_usage:/app/.wge_data_usage"
       - "${AGH_CONF_DIR}:/etc/adguard/conf"
@@ -108,12 +109,13 @@ EOF
 }
 
 append_odido_booster() {
+  local dockerfile=""
+  local vpn_mode="true"
+
   if ! should_deploy "odido-booster"; then
     return 0
   fi
-  local dockerfile
   dockerfile=$(detect_dockerfile "${SRC_DIR}/odido-bundle-booster" || echo "Dockerfile")
-  local vpn_mode="true"
   if [[ -f "${CONFIG_DIR}/theme.json" ]]; then
     vpn_mode=$(grep -o '"odido_use_vpn"[[:space:]]*:[[:space:]]*\(true\|false\)' "${CONFIG_DIR}/theme.json" 2>/dev/null | grep -o 'true\|false' || echo "true")
   fi
@@ -127,6 +129,44 @@ append_odido_booster() {
     image: selfhost/odido-booster:${ODIDO_BOOSTER_IMAGE_TAG:-latest}
     container_name: ${CONTAINER_PREFIX}odido-booster
 EOF
+
+  if [[ "${TEST_MODE:-false}" == "true" ]]; then
+    cat >> "${COMPOSE_FILE}" <<EOF
+    networks: [frontend]
+    ports: ["${LAN_IP}:8085:8085"]
+EOF
+  elif [[ "${vpn_mode}" == "true" ]]; then
+    cat >> "${COMPOSE_FILE}" <<EOF
+    network_mode: "container:${CONTAINER_PREFIX}gluetun"
+    depends_on:
+      gluetun: {condition: service_healthy}
+EOF
+  else
+    cat >> "${COMPOSE_FILE}" <<EOF
+    networks: [frontend]
+    ports: ["${LAN_IP}:8085:8085"]
+EOF
+  fi
+
+  cat >> "${COMPOSE_FILE}" <<EOF
+    environment:
+      - "API_KEY=${HUB_API_KEY_COMPOSE}"
+      - "ODIDO_USER_ID=${ODIDO_USER_ID}"
+      - "ODIDO_TOKEN=${ODIDO_TOKEN}"
+      - "PORT=8085"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8085/docs"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - ${DATA_DIR}/odido:/data
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: '0.3', memory: 128M}
+EOF
+}
 
   if [[ "${TEST_MODE:-false}" == "true" ]]; then
     cat >> "${COMPOSE_FILE}" <<EOF
@@ -484,12 +524,13 @@ EOF
 }
 
 append_wikiless() {
+  local dockerfile=""
+  local redis_url="redis://127.0.0.1:6379"
+
   if ! should_deploy "wikiless"; then
     return 0
   fi
-  local dockerfile
   dockerfile=$(detect_dockerfile "${SRC_DIR}/wikiless" || echo "Dockerfile")
-  local redis_url="redis://127.0.0.1:6379"
   if [[ "${TEST_MODE:-false}" == "true" ]]; then
     redis_url="redis://${CONTAINER_PREFIX}wikiless_redis:6379"
   fi
@@ -499,29 +540,29 @@ append_wikiless() {
     pull_policy: build
     build:
       context: "${SRC_DIR}/wikiless"
-      dockerfile: ${dockerfile}
+      dockerfile: \${dockerfile}
     image: selfhost/wikiless:latest
-    container_name: ${CONTAINER_PREFIX}wikiless
+    container_name: \${CONTAINER_PREFIX}wikiless
 EOF
 
   if [[ "${TEST_MODE:-false}" == "true" ]]; then
     cat >> "${COMPOSE_FILE}" <<EOF
     networks: [frontend]
-    ports: ["${LAN_IP}:8180:8180"]
+    ports: ["\${LAN_IP}:8180:8180"]
 EOF
   else
     cat >> "${COMPOSE_FILE}" <<EOF
-    network_mode: "container:${CONTAINER_PREFIX}gluetun"
+    network_mode: "container:\${CONTAINER_PREFIX}gluetun"
 EOF
   fi
 
   cat >> "${COMPOSE_FILE}" <<EOF
     environment:
-      - "DOMAIN=${LAN_IP}:${PORT_WIKILESS}"
-      - "NONSSL_PORT=${PORT_INT_WIKILESS}"
-      - "REDIS_URL=${redis_url}"
+      - "DOMAIN=\${LAN_IP}:\${PORT_WIKILESS}"
+      - "NONSSL_PORT=\${PORT_INT_WIKILESS}"
+      - "REDIS_URL=\${redis_url}"
     healthcheck:
-      test: ["CMD", "/nodejs/bin/node", "-e", "require('http').get('http://127.0.0.1:8180', (r) => {if (r.statusCode !== 200) process.exit(1);}).on('error', () => process.exit(1));"]
+      test: ["CMD", "/nodejs/bin/node", "-e", "require\('http'\).get\('http://127.0.0.1:8180', \(r\) => {if \(r.statusCode !== 200\) process.exit\(1\);}\).on\('error', \(\) => process.exit\(1\)\);"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -535,7 +576,7 @@ EOF
 
   wikiless_redis:
     image: redis:7-alpine
-    container_name: ${CONTAINER_PREFIX}wikiless_redis
+    container_name: \${CONTAINER_PREFIX}wikiless_redis
     labels:
       - "casaos.skip=true"
 EOF
@@ -546,14 +587,14 @@ EOF
 EOF
   else
     cat >> "${COMPOSE_FILE}" <<EOF
-    network_mode: "container:${CONTAINER_PREFIX}gluetun"
+    network_mode: "container:\${CONTAINER_PREFIX}gluetun"
     depends_on:
       gluetun: {condition: service_healthy}
 EOF
   fi
 
   cat >> "${COMPOSE_FILE}" <<EOF
-    volumes: ["${DATA_DIR}/redis:/data"]
+    volumes: ["\${DATA_DIR}/redis:/data"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -567,10 +608,11 @@ EOF
 }
 
 append_invidious() {
+  local companion_url="http://127.0.0.1:8282/companion"
+
   if ! should_deploy "invidious"; then
     return 0
   fi
-  local companion_url="http://127.0.0.1:8282/companion"
   if [[ "${TEST_MODE:-false}" == "true" ]]; then
     companion_url="http://${CONTAINER_PREFIX}companion:8282/companion"
   fi
@@ -578,17 +620,17 @@ append_invidious() {
   cat >> "${COMPOSE_FILE}" <<EOF
   invidious:
     image: quay.io/invidious/invidious:latest
-    container_name: ${CONTAINER_PREFIX}invidious
+    container_name: \${CONTAINER_PREFIX}invidious
 EOF
 
   if [[ "${TEST_MODE:-false}" == "true" ]]; then
     cat >> "${COMPOSE_FILE}" <<EOF
     networks: [frontend]
-    ports: ["${LAN_IP}:3000:3000"]
+    ports: ["\${LAN_IP}:3000:3000"]
 EOF
   else
     cat >> "${COMPOSE_FILE}" <<EOF
-    network_mode: "container:${CONTAINER_PREFIX}gluetun"
+    network_mode: "container:\${CONTAINER_PREFIX}gluetun"
 EOF
   fi
 
@@ -598,16 +640,16 @@ EOF
         db:
           dbname: invidious
           user: kemal
-          password: ${INVIDIOUS_DB_PASS_COMPOSE}
-          host: ${CONTAINER_PREFIX}invidious-db
+          password: \${INVIDIOUS_DB_PASS_COMPOSE}
+          host: \${CONTAINER_PREFIX}invidious-db
           port: 5432
         check_tables: true
         invidious_companion:
-        - private_url: "${companion_url}"
-        invidious_companion_key: "${IV_COMPANION}"
-        hmac_key: "${IV_HMAC}"
+        - private_url: "\${companion_url}"
+        invidious_companion_key: "\${IV_COMPANION}"
+        hmac_key: "\${IV_HMAC}"
     healthcheck:
-      test: ["CMD-SHELL", "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || [ $$? -eq 8 ]"]
+      test: ["CMD-SHELL", "wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/stats || [ \$\$? -eq 8 ]"]
       interval: 30s
       timeout: 5s
       retries: 2
@@ -625,22 +667,22 @@ EOF
 
   invidious-db:
     image: postgres:14
-    container_name: ${CONTAINER_PREFIX}invidious-db
+    container_name: \${CONTAINER_PREFIX}invidious-db
     labels:
       - "casaos.skip=true"
     networks: [frontend]
     environment:
       - "POSTGRES_DB=invidious"
       - "POSTGRES_USER=kemal"
-      - "POSTGRES_PASSWORD=${INVIDIOUS_DB_PASS_COMPOSE}"
+      - "POSTGRES_PASSWORD=\${INVIDIOUS_DB_PASS_COMPOSE}"
     volumes:
-      - ${DATA_DIR}/postgres:/var/lib/postgresql/data
-      - ${SRC_DIR}/invidious/config/sql:/config/sql:ro
-      - ${SRC_DIR}/invidious/docker/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh:ro
+      - \${DATA_DIR}/postgres:/var/lib/postgresql/data
+      - \${SRC_DIR}/invidious/config/sql:/config/sql:ro
+      - \${SRC_DIR}/invidious/docker/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh:ro
     healthcheck: {test: ["CMD-SHELL", "pg_isready -d invidious -U kemal"], interval: 10s, timeout: 5s, retries: 5}
 
   companion:
-    container_name: ${CONTAINER_PREFIX}companion
+    container_name: \${CONTAINER_PREFIX}companion
     image: quay.io/invidious/invidious-companion:latest
     labels:
       - "casaos.skip=true"
@@ -649,11 +691,11 @@ EOF
   if [[ "${TEST_MODE:-false}" == "true" ]]; then
     cat >> "${COMPOSE_FILE}" <<EOF
     networks: [frontend]
-    ports: ["${LAN_IP}:${PORT_COMPANION}:8282"]
+    ports: ["\${LAN_IP}:\${PORT_COMPANION}:8282"]
 EOF
   else
     cat >> "${COMPOSE_FILE}" <<EOF
-    network_mode: "container:${CONTAINER_PREFIX}gluetun"
+    network_mode: "container:\${CONTAINER_PREFIX}gluetun"
     depends_on:
       gluetun: {condition: service_healthy}
 EOF
@@ -661,7 +703,7 @@ EOF
 
   cat >> "${COMPOSE_FILE}" <<EOF
     environment:
-      - "SERVER_SECRET_KEY=${IV_COMPANION}"
+      - "SERVER_SECRET_KEY=\${IV_COMPANION}"
       - "PORT=8282"
     restart: always
     logging:
@@ -672,7 +714,7 @@ EOF
       - ALL
     read_only: true
     volumes:
-      - ${DATA_DIR}/companion:/var/tmp/youtubei.js:rw
+      - \${DATA_DIR}/companion:/var/tmp/youtubei.js:rw
     security_opt:
       - no-new-privileges:true
     healthcheck:
@@ -690,25 +732,25 @@ append_rimgo() {
   cat >> "${COMPOSE_FILE}" <<EOF
   rimgo:
     image: codeberg.org/rimgo/rimgo:latest
-    container_name: ${CONTAINER_PREFIX}rimgo
+    container_name: \${CONTAINER_PREFIX}rimgo
 EOF
 
   if [[ "${TEST_MODE:-false}" == "true" ]]; then
     cat >> "${COMPOSE_FILE}" <<EOF
     networks: [frontend]
-    ports: ["${LAN_IP}:3002:3002"]
+    ports: ["\${LAN_IP}:3002:3002"]
 EOF
   else
     cat >> "${COMPOSE_FILE}" <<EOF
-    network_mode: "container:${CONTAINER_PREFIX}gluetun"
+    network_mode: "container:\${CONTAINER_PREFIX}gluetun"
 EOF
   fi
 
   cat >> "${COMPOSE_FILE}" <<EOF
     environment:
-      - "IMGUR_CLIENT_ID=${RIMGO_IMGUR_CLIENT_ID:-546c25a59c58ad7}"
+      - "IMGUR_CLIENT_ID=\${RIMGO_IMGUR_CLIENT_ID:-546c25a59c58ad7}"
       - "ADDRESS=0.0.0.0"
-      - "PORT=${PORT_INT_RIMGO}"
+      - "PORT=\${PORT_INT_RIMGO}"
       - "PRIVACY_NOT_COLLECTED=true"
     healthcheck:
       test: ["NONE"]
@@ -721,10 +763,11 @@ EOF
 }
 
 append_breezewiki() {
+  local bw_origin="fandom.com"
+
   if ! should_deploy "breezewiki"; then
     return 0
   fi
-  local bw_origin="fandom.com"
   if [[ -f "${CONFIG_DIR}/breezewiki/breezewiki.ini" ]]; then
     bw_origin=$(grep "^canonical_origin" "${CONFIG_DIR}/breezewiki/breezewiki.ini" | cut -d'=' -f2 | tr -d ' ' || echo "fandom.com")
   fi
@@ -732,24 +775,24 @@ append_breezewiki() {
   cat >> "${COMPOSE_FILE}" <<EOF
   breezewiki:
     image: quay.io/pussthecatorg/breezewiki:latest
-    container_name: ${CONTAINER_PREFIX}breezewiki
+    container_name: \${CONTAINER_PREFIX}breezewiki
 EOF
 
   if [[ "${TEST_MODE:-false}" == "true" ]]; then
     cat >> "${COMPOSE_FILE}" <<EOF
     networks: [frontend]
-    ports: ["${LAN_IP}:8380:10416"]
+    ports: ["\${LAN_IP}:8380:10416"]
 EOF
   else
     cat >> "${COMPOSE_FILE}" <<EOF
-    network_mode: "container:${CONTAINER_PREFIX}gluetun"
+    network_mode: "container:\${CONTAINER_PREFIX}gluetun"
 EOF
   fi
 
   cat >> "${COMPOSE_FILE}" <<EOF
     environment:
       - "PORT=10416"
-      - "bw_canonical_origin=${bw_origin}"
+      - "bw_canonical_origin=\${bw_origin}"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:10416/ || exit 1"]
       interval: 60s
@@ -770,24 +813,24 @@ append_anonymousoverflow() {
   cat >> "${COMPOSE_FILE}" <<EOF
   anonymousoverflow:
     image: ghcr.io/httpjamesm/anonymousoverflow:release
-    container_name: ${CONTAINER_PREFIX}anonymousoverflow
+    container_name: \${CONTAINER_PREFIX}anonymousoverflow
 EOF
 
-  if [[ "${TEST_MODE:-false}" == "true" ]]; then
-    cat >> "${COMPOSE_FILE}" <<EOF
+  if [[ "\${TEST_MODE:-false}" == "true" ]]; then
+    cat >> "\${COMPOSE_FILE}" <<EOF
     networks: [frontend]
-    ports: ["${LAN_IP}:8480:8480"]
+    ports: ["\${LAN_IP}:8480:8480"]
 EOF
   else
-    cat >> "${COMPOSE_FILE}" <<EOF
-    network_mode: "container:${CONTAINER_PREFIX}gluetun"
+    cat >> "\${COMPOSE_FILE}" <<EOF
+    network_mode: "container:\${CONTAINER_PREFIX}gluetun"
 EOF
   fi
 
-  cat >> "${COMPOSE_FILE}" <<EOF
-    env_file: ["${ENV_DIR}/anonymousoverflow.env"]
+  cat >> "\${COMPOSE_FILE}" <<EOF
+    env_file: ["\${ENV_DIR}/anonymousoverflow.env"]
     environment:
-      - "PORT=${PORT_INT_ANONYMOUS}"
+      - "PORT=\${PORT_INT_ANONYMOUS}"
     healthcheck:
       test: ["NONE"]
     depends_on: {gluetun: {condition: service_healthy}}
@@ -799,36 +842,37 @@ EOF
 }
 
 append_scribe() {
+  local dockerfile=""
+
   if ! should_deploy "scribe"; then
     return 0
   fi
-  local dockerfile
-  dockerfile=$(detect_dockerfile "${SRC_DIR}/scribe" || echo "Dockerfile")
-  cat >> "${COMPOSE_FILE}" <<EOF
+  dockerfile=$(detect_dockerfile "\${SRC_DIR}/scribe" || echo "Dockerfile")
+  cat >> "\${COMPOSE_FILE}" <<EOF
   scribe:
     pull_policy: build
     build:
-      context: "${SRC_DIR}/scribe"
-      dockerfile: ${dockerfile}
-    image: selfhost/scribe:${SCRIBE_IMAGE_TAG:-latest}
-    container_name: ${CONTAINER_PREFIX}scribe
+      context: "\${SRC_DIR}/scribe"
+      dockerfile: \${dockerfile}
+    image: selfhost/scribe:\${SCRIBE_IMAGE_TAG:-latest}
+    container_name: \${CONTAINER_PREFIX}scribe
 EOF
 
-  if [[ "${TEST_MODE:-false}" == "true" ]]; then
-    cat >> "${COMPOSE_FILE}" <<EOF
+  if [[ "\${TEST_MODE:-false}" == "true" ]]; then
+    cat >> "\${COMPOSE_FILE}" <<EOF
     networks: [frontend]
-    ports: ["${LAN_IP}:8280:8280"]
+    ports: ["\${LAN_IP}:8280:8280"]
 EOF
   else
-    cat >> "${COMPOSE_FILE}" <<EOF
-    network_mode: "container:${CONTAINER_PREFIX}gluetun"
+    cat >> "\${COMPOSE_FILE}" <<EOF
+    network_mode: "container:\${CONTAINER_PREFIX}gluetun"
 EOF
   fi
 
-  cat >> "${COMPOSE_FILE}" <<EOF
-    env_file: ["${ENV_DIR}/scribe.env"]
+  cat >> "\${COMPOSE_FILE}" <<EOF
+    env_file: ["\${ENV_DIR}/scribe.env"]
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8280/ || [ $$? -eq 8 ]"]
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8280/ || [ \$\$\$? -eq 8 ]"]
       interval: 1m
       timeout: 5s
       retries: 3

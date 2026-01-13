@@ -107,7 +107,7 @@ class IntegrityChecker:
         self.check_pattern(html, r'Use IP links', "Dashboard labels are concise and direct")
         
         # 2. Capitalization
-        self.check_pattern(html, r'<h2 class="headline-small">Admin sign-in</h2>', "Login title uses Sentence case")
+        self.check_pattern(html, r'<h2 class="headline-small">Admin sign-in</h2>', "Sign-in title uses Sentence case")
 
     def verify_service_configs(self):
         print("\n--- Verifying Service Configurations ---")
@@ -118,6 +118,28 @@ class IntegrityChecker:
         # 2. AdGuard Home
         self.check_pattern("lib/services/config.sh", r'\"@@\\|\\|getproton.me\\^\"', "AdGuard YAML values are properly quoted")
 
+    def verify_docker_logs(self):
+        print("\n--- Parsing Docker Deployment Logs ---")
+        log_file = os.environ.get('HISTORY_LOG', 'data/AppData/privacy-hub/deployment.log')
+        if not os.path.exists(log_file):
+            self.log_warn(f"Deployment log not found at {log_file}. Skipping log audit.")
+            return
+
+        with open(log_file, 'r') as f:
+            for line in f:
+                try:
+                    log_data = json.loads(line)
+                    if log_data.get('level') == 'CRIT':
+                        self.log_fail(f"Critical error found in logs: {log_data.get('message')}")
+                    elif log_data.get('level') == 'WARN':
+                        self.log_warn(f"Warning found in logs: {log_data.get('message')}")
+                except json.JSONDecodeError:
+                    if 'ERROR' in line.upper() or 'CRITICAL' in line.upper():
+                        self.log_fail(f"Potential error in raw log line: {line.strip()}")
+
+        if self.failed == 0:
+            self.log_pass("No critical errors detected in deployment logs")
+
     def run(self):
         print("==================================================")
         print("🛡️  ZIMAOS PRIVACY HUB: INTEGRITY AUDIT")
@@ -127,6 +149,7 @@ class IntegrityChecker:
         self.verify_ui_standards()
         self.verify_style_guide()
         self.verify_service_configs()
+        self.verify_docker_logs()
         
         print("\n==================================================")
         print(f"AUDIT COMPLETE")

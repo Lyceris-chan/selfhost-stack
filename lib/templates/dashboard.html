@@ -393,7 +393,7 @@
                         <strong>How to use:</strong><br>
                         1. Run <code>Odido.Authenticator.exe</code><br>
                         2. Go to the URL provided in the tool: <code class="sensitive">https://www.odido.nl/login?...</code><br>
-                        3. Login into Odido<br>
+                        3. Sign in to Odido<br>
                         4. Grab the result URL: <code class="sensitive">https://www.odido.nl/loginappresult?token=...</code><br>
                         5. Paste it into the tool and press enter<br>
                         6. It will show the Refresh token now (Decrypted the response)<br>
@@ -576,6 +576,17 @@
                             <option value="stable">Stable (Tags)</option>
                             <option value="latest">Latest (Branch)</option>
                         </select>
+                    </div>
+                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+                        <div style="flex: 1;">
+                            <span class="label-large">Rollback Support</span>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Keep source-code snapshots before updates to allow reverting versions.</p>
+                        </div>
+                        <div class="switch-container" id="rollback-backup-switch" onclick="toggleRollbackBackup()" data-tooltip="Toggle automated backup before service updates">
+                            <div class="switch-track">
+                                <div class="switch-thumb"></div>
+                            </div>
+                        </div>
                     </div>
                     <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
                         <div style="flex: 1;">

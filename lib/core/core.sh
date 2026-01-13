@@ -143,25 +143,7 @@ generate_hash() {
 }
 
 # --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
-REG_USER="${REG_USER:-}"
-REG_TOKEN="${REG_TOKEN:-}"
-LAN_IP_OVERRIDE="${LAN_IP_OVERRIDE:-}"
-WG_CONF_B64="${WG_CONF_B64:-}"
-
-usage() {
-    echo "Usage: $0 [options]"
-    echo ""
-    echo "Options:"
-    echo "  -y          Auto-Confirm (non-interactive mode)"
-    echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
-    echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
-    echo "  -o          Skip Odido Bundle Booster deployment"
-    echo "  -c          Maintenance (recreates containers, preserves data)"
-    echo "  -E <file>   Load Environment Variables from file"
-    echo "  -G          Generate Only (stops before deployment)"
-    echo "  -h          Show this help message"
-}
-
+# Initialize globals
 FORCE_CLEAN=false
 CLEAN_ONLY=false
 AUTO_PASSWORD=false
@@ -176,27 +158,48 @@ ENV_FILE=""
 PERSONAL_MODE=false
 REG_TOKEN=""
 REG_USER=""
+LAN_IP_OVERRIDE=""
+WG_CONF_B64=""
 
-while getopts "cxpyas:j hE:Go" opt; do
-    case ${opt} in
-        c) RESET_ENV=true; FORCE_CLEAN=true ;;
-        x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
-        p) AUTO_PASSWORD=true ;;
-        y) AUTO_CONFIRM=true; AUTO_PASSWORD=true ;;
-        a) ALLOW_PROTON_VPN=true ;;
-        s) SELECTED_SERVICES="${OPTARG}" ;;
-        o) SKIP_ODIDO=true ;;
-        j) PARALLEL_DEPLOY=true ;;
-        E) ENV_FILE="${OPTARG}" ;;
-        G) GENERATE_ONLY=true ;;
-        h) 
-            usage
-            exit 0
-            ;;
-        *) usage; exit 1 ;;
-    esac
-done
-shift $((OPTIND -1))
+usage() {
+    echo "Usage: $0 [options]"
+    echo ""
+    echo "Options:"
+    echo "  -y          Auto-Confirm (Reserved for automated testing)"
+    echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
+    echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
+    echo "  -o          Skip Odido Bundle Booster deployment"
+    echo "  -c          Maintenance (recreates containers, preserves data)"
+    echo "  -E <file>   Load Environment Variables from file"
+    echo "  -G          Generate Only (stops before deployment)"
+    echo "  -h          Show this help message"
+}
+
+parse_args() {
+  local opt
+  while getopts "cxpyas:j hE:Go" opt; do
+      case ${opt} in
+          c) RESET_ENV=true; FORCE_CLEAN=true ;;
+          x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
+          p) AUTO_PASSWORD=true ;;
+          y) AUTO_CONFIRM=true; AUTO_PASSWORD=true ;;
+          a) ALLOW_PROTON_VPN=true ;;
+          s) SELECTED_SERVICES="${OPTARG}" ;;
+          o) SKIP_ODIDO=true ;;
+          j) PARALLEL_DEPLOY=true ;;
+          E) ENV_FILE="${OPTARG}" ;;
+          G) GENERATE_ONLY=true ;;
+          h) 
+              usage
+              exit 0
+              ;;
+          *) usage; exit 1 ;;
+      esac
+  done
+  shift $((OPTIND -1))
+}
+
+parse_args "$@"
 
 SKIP_ODIDO="${SKIP_ODIDO:-false}"
 
@@ -241,7 +244,7 @@ done
 
 # Detect if sudo is available
 if command -v sudo >/dev/null 2>&1; then
-    SUDO="sudo -E"
+    SUDO="sudo"
 else
     SUDO=""
 fi
@@ -344,9 +347,27 @@ else
     exit 1
 fi
 
-# Define consistent docker command using custom config for auth
-DOCKER_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" GOTOOLCHAIN=auto docker"
-DOCKER_COMPOSE_FINAL_CMD="$SUDO env DOCKER_CONFIG=\"$DOCKER_AUTH_DIR\" GOTOOLCHAIN=auto $DOCKER_COMPOSE_CMD"
+# Define consistent docker commands using functions to handle SUDO properly
+docker_cmd() {
+  if [[ -n "${SUDO:-}" ]]; then
+    ${SUDO} env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto docker "$@"
+  else
+    env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto docker "$@"
+  fi
+}
+
+docker_compose_cmd() {
+  if [[ -n "${SUDO:-}" ]]; then
+    ${SUDO} env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto ${DOCKER_COMPOSE_CMD} "$@"
+  else
+    env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto ${DOCKER_COMPOSE_CMD} "$@"
+  fi
+}
+
+# Replace variables with function calls in existing code (conceptually, but here we just redefine the variables to call the functions if needed, or better, update the scripts to call the functions)
+# For compatibility with existing scripts using $DOCKER_CMD:
+DOCKER_CMD="docker_cmd"
+DOCKER_COMPOSE_FINAL_CMD="docker_compose_cmd"
 
 # Initialize deSEC variables to prevent unbound variable errors
 DESEC_DOMAIN="${DESEC_DOMAIN:-}"
@@ -602,7 +623,9 @@ setup_secrets() {
       ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-$(generate_secret 24)}"
       PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-$(generate_secret 24)}"
     else
+      # 1. deSEC Domain & Certificate Setup (Requirement 2)
       echo "--- deSEC Domain & Certificate Setup ---"
+      local input_domain=""
       while [[ -z "${DESEC_DOMAIN}" ]]; do
         echo -n "1. deSEC Domain (e.g., myhome.dedyn.io): "
         read -r input_domain
@@ -612,12 +635,14 @@ setup_secrets() {
         fi
       done
 
+      local input_token=""
       echo -n "2. deSEC API Token: "
       read -rs input_token
       echo ""
       DESEC_TOKEN="${input_token:-$DESEC_TOKEN}"
       echo ""
 
+      # 2. Password Preferences (Requirement 3)
       echo "--- MANUAL CREDENTIAL PROVISIONING ---"
       echo "Security Note: Please use strong, unique passwords for each service."
       echo ""
@@ -697,7 +722,7 @@ setup_secrets() {
       apk add --no-cache apache2-utils >/dev/null 2>&1
       if [ $? -ne 0 ]; then echo "FAILED"; exit 1; fi
       echo "WG_HASH:$(htpasswd -B -n -b "admin" "$1" | cut -d: -f2)"
-      echo "AGH_HASH:$(htpasswd -B -n -b "$2" "$3" | cut -d: -f2)"
+      echo "AG_HASH:$(htpasswd -B -n -b "$2" "$3" | cut -d: -f2)"
       echo "PORT_HASH:$(htpasswd -B -C 10 -n -b "admin" "$4" | cut -d: -f2)"
     ' -- "${VPN_PASS_RAW}" "${AGH_USER}" "${AGH_PASS_RAW}" "${PORTAINER_PASS_RAW}" 2>/dev/null || echo "FAILED")
 
@@ -707,7 +732,7 @@ setup_secrets() {
     fi
 
     WG_HASH_CLEAN=$(echo "${hash_output}" | grep "^WG_HASH:" | cut -d: -f2)
-    AGH_PASS_HASH=$(echo "${hash_output}" | grep "^AGH_HASH:" | cut -d: -f2)
+    AGH_PASS_HASH=$(echo "${hash_output}" | grep "^AG_HASH:" | cut -d: -f2)
     PORTAINER_PASS_HASH=$(echo "${hash_output}" | grep "^PORT_HASH:" | cut -d: -f2)
 
     SCRIBE_SECRET=$(generate_secret 64)
@@ -750,7 +775,12 @@ EOF
   else
     source "${BASE_DIR}/.secrets"
     local updated_secrets=false
-    # Logic to ensure all secrets are present (omitted for brevity, assume similar refactoring)
+    # Logic to ensure all secrets are present
+    if [[ -z "${HUB_API_KEY:-}" ]]; then
+       HUB_API_KEY=$(generate_secret 32)
+       echo "HUB_API_KEY='${HUB_API_KEY}'" >> "${BASE_DIR}/.secrets"
+       updated_secrets=true
+    fi
     if [[ "${updated_secrets}" == "true" ]]; then
       "${SUDO}" chmod 600 "${BASE_DIR}/.secrets"
     fi
