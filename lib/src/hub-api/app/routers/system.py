@@ -340,6 +340,50 @@ def restart_stack(background_tasks: BackgroundTasks, user: str = Depends(get_adm
     log_structured("SYSTEM", "Full stack restart triggered via Dashboard", "ORCHESTRATION")
     return {"success": True, "message": "Stack restart initiated"}
 
+@router.get("/backups")
+def list_backups(user: str = Depends(get_admin_user)):
+    backup_dir = "/app/backups"
+    if not os.path.exists(backup_dir):
+        return {"backups": []}
+    
+    backups = []
+    for f in os.listdir(backup_dir):
+        if f.endswith(".tar.gz"):
+            path = os.path.join(backup_dir, f)
+            stat = os.stat(path)
+            backups.append({
+                "filename": f,
+                "size": stat.st_size / (1024 * 1024),
+                "timestamp": datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            })
+    
+    return {"backups": sorted(backups, key=lambda x: x['timestamp'], reverse=True)}
+
+@router.post("/backup")
+def trigger_backup(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+    def _backup():
+        log_structured("INFO", "System backup initiated", "MAINTENANCE")
+        subprocess.run(["bash", "/app/zima.sh", "-b"], cwd="/app")
+    
+    background_tasks.add_task(_backup)
+    return {"success": True, "message": "Backup sequence started in background"}
+
+@router.post("/restore")
+def trigger_restore(filename: str, background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+    backup_path = os.path.join("/app/backups", filename)
+    if not os.path.exists(backup_path):
+        return {"error": "Backup file not found"}
+
+    def _restore():
+        log_structured("INFO", f"System restore initiated from {filename}", "MAINTENANCE")
+        # Restoring might disrupt the API itself, but zima.sh -r just extracts files.
+        subprocess.run(["bash", "/app/zima.sh", "-r", backup_path], cwd="/app")
+        # After restore, we should probably restart everything
+        subprocess.run(["docker", "compose", "-f", "/app/docker-compose.yml", "restart"])
+    
+    background_tasks.add_task(_restore)
+    return {"success": True, "message": "Restore sequence started in background"}
+
 @router.post("/uninstall")
 def uninstall(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
     def _uninstall():

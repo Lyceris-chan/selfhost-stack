@@ -628,6 +628,12 @@
                     <button onclick="restartStack()" class="btn btn-tonal w-full justify-start" style="background: var(--md-sys-color-surface-container-highest);">
                         <span class="material-symbols-rounded">restart_alt</span> Restart stack
                     </button>
+                    <button onclick="backupSystem()" class="btn btn-tonal w-full justify-start" data-tooltip="Create a compressed backup of all secrets and configurations.">
+                        <span class="material-symbols-rounded">backup</span> Backup system
+                    </button>
+                    <button onclick="openRestoreModal()" class="btn btn-tonal w-full justify-start" data-tooltip="Restore system state from a previous backup file.">
+                        <span class="material-symbols-rounded">restore</span> Restore from backup
+                    </button>
                     <button onclick="uninstallStack()" class="btn btn-tonal w-full justify-start" style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Permanently remove all containers and data.">
                         <span class="material-symbols-rounded">delete_forever</span> Uninstall system
                     </button>
@@ -852,6 +858,25 @@
                             <span>Prune unused images</span>
                         </button>
                         <p class="body-small" style="opacity: 0.7; text-align: center;">Safe removal of dangling images and unused build cache.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System restoration modal -->
+    <div id="restore-modal" class="modal-overlay">
+        <div class="modal-card" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2 class="headline-small">System restoration</h2>
+                <button onclick="closeRestoreModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+            </div>
+            <div style="padding: 16px 0;">
+                <p class="body-medium mb-16" style="color: var(--md-sys-color-on-surface-variant);">Select a backup to restore the system configuration and secrets. <strong>Warning: This will overwrite current settings and restart the stack.</strong></p>
+                <div id="backup-list-container" style="background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 8px; max-height: 300px; overflow-y: auto;">
+                    <div style="padding: 24px; text-align: center; opacity: 0.6;">
+                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
+                        <span class="body-medium">Scanning for backups...</span>
                     </div>
                 </div>
             </div>

@@ -215,6 +215,29 @@ perform_backup() {
   fi
 }
 
+perform_restore() {
+  local backup_file="$1"
+  if [[ ! -f "${backup_file}" ]]; then
+    log_crit "Backup file not found: ${backup_file}"
+    exit 1
+  fi
+
+  log_info "Restoring system from backup: ${backup_file}..."
+  
+  # Ensure we are in a safe state (stop containers if any)
+  # But for simplicity, we just extract.
+  
+  if "${SUDO}" tar -xzf "${backup_file}" -C "${BASE_DIR}"; then
+    log_info "Restore successful. All configurations and secrets have been replaced."
+    "${SUDO}" chown -R "$(whoami)" "${BASE_DIR}"
+    # Ensure secrets have restricted permissions
+    [[ -f "${BASE_DIR}/.secrets" ]] && "${SUDO}" chmod 600 "${BASE_DIR}/.secrets"
+  else
+    log_crit "Restore failed."
+    exit 1
+  fi
+}
+
 setup_cron() {
   log_info "Configuring scheduled tasks..."
   local cron_jobs=""

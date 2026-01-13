@@ -170,6 +170,8 @@ usage() {
     echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
     echo "  -o          Skip Odido Bundle Booster deployment"
     echo "  -c          Maintenance (recreates containers, preserves data)"
+    echo "  -b          Create a system backup"
+    echo "  -r <file>   Restore from a system backup file"
     echo "  -E <file>   Load Environment Variables from file"
     echo "  -G          Generate Only (stops before deployment)"
     echo "  -h          Show this help message"
@@ -177,7 +179,7 @@ usage() {
 
 parse_args() {
   local opt
-  while getopts "cxpyas:j hE:Go" opt; do
+  while getopts "cxpyas:j hE:Gob:r:" opt; do
       case ${opt} in
           c) RESET_ENV=true; FORCE_CLEAN=true ;;
           x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
@@ -189,6 +191,8 @@ parse_args() {
           j) PARALLEL_DEPLOY=true ;;
           E) ENV_FILE="${OPTARG}" ;;
           G) GENERATE_ONLY=true ;;
+          b) DO_BACKUP=true ;;
+          r) RESTORE_FILE="${OPTARG}" ;;
           h) 
               usage
               exit 0
@@ -687,8 +691,14 @@ setup_secrets() {
         echo ""
         if [[ -n "${ODIDO_TOKEN}" ]]; then
           log_info "Fetching Odido User ID automatically..."
+          local proxy="http://172.${FOUND_OCTET:-20}.0.254:8888"
           local odido_redirect_url
-          odido_redirect_url=$(curl -sL --max-time 10 -o /dev/null -w '%{url_effective}' \
+          # Attempt via proxy first, then fall back to direct if proxy is unreachable (e.g., fresh install)
+          odido_redirect_url=$(curl --proxy "${proxy}" -sL --max-time 10 -o /dev/null -w '%{url_effective}' \
+            -H "Authorization: Bearer ${ODIDO_TOKEN}" \
+            -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
+            "https://capi.odido.nl/account/current" || \
+            curl -sL --max-time 10 -o /dev/null -w '%{url_effective}' \
             -H "Authorization: Bearer ${ODIDO_TOKEN}" \
             -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
             "https://capi.odido.nl/account/current" || echo "FAILED")

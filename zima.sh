@@ -52,6 +52,17 @@ main() {
     exit 0
   fi
 
+  # 1.1 Backup & Restore (Immediate Exit)
+  if [[ "${DO_BACKUP}" == "true" ]]; then
+    perform_backup "manual"
+    exit 0
+  fi
+
+  if [[ -n "${RESTORE_FILE}" ]]; then
+    perform_restore "${RESTORE_FILE}"
+    exit 0
+  fi
+
   # 2. Initialization & Network Detection
   # Required for subsequent prompts (e.g., deSEC needs PUBLIC_IP)
   init_directories

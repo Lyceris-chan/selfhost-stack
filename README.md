@@ -204,7 +204,7 @@ This stack features a hardened, recursive DNS engine built on **Unbound** and **
 To achieve "Gold Standard" security and performance, this stack implements specific overrides for core infrastructure services. These choices are grounded in established Internet Engineering Task Force (IETF) standards.
 
 ### Unbound (Recursive DNS)
-The Unbound configuration (`lib/services/config.sh`) is hardened beyond default settings to ensure maximum privacy and protection against common DNS-based attacks:
+The Unbound configuration ([lib/services/config.sh:285](lib/services/config.sh#L285)) is hardened beyond default settings to ensure maximum privacy and protection against common DNS-based attacks:
 
 *   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: `qname-minimisation: yes`. Prevents authoritative servers from seeing the full query, protecting user browsing patterns.
 *   **Aggressive NSEC Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: `aggressive-nsec: yes`. Mitigates certain DoS vectors and reduces load on authoritative servers.
@@ -216,7 +216,7 @@ The Unbound configuration (`lib/services/config.sh`) is hardened beyond default 
 *   **Performance Tuning**: `prefetch: yes` and `prefetch-key: yes` are enabled to ensure low-latency resolution by refreshing popular records before they expire.
 
 ### AdGuard Home (Filtering & TLS)
-AdGuard Home acts as the primary gateway and policy engine:
+AdGuard Home acts as the primary gateway and policy engine ([lib/services/config.sh:309](lib/services/config.sh#L309)):
 
 *   **Upstream Consolidation**: All queries are routed exclusively to the local Unbound instance (`172.x.0.250`) via a dedicated Docker network bridge.
 *   **Encrypted DNS Standard ([RFC 9250](https://datatracker.ietf.org/doc/html/rfc9250))**: Full support for **DNS-over-QUIC (DoQ)**, providing superior performance and privacy on mobile networks compared to traditional DoH/DoT.
@@ -224,7 +224,7 @@ AdGuard Home acts as the primary gateway and policy engine:
 *   **Dutch-Curated Filtering**: Uses a specialized blocklist based on **Hagezi Pro++**, optimized for performance and privacy.
 
 ### SearXNG (Privacy Search)
-SearXNG is configured to ensure total query anonymity:
+SearXNG is configured to ensure total query anonymity ([lib/services/config.sh:382](lib/services/config.sh#L382)):
 
 *   **Image Proxy Enabled**: All images in search results are proxied through your hub. This prevents source websites from tracking your IP address when you view results.
 *   **VPN Routing**: SearXNG exits exclusively through the VPN tunnel, ensuring search engines only see the VPN shared IP.
@@ -515,6 +515,13 @@ External assets (fonts, icons, scripts) are fetched once via the **Gluetun VPN p
 4.  **Local persistence**: Assets are saved to a persistent Docker volume (`/assets`).
 5.  **Offline serving**: The Management Dashboard serves all UI resources exclusively from this local volume.
 
+#### Backup and Portability
+The stack includes an integrated backup and restoration engine designed for maximum portability and data sovereignty.
+
+- **One-Click Backups**: Generate timestamped `.tar.gz` archives of all system secrets, environment variables, and core configurations directly from the dashboard.
+- **State Restoration**: Restore your entire system state from any valid backup archive. The system automatically handles file extraction and triggers a stack-wide restart to apply restored settings.
+- **Portability**: Backups are independent of hardware and can be used to migrate your privacy hub to a new host device by simply restoring the archive on a fresh installation.
+
 ---
 
 ### 🛡️ Blocklist information & DNS Filtering
@@ -641,11 +648,17 @@ tar -czf immich-backup.tar.gz /data/AppData/privacy-hub/immich
 
 *   **Update**: Click "Check Updates" in the dashboard or run `./zima.sh` again.
 *   **Backup**:
-    ```bash
-    # Manual backup of critical data (Secrets, Configs, Databases)
-    # Adjust path to match your installation
-    cp -r /data/AppData/privacy-hub /backup/location/
-    ```
+    *   **Dashboard**: Click **"Backup system"** in the System Information card. This creates a timestamped archive of your secrets, environment files, and service configurations.
+    *   **CLI**: Run `./zima.sh -b`.
+    *   **Manual**:
+        ```bash
+        # Manual backup of critical data (Secrets, Configs, Databases)
+        # Adjust path to match your installation
+        cp -r /data/AppData/privacy-hub /backup/location/
+        ```
+*   **Restore**:
+    *   **Dashboard**: Click **"Restore from backup"**, select your desired archive, and confirm. The system will automatically overwrite current configurations and restart the stack.
+    *   **CLI**: Run `./zima.sh -r /path/to/backup.tar.gz`.
 *   **Uninstall**:
     ```bash
     ./zima.sh -x
@@ -772,11 +785,13 @@ To ensure a "set and forget" experience, every release undergoes a rigorous auto
 | **Container Registries** | Pulling Docker images (Docker/GHCR) | **🏠 Home IP** (Direct) |
 | **Git Repositories** | Cloning source code (GitHub/Codeberg) | **🏠 Home IP** (Direct) |
 | **DNS Blocklists** | AdGuard filter updates | **🔒 VPN IP** (Gluetun) |
-| **deSEC.io** | SSL DNS Challenges | **🏠 Home IP** (Direct) |
-| **Odido API (Setup)** | Initial User ID retrieval | **🏠 Home IP** (Direct) |
+| **deSEC.io** | SSL DNS Challenges | **🔒 VPN IP** (Gluetun)* |
+| **Odido API (Setup)** | Initial User ID retrieval | **🔒 VPN IP** (Gluetun)* |
 | **Odido API (Active)** | Mobile Data fetching | **🔒 VPN IP** (Gluetun) |
 | **Cobalt** | Media downloads | **🔒 VPN IP** (Gluetun) |
 | **SearXNG / Immich** | Search & Media sync | **🔒 VPN IP** (Gluetun) |
+
+*\*Setup/Configuration tasks attempt to use the VPN proxy if available, but may fall back to direct Home IP if the VPN service is not yet established.*
 
 ### Detailed privacy policies
 

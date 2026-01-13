@@ -251,6 +251,10 @@ setup_configs() {
 
   if [[ -n "${DESEC_DOMAIN}" ]] && [[ -n "${DESEC_TOKEN}" ]]; then
     log_info "Configuring deSEC..."
+    local proxy="http://172.${found_octet_val}.0.254:8888"
+    curl --proxy "${proxy}" -s --max-time 5 -X PATCH "https://desec.io/api/v1/domains/${DESEC_DOMAIN}/rrsets/" \
+      -H "Authorization: Token ${DESEC_TOKEN}" -H "Content-Type: application/json" \
+      -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}]" > /dev/null 2>&1 || \
     curl -s --max-time 5 -X PATCH "https://desec.io/api/v1/domains/${DESEC_DOMAIN}/rrsets/" \
       -H "Authorization: Token ${DESEC_TOKEN}" -H "Content-Type: application/json" \
       -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}]" > /dev/null 2>&1 || log_warn "deSEC API failed"
