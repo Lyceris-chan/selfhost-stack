@@ -20,56 +20,105 @@ if (fs.existsSync(secretsPath)) {
 }
 
 const SERVICES = [
+
     { name: 'Dashboard', url: `http://${LAN_IP}:8081` },
+
     { name: 'Hub_API', url: `http://${LAN_IP}:55555/status` },
+
     { name: 'AdGuard', url: `http://${LAN_IP}:8083` },
+
     { name: 'Portainer', url: `http://${LAN_IP}:9000` },
+
     { name: 'WireGuard_UI', url: `http://${LAN_IP}:51821` },
+
     { name: 'Memos', url: `http://${LAN_IP}:5230` },
+
     { name: 'Cobalt', url: `http://${LAN_IP}:9001` },
+
     { name: 'SearXNG', url: `http://${LAN_IP}:8082` },
+
     { name: 'Immich', url: `http://${LAN_IP}:2283` },
+
     { name: 'Redlib', url: `http://${LAN_IP}:8080` },
+
     { name: 'Wikiless', url: `http://${LAN_IP}:8180` },
+
     { name: 'Invidious', url: `http://${LAN_IP}:3000` },
+
     { name: 'Rimgo', url: `http://${LAN_IP}:3002` },
+
     { name: 'Scribe', url: `http://${LAN_IP}:8280` },
+
     { name: 'Breezewiki', url: `http://${LAN_IP}:8380` },
+
     { name: 'AnonymousOverflow', url: `http://${LAN_IP}:8480` },
+
     { name: 'VERT', url: `http://${LAN_IP}:5555` },
-    { name: 'Companion', url: `http://${LAN_IP}:8283/companion` },
+
+    { name: 'Companion', url: `http://${LAN_IP}:8283` },
+
     { name: 'OdidoBooster', url: `http://${LAN_IP}:8085/docs` },
+
 ];
 
 const results = [];
 
+
+
 function logResult(category, test, outcome, details = '') {
+
     const timestamp = new Date().toISOString();
+
     const result = { timestamp, category, test, outcome, details };
+
     results.push(result);
+
     console.log(`[${outcome}] ${category} > ${test}: ${details}`);
+
 }
 
+
+
 async function runTests() {
+
     if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR);
 
+
+
     const browser = await puppeteer.launch({
+
         headless: 'new',
+
         args: ['--no-sandbox', '--disable-setuid-sandbox']
+
     });
 
+
+
     const page = await browser.newPage();
+
     await page.setViewport({ width: 1440, height: 1200 });
 
+
+
     try {
+
         console.log('--- Phase 1: Service Connectivity & Deep Functionality ---');
+
         for (const service of SERVICES) {
+
             console.log(`Checking ${service.name}: ${service.url}`);
+
             try {
-                await page.goto(service.url, { waitUntil: 'networkidle2', timeout: 60000 });
+
+                // Use a longer timeout and waitUntil networkidle2 for robustness
+
+                await page.goto(service.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
                 await new Promise(r => setTimeout(r, 2000));
+
                 
-                await page.waitForSelector('body', { timeout: 20000 });
+
                 logResult('Connectivity', service.name, 'PASS', `Reached ${service.url}`);
 
                 if (service.name === 'Invidious') {

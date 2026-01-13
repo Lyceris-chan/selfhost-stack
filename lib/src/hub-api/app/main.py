@@ -8,7 +8,7 @@ from .core.security import get_current_user, get_api_key_or_query_token
 from .utils.logging import init_db, log_structured
 from .utils.assets import ensure_assets
 from .routers import auth, system, services, wireguard, logs, odido
-from .services.background import metrics_collector_thread, log_sync_thread, update_metrics_activity
+from .services.background import metrics_collector_thread, log_sync_thread, update_metrics_activity, odido_retrieval_thread
 
 app = FastAPI(title=settings.APP_NAME)
 
@@ -36,6 +36,7 @@ def startup_event():
     # Start background threads
     threading.Thread(target=metrics_collector_thread, daemon=True).start()
     threading.Thread(target=log_sync_thread, daemon=True).start()
+    threading.Thread(target=odido_retrieval_thread, daemon=True).start()
     # Note: Session cleanup is started in security.py on import.
 
 @app.post("/watchtower")

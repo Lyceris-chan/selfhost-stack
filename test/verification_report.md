@@ -1,4 +1,4 @@
-# Verification Report - 1/12/2026, 11:19:35 PM
+# Verification Report - 1/12/2026, 11:54:58 PM
 
 ## Summary
 - **Total Tests:** 25
@@ -26,7 +26,7 @@
 | Breezewiki | ✅ PASS | Reached http://10.0.12.167:8380 |
 | AnonymousOverflow | ✅ PASS | Reached http://10.0.12.167:8480 |
 | VERT | ✅ PASS | Reached http://10.0.12.167:5555 |
-| Companion | ✅ PASS | Reached http://10.0.12.167:8283/companion |
+| Companion | ✅ PASS | Reached http://10.0.12.167:8283 |
 | OdidoBooster | ✅ PASS | Reached http://10.0.12.167:8085/docs |
 
 ### Invidious

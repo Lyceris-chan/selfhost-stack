@@ -538,7 +538,7 @@ EOF
 
     NGINX_REDIRECT=""
     if [ -n "$DESEC_DOMAIN" ]; then
-        NGINX_REDIRECT="if (\$http_x_forwarded_proto != 'https') { return 301 https://\$host:8443\$request_uri; }"
+        NGINX_REDIRECT="if (\$http_host = '$DESEC_DOMAIN') { return 301 https://\$host:8443\$request_uri; }"
     fi
 
     cat <<EOF | $SUDO tee "$NGINX_CONF" >/dev/null

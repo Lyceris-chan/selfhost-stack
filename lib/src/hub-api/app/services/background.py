@@ -4,10 +4,86 @@ import threading
 import sqlite3
 import os
 import json
+import requests
+import re
 from ..core.config import settings
 from ..utils.logging import log_structured
 
 last_metrics_request = 0
+
+def refresh_secrets(updates):
+    """Update .secrets file with new values."""
+    if not os.path.exists(settings.SECRETS_FILE):
+        return
+    
+    try:
+        with open(settings.SECRETS_FILE, 'r') as f:
+            lines = f.readlines()
+        
+        new_lines = []
+        for line in lines:
+            updated = False
+            for key, val in updates.items():
+                if line.startswith(f'{key}='):
+                    new_lines.append(f'{key}="{val}"\n')
+                    updated = True
+                    break
+            if not updated:
+                new_lines.append(line)
+        
+        # Add new keys if not present
+        existing_keys = [l.split('=')[0] for l in new_lines]
+        for key, val in updates.items():
+            if key not in existing_keys:
+                new_lines.append(f'{key}="{val}"\n')
+
+        with open(settings.SECRETS_FILE, 'w') as f:
+            f.writelines(new_lines)
+    except Exception as e:
+        log_structured("ERROR", "SYSTEM", f"Failed to update secrets: {e}")
+
+def odido_retrieval_thread():
+    """Background thread to auto-retrieve Odido User ID if missing."""
+    while True:
+        try:
+            if not os.path.exists(settings.SECRETS_FILE):
+                time.sleep(60)
+                continue
+
+            with open(settings.SECRETS_FILE, 'r') as f:
+                content = f.read()
+            
+            # Check if we have token but missing or default user_id
+            token_match = re.search(r'ODIDO_TOKEN="([^"]+)"', content)
+            userid_match = re.search(r'ODIDO_USER_ID="([^"]*)"', content)
+            
+            if token_match and (not userid_match or not userid_match.group(1)):
+                token = token_match.group(1)
+                log_structured("INFO", "SYSTEM", "Odido User ID missing. Attempting background retrieval...")
+                
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "User-Agent": "T-Mobile 5.3.28 (Android 10; 10)"
+                }
+                # Follow redirects manually or via requests
+                resp = requests.get("https://capi.odido.nl/account/current", headers=headers, allow_redirects=True, timeout=10)
+                final_url = resp.url
+                
+                # Extract 12-char hex User ID
+                # Format: https://capi.odido.nl/{userid}/account/current
+                id_match = re.search(r'capi\.odido\.nl/([0-9a-f]{12})', final_url, re.IGNORECASE)
+                if id_match:
+                    new_id = id_match.group(1)
+                    log_structured("SUCCESS", "SYSTEM", f"Successfully retrieved Odido User ID: {new_id}")
+                    refresh_secrets({"ODIDO_USER_ID": new_id})
+                else:
+                    log_structured("WARN", "SYSTEM", "Background Odido retrieval failed: User ID not found in redirect URL")
+            
+            # Check once an hour if still missing
+            time.sleep(3600)
+        except Exception as e:
+            log_structured("ERROR", "SYSTEM", f"Odido Retrieval Error: {e}")
+            time.sleep(300)
 
 def metrics_collector_thread():
     """Background thread to collect container metrics."""
