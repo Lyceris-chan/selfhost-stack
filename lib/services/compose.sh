@@ -168,44 +168,6 @@ EOF
 EOF
 }
 
-  if [[ "${TEST_MODE:-false}" == "true" ]]; then
-    cat >> "${COMPOSE_FILE}" <<EOF
-    networks: [frontend]
-    ports: ["${LAN_IP}:8085:8085"]
-EOF
-  elif [[ "${vpn_mode}" == "true" ]]; then
-    cat >> "${COMPOSE_FILE}" <<EOF
-    network_mode: "container:${CONTAINER_PREFIX}gluetun"
-    depends_on:
-      gluetun: {condition: service_healthy}
-EOF
-  else
-    cat >> "${COMPOSE_FILE}" <<EOF
-    networks: [frontend]
-    ports: ["${LAN_IP}:8085:8085"]
-EOF
-  fi
-
-  cat >> "${COMPOSE_FILE}" <<EOF
-    environment:
-      - "API_KEY=${HUB_API_KEY_COMPOSE}"
-      - "ODIDO_USER_ID=${ODIDO_USER_ID}"
-      - "ODIDO_TOKEN=${ODIDO_TOKEN}"
-      - "PORT=8085"
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8085/docs"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    volumes:
-      - ${DATA_DIR}/odido:/data
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits: {cpus: '0.3', memory: 128M}
-EOF
-}
-
 append_memos() {
   if ! should_deploy "memos"; then
     return 0
