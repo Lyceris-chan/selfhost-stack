@@ -390,9 +390,9 @@ def main():
         verify_logs()
         
         # 7. UI Tests & Playback
-        print("\n--- Running UI & Playback Tests ---")
+        print("\n--- Running UI Audit ---")
         os.environ['LAN_IP'] = LAN_IP
-        run_command(f"LAN_IP={LAN_IP} bun unified_test.js", cwd=TEST_SCRIPT_DIR)
+        run_command(f"LAN_IP={LAN_IP} node verify_ui.js", cwd=TEST_SCRIPT_DIR)
 
     finally:
         end_time = time.time()
