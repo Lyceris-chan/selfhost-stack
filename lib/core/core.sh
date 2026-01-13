@@ -345,7 +345,10 @@ MIGRATE_SCRIPT="$BASE_DIR/migrate.sh"
 PATCHES_SCRIPT="$BASE_DIR/patches.sh"
 
 # Ensure root-level data files are writable by the container user (UID 1000)
-$SUDO touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
+    touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
+    if [ ! -f "$ACTIVE_PROFILE_NAME_FILE" ]; then echo "Initial-Setup" | $SUDO tee "$ACTIVE_PROFILE_NAME_FILE" >/dev/null; fi
+    $SUDO chmod 666 "$HISTORY_LOG" 2>/dev/null || true
+    $SUDO chmod 644 "$ACTIVE_PROFILE_NAME_FILE" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
 $SUDO chown 1000:1000 "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage" "$ACTIVE_PROFILE_NAME_FILE" 2>/dev/null || true
 $SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$ASSETS_DIR" 2>/dev/null || true
 

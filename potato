@@ -1,0 +1,24 @@
+# Progress Report
+
+## Fixed Issues
+- [x] **AdGuard Configuration Error**: Fixed YAML syntax generation in `lib/services/config.sh`. `user_rules` now correctly handles empty lists.
+- [x] **Hub API Permission Error**: Updated `lib/core/core.sh` to ensure `deployment.log` is writable (`chmod 666`) by the container user.
+- [x] **Dashboard Console Error**: Fixed `TypeError: palette.get is not a function` in `lib/templates/assets/dashboard.js` by updating method call to `palette.tone()` to match the `material-color-utilities` library version.
+- [x] **Services not showing**: Resolved by fixing Hub API permissions (allowing API startup) and Dashboard JS error (allowing frontend rendering).
+
+## UI & Writing Improvements
+- [x] **Material Design 3**: Verified CSS tokens and responsiveness.
+- [x] **Writing Style**: Updated `dashboard.html` and `dashboard.js` to follow Google Developer Style Guide.
+    - Removed "Please" and "We".
+    - Simplified jargon (e.g., "FQDN" -> "domain name").
+    - Switched to active voice where possible.
+    - Standardized sentence case for headings.
+
+## Original Potato Content
+- Improve the UI of the project and take screenshots and measure and investistigate spacing and all other UI factors to ensure we strictly follow m3.material.io and that it doesnt break when the window gets resized
+- improve the writing and wording used to follow  https://developers.google.com/style 
+- adguard is still broken
+- services dont show in admin / regular mode  
+dashboard console logs
+(index):3904 Uncaught TypeError: palette.get is not a function
+...

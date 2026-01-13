@@ -525,14 +525,16 @@ tls:
   server_name: $DNS_SERVER_NAME
   certificate_path: /opt/adguardhome/conf/ssl.crt
   private_key_path: /opt/adguardhome/conf/ssl.key
-user_rules:
 $(if [ "$ALLOW_PROTON_VPN" = true ]; then
+    echo "user_rules:"
     echo "  - @@||getproton.me^"
     echo "  - @@||vpn-api.proton.me^"
     echo "  - @@||protonstatus.com^"
     echo "  - @@||protonvpn.ch^"
     echo "  - @@||protonvpn.com^"
     echo "  - @@||protonvpn.net^"
+else
+    echo "user_rules: []"
 fi)
 EOF
 

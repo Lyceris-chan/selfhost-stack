@@ -62,7 +62,7 @@
                         <img src="assets/icon.svg" style="width: 32px; height: 32px;" alt="Logo">
                         <h1 class="display-small" style="color: var(--md-sys-color-primary); margin: 0;">Privacy Hub</h1>
                     </div>
-                    <div class="subtitle body-large" style="color: var(--md-sys-color-on-surface-variant); margin-top: 8px;">Self-hosted network security and private service infrastructure.</div>
+                    <div class="subtitle body-large" style="color: var(--md-sys-color-on-surface-variant); margin-top: 8px;">Network security and private service infrastructure.</div>
                 </div>
                 <div class="header-actions">
 
@@ -124,7 +124,7 @@
                         <div>
                             <h3 class="title-medium m-0" style="color: inherit;">Critical network advisory</h3>
                             <p class="body-medium mt-8" style="color: inherit; opacity: 0.9;">
-                                To ensure firewall persistence and static IP reliability, you <strong>must disable Dynamic/Random MAC addresses</strong> in your host device's network settings.
+                                To ensure firewall persistence and static IP reliability, <strong>disable Dynamic/Random MAC addresses</strong> in your host device's network settings.
                             </p>
                         </div>
                     </div>
@@ -227,15 +227,15 @@
             </div>
             <div class="card">
                 <h3 class="title-medium">Device DNS settings</h3>
-                <p class="body-medium description">Utilize these RFC-compliant encrypted endpoints to maintain digital independence:</p>
+                <p class="body-medium description">Utilize these Standard encrypted endpoints to maintain digital independence:</p>
                 <div class="code-label" data-tooltip="Standard unencrypted DNS (Port 53). Recommended only for use within your local LAN.">Standard IPv4 (Local LAN Only)</div>
                 <div class="code-block sensitive">$LAN_IP:53</div>
-                <div class="code-label" data-tooltip="DNS-over-QUIC (DOQ) - RFC 9250. Port 853. High-performance encrypted DNS designed for superior latency and stability.">Secure DOQ (Modern Clients)</div>
+                <div class="code-label" data-tooltip="DNS-over-QUIC (DOQ). Port 853. High-performance encrypted DNS designed for superior latency and stability.">Secure DOQ (Modern Clients)</div>
                 <div class="code-block sensitive">quic://$LAN_IP</div>
                 <div class="desec-only" style="display: none;">
-                    <div class="code-label" data-tooltip="DNS-over-HTTPS (DOH) - RFC 8484. Standard for web browsers. Queries are indistinguishable from HTTPS traffic.">Secure DOH (Browsers)</div>
+                    <div class="code-label" data-tooltip="DNS-over-HTTPS (DOH). Standard for web browsers. Queries are indistinguishable from HTTPS traffic.">Secure DOH (Browsers)</div>
                     <div class="code-block sensitive">https://$DESEC_DOMAIN/dns-query</div>
-                    <div class="code-label" data-tooltip="DNS-over-TLS (DOT) - RFC 7858. Port 853. The industry standard for Android 'Private DNS' and system resolvers.">Secure DOT (Android / System)</div>
+                    <div class="code-label" data-tooltip="DNS-over-TLS (DOT). Port 853. The industry standard for Android 'Private DNS' and system resolvers.">Secure DOT (Android / System)</div>
                     <div class="code-block sensitive">$DESEC_DOMAIN:853</div>
                 </div>
                 <div class="no-desec-only" style="display: none;">
@@ -272,9 +272,9 @@
                 <div id="dns-setup-untrusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
                     <p class="body-medium description" style="color:var(--md-sys-color-error);">Limited Encrypted DNS Coverage</p>
                     <p class="body-small description">
-                        Android 'Private DNS' requires a FQDN. Since no domain is configured, your mobile devices cannot utilize native encrypted DNS without the VPN.
+                        Android 'Private DNS' requires a domain name. Since no domain is configured, your mobile devices cannot utilize native encrypted DNS without the VPN.
                         <br><br>
-                        Once a valid SSL certificate is acquired, the configured deSEC domain will automatically be used as the FQDN for this dashboard.
+                        Once a valid SSL certificate is acquired, the configured deSEC domain will automatically be used as the domain name for this dashboard.
                     </p>
                     <div style="flex-grow: 1;">
                         <div class="code-label" data-tooltip="The local IP address of your privacy hub.">Primary Gateway</div>
@@ -406,7 +406,7 @@
                     <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 16px;">
                         <div style="flex: 1;">
                             <span class="label-large">Secure API Routing (VPN)</span>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Requests are routed through the VPN by default to hide your home IP. Disable this only if the Odido API blocks VPN traffic or you experience connectivity issues.</p>
+                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Routes requests through VPN by default to hide your home IP. Disable only if the Odido API blocks VPN traffic or you experience connectivity issues.</p>
                         </div>
                         <div class="switch-container" id="odido-vpn-switch" onclick="toggleOdidoVpn()" data-tooltip="Toggle between VPN and Home IP for Odido requests">
                             <div class="switch-track">
@@ -503,7 +503,7 @@
                         <button onclick="localStorage.removeItem('theme_seed'); location.reload();" class="btn btn-icon" data-tooltip="Reset theme to default"><span class="material-symbols-rounded">refresh</span></button>
                     </div>
                 </div>
-                <p class="body-medium description">Personalize the dashboard using Material Design 3 dynamic color algorithms (HCT color space).</p>
+                <p class="body-medium description">Personalize the dashboard using Material Design 3 dynamic color algorithms.</p>
                 <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
                     <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
                         <div style="position: relative; width: 48px; height: 48px; border-radius: 24px; overflow: hidden; border: 2px solid var(--md-sys-color-primary);">
