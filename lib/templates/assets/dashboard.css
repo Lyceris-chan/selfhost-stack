@@ -310,14 +310,30 @@
                     flex-wrap: wrap;
                 }
         
-                .header-actions {
-                    display: flex;
-                    align-items: center;
-                    gap: 16px;
-                    flex-wrap: wrap;
-                    justify-content: flex-end;
-                }
-        
+                        .header-actions {
+                            display: flex;
+                            align-items: center;
+                            gap: 12px;
+                            flex-wrap: wrap;
+                            justify-content: flex-end;
+                        }
+                
+                        .theme-toggle {
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            width: 40px;
+                            height: 40px;
+                            border-radius: 50%;
+                            cursor: pointer;
+                            color: var(--md-sys-color-on-surface-variant);
+                            transition: all 0.2s var(--md-sys-motion-easing-standard);
+                        }
+                
+                        .theme-toggle:hover {
+                            background-color: var(--md-sys-color-surface-container-highest);
+                            color: var(--md-sys-color-on-surface);
+                        }        
                 @media (max-width: 900px) {
                     .header-actions {
                         width: 100%;
@@ -425,19 +441,50 @@
                 .card-header {
                     display: flex;
                     justify-content: space-between;
-                    align-items: flex-start;
+                    align-items: center;
                     margin-bottom: 16px;
                     gap: 12px;
                 }
         
-                .card-header h2 {
-                    margin: 0;
-                    font-size: 22px;
-                    font-weight: 400;
-                    color: var(--md-sys-color-on-surface);
-                    line-height: 28px;
-                }
-        
+                        .card-header h2 {
+                            margin: 0;
+                            font-size: 22px;
+                            font-weight: 400;
+                            color: var(--md-sys-color-on-surface);
+                            line-height: 28px;
+                            white-space: nowrap;
+                            overflow: hidden;
+                            text-overflow: ellipsis;
+                        }
+                
+                        .card-title-row {
+                            flex: 1;
+                            min-width: 0;
+                            margin-right: 8px;
+                            display: flex;
+                            align-items: center;
+                        }
+                
+                        .card-header-actions {
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            flex-shrink: 0;
+                        }
+                
+                        .nav-arrow {
+                            font-size: 20px;
+                            color: var(--md-sys-color-on-surface-variant);
+                            opacity: 0;
+                            margin-left: 4px;
+                            transform: translateX(-8px);
+                            transition: all 0.2s var(--md-sys-motion-easing-standard);
+                        }
+                
+                        .card:hover .nav-arrow {
+                            opacity: 1;
+                            transform: translateX(0);
+                        }        
                 .card .description {
                     font-size: 14px;
                     color: var(--md-sys-color-on-surface-variant);
@@ -550,6 +597,13 @@
                 .btn-tonal { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
                 .btn-outlined { background: transparent; color: var(--md-sys-color-primary); border: 1px solid var(--md-sys-color-outline); }
                 .btn-icon { width: 40px; height: 40px; padding: 0; border-radius: 20px; }
+                
+                .btn-group {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                    align-items: center;
+                }
                 
                 /* MD3 Switch */
                 .switch-container {

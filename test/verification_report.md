@@ -1,10 +1,10 @@
-# Verification Report - 1/12/2026, 11:54:58 PM
+# Verification Report - 1/13/2026, 3:04:04 AM
 
 ## Summary
-- **Total Tests:** 25
-- **Passed:** ✅ 23
-- **Failed:** ❌ 1
-- **Warnings:** ⚠️ 1
+- **Total Tests:** 28
+- **Passed:** ✅ 25
+- **Failed:** ❌ 3
+- **Warnings:** ⚠️ 0
 
 ### Connectivity
 | Test | Outcome | Details |
@@ -33,17 +33,20 @@
 | Test | Outcome | Details |
 |------|---------|---------|
 | Search | ✅ PASS | Search results found |
-| Player Loaded | ✅ PASS | Video player element detected |
-| Playback Progress | ⚠️ WARN | Video element found but not progressing (might be paused or buffering) |
+| Functionality | ❌ FAIL | Waiting for selector `video, #player, .video-js, #player-container, iframe, .vjs-tech` failed |
 
 ### Dashboard
 | Test | Outcome | Details |
 |------|---------|---------|
-| Filter Toggle | ✅ PASS | Infrastructure category activated |
+| Filter Toggle | ❌ FAIL | Infrastructure category activated |
 | Admin Login | ✅ PASS | Admin mode activated |
+| Update Modal | ✅ PASS | Update selection modal opened |
+| Session Policy Toggle | ✅ PASS | Toggled cleanup: false -> true |
+| Log Visibility | ✅ PASS | Logs section visible |
+| Log Level Filter | ✅ PASS | Filtered INFO logs: 3 entries found |
 
-### Global
+### Portainer
 | Test | Outcome | Details |
 |------|---------|---------|
-| Suite Execution | ❌ FAIL | Waiting for selector `#update-all-btn` failed |
+| Integration | ❌ FAIL | Navigation timeout of 30000 ms exceeded |
 
