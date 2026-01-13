@@ -355,6 +355,8 @@ server {
     }
     location /api/ {
         proxy_pass http://hub-api:55555/;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
     }
 }
 EOF

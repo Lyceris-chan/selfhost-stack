@@ -90,6 +90,6 @@ async def events_stream(request: Request, user: str = Depends(get_current_user))
                             yield ": keepalive\n\n"
                             keepalive_counter = 0
         except Exception as e:
-            print(f"Stream error: {e}")
+            log_structured("ERROR", f"Log stream error: {e}", "SYSTEM")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

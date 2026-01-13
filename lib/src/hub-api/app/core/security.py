@@ -28,7 +28,7 @@ def load_sessions():
                 with session_lock:
                     valid_sessions = {t: expiry for t, expiry in data.items() if expiry > now}
     except Exception as e:
-        print(f"Session Load Error: {e}")
+        log_structured("ERROR", f"Session Load Error: {e}", "SECURITY")
 
 def save_sessions():
     """Save valid auth sessions to disk atomically with restricted permissions."""
@@ -41,7 +41,7 @@ def save_sessions():
             with os.fdopen(fd, 'w') as f:
                 json.dump(valid_sessions, f)
     except Exception as e:
-        print(f"Session Save Error: {e}")
+        log_structured("ERROR", f"Session Save Error: {e}", "SECURITY")
 
 def cleanup_sessions_thread():
     """Background thread to purge expired auth sessions."""
