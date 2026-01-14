@@ -294,6 +294,7 @@ readonly SRC_DIR="$BASE_DIR/sources"
 readonly ENV_DIR="$BASE_DIR/env"
 readonly CONFIG_DIR="$BASE_DIR/config"
 readonly DATA_DIR="$BASE_DIR/data"
+export DATA_DIR
 readonly COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
 readonly DASHBOARD_FILE="$BASE_DIR/dashboard.html"
 readonly SECRETS_FILE="$BASE_DIR/.secrets"

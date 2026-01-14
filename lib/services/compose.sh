@@ -630,7 +630,7 @@ EOF
       - ALL
     read_only: true
     volumes:
-      - \${DATA_DIR}/companion:/var/tmp/youtubei.js:rw
+      - ${DATA_DIR}/companion:/var/tmp/youtubei.js:rw
     security_opt:
       - no-new-privileges:true
     healthcheck:
