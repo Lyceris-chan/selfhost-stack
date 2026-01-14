@@ -73,13 +73,15 @@ threading.Thread(target=cleanup_sessions_thread, daemon=True).start()
 
 async def get_current_user(request: Request,
                            api_key: str = Security(api_key_header),
-                           session_token: str = Security(session_token_header)):
+                           session_token: str = Security(session_token_header),
+                           token_query: str = Query(None, alias="token")):
   """Authenticates the user via session token or API key.
 
   Args:
       request: The incoming request.
       api_key: Provided X-API-Key header.
       session_token: Provided X-Session-Token header.
+      token_query: Provided 'token' query parameter (for EventSource).
 
   Returns:
       A string identifying the user role ('admin' or 'api_key').
@@ -87,20 +89,21 @@ async def get_current_user(request: Request,
   Raises:
       HTTPException: 401 if authentication fails.
   """
-  # 1. Check Session Token (Header) - Admin Privileges
-  if session_token:
+  # 1. Check Session Token (Header or Query) - Admin Privileges
+  actual_session_token = session_token or token_query
+  if actual_session_token:
     with session_lock:
-      if session_token in valid_sessions:
+      if actual_session_token in valid_sessions:
         if not session_state["cleanup_enabled"] or time.time(
-        ) < valid_sessions[session_token]:
+        ) < valid_sessions[actual_session_token]:
           # Refresh session (slide window)
-          valid_sessions[session_token] = time.time() + 1800
+          valid_sessions[actual_session_token] = time.time() + 1800
           return "admin"
         else:
-          del valid_sessions[session_token]
+          del valid_sessions[actual_session_token]
       else:
         # Log invalid session token for debugging
-        log_structured("WARN", f"Invalid session token attempted: {session_token[:8]}...", "AUTH")
+        log_structured("WARN", f"Invalid session token attempted: {actual_session_token[:8]}...", "AUTH")
 
   # 2. Check API Key (Header) - API Key Privileges
   if settings.HUB_API_KEY and api_key and secrets.compare_digest(

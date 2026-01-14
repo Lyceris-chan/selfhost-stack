@@ -205,6 +205,7 @@
                     z-index: 100;
                     background: var(--md-sys-color-surface);
                     transition: background-color 300ms ease;
+                    width: 100%;
                 }
                 .filter-bar::-webkit-scrollbar { display: none; }
                 
@@ -212,13 +213,15 @@
                     cursor: pointer;
                     user-select: none;
                     transition: all 200ms var(--md-sys-motion-easing-standard);
-                    flex: 0 0 auto;
-                    min-width: 120px;
+                    flex: 1 1 auto;
+                    padding: 0 16px;
                     justify-content: center;
                     border-radius: var(--md-sys-shape-corner-full);
                     border: 1px solid var(--md-sys-color-outline);
                     background-color: transparent;
                     color: var(--md-sys-color-on-surface-variant);
+                    white-space: nowrap;
+                    height: 32px;
                 }
                 .filter-chip.active {
                     background: var(--md-sys-color-secondary-container) !important;
@@ -230,9 +233,33 @@
                     .filter-bar {
                         flex-wrap: nowrap;
                         overflow-x: auto;
+                        justify-content: flex-start;
                     }
                     .filter-chip {
+                        flex: 0 0 auto;
                         min-width: max-content;
+                    }
+                    .card-header {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 16px;
+                    }
+                    .card-header-actions {
+                        width: 100%;
+                        justify-content: space-between;
+                    }
+                    .header-row {
+                        flex-direction: column;
+                        align-items: flex-start;
+                    }
+                    .header-actions {
+                        width: 100%;
+                        justify-content: flex-start;
+                        gap: 8px;
+                    }
+                    .display-small {
+                        font-size: 28px;
+                        line-height: 36px;
                     }
                 }
                 
@@ -279,7 +306,7 @@
                 
                 .code-block {
                     background: var(--md-sys-color-surface-container-highest);
-                    padding: 16px;
+                    padding: 12px 16px;
                     border-radius: var(--md-sys-shape-corner-small);
                     font-size: 13px;
                     margin-bottom: 16px;
@@ -290,9 +317,8 @@
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
+                    gap: 16px;
                     overflow: hidden;
-                    white-space: nowrap;
-                    text-overflow: ellipsis;
                 }
 
                 .code-block:hover {
@@ -310,7 +336,7 @@
                     font-family: 'Material Symbols Rounded';
                     font-size: 18px;
                     opacity: 0.5;
-                    margin-left: 12px;
+                    flex-shrink: 0;
                 }
                 
                 .material-symbols-rounded {
@@ -328,6 +354,10 @@
                     direction: ltr;
                     -webkit-font-smoothing: antialiased;
                     font-feature-settings: 'liga';
+                    width: 24px;
+                    height: 24px;
+                    overflow: hidden;
+                    flex-shrink: 0;
                 }
         
                 .container { max-width: 1600px; width: 100%; margin: 0 auto; position: relative; }
@@ -724,6 +754,7 @@
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
+                    gap: 16px;
                     box-shadow: var(--md-sys-elevation-3);
                     opacity: 0;
                     transform: translateY(20px);
@@ -890,5 +921,10 @@
                     border-top: 4px solid var(--md-sys-color-primary);
                     border-radius: 50%;
                     animation: spin 1s linear infinite;
+                }
+
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
                 }
 

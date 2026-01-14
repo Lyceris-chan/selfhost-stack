@@ -118,6 +118,22 @@ EOF
       "url": "http://${LAN_IP}:${PORT_BREEZEWIKI}/",
       "source_url": "https://github.com/breezewiki/breezewiki"
     },
+    "redlib": {
+      "name": "Redlib",
+      "description": "A private Reddit interface.",
+      "category": "apps",
+      "order": 30,
+      "url": "http://${LAN_IP}:${PORT_REDLIB}",
+      "source_url": "https://github.com/redlib-org/redlib"
+    },
+    "wikiless": {
+      "name": "Wikiless",
+      "description": "A private Wikipedia interface.",
+      "category": "apps",
+      "order": 40,
+      "url": "http://${LAN_IP}:${PORT_WIKILESS}",
+      "source_url": "https://github.com/Wikiless/Wikiless"
+    },
     "invidious": {
       "name": "Invidious",
       "description": "A privacy-respecting YouTube frontend.",
@@ -126,21 +142,117 @@ EOF
       "url": "http://${LAN_IP}:${PORT_INVIDIOUS}",
       "source_url": "https://github.com/iv-org/invidious"
     },
+    "rimgo": {
+      "name": "Rimgo",
+      "description": "A private Imgur interface.",
+      "category": "apps",
+      "order": 60,
+      "url": "http://${LAN_IP}:${PORT_RIMGO}",
+      "source_url": "https://github.com/rimgo/rimgo"
+    },
+    "searxng": {
+      "name": "SearXNG",
+      "description": "A privacy-respecting search engine.",
+      "category": "apps",
+      "order": 70,
+      "url": "http://${LAN_IP}:${PORT_SEARXNG}",
+      "source_url": "https://github.com/searxng/searxng"
+    },
+    "memos": {
+      "name": "Memos",
+      "description": "A privacy-first, lightweight note-taking service.",
+      "category": "apps",
+      "order": 80,
+      "url": "http://${LAN_IP}:${PORT_MEMOS}",
+      "source_url": "https://github.com/usememos/memos"
+    },
+    "cobalt": {
+      "name": "Cobalt",
+      "description": "Friendly media downloader.",
+      "category": "apps",
+      "order": 90,
+      "url": "http://${LAN_IP}:${PORT_COBALT_WEB}",
+      "source_url": "https://github.com/imputnet/cobalt"
+    },
+    "immich": {
+      "name": "Immich",
+      "description": "Self-hosted photo and video management.",
+      "category": "apps",
+      "order": 100,
+      "url": "http://${LAN_IP}:${PORT_IMMICH}",
+      "source_url": "https://github.com/immich-app/immich"
+    },
+    "scribe": {
+      "name": "Scribe",
+      "description": "Alternative frontend to Medium.",
+      "category": "apps",
+      "order": 110,
+      "url": "http://${LAN_IP}:${PORT_SCRIBE}",
+      "source_url": "https://github.com/edwardgeorge/scribe"
+    },
     "adguard": {
       "name": "AdGuard Home",
-      "description": "Network-wide advertisement and tracker filtration.",
+      "description": "Network-wide advertisement filtration.",
       "category": "system",
       "order": 10,
       "url": "http://${LAN_IP}:${PORT_ADGUARD_WEB}",
       "source_url": "https://github.com/AdguardTeam/AdGuardHome"
     },
+    "portainer": {
+      "name": "Portainer",
+      "description": "Infrastructure and container telemetry.",
+      "category": "system",
+      "order": 20,
+      "url": "http://${LAN_IP}:${PORT_PORTAINER}",
+      "source_url": "https://github.com/portainer/portainer"
+    },
+    "wg-easy": {
+      "name": "WireGuard",
+      "description": "Remote access tunnel management.",
+      "category": "system",
+      "order": 30,
+      "url": "http://${LAN_IP}:${PORT_WG_WEB}",
+      "source_url": "https://github.com/wg-easy/wg-easy"
+    },
     "unbound": {
       "name": "Unbound",
-      "description": "A validating, recursive, caching DNS resolver.",
+      "description": "Validating, recursive DNS resolver.",
       "category": "system",
       "order": 40,
       "url": "#",
       "source_url": "https://github.com/NLnetLabs/unbound"
+    },
+    "gluetun": {
+      "name": "VPN Gateway",
+      "description": "Traffic routing via external VPN.",
+      "category": "system",
+      "order": 50,
+      "url": "#",
+      "source_url": "https://github.com/qdm12/gluetun"
+    },
+    "vert": {
+      "name": "Vert",
+      "description": "High-performance media playback.",
+      "category": "tools",
+      "order": 10,
+      "url": "http://${LAN_IP}:${PORT_VERT}",
+      "source_url": "https://github.com/Lyceris-chan/vert"
+    },
+    "odido-booster": {
+      "name": "Odido Booster",
+      "description": "Network optimization utility.",
+      "category": "tools",
+      "order": 20,
+      "url": "http://${LAN_IP}:8085/docs",
+      "source_url": "https://github.com/Lyceris-chan/odido-booster"
+    },
+    "watchtower": {
+      "name": "Watchtower",
+      "description": "Automated container maintenance.",
+      "category": "tools",
+      "order": 30,
+      "url": "#",
+      "source_url": "https://github.com/containrrr/watchtower"
     }
   }
 }
@@ -163,8 +275,15 @@ setup_static_assets() {
   local svg_content=""
   "${SUDO}" mkdir -p "${ASSETS_DIR}"
   svg_content="<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 128 128\">
-    <rect width=\"128\" height=\"128\" rx=\"28\" fill=\"#141218\"/>
-    <path d=\"M64 104q-23-6-38-26.5T11 36v-22l53-20 53 20v22q0 25-15 45.5T64 104Zm0-14q17-5.5 28.5-22t11.5-35V21L64 6 24 21v12q0 18.5 11.5 35T64 90Zm0-52Z\" fill=\"#D0BCFF\"/>
+    <style>
+        :root { --bg: #ffffff; --fg: #6750A4; }
+        @media (prefers-color-scheme: dark) { :root { --bg: #141218; --fg: #D0BCFF; } }
+        .bg { fill: var(--bg); }
+        .fg { fill: var(--fg); }
+    </style>
+    <rect class=\"bg\" width=\"128\" height=\"128\" rx=\"28\"/>
+    <path class=\"fg\" d=\"M64 104q-23-6-38-26.5T11 36v-22l53-20 53 20v22q0 25-15 45.5T64 104Zm0-14q17-5.5 28.5-22t11.5-35V21L64 6 24 21v12q0 18.5 11.5 35T64 90Zm0-52Z\" transform=\"translate(0, 15) scale(1)\"/>
+    <circle class=\"fg\" cx=\"64\" cy=\"55\" r=\"12\" opacity=\"0.8\"/>
 </svg>"
   echo "${svg_content}" | "${SUDO}" tee "${ASSETS_DIR}/${APP_NAME}.svg" >/dev/null
   echo "${svg_content}" | "${SUDO}" tee "${ASSETS_DIR}/icon.svg" >/dev/null
@@ -363,6 +482,10 @@ schema_version: 29
 http: {address: 0.0.0.0:${PORT_ADGUARD_WEB}}
 users: [{name: "${AGH_USER}", password: "${AGH_PASS_HASH}"}]
 dns:
+  bind_hosts: ["0.0.0.0"]
+  port: 53
+  dot_port: 853
+  quic_port: 853
   upstream_dns: ["${unbound_static_ip}"]
   bootstrap_dns: ["${unbound_static_ip}"]
 filters:

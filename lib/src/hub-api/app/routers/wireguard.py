@@ -104,4 +104,4 @@ def list_profiles(user: str = Depends(get_admin_user)):
     ]
     return {"profiles": files}
   except Exception:
-    return {"error": "Failed to list profiles"}
+    return {"profiles": [], "error": "Failed to list profiles"}
