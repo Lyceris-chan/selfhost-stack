@@ -14,7 +14,7 @@ readonly ALL_CONTAINERS="gluetun adguard dashboard portainer wg-easy api odido-b
 export ALL_CONTAINERS
 
 # Infrastructure images that should be pre-pulled
-readonly CRITICAL_IMAGES="nginx:alpine python:3.11-alpine alpine:latest redis:alpine postgres:14-alpine searxng/searxng:latest ghcr.io/imputnet/cobalt:latest ghcr.io/usememos/memos:latest containrrr/watchtower:latest"
+readonly CRITICAL_IMAGES="nginx:alpine python:3.11-alpine alpine:latest redis:alpine postgres:14-alpine searxng/searxng:latest ghcr.io/imputnet/cobalt:latest ghcr.io/usememos/memos:latest containrrr/watchtower:latest neilpang/acme.sh:latest"
 export CRITICAL_IMAGES
 
 # Default tags for specific services

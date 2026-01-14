@@ -375,6 +375,18 @@ docker_compose_cmd() {
 DOCKER_CMD="docker_cmd"
 DOCKER_COMPOSE_FINAL_CMD="docker_compose_cmd"
 
+# OpenSSL Helper with Docker Fallback
+ossl() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl "$@"
+  else
+    # Fallback to docker using acme.sh image which contains openssl
+    # We use -v to mount the current directory so relative paths might work if they are under BASE_DIR
+    # But for more reliability, callers should use absolute paths if possible or we can mount BASE_DIR
+    "${DOCKER_CMD}" run --rm --entrypoint openssl -v "${BASE_DIR}:${BASE_DIR}:ro" -w "$(pwd)" neilpang/acme.sh:latest "$@"
+  fi
+}
+
 # Initialize deSEC variables to prevent unbound variable errors
 DESEC_DOMAIN="${DESEC_DOMAIN:-}"
 DESEC_TOKEN="${DESEC_TOKEN:-}"

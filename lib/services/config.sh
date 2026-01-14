@@ -300,18 +300,13 @@ setup_configs() {
     # Check if we already have a valid, unexpired certificate for this domain
     local cert_valid=false
     if [[ -f "${AGH_CONF_DIR}/ssl.crt" ]]; then
-      if command -v openssl >/dev/null 2>&1; then
-        if openssl x509 -checkend 86400 -noout -in "${AGH_CONF_DIR}/ssl.crt" >/dev/null 2>&1; then
-          # Check if the cert matches the domain
-          if openssl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | grep -q "${DESEC_DOMAIN}"; then
-            log_info "Existing valid certificate for ${DESEC_DOMAIN} detected. Skipping issuance."
-            cert_valid=true
-          fi
+      # Use ossl helper which handles host/docker transparently
+      if ossl x509 -checkend 86400 -noout -in "${AGH_CONF_DIR}/ssl.crt" >/dev/null 2>&1; then
+        # Check if the cert matches the domain
+        if ossl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | grep -q "${DESEC_DOMAIN}"; then
+          log_info "Existing valid certificate for ${DESEC_DOMAIN} detected. Skipping issuance."
+          cert_valid=true
         fi
-      else
-        # Fallback to assume it's valid if recently restored and exists
-        log_info "Existing certificate detected. Assuming validity (openssl missing on host)."
-        cert_valid=true
       fi
     fi
 
@@ -465,9 +460,9 @@ generate_libredirect_export() {
   fi
 
   host="${DESEC_DOMAIN}"
-  jq --arg inv "https://invidious.\${host}\${port}" \
-     --arg red "https://redlib.\${host}\${port}" \
-     --arg wiki "https://wikiless.\${host}\${port}" \
-     '.invidious = [\$inv] | .redlib = [\$red] | .wikiless = [\$wiki] | .youtube.enabled = true | .reddit.enabled = true | .wikipedia.enabled = true' \
+  jq --arg inv "https://invidious.${host}${port}" \
+     --arg red "https://redlib.${host}${port}" \
+     --arg wiki "https://wikiless.${host}${port}" \
+     '.invidious = [$inv] | .redlib = [$red] | .wikiless = [$wiki] | .youtube.enabled = true | .reddit.enabled = true | .wikipedia.enabled = true' \
      "${template_file}" > "${export_file}"
 }
