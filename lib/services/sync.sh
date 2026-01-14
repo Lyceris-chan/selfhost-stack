@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# --- SECTION 11: SOURCE REPOSITORY SYNCHRONIZATION ---
 # Initialize or update external source code for locally-built application containers.
 
 clone_repo() {

@@ -1,10 +1,17 @@
 import os
+
 import requests
+
 from ..core.config import settings
 from .logging import log_structured
 
+
 def ensure_assets():
-    """Ensure essential assets exist."""
+    """Verifies and initializes essential UI assets and branding icons.
+
+    Ensures the existence of the assets directory and generates a default SVG
+    application icon if one does not exist.
+    """
     try:
         if not os.path.exists(settings.ASSETS_DIR):
             os.makedirs(settings.ASSETS_DIR, exist_ok=True)

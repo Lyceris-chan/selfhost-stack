@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # shellcheck disable=SC2154
 set -euo pipefail
 SERVICE=$1

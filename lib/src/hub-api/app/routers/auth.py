@@ -9,17 +9,32 @@ from ..utils.logging import log_structured
 
 router = APIRouter()
 
+
 class VerifyAdminRequest(BaseModel):
+    """Schema for admin password verification."""
     password: str
 
+
 class ToggleSessionRequest(BaseModel):
+    """Schema for toggling session cleanup."""
     enabled: bool
 
+
 class RotateKeyRequest(BaseModel):
+    """Schema for API key rotation."""
     new_key: str
+
 
 @router.post("/verify-admin")
 def verify_admin(request: VerifyAdminRequest):
+    """Verifies the admin password and creates a session token.
+
+    Args:
+        request: The verification request containing the password.
+
+    Returns:
+        A dictionary with success status, session token, and cleanup state.
+    """
     if settings.ADMIN_PASS_RAW and request.password and secrets.compare_digest(request.password, settings.ADMIN_PASS_RAW):
         # Determine timeout
         timeout_seconds = 1800
@@ -40,14 +55,34 @@ def verify_admin(request: VerifyAdminRequest):
     else:
         raise HTTPException(status_code=401, detail="Invalid admin password")
 
+
 @router.post("/toggle-session-cleanup")
 def toggle_session_cleanup(request: ToggleSessionRequest, user: str = Depends(get_admin_user)):
+    """Toggles the automated session cleanup background task.
+
+    Args:
+        request: Toggle request containing the desired state.
+        user: The authenticated admin user.
+
+    Returns:
+        The updated cleanup state.
+    """
     from ..core.security import session_state
     session_state["cleanup_enabled"] = request.enabled
     return {"success": True, "enabled": request.enabled}
 
+
 @router.post("/rotate-api-key")
 def rotate_api_key(request: RotateKeyRequest, user: str = Depends(get_admin_user)):
+    """Rotates the HUB_API_KEY used for inter-service communication.
+
+    Args:
+        request: Key rotation request containing the new key.
+        user: The authenticated admin user.
+
+    Returns:
+        Success status of the rotation.
+    """
     if request.new_key:
         # Security: Sanitize the key to prevent environment variable injection.
         # We only allow alphanumeric characters.

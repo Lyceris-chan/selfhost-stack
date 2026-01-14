@@ -1,6 +1,15 @@
-import os
+#!/usr/bin/env python3
+"""Test configuration initializer.
+
+This script populates the test environment variables and configuration files
+required for the automated verification suite. It adheres to the Google 
+Python Style Guide.
+"""
+
 import base64
+import os
 import re
+import sys
 
 def parse_details(details_path):
     data = {}
@@ -52,9 +61,9 @@ def update_test_config(template_path, output_path, details_data):
         elif line.startswith('export PUBLIC_IP='):
             new_lines.append('export PUBLIC_IP="127.0.0.1"\n')
         elif line.startswith('export ADMIN_PASS_RAW='):
-            new_lines.append('export ADMIN_PASS_RAW="admin123"\n')
+            new_lines.append('# export ADMIN_PASS_RAW=""\n')
         elif line.startswith('export VPN_PASS_RAW='):
-            new_lines.append('export VPN_PASS_RAW="vpn123"\n')
+            new_lines.append('# export VPN_PASS_RAW=""\n')
         elif line.startswith('export WG_CONF_B64='):
             val = details_data.get('WG_CONF_B64', '')
             if not val:

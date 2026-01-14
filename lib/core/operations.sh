@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# --- SECTION 2: CLEANUP & ENVIRONMENT RESET ---
 # Functions to clear out existing garbage for a clean start.
 
 check_docker_rate_limit() {

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# --- SECTION 18: IMAGE MANAGEMENT ---
 
 resolve_service_tags() {
   log_info "Resolving service image tags..."

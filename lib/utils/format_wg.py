@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
-from pathlib import Path
+"""WireGuard configuration formatter.
+
+This script ensures WireGuard .conf files are correctly formatted for Gluetun
+and handles environment-specific endpoint overrides.
+"""
+
+import os
 import re
 import sys
-import os
+from pathlib import Path
+
 
 def main():
+    """Main execution for formatting WireGuard configuration files."""
     if len(sys.argv) < 2:
         print("Usage: format_wg.py <file_path>")
         sys.exit(1)
@@ -35,6 +43,7 @@ def main():
     except Exception as e:
         print(f"Error processing file: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

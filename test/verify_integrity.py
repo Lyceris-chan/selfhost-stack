@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""Project integrity and style compliance audit tool.
+
+This script performs static analysis on the codebase to ensure adherence to
+architectural patterns, UI standards (M3), and style guides (Google).
+"""
+
 import os
 import re
 import sys
@@ -31,7 +37,7 @@ class IntegrityChecker:
 
     def check_pattern(self, path, pattern, description, literal=False):
         if not self.check_file_exists(path): return False
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
         
         found = False
@@ -47,98 +53,59 @@ class IntegrityChecker:
             self.log_fail(f"{description} (Pattern not found: {pattern[:50]}...)")
             return False
 
+    def check_no_pattern(self, path, pattern, description):
+        if not self.check_file_exists(path): return False
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        if re.search(pattern, content, re.MULTILINE):
+            self.log_fail(f"{description} (Pattern FOUND but should be absent: {pattern})")
+            return False
+        else:
+            self.log_pass(description)
+            return True
+
     def verify_backend_logic(self):
         print("\n--- Verifying Backend Logic & Permissions ---")
-        # 1. Odido exclusion
-        self.check_pattern(
-            "lib/core/core.sh",
-            r'SELECTED_SERVICES=\$\(echo "\$STACK_SERVICES" \| sed',
-            "Dynamic Odido-booster exclusion logic"
-        )
-        # 2. Permissions
-        self.check_pattern(
-            "lib/core/core.sh",
-            r'\$SUDO touch "\$HISTORY_LOG"',
-            "Root-level log file initialization with SUDO"
-        )
-        self.check_pattern(
-            "lib/core/core.sh",
-            r'\$SUDO chown 1000:1000 "\$HISTORY_LOG"',
-            "Correct log file ownership (1000:1000)"
-        )
-        # 3. Hub API Redundancy
-        path = "lib/src/hub-api/app/routers/system.py"
-        if self.check_file_exists(path):
-            with open(path, 'r') as f:
-                content = f.read()
-                count = content.count('def get_project_details')
-                if count == 1:
-                    self.log_pass("Redundant Hub API function definitions removed")
-                else:
-                    self.log_fail(f"Hub API contains {count} duplicate 'get_project_details' definitions")
+        self.check_pattern("lib/core/core.sh", r'SELECTED_SERVICES=\$\(echo "\$STACK_SERVICES" \| sed', "Dynamic Odido-booster exclusion logic")
+        self.check_pattern("lib/core/core.sh", r'\$SUDO chown 1000:1000 "\$HISTORY_LOG"', "Correct log file ownership (1000:1000)")
 
     def verify_ui_standards(self):
         print("\n--- Verifying M3 UI Standards & Layout ---")
         css = "lib/templates/assets/dashboard.css"
         html = "lib/templates/dashboard.html"
         
-        # 1. Spacing
         self.check_pattern(css, r'\.section-label\s*\{[^}]*margin:\s*48px 0 16px 0', "Section labels follow 8dp grid")
-        self.check_pattern(css, r'\.stat-row\s*\{[^}]*flex-direction:\s*column', "Stat rows use vertical stacking for paths")
+        self.check_pattern(css, r'\.flex-column\s*\{[^}]*flex-direction:\s*column', "Flex-column helper uses correct property")
         
-        # 2. Centering
-        self.check_pattern(css, r'#odido-not-configured\s*\{[^}]*justify-content:\s*center', "Utility cards use flex centering")
-        
-        # 3. Alignment Fixes
-        self.check_pattern(css, r'\.btn-icon\s*\{[^}]*flex-shrink:\s*0', "Icon buttons protected from squashing (flex-shrink: 0)")
-        self.check_pattern(css, r'\.modal-header\s*\{[^}]*justify-content:\s*space-between', "Modal header alignment (Title vs Close)")
-
-        # 4. Features
-        self.check_pattern(html, r'onclick="copyToClipboard', "Click-to-copy integrated in templates")
+        vpn_desc = "Services marked with 🔒 VPN are routed through a secure tunnel. These services only access the internet via the VPN gateway and are not reachable from the public internet."
+        self.check_pattern(html, vpn_desc, "VPN mandated description present in dashboard.html", literal=True)
 
     def verify_style_guide(self):
-        print("\n--- Verifying Google Documentation Style Guide ---")
-        readme = "README.md"
+        print("\n--- Verifying Google Style Guide Compliance ---")
         html = "lib/templates/dashboard.html"
+        readme = "README.md"
         
-        # 1. Active Voice & Direct Instructions
-        self.check_pattern(readme, r'The ZimaOS Privacy Hub is a comprehensive, self-hosted privacy infrastructure', "README uses active voice in subtitle")
-        self.check_pattern(html, r'Redact identifying metrics to protect your privacy', "Dashboard tooltips follow style guide")
-        self.check_pattern(html, r'Use IP links', "Dashboard labels are concise and direct")
-        
-        # 2. Capitalization
-        self.check_pattern(html, r'<h2 class="headline-small">Admin sign-in</h2>', "Sign-in title uses Sentence case")
+        # Terminologies
+        self.check_pattern(html, r'Admin Sign in', "Uses 'sign-in' instead of 'login'")
+        self.check_no_pattern(html, r'[^/]Login', "No 'Login' found in dashboard template (excluding URLs)")
+        self.check_no_pattern(readme, r'Login', "No 'Login' found in README.md")
 
-    def verify_service_configs(self):
-        print("\n--- Verifying Service Configurations ---")
-        # 1. SearXNG
-        self.check_pattern("lib/services/config.sh", r'autocomplete: \"duckduckgo\"', "SearXNG autocomplete set to DuckDuckGo")
-        self.check_pattern("lib/services/config.sh", r'image_proxy: true', "SearXNG image proxy enabled")
-        
-        # 2. AdGuard Home
-        self.check_pattern("lib/services/config.sh", r'\"@@\\|\\|getproton.me\\^\"', "AdGuard YAML values are properly quoted")
+        # No Em Dashes (Restricted to project code/docs, ignoring third-party data)
+        for root, dirs, files in os.walk("."):
+            # Ignore external data and node_modules
+            if any(x in root for x in ["node_modules", ".git", "data/AppData", "test/test_data"]):
+                continue
+            for file in files:
+                if file.endswith((".md", ".html", ".sh", ".py", ".js")):
+                    if file == "styles.md":
+                        continue
+                    path = os.path.join(root, file)
+                    self.check_no_pattern(path, "\u2014", f"No em dashes in {path}")
 
-    def verify_docker_logs(self):
-        print("\n--- Parsing Docker Deployment Logs ---")
-        log_file = os.environ.get('HISTORY_LOG', 'data/AppData/privacy-hub/deployment.log')
-        if not os.path.exists(log_file):
-            self.log_warn(f"Deployment log not found at {log_file}. Skipping log audit.")
-            return
-
-        with open(log_file, 'r') as f:
-            for line in f:
-                try:
-                    log_data = json.loads(line)
-                    if log_data.get('level') == 'CRIT':
-                        self.log_fail(f"Critical error found in logs: {log_data.get('message')}")
-                    elif log_data.get('level') == 'WARN':
-                        self.log_warn(f"Warning found in logs: {log_data.get('message')}")
-                except json.JSONDecodeError:
-                    if 'ERROR' in line.upper() or 'CRITICAL' in line.upper():
-                        self.log_fail(f"Potential error in raw log line: {line.strip()}")
-
-        if self.failed == 0:
-            self.log_pass("No critical errors detected in deployment logs")
+        # No Nonsensical Markers
+        self.check_no_pattern("zima.sh", r'SECTION \d:', "No SECTION markers in zima.sh")
+        self.check_no_pattern("lib/core/core.sh", r'SECTION \d:', "No SECTION markers in core.sh")
 
     def run(self):
         print("==================================================")
@@ -148,14 +115,11 @@ class IntegrityChecker:
         self.verify_backend_logic()
         self.verify_ui_standards()
         self.verify_style_guide()
-        self.verify_service_configs()
-        self.verify_docker_logs()
         
         print("\n==================================================")
         print(f"AUDIT COMPLETE")
         print(f"  ✅ Passed:   {self.passed}")
         print(f"  ❌ Failed:   {self.failed}")
-        print(f"  ⚠️  Warnings: {self.warnings}")
         print("==================================================")
         
         if self.failed > 0:

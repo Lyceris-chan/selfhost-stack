@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# --- SECTION 16: STACK ORCHESTRATION & DEPLOYMENT ---
 # Execute system deployment and verify global infrastructure integrity.
 
 deploy_stack() {
@@ -104,7 +103,6 @@ then
         log_warn "Control plane returned status ${api_test}. The dashboard may show 'Offline (API Error)' initially."
     fi
 
-    # --- SECTION 16.1: PORTAINER AUTOMATION ---
     if [[ "${AUTO_PASSWORD}" == "true" ]] && grep -q "portainer:" "${COMPOSE_FILE}"; then
         log_info "Synchronizing Portainer administrative settings..."
         local portainer_ready=false
@@ -170,7 +168,6 @@ then
         fi
     fi
 
-    # --- SECTION 16.4: ASSET LOCALIZATION ---
     # Download remote assets (fonts, utilities) via Gluetun proxy for privacy
     download_remote_assets
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# --- SECTION 12: ADMINISTRATIVE CONTROL ARTIFACTS ---
 
 generate_scripts() {
   local vertd_devices=""
@@ -100,7 +99,7 @@ EOF
   readonly SERVICES_JSON="${CONFIG_DIR}/services.json"
   readonly CUSTOM_SERVICES_JSON="${PROJECT_ROOT}/custom_services.json"
 
-  cat > "${SERVICES_JSON}" <<EOF
+  "${SUDO}" tee "${SERVICES_JSON}" >/dev/null <<EOF
 {
   "services": {
     "anonymousoverflow": {
@@ -189,19 +188,14 @@ download_remote_assets() {
     return 0
   fi
 
-  if [[ "${MOCK_VERIFICATION:-false}" == "true" ]]; then
-    proxy_ready=true
-    proxy=""
-  else
-    log_info "Waiting for proxy to stabilize..."
-    for i in {1..30}; do
-      if curl --proxy "${proxy}" -fsSL --max-time 2 https://fontlay.com -o /dev/null >/dev/null 2>&1; then
-        proxy_ready=true
-        break
-      fi
-      sleep 1
-    done
-  fi
+  log_info "Waiting for proxy to stabilize..."
+  for i in {1..30}; do
+    if curl --proxy "${proxy}" -fsSL --max-time 2 https://fontlay.com -o /dev/null >/dev/null 2>&1; then
+      proxy_ready=true
+      break
+    fi
+    sleep 1
+  done
 
   if [[ "${proxy_ready}" == "false" ]]; then
     log_crit "Proxy not responding. Asset download aborted."
@@ -220,7 +214,7 @@ download_remote_assets() {
       if curl "${curl_args[@]}" "${url}" -o "${dest}"; then
         return 0
       fi
-      log_warn "Retrying download (\$j/3): \${url}"
+      log_warn "Retrying download ($j/3): ${url}"
       sleep 1
     done
     return 1
@@ -230,6 +224,45 @@ download_remote_assets() {
   download_asset "${ASSETS_DIR}/gs.css" "${url_gs}"
   download_asset "${ASSETS_DIR}/cc.css" "${url_cc}"
   download_asset "${ASSETS_DIR}/ms.css" "${url_ms}"
+
+  # Extract and download font files referenced in CSS
+  local css_f
+  for css_f in gs.css cc.css ms.css; do
+    local f_path="${ASSETS_DIR}/${css_f}"
+    if [[ -s "${f_path}" ]]; then
+      local origin="https://fontlay.com"
+      local base_name="${css_f%.css}"
+      
+      # Find all url() references
+      grep -o "url([^)]*)" "${f_path}" | sed -E 's/url\(["'\'']?([^"'\'')]+)["'\'']?\)/\1/' | sort | uniq | while read -r f_url; do
+        [[ -z "${f_url}" ]] && continue
+        local ext="ttf"
+        if [[ "${f_url}" == *.woff2* ]]; then ext="woff2"; elif [[ "${f_url}" == *.woff* ]]; then ext="woff"; fi
+        
+        # Create a unique filename for the font
+        local f_hash
+        f_hash=$(echo "${f_url}" | md5sum | cut -c1-8)
+        local f_filename="${base_name}_${f_hash}.${ext}"
+        local f_dest="${ASSETS_DIR}/${f_filename}"
+        local f_fetch_url="${f_url}"
+        
+        if [[ "${f_url}" == //* ]]; then f_fetch_url="https:${f_url}"
+        elif [[ "${f_url}" == /* ]]; then f_fetch_url="${origin}${f_url}"
+        elif [[ "${f_url}" != http* ]]; then f_fetch_url="${origin}/${f_url}"
+        fi
+
+        if [[ ! -f "${f_dest}" ]]; then
+          log_info "  -> Downloading font asset: ${f_filename}"
+          download_asset "${f_dest}" "${f_fetch_url}" || true
+        fi
+        
+        # Replace remote URL with local filename in CSS
+        if [[ -f "${f_dest}" ]]; then
+          sed -i "s|${f_url}|${f_filename}|g" "${f_path}"
+        fi
+      done
+    fi
+  done
 
   log_info "Downloading libraries..."
   download_asset "${ASSETS_DIR}/mcu.js" "https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/+esm"
@@ -259,19 +292,15 @@ setup_configs() {
       -H "Authorization: Token ${DESEC_TOKEN}" -H "Content-Type: application/json" \
       -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}]" > /dev/null 2>&1 || log_warn "deSEC API failed"
 
-    if [[ "${MOCK_VERIFICATION:-false}" == "true" ]]; then
-      "${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/certs" neilpang/acme.sh:latest /bin/sh -c "openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes -keyout /certs/ssl.key -out /certs/ssl.crt -subj '/CN=${DESEC_DOMAIN}'" >/dev/null 2>&1
-    else
-      "${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/acme" -e "DESEC_Token=${DESEC_TOKEN}" -e "DESEC_DOMAIN=${DESEC_DOMAIN}" \
-        neilpang/acme.sh:latest --issue --dns dns_desec --dnssleep 10 -d "${DESEC_DOMAIN}" -d "*.\$DESEC_DOMAIN" \
-        --keylength ec-256 --server letsencrypt --home /acme --config-home /acme --cert-home /acme/certs > /dev/null 2>&1
+    "${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/acme" -e "DESEC_Token=${DESEC_TOKEN}" -e "DESEC_DOMAIN=${DESEC_DOMAIN}" \
+      neilpang/acme.sh:latest --issue --dns dns_desec --dnssleep 10 -d "${DESEC_DOMAIN}" -d "*.\$DESEC_DOMAIN" \
+      --keylength ec-256 --server letsencrypt --home /acme --config-home /acme --cert-home /acme/certs > /dev/null 2>&1
 
-      if [[ -f "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]]; then
-        cp "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "${AGH_CONF_DIR}/ssl.crt"
-        cp "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "${AGH_CONF_DIR}/ssl.key"
-      else
-        "${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/certs" neilpang/acme.sh:latest /bin/sh -c "openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes -keyout /certs/ssl.key -out /certs/ssl.crt -subj '/CN=${DESEC_DOMAIN}'" >/dev/null 2>&1
-      fi
+    if [[ -f "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]]; then
+      cp "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "${AGH_CONF_DIR}/ssl.crt"
+      cp "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "${AGH_CONF_DIR}/ssl.key"
+    else
+      "${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/certs" neilpang/acme.sh:latest /bin/sh -c "openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes -keyout /certs/ssl.key -out /certs/ssl.crt -subj '/CN=${DESEC_DOMAIN}'" >/dev/null 2>&1
     fi
     dns_server_name="${DESEC_DOMAIN}"
   else
@@ -321,33 +350,33 @@ filters:
 filters_update_interval: 6
 tls:
   enabled: true
-  server_name: "\${dns_server_name}"
+  server_name: "${dns_server_name}"
   certificate_path: /opt/adguardhome/conf/ssl.crt
   private_key_path: /opt/adguardhome/conf/ssl.key
 EOF
 
-  if [[ -n "\${DESEC_DOMAIN}" ]]; then
-    nginx_redirect="if (\$http_host = '\${DESEC_DOMAIN}') { return 301 https://\$host:8443\$request_uri; }"
+  if [[ -n "${DESEC_DOMAIN}" ]]; then
+    nginx_redirect="if (\$http_host = '${DESEC_DOMAIN}') { return 301 https://\$host:8443\$request_uri; }"
   fi
 
   cat <<EOF | "${SUDO}" tee "${NGINX_CONF}" >/dev/null
 error_log /dev/stderr info;
 access_log /dev/stdout;
-set_real_ip_from 172.\${found_octet_val}.0.0/16;
+set_real_ip_from 172.${found_octet_val}.0.0/16;
 real_ip_header X-Forwarded-For;
 real_ip_recursive on;
 map \$http_host \$backend {
     hostnames;
     default "";
-    adguard.\${DESEC_DOMAIN}    http://\${CONTAINER_PREFIX}adguard:8083;
+    adguard.${DESEC_DOMAIN}    http://${CONTAINER_PREFIX}adguard:8083;
 }
 server {
-    listen \${PORT_DASHBOARD_WEB};
+    listen ${PORT_DASHBOARD_WEB};
     listen 8443 ssl;
     ssl_certificate /etc/adguard/conf/ssl.crt;
     ssl_certificate_key /etc/adguard/conf/ssl.key;
     location / {
-        \${nginx_redirect}
+        ${nginx_redirect}
         proxy_set_header Host \$host;
         if (\$backend != "") { proxy_pass \$backend; break; }
         root /usr/share/nginx/html;

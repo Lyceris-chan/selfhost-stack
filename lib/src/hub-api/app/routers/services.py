@@ -1,33 +1,49 @@
-import os
+import concurrent.futures
 import json
+import os
 import re
 import subprocess
 import threading
-import concurrent.futures
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
-from ..core.security import get_current_user, get_admin_user
+
 from ..core.config import settings
+from ..core.security import get_admin_user, get_current_user
 from ..utils.logging import log_structured
 from ..utils.process import run_command, sanitize_service_name
 
 router = APIRouter()
 
+
 class ServiceUpdate(BaseModel):
+    """Schema for a single service update request."""
     service: str
+
 
 class RollbackRequest(BaseModel):
+    """Schema for a service rollback request."""
     service: str
+
 
 class BatchUpdate(BaseModel):
+    """Schema for a batch service update request."""
     services: List[str]
 
+
 class MigrationRequest(BaseModel):
+    """Schema for a service migration request."""
     service: str
-    backup: str = "yes" # "yes" or "no"
+    backup: str = "yes"  # "yes" or "no"
+
 
 def load_services():
+    """Loads service metadata from the configured services.json file.
+
+    Returns:
+        A dictionary containing service definitions.
+    """
     try:
         if os.path.exists(settings.SERVICES_FILE):
             with open(settings.SERVICES_FILE, "r", encoding="utf-8") as f:
@@ -40,7 +56,13 @@ def load_services():
         pass
     return {}
 
+
 def get_update_strategy():
+    """Determines the current update strategy (stable/nightly) from env or config.
+
+    Returns:
+        The active update strategy string.
+    """
     strategy = os.environ.get('UPDATE_STRATEGY', 'stable')
     theme_file = os.path.join(settings.CONFIG_DIR, "theme.json")
     if os.path.exists(theme_file):
@@ -53,22 +75,37 @@ def get_update_strategy():
             pass
     return strategy
 
+
 @router.get("/services")
 def get_services():
+    """Endpoint to retrieve the current service catalog."""
     return {"services": load_services()}
 
+
 @router.get("/theme")
-def get_theme(): # Public
+def get_theme():
+    """Endpoint to retrieve the current UI theme configuration."""
     theme_file = os.path.join(settings.CONFIG_DIR, "theme.json")
     if os.path.exists(theme_file):
         try:
             with open(theme_file, 'r') as f:
                 return json.load(f)
-        except: pass
+        except Exception:
+            pass
     return {}
+
 
 @router.post("/theme")
 def update_theme(theme: dict, user: str = Depends(get_current_user)):
+    """Updates the UI theme and synchronizes related system settings.
+
+    Args:
+        theme: Dictionary containing theme preferences.
+        user: Authenticated user.
+
+    Returns:
+        Success or error status.
+    """
     theme_file = os.path.join(settings.CONFIG_DIR, "theme.json")
     try:
         with open(theme_file, 'w') as f:
@@ -110,7 +147,9 @@ def update_theme(theme: dict, user: str = Depends(get_current_user)):
     except Exception as e:
         return {"error": str(e)}
 
+
 def _check_repo_status(repo_name):
+    """Internal helper to check if a git repository is behind its origin."""
     src_root = "/app/sources"
     repo_path = os.path.join(src_root, repo_name)
     if os.path.isdir(os.path.join(repo_path, ".git")):
@@ -122,8 +161,10 @@ def _check_repo_status(repo_name):
             pass
     return None
 
+
 @router.get("/updates")
 def check_updates_status(user: str = Depends(get_current_user)):
+    """Audits the local source repositories and images for available updates."""
     updates = {}
     src_root = "/app/sources"
     
@@ -144,11 +185,14 @@ def check_updates_status(user: str = Depends(get_current_user)):
                 for k, v in img_updates.items():
                     if not k.startswith('_'):
                         updates[k] = v
-        except: pass
+        except Exception:
+            pass
     return {"updates": updates}
+
 
 @router.get("/check-updates")
 def trigger_check_updates(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+    """Triggers a background task to fetch updates for all source repositories."""
     def _check():
         log_structured("INFO", "Checking for system-wide source updates...", "MAINTENANCE")
         src_root = "/app/sources"
@@ -161,8 +205,19 @@ def trigger_check_updates(background_tasks: BackgroundTasks, user: str = Depends
     background_tasks.add_task(_check)
     return {"success": True, "message": "Source update check initiated"}
 
+
 @router.post("/update-service")
 def update_single_service(req: ServiceUpdate, background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+    """Initiates an update sequence for a specific service.
+
+    Args:
+        req: Service update request.
+        background_tasks: Background task registry.
+        user: Authenticated admin user.
+
+    Returns:
+        Status message indicating the update has started.
+    """
     service = sanitize_service_name(req.service)
     if not service:
         raise HTTPException(status_code=400, detail="Invalid service name")
@@ -187,8 +242,9 @@ def update_single_service(req: ServiceUpdate, background_tasks: BackgroundTasks,
                     if res.returncode == 0:
                         prev_hash = res.stdout.strip()
                         state_file = f"/app/data/rollback_{service}.json"
+                        from datetime import datetime
                         with open(state_file, 'w') as f:
-                            json.dump({"hash": prev_hash, "timestamp": str(threading.Event())}, f)
+                            json.dump({"hash": prev_hash, "timestamp": datetime.now().isoformat()}, f)
                         log_structured("INFO", f"[Rollback Engine] Saved previous state for {service}: {prev_hash[:8]}", "MAINTENANCE")
                 except Exception as e:
                     log_structured("ERROR", f"[Rollback Engine] Failed to save state: {e}", "MAINTENANCE")
@@ -232,8 +288,19 @@ def update_single_service(req: ServiceUpdate, background_tasks: BackgroundTasks,
     background_tasks.add_task(_run_update)
     return {"success": True, "message": f"Update for {service} started in background"}
 
+
 @router.post("/rollback-service")
 def rollback_single_service(req: RollbackRequest, background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+    """Reverts a service to its previous recorded state.
+
+    Args:
+        req: Rollback request.
+        background_tasks: Background task registry.
+        user: Authenticated admin user.
+
+    Returns:
+        Status message indicating the rollback has started.
+    """
     service = sanitize_service_name(req.service)
     if not service:
         raise HTTPException(status_code=400, detail="Invalid service name")
@@ -271,14 +338,18 @@ def rollback_single_service(req: RollbackRequest, background_tasks: BackgroundTa
     background_tasks.add_task(_run_rollback)
     return {"success": True, "message": f"Rollback for {service} started in background"}
 
+
 @router.get("/rollback-status")
 def check_rollback_status(service: str, user: str = Depends(get_current_user)):
+    """Checks if a rollback point exists for a specific service."""
     service = sanitize_service_name(service)
     state_file = f"/app/data/rollback_{service}.json"
     return {"available": os.path.exists(state_file)}
 
+
 @router.post("/batch-update")
 def batch_update_services(req: BatchUpdate, background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+    """Sequentially updates multiple services in the background."""
     services = [sanitize_service_name(s) for s in req.services if sanitize_service_name(s)]
     if not services:
         raise HTTPException(status_code=400, detail="No valid services provided")
@@ -294,8 +365,10 @@ def batch_update_services(req: BatchUpdate, background_tasks: BackgroundTasks, u
     background_tasks.add_task(_run_batch)
     return {"success": True, "message": "Batch update started"}
 
+
 @router.post("/migrate")
 def migrate_service(service: str, backup: str = "yes", user: str = Depends(get_admin_user)):
+    """Executes database migration logic for a service."""
     service = sanitize_service_name(service)
     if not service:
         raise HTTPException(status_code=400, detail="Invalid service name")
@@ -309,8 +382,10 @@ def migrate_service(service: str, backup: str = "yes", user: str = Depends(get_a
     except Exception as e:
         return {"error": str(e)}
 
+
 @router.post("/clear-db")
 def clear_db(service: str, backup: str = "yes", user: str = Depends(get_admin_user)):
+    """Wipes the database for a specific service."""
     service = sanitize_service_name(service)
     if not service:
         raise HTTPException(status_code=400, detail="Invalid service name")
@@ -321,8 +396,10 @@ def clear_db(service: str, backup: str = "yes", user: str = Depends(get_admin_us
     except Exception as e:
         return {"error": str(e)}
 
+
 @router.get("/clear-logs")
 def clear_logs(service: str, user: str = Depends(get_admin_user)):
+    """Clears application logs for a specific service."""
     service = sanitize_service_name(service)
     if not service:
         raise HTTPException(status_code=400, detail="Invalid service name")
@@ -335,8 +412,10 @@ def clear_logs(service: str, user: str = Depends(get_admin_user)):
     except Exception as e:
         return {"error": str(e)}
 
+
 @router.get("/vacuum")
 def vacuum_db(service: str, user: str = Depends(get_admin_user)):
+    """Performs database optimization (VACUUM) for a service."""
     service = sanitize_service_name(service)
     if not service:
         raise HTTPException(status_code=400, detail="Invalid service name")
@@ -348,8 +427,10 @@ def vacuum_db(service: str, user: str = Depends(get_admin_user)):
     except Exception as e:
         return {"error": str(e)}
 
+
 @router.get("/changelog")
 def get_changelog(service: str, user: str = Depends(get_current_user)):
+    """Retrieves the recent git commit history for a service."""
     service = sanitize_service_name(service)
     if not service:
         raise HTTPException(status_code=400, detail="Invalid service name")
@@ -363,8 +444,10 @@ def get_changelog(service: str, user: str = Depends(get_current_user)):
             pass
     return {"changelog": "No detailed changelog available for this service."}
 
+
 @router.post("/master-update")
 def master_update(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+    """Initiates a full system update sequence in the background."""
     def _run():
         log_structured("INFO", "[Update Engine] Starting Master Update...", "MAINTENANCE")
         run_command(["/usr/local/bin/migrate.sh", "all", "backup-all"], timeout=300)

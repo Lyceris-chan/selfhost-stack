@@ -99,7 +99,7 @@ You'll need:
 
 ---
 
-### Step 2: Get your domain token *(Required)*
+### Step 2: Get your domain token *(Mandatory)*
 
 *This gives your hub a memorable name like `my-home.dedyn.io` instead of an IP address.*
 
@@ -111,7 +111,7 @@ You'll need:
 
 > 📝 **What you're getting**: This token lets the installer automatically set up SSL certificates so your connection is encrypted.
 
-> ⚠️ **Why you need this for HTTPS**: Without a domain, your browser will show scary "Your connection is not private" warnings because SSL certificates can only be issued for domain names, not IP addresses. The deSEC domain and token allow the installer to automatically obtain a free **Let's Encrypt** certificate, so your dashboard and services load securely without any browser warnings. If you skip this step, you will need to click through security warnings every time you access your hub.
+> ⚠️ **Why you need this for HTTPS**: Without a domain, your browser will show scary "Your connection is not private" warnings because SSL certificates can only be issued for domain names, not IP addresses. The deSEC domain and token allow the installer to automatically obtain a free **Let's Encrypt** certificate, so your dashboard and services load securely without any browser warnings.
 >
 > **Mandatory for DNS-over-HTTPS (DoH) and DNS-over-QUIC (DoQ)**: A valid, globally trusted certificate is mandatory for DoH and DoQ to function correctly on modern devices. Without it, your phone or browser will refuse to use your hub as a secure DNS provider.
 >
@@ -148,7 +148,6 @@ Before running the installer, you can customize your deployment using these flag
 
 | Flag | Description |
 | :--- | :--- |
-| `-y` | **Auto-Confirm**: Skips yes/no prompts. Reserved for automated testing. |
 | `-j` | **Parallel Deploy**: Deploys services in parallel. Faster, but higher CPU usage! |
 | `-s` | **Selective**: Install only specific apps (e.g., `-s invidious,memos`). |
 | `-c` | **Maintenance**: Recreates containers and networks to fix glitches while **preserving** your persistent data. |
@@ -159,10 +158,10 @@ Before running the installer, you can customize your deployment using these flag
 **Example usage:**
 ```bash
 # Automated deployment with parallel builds
-./zima.sh -y -j
+./zima.sh -j
 
 # Selective deployment with auto-passwords
-./zima.sh -y -s invidious,memos,searxng
+./zima.sh -s invidious,memos,searxng
 ```
 
 ---
@@ -218,6 +217,7 @@ The Unbound configuration ([lib/services/config.sh:285](lib/services/config.sh#L
 *   **Harden Glue ([RFC 1034](https://datatracker.ietf.org/doc/html/rfc1034))**: `harden-glue: yes`. Prevents cache poisoning by trusting only records within the authoritative zone.
 *   **Trust Anchor Management ([RFC 5011](https://datatracker.ietf.org/doc/html/rfc5011))**: `auto-trust-anchor-file`. Maintains DNSSEC integrity through automated root key updates.
 *   **Performance Tuning**: `prefetch: yes` and `prefetch-key: yes` are enabled to ensure low-latency resolution by refreshing popular records before they expire.
+*   **VPN DNS Isolation**: The **Gluetun** VPN container is explicitly configured to use **Quad9** (`DOT_PROVIDERS=quad9`) for its internal DNS-over-TLS resolution instead of the default Cloudflare, ensuring no traffic is routed to 1.1.1.1.
 
 ### AdGuard Home (Filtering & TLS)
 AdGuard Home acts as the primary gateway and policy engine ([lib/services/config.sh:309](lib/services/config.sh#L309)):
@@ -279,8 +279,7 @@ To automatically redirect your browser from big-tech sites to your private Hub:
 
 ### Included privacy services
 
-Services marked with 🔒 VPN are routed through a secure tunnel. These services only access the internet via the VPN gateway, and they are not reachable from the public internet. Every service in this stack is pulled from a trusted minimal image.
-
+Services marked with 🔒 VPN are routed through a secure tunnel. These services only access the internet via the VPN gateway and are not reachable from the public internet.
 
 <details>
 <summary>📋 <strong>View full service catalog and routing</strong> (Click to expand)</summary>
@@ -300,7 +299,7 @@ Services marked with 🔒 VPN are routed through a secure tunnel. These services
 | **Memos** | Utility | **🔒 VPN** | [Source](https://github.com/usememos/memos) / [Image](https://github.com/usememos/memos/pkgs/container/memos) |
 | **Immich** | Utility | **🔒 VPN*** | [Source](https://github.com/immich-app/immich) / [Image](https://github.com/immich-app/immich/pkgs/container/immich-server) |
 | **VERT / VERTd** | Utility | **🏠 Local** | [Source](https://github.com/vert-sh/vert) / [Image](https://github.com/vert-sh/vert/pkgs/container/vert) |
-| **AdGuard Home** | Core | **🏠 Local** | [Source](https://github.com/AdguardTeam/AdGuardHome) / [Image](https://hub.docker.com/r/adguard/adguardhome) |
+| **AdGuard Home*** | Core | **🏠 Local** | [Source](https://github.com/AdguardTeam/AdGuardHome) / [Image](https://hub.docker.com/r/adguard/adguardhome) |
 | **Unbound** | Core | **🏠 Local** | [Source](https://github.com/NLnetLabs/unbound) / [Image](https://hub.docker.com/r/klutchell/unbound) |
 | **WireGuard** | Core | **🏠 Local** | [Source](https://github.com/wg-easy/wg-easy) / [Image](https://github.com/wg-easy/wg-easy/pkgs/container/wg-easy) |
 | **Gluetun** | Core | **🌍 Exit** | [Source](https://github.com/qdm12/gluetun) / [Image](https://hub.docker.com/r/qmcgaw/gluetun) |
@@ -311,6 +310,7 @@ Services marked with 🔒 VPN are routed through a secure tunnel. These services
 | **Odido Booster** | Utility | **🏠 Local** | [Source](https://github.com/Lyceris-chan/odido-bundle-booster) / *(local build)* |
 
 *\*Immich uses the VPN only for specific machine learning model downloads and metadata fetching. Your photos stay local.
+\**AdGuard Home fetches DNS blocklists and updates via your home IP address.
 
 </details>
 

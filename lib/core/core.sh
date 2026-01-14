@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
 
 # Source Consolidated Constants
 # SCRIPT_DIR is exported from zima.sh
@@ -142,7 +144,6 @@ generate_hash() {
   "${DOCKER_CMD}" run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "${user}" "${pass}" 2>/dev/null | cut -d: -f2 || echo "FAILED"
 }
 
-# --- SECTION 0: ARGUMENT PARSING & INITIALIZATION ---
 # Initialize globals
 FORCE_CLEAN=false
 CLEAN_ONLY=false
@@ -231,7 +232,6 @@ if [ -n "$ENV_FILE" ]; then
     fi
 fi
 
-# --- SECTION 1: ENVIRONMENT VALIDATION & DIRECTORY SETUP ---
 # Suppress git advice/warnings for cleaner logs during automated clones
 export GIT_CONFIG_PARAMETERS="'advice.detachedHead=false'"
 
@@ -431,7 +431,6 @@ readonly PATCHES_SCRIPT="$BASE_DIR/patches.sh"
 $SUDO chown 1000:1000 "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage" "$ACTIVE_PROFILE_NAME_FILE" 2>/dev/null || true
 $SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$ASSETS_DIR" 2>/dev/null || true
 
-# --- SECTION 3: DYNAMIC SUBNET ALLOCATION ---
 allocate_subnet() {
   log_info "Allocating private virtual subnet for container isolation."
 
@@ -439,6 +438,7 @@ allocate_subnet() {
   local found_octet=""
   local test_subnet
   local test_net_name
+  local i
 
   for i in {20..30}; do
     test_subnet="172.${i}.0.0/16"
@@ -629,7 +629,7 @@ setup_secrets() {
       ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-$(generate_secret 24)}"
       PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-$(generate_secret 24)}"
     else
-      # 1. deSEC Domain & Certificate Setup (Requirement 2)
+      # 1. deSEC Domain & Certificate Setup
       echo "--- deSEC Domain & Certificate Setup ---"
       local input_domain=""
       while [[ -z "${DESEC_DOMAIN}" ]]; do
@@ -648,7 +648,7 @@ setup_secrets() {
       DESEC_TOKEN="${input_token:-$DESEC_TOKEN}"
       echo ""
 
-      # 2. Password Preferences (Requirement 3)
+      # 2. Password Preferences
       echo "--- MANUAL CREDENTIAL PROVISIONING ---"
       echo "Security Note: Please use strong, unique passwords for each service."
       echo ""
@@ -755,6 +755,12 @@ setup_secrets() {
     IMMICH_DB_PASSWORD=$(generate_secret 32)
     IMMICH_ADMIN_PASS_RAW=$(generate_secret 24)
     INVIDIOUS_DB_PASSWORD=$(generate_secret 32)
+
+    # Robustness: Remove .secrets if it accidentally became a directory (Docker auto-mount issue)
+    if [[ -d "${BASE_DIR}/.secrets" ]]; then
+      log_warn ".secrets found as a directory. Removing..."
+      ${SUDO} rm -rf "${BASE_DIR}/.secrets"
+    fi
 
     cat > "${BASE_DIR}/.secrets" <<EOF
 VPN_PASS_RAW="${VPN_PASS_RAW}"

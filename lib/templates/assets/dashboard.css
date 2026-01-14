@@ -416,16 +416,14 @@
                     flex-wrap: wrap;
                 }
                 
-                /* Grid Layouts */
-                .grid { 
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-                    gap: 24px; 
-                    margin-bottom: 32px; 
-                    width: 100%;
-                }
-        
-                @media (max-width: 720px) {
+                        /* Grid Layouts */
+                                                .grid {
+                                                    display: grid;
+                                                    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+                                                    gap: 24px;
+                                                    margin-bottom: 32px;
+                                                    width: 100%;
+                                                }                @media (max-width: 720px) {
                     .grid {
                         grid-template-columns: 1fr;
                     }
@@ -480,13 +478,15 @@
         
                         .card-header h2 {
                             margin: 0;
-                            font-size: 24px;
-                            font-weight: 400;
+                            font-size: 16px;
+                            font-weight: 500;
                             color: var(--md-sys-color-on-surface);
-                            line-height: 32px;
+                            line-height: 24px;
                             white-space: nowrap;
-                            overflow: hidden;
                             text-overflow: ellipsis;
+                            overflow: hidden;
+                            min-width: 0;
+                            flex-shrink: 1;
                         }
                 
                         .card-title-row {
@@ -824,7 +824,7 @@
         
                 /* Helper Classes */
         .flex-row { display: flex; flex-direction: row; }
-        .flex-column { display: flex; flex-column: column; }
+        .flex-column { display: flex; flex-direction: column; }
         .align-center { align-items: center; }
         .align-start { align-items: flex-start; }
         .justify-between { justify-content: space-between; }

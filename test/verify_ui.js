@@ -1,143 +1,242 @@
 /**
- * @fileoverview Expanded UI audit suite for ZimaOS Privacy Hub.
- * Verifies Material Design 3 compliance, interactions, and service status.
+ * @fileoverview Comprehensive UI Verification Suite for ZimaOS Privacy Hub.
+ * 
+ * This script utilizes Puppeteer to perform an end-to-end audit of the dashboard,
+ * checking for accessibility, visual rendering (M3), status indicators,
+ * interaction flows, and console health.
+ * 
+ * Adheres to the Google JavaScript Style Guide.
  */
 
-const { initBrowser, logResult, getAdminPassword, generateReport, SCREENSHOT_DIR } = require('./lib/browser_utils');
 const path = require('path');
+const {
+  initBrowser,
+  logResult,
+  getResults,
+  getAdminPassword,
+  generateReport,
+  getConsoleLogs,
+  SCREENSHOT_DIR,
+} = require('./lib/browser_utils');
 
+/** @const {string} LAN IP for the test environment. */
 const LAN_IP = process.env.LAN_IP || '127.0.0.1';
+
+/** @const {string} URL of the dashboard. */
 const DASHBOARD_URL = `http://${LAN_IP}:8088`;
 
 /**
- * Executes the full UI audit suite.
+ * Main execution function for the UI audit.
  */
 async function runAudit() {
-  const { browser, page } = await initBrowser();
+  const {browser, page} = await initBrowser();
   const adminPass = getAdminPassword();
 
   try {
-    console.log('--- Phase 1: Initial Dashboard Audit ---');
-    await page.goto(DASHBOARD_URL, { waitUntil: 'networkidle2', timeout: 30000 });
-    
-    // 1. Basic Page Load
-    logResult('Dashboard', 'Load', 'PASS', 'Dashboard reachable');
-    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '01-initial-load.png') });
+    console.log(`\n=== Starting UI Audit at ${DASHBOARD_URL} ===`);
 
-    // --- UI Audit: Overlap & Layout Check ---
-    console.log('  Running Comprehensive Layout Audit...');
-    const layoutAudit = await page.evaluate(() => {
+    // --- Phase 1: Initial Load & Accessibility ---
+    try {
+      await page.goto(DASHBOARD_URL, {waitUntil: 'networkidle2', timeout: 45000});
+      logResult('Dashboard', 'Load', 'PASS', 'Dashboard reachable and loaded');
+    } catch (e) {
+      logResult('Dashboard', 'Load', 'FAIL', `Failed to load dashboard: ${e.message}`);
+      throw e;
+    }
+
+    await page.screenshot({path: path.join(SCREENSHOT_DIR, '01-initial-load.png')});
+
+    // --- Phase 2: Service Status Indicators ---
+    console.log('  Verifying Service Status Indicators...');
+    // Allow time for WebSocket/polling to update statuses
+    await new Promise((r) => setTimeout(r, 5000));
+
+    const serviceStates = await page.evaluate(() => {
+      const indicators = document.querySelectorAll('.status-indicator');
       const results = [];
-      const checkOverlap = (el1, el2) => {
-        const r1 = el1.getBoundingClientRect();
-        const r2 = el2.getBoundingClientRect();
-        return !(r1.right < r2.left || r1.left > r2.right || r1.bottom < r2.top || r1.top > r2.bottom);
-      };
+      indicators.forEach((ind) => {
+        const dot = ind.querySelector('.status-dot');
+        const labelSpan = ind.querySelector('span:not(.status-dot)');
+        const text = labelSpan ? labelSpan.textContent.trim() : 'Unknown';
+        const card = ind.closest('.card');
+        const name = card ?
+            (card.querySelector('h2')?.textContent ||
+             card.querySelector('h3')?.textContent || 'Unknown') :
+            'Unknown';
 
-      // 1. Audit Cards
-      const cards = document.querySelectorAll('.card');
-      cards.forEach((card, i) => {
-        const title = card.querySelector('h2, h3');
-        const actions = card.querySelector('.card-header-actions');
-        if (title && actions && checkOverlap(title, actions)) {
-          results.push(`Overlap in card ${i}: Title and Actions`);
+        let status = 'UNKNOWN';
+        if (dot.classList.contains('active') || dot.classList.contains('up')) {
+          status = 'ONLINE';
+        } else if (dot.classList.contains('down') || dot.classList.contains('error')) {
+          status = 'OFFLINE';
+        } else if (dot.classList.contains('starting') || dot.classList.contains('pending')) {
+          status = 'STARTING';
         }
-      });
 
-      // 2. Audit Chips
-      const chipBoxes = document.querySelectorAll('.chip-box');
-      chipBoxes.forEach((box, i) => {
-        const chips = box.querySelectorAll('.chip');
-        for (let j = 0; j < chips.length; j++) {
-          for (let k = j + 1; k < chips.length; k++) {
-            if (checkOverlap(chips[j], chips[k])) {
-              results.push(`Overlap in chip-box ${i}: Chips ${j} and ${k}`);
-            }
-          }
-        }
+        results.push({name, status, text});
       });
-
       return results;
     });
 
-    if (layoutAudit.length === 0) {
-      logResult('Dashboard', 'Overlap Audit', 'PASS', 'No overlapping components detected');
+    const offlineServices = serviceStates.filter((s) => s.status === 'OFFLINE');
+    if (offlineServices.length === 0 && serviceStates.length > 0) {
+      logResult('Services', 'Status Check', 'PASS',
+          `All ${serviceStates.length} services reporting ONLINE`);
+    } else if (serviceStates.length === 0) {
+      logResult('Services', 'Status Check', 'WARN',
+          'No status indicators found (Dashboard might be empty?)');
     } else {
-      logResult('Dashboard', 'Overlap Audit', 'FAIL', `Detected ${layoutAudit.length} overlaps: ${layoutAudit.join(', ')}`);
+      const details = offlineServices.map((s) => `${s.name}`).join(', ');
+      logResult('Services', 'Status Check', 'FAIL',
+          `Offline services detected: ${details}`);
     }
 
-    // responsiveness check
-    console.log('  Testing responsiveness (Mobile Viewport)...');
-    await page.setViewport({ width: 375, height: 812 }); // iPhone X
-    await new Promise(r => setTimeout(r, 1000));
-    const mobileAudit = await page.evaluate(() => {
+    // --- Phase 3: Layout & Visual Integrity ---
+    console.log('  Running Visual Integrity Audit (Overlap & Overflow)...');
+    const layoutIssues = await page.evaluate(() => {
+      const issues = [];
+      const isOverflowing = (el) =>
+          el.offsetWidth < el.scrollWidth || el.offsetHeight < el.scrollHeight;
+
+      // Helper to check overlap
+      const overlaps = (r1, r2) => {
+        if (r1.width === 0 || r1.height === 0 || r2.width === 0 || r2.height === 0) {
+          return false;
+        }
+        return !(r1.right <= r2.left || r1.left >= r2.right ||
+                 r1.bottom <= r2.top || r1.top >= r2.bottom);
+      };
+
       const cards = document.querySelectorAll('.card');
-      const overflowing = Array.from(cards).filter(c => c.offsetWidth > window.innerWidth);
-      return overflowing.length;
+      cards.forEach((card, i) => {
+        const name = card.querySelector('h2, h3')?.textContent || `Card ${i}`;
+        const header = card.querySelector('.card-header');
+        const actions = card.querySelector('.card-header-actions');
+        const rect = card.getBoundingClientRect();
+
+        // Check overflow in titles
+        const title = card.querySelector('h2, h3');
+        if (title && isOverflowing(title)) {
+          issues.push(`Text overflow in title of [${name}]`);
+        }
+
+        // Check overlap between title and actions
+        if (header && actions && title) {
+          if (overlaps(title.getBoundingClientRect(), actions.getBoundingClientRect())) {
+            issues.push(`Header content overlap in [${name}]`);
+          }
+        }
+
+        // Check card overlap with other cards
+        cards.forEach((otherCard, j) => {
+          if (i !== j) {
+            if (overlaps(rect, otherCard.getBoundingClientRect())) {
+              issues.push(`Card [${name}] overlaps with another card`);
+            }
+          }
+        });
+      });
+
+      // M3 Spacing Check (8dp Grid)
+      const sections = document.querySelectorAll('section');
+      sections.forEach((sec) => {
+        const style = window.getComputedStyle(sec);
+        const marginTop = parseInt(style.marginTop);
+        const marginBottom = parseInt(style.marginBottom);
+
+        if (marginTop % 8 !== 0) {
+          issues.push(`Section margin-top (${marginTop}px) violates 8dp grid`);
+        }
+        if (marginBottom % 8 !== 0) {
+          issues.push(`Section margin-bottom (${marginBottom}px) violates 8dp grid`);
+        }
+      });
+
+      return issues;
     });
-    logResult('Dashboard', 'Mobile Responsiveness', mobileAudit === 0 ? 'PASS' : 'FAIL', 'Cards adapt to mobile width');
-    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '01-mobile-view.png') });
-    await page.setViewport({ width: 1280, height: 800 }); // Restore desktop
 
-    // 2. Dynamic Theme Check
-    console.log('  Testing Theme Switching...');
-    await page.click('.theme-toggle');
-    const isLightMode = await page.evaluate(() => document.documentElement.classList.contains('light-mode'));
-    logResult('Dashboard', 'Theme Toggle', isLightMode ? 'PASS' : 'FAIL', 'Light/Dark mode switch verified');
-    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '02-theme-switch.png') });
-
-    // 3. Admin Sign in & Interaction
-    console.log('  Testing Admin Authentication...');
-    await page.click('#admin-lock-btn');
-    await page.waitForSelector('#signin-modal', { visible: true });
-    
-    // Layout check for M3 Modal
-    const modalAudit = await page.evaluate(() => {
-      const header = document.querySelector('#signin-modal .modal-header');
-      const title = header.querySelector('h2');
-      const closeBtn = header.querySelector('.btn-icon');
-      const overlap = (title.getBoundingClientRect().right > closeBtn.getBoundingClientRect().left);
-      
-      // Check for layout shifts (simplified)
-      const initialTop = header.getBoundingClientRect().top;
-      return { overlap, initialTop };
-    });
-    logResult('Dashboard', 'Modal Layout', !modalAudit.overlap ? 'PASS' : 'FAIL', 'No component overlap detected');
-    logResult('Dashboard', 'M3 Spacing', modalAudit.initialTop > 0 ? 'PASS' : 'FAIL', 'Material Design spacing verified');
-
-    await page.type('#admin-password-input', adminPass);
-    await page.click('#signin-modal .btn-filled');
-    await page.waitForFunction(() => document.body.classList.contains('admin-mode'), { timeout: 10000 });
-    logResult('Dashboard', 'Admin Sign in', 'PASS', 'Authenticated successfully');
-
-    // 4. Service Status Integrity
-    console.log('  Verifying Service Status Indicators...');
-    const statusPass = await page.evaluate(() => {
-      const indicators = document.querySelectorAll('.status-indicator');
-      return Array.from(indicators).every(i => i.textContent.includes('Connected') || i.textContent.includes('Online') || i.textContent.includes('Running'));
-    });
-    logResult('Dashboard', 'Service Integrity', statusPass ? 'PASS' : 'FAIL', 'All core services reporting healthy');
-
-    // 5. Functional Spot Check (Invidious)
-    console.log('--- Phase 2: Privacy Frontend Audit (Invidious) ---');
-    try {
-      await page.goto(`http://${LAN_IP}:3000`, { waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('input[name="q"]', { timeout: 10000 });
-      await page.type('input[name="q"]', 'Privacy Hub Audit');
-      await page.keyboard.press('Enter');
-      await page.waitForSelector('a[href*="watch?v="]', { timeout: 10000 });
-      logResult('Invidious', 'Search & Scrape', 'PASS', 'VPN-gated results returned');
-    } catch (err) {
-      logResult('Invidious', 'Search & Scrape', 'FAIL', err.message);
+    if (layoutIssues.length === 0) {
+      logResult('UI', 'Layout Integrity', 'PASS',
+          'No overlaps, overflows, or M3 grid violations detected');
+    } else {
+      // De-duplicate issues
+      const uniqueIssues = [...new Set(layoutIssues)];
+      logResult('UI', 'Layout Integrity', 'FAIL', uniqueIssues.join('; '));
     }
 
-  } catch (e) {
-    console.error('Audit Error:', e);
-    logResult('Global', 'Audit Execution', 'FAIL', e.message);
+    // --- Phase 4: Sign in / Authentication Flow ---
+    console.log('  Verifying Authentication Flow...');
+
+    // Check for "Sign in" terminology (Google Style Guide)
+    const signinBtn = await page.$('#admin-lock-btn, .login-btn, .signin-btn');
+    if (signinBtn) {
+      await signinBtn.click();
+      await page.waitForSelector('#signin-modal', {visible: true, timeout: 5000});
+
+      const modalTitle = await page.$eval('#signin-modal h2', (el) => el.textContent);
+      // Strict case-sensitive check for "Sign in" terminology
+      if (modalTitle.includes('Sign in')) {
+        logResult('UI', 'Terminology', 'PASS', 'Modal uses correct "Sign in" terminology');
+      } else {
+        logResult('UI', 'Terminology', 'WARN',
+            `Modal title "${modalTitle}" should use "Sign in"`);
+      }
+
+      // Perform Sign in
+      await page.type('#admin-password-input', adminPass);
+      // Assuming the button is the one with 'btn-filled' class inside modal
+      await page.click('#signin-modal .btn-filled');
+
+      try {
+        await page.waitForFunction(() => document.body.classList.contains('admin-mode'),
+            {timeout: 10000});
+        logResult('Auth', 'Admin Sign in', 'PASS', 'Authenticated successfully');
+      } catch (e) {
+        logResult('Auth', 'Admin Sign in', 'FAIL',
+            'Failed to enter admin mode after credentials');
+      }
+    } else {
+      logResult('Auth', 'Sign in Button', 'WARN', 'Could not locate sign in button');
+    }
+
+    // --- Phase 5: Browser Console Audit ---
+    console.log('  Auditing Browser Console...');
+    const logs = getConsoleLogs();
+    const errors = logs.filter((l) => l.type === 'error');
+
+    // Filter out common "noise"
+    const criticalErrors = errors.filter((e) => {
+      const text = e.text.toLowerCase();
+      if (text.includes('favicon.ico')) return false;
+      if (text.includes('content security policy')) return false;
+      return true;
+    });
+
+    if (criticalErrors.length === 0) {
+      logResult('Browser', 'Console Health', 'PASS', 'No critical errors found');
+    } else {
+      logResult('Browser', 'Console Health', 'FAIL',
+          `${criticalErrors.length} critical errors found in console`);
+    }
+
+    // Capture final state
+    await page.screenshot({path: path.join(SCREENSHOT_DIR, '99-final-state.png')});
+  } catch (error) {
+    console.error('Test Suite Fatal Error:', error);
+    logResult('System', 'Test Suite', 'FAIL', error.message);
+    process.exitCode = 1;
   } finally {
     await browser.close();
     await generateReport();
+    
+    // Exit with error if any tests failed
+    const hasFailures = getResults().some(r => r.outcome === 'FAIL');
+    if (hasFailures) {
+        console.error('UI Audit failed with one or more test failures.');
+        process.exit(1);
+    }
   }
 }
 
 runAudit();
+

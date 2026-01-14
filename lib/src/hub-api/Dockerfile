@@ -2,7 +2,7 @@ FROM python:3.11-alpine
 
 # Install build dependencies and system tools
 RUN apk add --no-cache --virtual .build-deps gcc musl-dev linux-headers python3-dev \
-    && apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git \
+    && apk add --no-cache docker-cli docker-cli-compose openssl netcat-openbsd curl git bash \
     && pip install --upgrade pip
 
 # Copy requirements first for cache efficiency

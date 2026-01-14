@@ -14,13 +14,13 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SCRIPT_DIR
 
-# 1. Core Logic
+# Core Logic
 source "${SCRIPT_DIR}/lib/core/core.sh"
 
-# 2. Service Logic
+# Service Logic
 source "${SCRIPT_DIR}/lib/core/loader.sh"
 
-# 3. Operations Logic
+# Operations Logic
 source "${SCRIPT_DIR}/lib/core/operations.sh"
 
 # --- Error Handling ---
@@ -45,14 +45,14 @@ trap 'failure_handler ${LINENO} "$BASH_COMMAND"' ERR
 # --- Main Execution Flow ---
 
 main() {
-  # 1. Cleanup & Reset (Immediate Exit)
+  # Cleanup & Reset (Immediate Exit)
   if [[ "${CLEAN_ONLY}" == "true" ]]; then
     clean_environment
-    log_info "Clean-only mode enabled. Deployment skipped."
+    log_info "Clean-only mode enabled. Skipping deployment."
     exit 0
   fi
 
-  # 1.1 Backup & Restore (Immediate Exit)
+  # Backup & Restore (Immediate Exit)
   if [[ "${DO_BACKUP}" == "true" ]]; then
     perform_backup "manual"
     exit 0
@@ -63,13 +63,14 @@ main() {
     exit 0
   fi
 
-  # 2. Initialization & Network Detection
+  # Initialization & Network Detection
   # Required for subsequent prompts (e.g., deSEC needs PUBLIC_IP)
+  clean_environment
   init_directories
   allocate_subnet
   detect_network
 
-  # 3. WireGuard Configuration Prompt (Requirement 1)
+  # WireGuard Configuration Prompt (Requirement 1)
   echo ""
   echo "==========================================================="
   echo " PROTON WIREGUARD CONFIGURATION"
@@ -77,7 +78,7 @@ main() {
   echo ""
 
   if validate_wg_config; then
-    log_info "Existing WireGuard config found and validated."
+    log_info "System found and validated existing WireGuard config."
   else
     if [[ -f "${ACTIVE_WG_CONF}" ]] && [[ -s "${ACTIVE_WG_CONF}" ]]; then
       log_warn "Existing WireGuard config was invalid/empty. Removed."
@@ -85,8 +86,18 @@ main() {
     fi
 
     if [[ -n "${WG_CONF_B64:-}" ]]; then
-      log_info "WireGuard configuration provided in environment. Decoding..."
+      log_info "System detected WireGuard configuration in environment. Decoding..."
       echo "${WG_CONF_B64}" | base64 -d | ${SUDO} tee "${ACTIVE_WG_CONF}" >/dev/null
+      
+      if [[ ! -s "${ACTIVE_WG_CONF}" ]]; then
+        log_crit "Failed to decode WireGuard config from environment variables. File is empty."
+        exit 1
+      fi
+
+      if ! grep -q "Endpoint" "${ACTIVE_WG_CONF}" || ! grep -q "PublicKey" "${ACTIVE_WG_CONF}"; then
+          log_crit "Decoded WireGuard config is missing required fields (Endpoint/PublicKey)."
+          exit 1
+      fi
     elif [[ "${AUTO_CONFIRM}" == "true" ]]; then
       log_crit "Auto-confirm active but no WireGuard configuration provided via environment."
       exit 1
@@ -102,29 +113,33 @@ main() {
     ${SUDO} chmod 600 "${ACTIVE_WG_CONF}"
     "${PYTHON_CMD}" "${SCRIPT_DIR}/lib/utils/format_wg.py" "${ACTIVE_WG_CONF}"
 
+    if [[ ! -s "${ACTIVE_WG_CONF}" ]]; then
+        log_crit "WireGuard config is empty after formatting. Check format_wg.py."
+        exit 1
+    fi
+
     if ! validate_wg_config; then
       log_crit "The pasted WireGuard configuration is invalid."
       exit 1
     fi
   fi
 
-  # 4. Auth & Secrets Prompt (Requirements 2 & 3: deSEC and Passwords)
+  # Auth & Secrets Prompt (Requirements 2 & 3: deSEC and Passwords)
   setup_secrets
 
-  # 5. Background Operations (Now that user interaction is complete)
+  # Background Operations (Now that user interaction is complete)
   log_info "Interactions complete. Starting background infrastructure preparation..."
   
-  clean_environment
   setup_static_assets
   
   log_info "Pre-pulling core infrastructure images in parallel..."
   resolve_service_tags
   pull_critical_images
 
-  # 6. Configuration Compilation
+  # Configuration Compilation
   setup_configs
 
-  # 7. Extract Profile Name
+  # Extract Profile Name
   local initial_profile_name
   initial_profile_name=$(extract_wg_profile_name "${ACTIVE_WG_CONF}" || echo "Initial-Setup")
 
@@ -137,17 +152,17 @@ main() {
   ${SUDO} chmod 600 "${ACTIVE_WG_CONF}" "${WG_PROFILES_DIR}/${initial_profile_name_safe}.conf"
   echo "${initial_profile_name_safe}" | ${SUDO} tee "${ACTIVE_PROFILE_NAME_FILE}" >/dev/null
 
-  # 8. Sync Sources
+  # Sync Sources
   sync_sources
 
-  # 9. Generate Scripts & Dashboard
+  # Generate Scripts & Dashboard
   generate_scripts
   generate_dashboard
 
-  # 10. Generate Compose
+  # Generate Compose
   generate_compose
 
-  # 11. Setup Exports
+  # Setup Exports
   generate_protonpass_export
   generate_libredirect_export
 
@@ -156,7 +171,7 @@ main() {
     exit 0
   fi
 
-  # 12. Deploy
+  # Deploy
   deploy_stack
 }
 

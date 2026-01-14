@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZimaOS $APP_NAME</title>
-    <link rel="icon" type="image/svg+xml" href="/assets/$APP_NAME.svg">
+    <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
     <!-- Local privacy friendly assets (Hosted Locally) -->
     <link href="assets/gs.css" rel="stylesheet">
     <link href="assets/cc.css" rel="stylesheet">
@@ -106,7 +106,7 @@
                 <div class="flex-row justify-between align-center gap-24 flex-wrap">
                     <div>
                         <h3 class="title-medium m-0" style="color: inherit;">Updates are available</h3>
-                        <p class="body-medium mt-8" id="update-list" style="color: inherit; opacity: 0.9;">New versions were detected for your services.</p>
+                        <p class="body-medium mt-8" id="update-list" style="color: inherit; opacity: 0.9;">System detected new versions for your services.</p>
                     </div>
                     <div class="flex-row gap-12">
                         <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Pull the latest source code and rebuild containers for all pending services.">Update all</button>
@@ -140,7 +140,7 @@
         <section data-category="apps">
         <div class="section-label">Applications</div>
         <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span class="chip category-badge" data-tooltip="Services isolated within a secure VPN tunnel (Gluetun). This allows you to host your own private instances: removing the need to trust third-party hosts, while ensuring your home IP stays hidden from service providers."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
+            <span class="chip category-badge" data-tooltip="Services marked with 🔒 VPN are routed through a secure tunnel. These services only access the internet via the VPN gateway and are not reachable from the public internet."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
             <span class="chip category-badge" data-tooltip="Local services accessed directly through the internal network interface."><span class="material-symbols-rounded">lan</span> Direct Access</span>
             <span class="chip category-badge" data-tooltip="Manage advanced infrastructure and container telemetry with Portainer."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
         </div>
@@ -807,7 +807,7 @@
     <div id="signin-modal" class="modal-overlay">
         <div class="modal-card">
             <div class="modal-header">
-                <h2 class="headline-small">Admin sign-in</h2>
+                <h2 class="headline-small">Admin Sign in</h2>
                 <button onclick="closeSignInModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
             </div>
             <p class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant);">Enter your administrator password to unlock management features.</p>

@@ -64,7 +64,6 @@ sources/
 **/.active_profile_name
 **/active-wg.conf
 **/deployment.log
-**/dashboard.html
 **/protonpass_import.csv
 **/libredirect_import.json
 
@@ -80,3 +79,4 @@ test/ui_report.md
 ui_report.md
 *.png
 !lib/templates/assets/*.png
+details

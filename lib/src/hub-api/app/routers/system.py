@@ -1,19 +1,22 @@
-import os
 import json
-import time
-import psutil
-import subprocess
+import os
 import re
 import sqlite3
+import subprocess
 import threading
+import time
 from datetime import datetime
-from fastapi import APIRouter, Depends, BackgroundTasks
-from ..core.security import get_current_user, get_admin_user, get_optional_user
+
+import psutil
+from fastapi import APIRouter, BackgroundTasks, Depends
+
 from ..core.config import settings
+from ..core.security import get_admin_user, get_current_user, get_optional_user
 from ..utils.logging import log_structured
 from ..utils.process import run_command
 
 router = APIRouter()
+
 
 @router.get("/certificate-status")
 def get_certificate_status():
@@ -63,7 +66,9 @@ def get_certificate_status():
     except Exception as e:
         return {"error": str(e), "installed": False}
 
+
 def get_total_usage(path):
+    """Retrieves accumulated data usage from a JSON file."""
     try:
         if os.path.exists(path) and os.path.getsize(path) > 0:
             with open(path, 'r') as f:
@@ -73,7 +78,9 @@ def get_total_usage(path):
         pass
     return 0, 0
 
+
 def save_total_usage(path, rx, tx):
+    """Saves accumulated data usage to a JSON file atomically."""
     try:
         import tempfile
         dirname = os.path.dirname(path)
@@ -85,13 +92,16 @@ def save_total_usage(path, rx, tx):
         if 'temp_name' in locals() and os.path.exists(temp_name):
             os.remove(temp_name)
 
+
 @router.get("/health")
 def health_check():
     """Lightweight health check for Docker orchestration."""
     return {"status": "ok"}
 
+
 @router.get("/status")
 def get_status(user: str = Depends(get_optional_user)):
+    """Aggregates infrastructure and VPN status from the orchestrator."""
     try:
         result = run_command([settings.CONTROL_SCRIPT, "status"], check=False)
         output = result.stdout.strip()
@@ -143,8 +153,10 @@ def get_status(user: str = Depends(get_optional_user)):
         log_structured("ERROR", f"Status check failed: {e}")
         return {"error": str(e)}
 
+
 @router.get("/system-health")
 def get_system_health(user: str = Depends(get_optional_user)):
+    """Retrieves hardware and host-level health metrics."""
     try:
         uptime_seconds = time.time() - psutil.boot_time()
         cpu_usage = psutil.cpu_percent(interval=0.1)
@@ -206,8 +218,10 @@ def get_system_health(user: str = Depends(get_optional_user)):
     except Exception as e:
         return {"error": str(e)}
 
+
 @router.get("/metrics")
 def get_metrics(user: str = Depends(get_optional_user)):
+    """Retrieves container-level performance metrics from the database."""
     try:
         conn = sqlite3.connect(settings.DB_FILE)
         c = conn.cursor()
@@ -220,8 +234,10 @@ def get_metrics(user: str = Depends(get_optional_user)):
     except Exception as e:
         return {"error": str(e)}
 
+
 @router.get("/containers")
 def get_containers(user: str = Depends(get_optional_user)):
+    """Lists all stack containers and their hardening status."""
     try:
         result = run_command(
             ['docker', 'ps', '-a', '--no-trunc', '--format', '{{.Names}}\t{{.ID}}\t{{.Labels}}'],
@@ -246,6 +262,7 @@ def get_containers(user: str = Depends(get_optional_user)):
         return {"containers": containers}
     except Exception as e:
         return {"error": str(e)}
+
 
 @router.get("/project-details")
 def get_project_details(user: str = Depends(get_admin_user)):
@@ -316,8 +333,10 @@ def get_project_details(user: str = Depends(get_admin_user)):
         "reclaimable": reclaimable
     }
 
+
 @router.post("/purge-images")
 def purge_images(user: str = Depends(get_admin_user)):
+    """Triggers a cleanup of unused Docker images and build cache."""
     try:
         res = run_command(['docker', 'image', 'prune', '-f'], timeout=60)
         reclaimed_msg = "Unused images and build cache cleared."
@@ -330,8 +349,10 @@ def purge_images(user: str = Depends(get_admin_user)):
     except Exception as e:
         return {"error": str(e)}
 
+
 @router.post("/restart-stack")
 def restart_stack(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+    """Triggers a restart of all containers in the stack."""
     def _restart():
         time.sleep(2)
         subprocess.run(["docker", "compose", "-f", "/app/docker-compose.yml", "restart"])
@@ -340,8 +361,10 @@ def restart_stack(background_tasks: BackgroundTasks, user: str = Depends(get_adm
     log_structured("SYSTEM", "Full stack restart triggered via Dashboard", "ORCHESTRATION")
     return {"success": True, "message": "Stack restart initiated"}
 
+
 @router.get("/backups")
 def list_backups(user: str = Depends(get_admin_user)):
+    """Lists all available system backup archives."""
     backup_dir = "/app/backups"
     if not os.path.exists(backup_dir):
         return {"backups": []}
@@ -359,8 +382,10 @@ def list_backups(user: str = Depends(get_admin_user)):
     
     return {"backups": sorted(backups, key=lambda x: x['timestamp'], reverse=True)}
 
+
 @router.post("/backup")
 def trigger_backup(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+    """Triggers a background system backup task."""
     def _backup():
         log_structured("INFO", "System backup initiated", "MAINTENANCE")
         subprocess.run(["bash", "/app/zima.sh", "-b"], cwd="/app")
@@ -368,8 +393,10 @@ def trigger_backup(background_tasks: BackgroundTasks, user: str = Depends(get_ad
     background_tasks.add_task(_backup)
     return {"success": True, "message": "Backup sequence started in background"}
 
+
 @router.post("/restore")
 def trigger_restore(filename: str, background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+    """Triggers a system restoration from a specific backup file."""
     backup_path = os.path.join("/app/backups", filename)
     if not os.path.exists(backup_path):
         return {"error": "Backup file not found"}
@@ -384,8 +411,10 @@ def trigger_restore(filename: str, background_tasks: BackgroundTasks, user: str 
     background_tasks.add_task(_restore)
     return {"success": True, "message": "Restore sequence started in background"}
 
+
 @router.post("/uninstall")
 def uninstall(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+    """Triggers the full uninstallation sequence."""
     def _uninstall():
         log_structured("INFO", "Uninstall sequence started", "MAINTENANCE")
         time.sleep(5)

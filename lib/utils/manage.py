@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-import os
-import sys
-import subprocess
+"""Management CLI for the Privacy Hub stack.
+
+This script provides an interactive and command-line interface for deploying,
+updating, and resetting the Privacy Hub environment.
+"""
+
 import argparse
+import os
+import subprocess
+import sys
 
 # ANSI Colors
 CYAN = "\033[96m"
@@ -15,14 +21,22 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 INSTALL_SCRIPT = os.path.join(PROJECT_ROOT, "zima.sh")
 
+
 def print_banner():
+    """Prints the application banner to the console."""
     print(f"{CYAN}")
     print("==========================================================")
     print(" 🛡️  PRIVACY HUB MANAGER")
     print("==========================================================")
     print(f"{RESET}")
 
+
 def run_install(args):
+    """Executes the zima.sh installation script with provided arguments.
+
+    Args:
+        args: Parsed command-line arguments containing deployment options.
+    """
     cmd = [INSTALL_SCRIPT]
     if args.auto:
         cmd.append("-y")
@@ -32,12 +46,14 @@ def run_install(args):
         cmd.append("-x")
     if args.services:
         cmd.append(f"-s {args.services}")
-    
+
     print(f"{GREEN}Starting deployment...{RESET}")
     # Replace current process with the bash script to handle TTY correctly
     os.execv(INSTALL_SCRIPT, cmd)
 
+
 def main():
+    """Main entry point for the management CLI."""
     parser = argparse.ArgumentParser(description="Privacy Hub Management CLI")
     parser.add_argument("--install", action="store_true", help="Run the installer")
     parser.add_argument("-y", "--auto", action="store_true", help="Auto-confirm")

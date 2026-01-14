@@ -1,5 +1,5 @@
-#!/bin/sh
-set -eu
+#!/usr/bin/env bash
+set -euo pipefail
 ACTION=$1
 PROFILE_NAME=$2
 CONTAINER_PREFIX="__CONTAINER_PREFIX__"
@@ -61,10 +61,6 @@ elif [ "$ACTION" = "delete" ]; then
         rm "$PROFILES_DIR/$PROFILE_NAME.conf"
     fi
 elif [ "$ACTION" = "status" ]; then
-    if [ "$MOCK_VERIFICATION" = "true" ]; then
-        printf '{"gluetun":{"status":"up","healthy":true,"active_profile":"MockProfile","endpoint":"127.0.0.1","public_ip":"127.0.0.1","handshake_ago":"Connected","session_rx":"100","session_tx":"100","total_rx":"1000","total_tx":"1000"},"wgeasy":{"status":"up","host":"127.0.0.1","clients":"0","connected":"0","session_rx":"0","session_tx":"0","total_rx":"0","total_tx":"0"},"services":{},"health_details":{}}'
-        exit 0
-    fi
     GLUETUN_STATUS="down"
     GLUETUN_HEALTHY="false"
     HANDSHAKE_AGO="N/A"
