@@ -283,7 +283,12 @@ setup_configs() {
   "${SUDO}" chmod 644 "${ACTIVE_PROFILE_NAME_FILE}" "${HISTORY_LOG}" "${BASE_DIR}/.data_usage" "${BASE_DIR}/.wge_data_usage"
 
   if [[ -n "${DESEC_DOMAIN}" ]] && [[ -n "${DESEC_TOKEN}" ]]; then
-    log_info "Configuring deSEC..."
+    log_info "Configuring deSEC Dynamic DNS and Certificates..."
+    
+    # Ensure directory exists with correct permissions for the current user
+    "${SUDO}" mkdir -p "${AGH_CONF_DIR}"
+    "${SUDO}" chown "$(whoami)" "${AGH_CONF_DIR}"
+
     local proxy="http://172.${found_octet_val}.0.254:8888"
     curl --proxy "${proxy}" -s --max-time 5 -X PATCH "https://desec.io/api/v1/domains/${DESEC_DOMAIN}/rrsets/" \
       -H "Authorization: Token ${DESEC_TOKEN}" -H "Content-Type: application/json" \
@@ -292,15 +297,38 @@ setup_configs() {
       -H "Authorization: Token ${DESEC_TOKEN}" -H "Content-Type: application/json" \
       -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}]" > /dev/null 2>&1 || log_warn "deSEC API failed"
 
-    "${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/acme" -e "DESEC_Token=${DESEC_TOKEN}" -e "DESEC_DOMAIN=${DESEC_DOMAIN}" \
-      neilpang/acme.sh:latest --issue --dns dns_desec --dnssleep 10 -d "${DESEC_DOMAIN}" -d "*.\$DESEC_DOMAIN" \
-      --keylength ec-256 --server letsencrypt --home /acme --config-home /acme --cert-home /acme/certs > /dev/null 2>&1
+    # Check if we already have a valid, unexpired certificate for this domain
+    local cert_valid=false
+    if [[ -f "${AGH_CONF_DIR}/ssl.crt" ]]; then
+      if command -v openssl >/dev/null 2>&1; then
+        if openssl x509 -checkend 86400 -noout -in "${AGH_CONF_DIR}/ssl.crt" >/dev/null 2>&1; then
+          # Check if the cert matches the domain
+          if openssl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | grep -q "${DESEC_DOMAIN}"; then
+            log_info "Existing valid certificate for ${DESEC_DOMAIN} detected. Skipping issuance."
+            cert_valid=true
+          fi
+        fi
+      else
+        # Fallback to assume it's valid if recently restored and exists
+        log_info "Existing certificate detected. Assuming validity (openssl missing on host)."
+        cert_valid=true
+      fi
+    fi
 
-    if [[ -f "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]]; then
-      cp "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "${AGH_CONF_DIR}/ssl.crt"
-      cp "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "${AGH_CONF_DIR}/ssl.key"
-    else
-      "${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/certs" neilpang/acme.sh:latest /bin/sh -c "openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes -keyout /certs/ssl.key -out /certs/ssl.crt -subj '/CN=${DESEC_DOMAIN}'" >/dev/null 2>&1
+    if [[ "${cert_valid}" == "false" ]]; then
+      log_info "Issuing SSL certificate via acme.sh (deSEC DNS challenge)..."
+      "${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/acme" -e "DESEC_Token=${DESEC_TOKEN}" -e "DESEC_DOMAIN=${DESEC_DOMAIN}" \
+        neilpang/acme.sh:latest --issue --dns dns_desec --dnssleep 15 -d "${DESEC_DOMAIN}" -d "*.${DESEC_DOMAIN}" \
+        --keylength ec-256 --server letsencrypt --home /acme --config-home /acme --cert-home /acme/certs > /dev/null 2>&1 || log_warn "acme.sh issuance failed. Falling back to self-signed."
+
+      if [[ -f "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]]; then
+        cp "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "${AGH_CONF_DIR}/ssl.crt"
+        cp "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/${DESEC_DOMAIN}.key" "${AGH_CONF_DIR}/ssl.key"
+        log_info "ACME certificate successfully installed."
+      else
+        log_info "Generating fallback self-signed cert for ${DESEC_DOMAIN}..."
+        "${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/certs" neilpang/acme.sh:latest /bin/sh -c "openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes -keyout /certs/ssl.key -out /certs/ssl.crt -subj '/CN=${DESEC_DOMAIN}'" >/dev/null 2>&1
+      fi
     fi
     dns_server_name="${DESEC_DOMAIN}"
   else
@@ -308,7 +336,7 @@ setup_configs() {
     "${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/certs" neilpang/acme.sh:latest /bin/sh -c "openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes -keyout /certs/ssl.key -out /certs/ssl.crt -subj '/CN=${LAN_IP}'" >/dev/null 2>&1
   fi
 
-  "${SUDO}" mkdir -p "$(dirname "${UNBOUND_CONF}")" "$(dirname "${NGINX_CONF}")" "${AGH_CONF_DIR}" "${DATA_DIR}/hub-api"
+  "${SUDO}" mkdir -p "$(dirname "${UNBOUND_CONF}")" "$(dirname "${NGINX_CONF}")" "${DATA_DIR}/hub-api"
   "${SUDO}" chown -R 1000:1000 "${DATA_DIR}/hub-api"
 
   cat <<UNBOUNDEOF | "${SUDO}" tee "${UNBOUND_CONF}" >/dev/null
