@@ -60,7 +60,7 @@ def main():
     parser.add_argument("-c", "--clean", action="store_true", help="Clean environment before install")
     parser.add_argument("-x", "--nuke", action="store_true", help="Factory reset (Data Loss!)")
     parser.add_argument("-s", "--services", help="Comma-separated list of services to deploy")
-    
+
     if len(sys.argv) == 1:
         # Interactive Mode
         print_banner()
@@ -69,7 +69,7 @@ def main():
         print("3. Exit")
         print("")
         choice = input("Select an option [1-3]: ").strip()
-        
+
         if choice == "1":
             run_install(parser.parse_args(["--install"]))
         elif choice == "2":

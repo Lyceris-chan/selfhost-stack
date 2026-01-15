@@ -85,25 +85,28 @@ function getAdminPassword() {
   let adminPass = 'admin123';
 
   // Primary: Check test docker-compose.yml
-  const composePath = path.join(__dirname, '../test_data/data/AppData/privacy-hub-test/docker-compose.yml');
+  const composePath = path.join(
+      __dirname, '../test_data/data/AppData/privacy-hub-test/docker-compose.yml');
   if (fs.existsSync(composePath)) {
     const compose = fs.readFileSync(composePath, 'utf8');
-    const match = compose.match(/ADMIN_PASS_RAW=([^\s"]+)/);
+    const match = compose.match(/ADMIN_PASS_RAW=([^\n\s"]+)/);
     if (match) {
       adminPass = match[1];
-      console.log(`Loaded admin password from test docker-compose.yml: ${adminPass}`);
+      console.log(
+          `Loaded admin password from test docker-compose.yml: ${adminPass}`);
       return adminPass;
     }
   }
 
   const paths = [
-    path.join(__dirname, '../test_data/data/AppData/privacy-hub-test/.secrets'),
+    path.join(
+        __dirname, '../test_data/data/AppData/privacy-hub-test/.secrets'),
     path.join(__dirname, '../../data/AppData/privacy-hub/.secrets'),
   ];
   for (const p of paths) {
     if (fs.existsSync(p) && fs.lstatSync(p).isFile()) {
       const secrets = fs.readFileSync(p, 'utf8');
-      const match = secrets.match(/ADMIN_PASS_RAW=["']?([^"'\s]+)["']?/);
+      const match = secrets.match(/ADMIN_PASS_RAW=["']?([^"'\n\s]+)["']?/);
       if (match) {
         adminPass = match[1];
         console.log(`Loaded admin password from ${p}`);
@@ -136,8 +139,10 @@ async function generateReport() {
   for (const cat of categories) {
     report += `### ${cat}\n| Test | Outcome | Details |\n|------|---------|---------|\n`;
     results.filter((r) => r.category === cat).forEach((res) => {
-      const icon = res.outcome === 'PASS' ? '✅' : (res.outcome === 'FAIL' ? '❌' : '⚠️');
-      report += `| ${res.test} | ${icon} ${res.outcome} | ${res.details} |\n`;
+      const icon = res.outcome === 'PASS' ? '✅' :
+          (res.outcome === 'FAIL' ? '❌' : '⚠️');
+      report +=
+          `| ${res.test} | ${icon} ${res.outcome} | ${res.details} |\n`;
     });
     report += `\n`;
   }

@@ -1,0 +1,53 @@
+title Google Material Design 3 Style Guide
+section Google Material Design 3 Style Guide
+  section 1 Introduction
+    Material Design 3 (also known as Material You) is the latest version of Google’s open-source design system. It is designed to be personal, adaptive, and expressive. This document summarizes the core UI design rules and principles for Material Design 3.
+  section 2 Foundations
+    section 2.1 Accessibility
+      - Contrast:Minimum contrast ratio of 4.5:1 for normal text and 3:1 for large text.
+      - Touch Targets:Minimum size of 48x48dp, with at least 8dp of space between targets.
+    section 2.2 Design Tokens
+    M3 uses design tokens to store style values. Tokens are categorized into:
+      - Reference tokens:Absolute values (e.g., Palette.Blue.40).
+      - System tokens:Context-specific roles (e.g., Sys.Color.Primary).
+      - Component tokens:Component-specific attributes (e.g., Comp.Button.Container.Color).
+  section 3 Color
+    section 3.1 Principles
+      - Dynamic Color:M3 uses dynamic color algorithms to create accessible and harmonious color schemes based on a user's wallpaper or a specific seed color.
+      - Tone-based:Color is defined by its tonal value (luminance) rather than just hue and saturation, ensuring consistent contrast across different themes.
+    section 3.2 Color Roles
+    Each color in an M3 theme has a specific role:
+  section 4 Typography
+    section 4.1 Type Scale
+    The M3 type scale provides a range of sizes to support different needs. It usesRobotoas the default font (or system fonts on specific platforms).
+  section 5 Layout
+    section 5.1 8dp Grid
+    All components and layout elements should align to an8dp square grid. For smaller elements like icons and type, a 4dp grid can be used.
+    section 5.2 Spacing
+    Spacing between elements should be in increments of 4dp or 8dp (e.g., 8dp, 16dp, 24dp, 32dp).
+    section 5.3 Window Size Classes
+  section 6 Components
+    section 6.1 Action
+      - Buttons:Corner radius is typically20dp(fully rounded for small buttons). High-emphasis buttons use the Primary color.
+      - FAB:Corner radius is12dpfor small/standard FABs and28dpfor large FABs.
+      - Chips:Used for input, selection, filtering, or triggering actions. Types include assist, filter, input, and suggestion.
+    section 6.2 Containment
+      - Cards:Corner radius is12dp. Left/right padding is16dp. Types include Elevated, Filled, and Outlined.
+      - Dialogs:Corner radius is28dp. Padding is 24dp.
+      - Bottom Sheets:Anchored to the bottom of the screen; used for secondary or modal content.
+    section 6.3 Communication
+      - Badges:Display notifications, counts, or status on icons. Content is limited to 4 characters.
+    section 6.4 Navigation
+      - Navigation Bar:For primary destinations on compact/medium screens.
+      - Navigation Drawer:For larger screens (expanded/large/extra-large); being replaced by expanded navigation rails.
+      - Tabs:Organize content across different screens or views; primary for main destinations, secondary for related content.
+    section 6.5 Information
+      - Lists:Help users find and act on items; should be short, scannable, and logically ordered.
+      - Menus:Present a temporary set of actions relative to a component or field.
+  section 6 Writing
+    section 6.1 Voice and Tone
+      - Direct:Use clear and concise language.
+      - Helpful:Provide useful information to guide the user.
+      - Human:Use a friendly and professional tone.
+    section 6.2 Capitalization
+    UseSentence casefor most UI text, including titles, labels, and buttons. Title Case should be avoided unless it's a brand name.

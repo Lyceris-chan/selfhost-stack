@@ -1,0 +1,29 @@
+title READMEs | styleguide
+section styleguide
+section READMEs
+    About README.md files.
+      - Overview
+      - Readable README files
+      - Where to put your README
+      - What to put in your README
+  section Overview
+    A README is a short summary of the contents of a directory. The contents of the file are displayed in GitHub and Gitiles when you view the contents of the containing directory. README files provide critical information for people browsing your code, especially first-time users.
+    This document covers how to create README files that are readable with GitHub and Gitiles.
+  section Readable README files
+    README files must be namedREADME.md.The file namemustend with the.mdextension and is case sensitive.
+        code README.md
+    For example, the file /README.md is rendered when you view the contents of the containing directory:
+    https://github.com/google/styleguide/tree/gh-pages
+    AlsoREADME.mdatHEADref is rendered by Gitiles when displaying repository index:
+    https://gerrit.googlesource.com/gitiles/
+  section Where to put your README
+    Unlike all other Markdown files,README.mdfiles should not be located inside your product or library’s documentation directory.README.mdfiles should be located in the top-level directory for your product or library’s actual codebase.
+    All top-level directories for a code package should have an up-to-dateREADME.mdfile. This is especially important for package directories that provide interfaces for other teams.
+  section What to put in your README
+    At a minimum, yourREADME.mdfile should contain a link to your user- and/or team-facing documentation.
+    Every package-levelREADME.mdshould include or point to the following information:
+      - What is in this package or library and what’s it used for.
+      - Points of contact.
+      - Status of whether this package or library is deprecated, or not for general release, etc.
+      - How to use the package or library. Examples include sample code, copyablebazel runorbazel testcommands, etc.
+      - Links to relevant documentation.

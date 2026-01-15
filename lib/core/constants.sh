@@ -1,8 +1,11 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+#
+# Centralized constants and port definitions for the Privacy Hub stack.
+#
+# This file contains service definitions, port mappings, and repository URLs
+# used throughout the orchestration scripts.
 
-# Centralized list of all services in the Privacy Hub stack
-readonly STACK_SERVICES="hub-api odido-booster memos gluetun portainer adguard unbound wg-easy redlib wikiless invidious rimgo breezewiki anonymousoverflow scribe vert vertd companion cobalt cobalt-web searxng immich watchtower"
+readonly STACK_SERVICES="hub-api dashboard gluetun adguard unbound wg-easy redlib wikiless rimgo breezewiki anonymousoverflow scribe invidious companion searxng portainer memos odido-booster cobalt cobalt-web vert vertd immich watchtower"
 export STACK_SERVICES
 
 # Services that are built locally from source
@@ -54,6 +57,8 @@ readonly PORT_COMPANION=8283
 export PORT_COMPANION
 readonly PORT_COBALT=9001
 export PORT_COBALT
+readonly PORT_COBALT_WEB=9001
+export PORT_COBALT_WEB
 readonly PORT_COBALT_API=9002
 export PORT_COBALT_API
 readonly PORT_SEARXNG=8082

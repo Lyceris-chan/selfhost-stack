@@ -1,887 +1,887 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZimaOS $APP_NAME</title>
-    <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
-    <!-- Local privacy friendly assets (Hosted Locally) -->
-    <link href="assets/gs.css" rel="stylesheet">
-    <link href="assets/cc.css" rel="stylesheet">
-    <link href="assets/ms.css" rel="stylesheet">
-    <script>
-        // HTTPS Auto-Switch & Default Logic
-        const isLocalHost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '[::1]');
-        const isIpHost = window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/) || window.location.hostname.includes(':');
-        
-        // Storage reset logic for -c cleanup
-        if (window.location.search.includes('reset=true')) {
-            localStorage.clear();
-            sessionStorage.clear();
-            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-            window.history.replaceState({}, document.title, cleanUrl);
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZimaOS $APP_NAME</title>
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+  <!-- Local privacy friendly assets (Hosted Locally) -->
+  <link href="assets/gs.css" rel="stylesheet">
+  <link href="assets/cc.css" rel="stylesheet">
+  <link href="assets/ms.css" rel="stylesheet">
+  <script>
+    // HTTPS Auto-Switch & Default Logic
+    const isLocalHost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '[::1]');
+    const isIpHost = window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/) || window.location.hostname.includes(':');
+    
+    // Storage reset logic for -c cleanup
+    if (window.location.search.includes('reset=true')) {
+      localStorage.clear();
+      sessionStorage.clear();
+      const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
 
-        if (window.location.protocol === 'http:' && !isLocalHost && !isIpHost) {
-            const httpsPort = '8443';
-            const httpsUrl = 'https://' + window.location.hostname + ':' + httpsPort + window.location.pathname + window.location.search;
-            
-            // Check if HTTPS is available before redirecting
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000);
+    if (window.location.protocol === 'http:' && !isLocalHost && !isIpHost) {
+      const httpsPort = '8443';
+      const httpsUrl = 'https://' + window.location.hostname + ':' + httpsPort + window.location.pathname + window.location.search;
+      
+      // Check if HTTPS is available before redirecting
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-            fetch(httpsUrl, { mode: 'no-cors', signal: controller.signal })
-                .then(() => {
-                    clearTimeout(timeoutId);
-                    window.location.href = httpsUrl;
-                })
-                .catch(() => {
-                    clearTimeout(timeoutId);
-                    console.log("HTTPS port not reachable or timed out, staying on HTTP");
-                });
-        }
-        
-        // Prevent extension injection errors - defined early
-        globalThis.configureInjection = globalThis.configureInjection || (() => {});
-    </script>
-    <script type="module">
-        import * as MaterialColorUtilities from './assets/mcu.js';
-        window.MaterialColorUtilities = MaterialColorUtilities;
-    </script>
-    <script src="assets/qrcode.min.js"></script>
-    <style>
+      fetch(httpsUrl, { mode: 'no-cors', signal: controller.signal })
+        .then(() => {
+          clearTimeout(timeoutId);
+          window.location.href = httpsUrl;
+        })
+        .catch(() => {
+          clearTimeout(timeoutId);
+          console.log("HTTPS port not reachable or timed out, staying on HTTP");
+        });
+    }
+    
+    // Prevent extension injection errors - defined early
+    globalThis.configureInjection = globalThis.configureInjection || (() => {});
+  </script>
+  <script type="module">
+    import * as MaterialColorUtilities from './assets/mcu.js';
+    window.MaterialColorUtilities = MaterialColorUtilities;
+  </script>
+  <script src="assets/qrcode.min.js"></script>
+  <style>
 {{HUB_CSS}}
-    </style>
+  </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div class="header-row">
-                <div>
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <img src="assets/icon.svg" style="width: 32px; height: 32px;" alt="Privacy Hub Logo">
-                        <h1 class="display-small" style="color: var(--md-sys-color-primary); margin: 0;">Privacy Hub</h1>
-                    </div>
-                    <div class="subtitle body-large" style="color: var(--md-sys-color-on-surface-variant); margin-top: 8px;">Secure your network and manage your private service infrastructure.</div>
-                </div>
-                <div class="header-actions">
-
-                    <div class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics to protect your privacy.">
-                        <span class="label-large">Safe display mode</span>
-                        <div class="switch-track">
-                            <div class="switch-thumb"></div>
-                        </div>
-                    </div>
-                    <div class="switch-container admin-only" id="link-mode-switch" onclick="toggleLinkMode()" data-tooltip="Choose between IP addresses and domain names for service links.">
-                        <span class="label-large" id="link-mode-label">Use IP links</span>
-                        <div class="switch-track">
-                            <div class="switch-thumb"></div>
-                        </div>
-                    </div>
-                    <div class="status-indicator" style="background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant);">
-                        <span class="status-dot" id="api-dot"></span>
-                        <span class="status-text" id="api-text">Connecting to Hub API...</span>
-                    </div>
-                    <div class="theme-toggle" onclick="toggleTheme()" data-tooltip="Switch between Light and Dark mode">
-                        <span class="material-symbols-rounded" id="theme-icon">light_mode</span>
-                    </div>
-                    <div class="theme-toggle" id="admin-lock-btn" onclick="toggleAdminMode()" data-tooltip="Enter Admin Mode to manage services">
-                        <span class="material-symbols-rounded" id="admin-icon">admin_panel_settings</span>
-                    </div>
-                </div>
-            </div>
-        </header>
-
-        <div class="filter-bar" id="category-filters">
-            <div class="chip filter-chip active" data-target="all" onclick="filterCategory('all')">All services</div>
-            <div class="chip filter-chip" data-target="apps" onclick="filterCategory('apps')">Applications</div>
-            <div class="chip filter-chip" data-target="system" onclick="filterCategory('system')">Infrastructure</div>
-            <div class="chip filter-chip" data-target="dns" onclick="filterCategory('dns')">DNS & Security</div>
-            <div class="chip filter-chip" data-target="tools" onclick="filterCategory('tools')">Utilities</div>
-            <div class="chip filter-chip admin-only" data-target="logs" onclick="filterCategory('logs')">System & Logs</div>
+  <div class="container">
+    <header>
+      <div class="header-row">
+        <div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <img src="assets/icon.svg" style="width: 32px; height: 32px;" alt="Privacy Hub Logo">
+            <h1 class="display-small" style="color: var(--md-sys-color-primary); margin: 0;">Privacy Hub</h1>
+          </div>
+          <div class="subtitle body-large" style="color: var(--md-sys-color-on-surface-variant); margin-top: 8px;">Secure your network and manage your private service infrastructure.</div>
         </div>
+        <div class="header-actions">
 
-        <div id="update-banner" class="admin-only mb-32" style="display:none;">
-            <div class="card card-primary" style="min-height: auto;">
-                <div class="flex-row justify-between align-center gap-24 flex-wrap">
-                    <div>
-                        <h3 class="title-medium m-0" style="color: inherit;">Updates are available</h3>
-                        <p class="body-medium mt-8" id="update-list" style="color: inherit; opacity: 0.9;">System detected new versions for your services.</p>
-                    </div>
-                    <div class="flex-row gap-12">
-                        <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Pull the latest source code and rebuild containers for all pending services.">Update all</button>
-                        <button onclick="dismissUpdateBanner()" class="btn btn-outlined" style="border-color: currentColor; color: inherit;">Dismiss</button>
-                    </div>
-                </div>
+          <button class="switch-container" id="privacy-switch" onclick="togglePrivacy()" data-tooltip="Redact identifying metrics to protect your privacy.">
+            <span class="label-large">Safe display mode</span>
+            <div class="switch-track">
+              <div class="switch-thumb"></div>
             </div>
+          </button>
+          <button class="switch-container admin-only" id="link-mode-switch" onclick="toggleLinkMode()" data-tooltip="Choose between IP addresses and domain names for service links.">
+            <span class="label-large" id="link-mode-label">Use IP links</span>
+            <div class="switch-track">
+              <div class="switch-thumb"></div>
+            </div>
+          </button>
+          <div class="status-indicator" style="background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant);">
+            <span class="status-dot" id="api-dot"></span>
+            <span class="status-text" id="api-text">Connecting to Hub API...</span>
+          </div>
+          <button class="theme-toggle" onclick="toggleTheme()" data-tooltip="Switch between Light and Dark mode">
+            <span class="material-symbols-rounded" id="theme-icon">light_mode</span>
+          </button>
+          <button class="theme-toggle" id="admin-lock-btn" onclick="toggleAdminMode()" data-tooltip="Enter Admin Mode to manage services">
+            <span class="material-symbols-rounded" id="admin-icon">admin_panel_settings</span>
+          </button>
         </div>
+      </div>
+    </header>
 
-        <div id="mac-advisory" class="mb-32" style="display:none;">
-            <div class="card card-error" style="min-height: auto; padding: 16px 24px;">
-                <div class="flex-row justify-between align-start gap-24">
-                    <div class="flex-row gap-16 align-start">
-                        <span class="material-symbols-rounded mt-8">warning</span>
-                        <div>
-                            <h3 class="title-medium m-0" style="color: inherit;">Critical network advisory</h3>
-                            <p class="body-medium mt-8" style="color: inherit; opacity: 0.9;">
-                                To ensure firewall persistence and static IP reliability, <strong>disable dynamic or random MAC addresses</strong> in your host device's network settings.
-                            </p>
-                        </div>
-                    </div>
-                    <button onclick="dismissMacAdvisory()" class="btn btn-icon" style="color: inherit; margin: -8px -8px 0 0;" data-tooltip="Dismiss">
-                        <span class="material-symbols-rounded">close</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-
-
-        <section data-category="apps">
-        <div class="section-label">Applications</div>
-        <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span class="chip category-badge" data-tooltip="Services marked with 🔒 VPN are routed through a secure tunnel. These services only access the internet via the VPN gateway and are not reachable from the public internet."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
-            <span class="chip category-badge" data-tooltip="Local services accessed directly through the internal network interface."><span class="material-symbols-rounded">lan</span> Direct Access</span>
-            <span class="chip category-badge" data-tooltip="Manage advanced infrastructure and container telemetry with Portainer."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
-        </div>
-        <div id="grid-apps" class="grid">
-            <!-- Dynamic Cards Injected Here -->
-        </div>
-        </section>
-
-        <section data-category="system">
-        <div class="section-label title-medium">System Management</div>
-        <div class="section-hint body-medium" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-            <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);"><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
-        </div>
-        
-        <div class="section-hint mb-16 card-outline" style="padding: 16px; border-radius: var(--md-sys-shape-corner-large);">
-            <div class="w-full flex-row align-center gap-8 mb-8" style="color: var(--md-sys-color-primary);">
-                <span class="material-symbols-rounded" style="font-size: 20px;">vpn_lock</span>
-                <span class="label-large" style="font-weight: 600;">Outbound VPN Gateway (Gluetun)</span>
-            </div>
-            <span class="chip category-badge" id="hint-vpn-status" data-tooltip="Gluetun Outbound VPN Tunnel Status">VPN: Checking...</span>
-            <span class="chip category-badge" id="hint-vpn-ip" data-tooltip="Current Public VPN IP"><span class="material-symbols-rounded" style="font-size:14px;">public</span> IP: --</span>
-            <span class="chip category-badge" id="hint-vpn-speed" data-tooltip="Real-time VPN Throughput"><span class="material-symbols-rounded" style="font-size:14px;">speed</span> --</span>
-            <span class="chip category-badge" id="hint-vpn-usage" data-tooltip="VPN Session / Total Data Usage"><span class="material-symbols-rounded" style="font-size:14px;">data_usage</span> --</span>
-        </div>
-
-        <div class="section-hint card-outline" style="padding: 16px; border-radius: var(--md-sys-shape-corner-large);">
-            <div class="w-full flex-row align-center gap-8 mb-8" style="color: var(--md-sys-color-primary);">
-                <span class="material-symbols-rounded" style="font-size: 20px;">settings_input_antenna</span>
-                <span class="label-large" style="font-weight: 600;">Inbound Access Gateway (WireGuard)</span>
-            </div>
-            <span class="chip category-badge" id="hint-wge-clients" data-tooltip="WG-Easy Active/Total Clients"><span class="material-symbols-rounded" style="font-size:14px;">group</span> -- Clients</span>
-            <span class="chip category-badge" id="hint-wge-usage" data-tooltip="WG-Easy Inbound Data Usage (Session / Total)"><span class="material-symbols-rounded" style="font-size:14px;">move_up</span> --</span>
-        </div>
-        <div id="grid-system" class="grid">
-            <!-- Dynamic Cards Injected Here -->
-        </div>
-        </section>
-
-        <section data-category="dns">
-        <div class="section-label title-medium">DNS Configuration</div>
-        <div class="grid">
-            <div class="card">
-                <h3 class="title-medium">Certificate status</h3>
-                <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
-                    <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label label-medium">Type</span><span class="stat-value title-small" id="cert-type">Checking...</span></div>
-                    <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label label-medium">Domain</span><span class="stat-value title-small sensitive" id="cert-subject">Checking...</span></div>
-                    <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label label-medium">Issuer</span><span class="stat-value title-small sensitive" id="cert-issuer">Checking...</span></div>
-                    <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label label-medium">Expires</span><span class="stat-value title-small sensitive" id="cert-to">Checking...</span></div>
-                    <div id="ssl-failure-info" style="display:none; margin-top: 16px; padding: 16px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: 1px solid var(--md-sys-color-error);">
-                        <div class="body-small" style="font-weight:600; margin-bottom:4px; display: flex; align-items: center; gap: 8px;">
-                            <span class="material-symbols-rounded" style="font-size: 16px;">error</span>
-                            Pipeline Error
-                        </div>
-                        <div class="body-small" id="ssl-failure-reason" style="opacity: 0.9;">--</div>
-                    </div>
-                    <div id="cert-loading" class="chip admin" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium); border: none; margin-top: 16px;">
-                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        <div style="display: flex; flex-direction: column; gap: 2px;">
-                            <span style="font-weight: 600;">Verifying Pipeline</span>
-                            <span class="body-medium" style="opacity: 0.8; white-space: normal;">Checking SSL certificate validity and issuance status...</span>
-                        </div>
-                    </div>
-                </div>
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; gap: 16px; flex-wrap: wrap;">
-                    <div id="cert-status-badge" class="chip" style="width: fit-content; flex: 0 0 auto;" data-tooltip="Overall health of the SSL certificate issuance pipeline">Not Installed</div>
-                    <button id="ssl-retry-btn" class="btn btn-icon btn-action" style="display:none;" data-tooltip="Force Let's Encrypt re-attempt" onclick="requestSslCheck()">
-                        <span class="material-symbols-rounded">refresh</span>
-                    </button>
-                </div>
-            </div>
-            <div class="card admin-only">
-                <h3 class="title-medium">deSEC configuration</h3>
-                <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
-                <form onsubmit="saveDesecConfig(); return false;">
-                    <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. yourname.dedyn.io)" style="margin-bottom:12px;" autocomplete="username" data-tooltip="Enter your registered deSEC domain (e.g. yourname.dedyn.io). You can create one for free at desec.io.">
-                    <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="The secret API token from your deSEC account used to verify domain ownership.">
-                    <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
-                        Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
-                    </p>
-                    <div style="text-align:right;">
-                        <button type="submit" class="btn btn-tonal">Save deSEC config</button>
-                    </div>
-                </form>
-            </div>
-            <div class="card">
-                <h3 class="title-medium">Device DNS settings</h3>
-                <p class="body-medium description">Use these standard encrypted endpoints to maintain digital independence:</p>
-                <div class="code-label" data-tooltip="Standard unencrypted DNS (Port 53). Recommended only for use within your local LAN.">Standard IPv4 (Local LAN Only)</div>
-                <div class="code-block sensitive" onclick="copyToClipboard('$LAN_IP:53', this)">$LAN_IP:53</div>
-                <div class="code-label" data-tooltip="DNS-over-QUIC (DOQ). Port 853. High-performance encrypted DNS designed for superior latency and stability.">Secure DOQ (Modern Clients)</div>
-                <div class="code-block sensitive" onclick="copyToClipboard('quic://$LAN_IP', this)">quic://$LAN_IP</div>
-                <div class="desec-only" style="display: none;">
-                    <div class="code-label" data-tooltip="DNS-over-HTTPS (DOH). Standard for web browsers. Queries are indistinguishable from HTTPS traffic.">Secure DOH (Browsers)</div>
-                    <div class="code-block sensitive" onclick="copyToClipboard('https://$DESEC_DOMAIN/dns-query', this)">https://$DESEC_DOMAIN/dns-query</div>
-                    <div class="code-label" data-tooltip="DNS-over-TLS (DOT). Port 853. The industry standard for Android 'Private DNS' and system resolvers.">Secure DOT (Android / System)</div>
-                    <div class="code-block sensitive" onclick="copyToClipboard('$DESEC_DOMAIN:853', this)">$DESEC_DOMAIN:853</div>
-                </div>
-                <div class="no-desec-only" style="display: none;">
-                    <div class="code-label" data-tooltip="Secured DNS via HTTPS">DNS-over-HTTPS</div>
-                    <div class="code-block sensitive" onclick="copyToClipboard('https://$LAN_IP/dns-query', this)">https://$LAN_IP/dns-query</div>
-                    <div class="code-label" data-tooltip="Secured DNS via TLS">DNS-over-TLS</div>
-                    <div class="code-block sensitive" onclick="copyToClipboard('$LAN_IP:853', this)">$LAN_IP:853</div>
-                </div>
-                <p class="body-small" style="margin-top: 16px; opacity: 0.7; font-style: italic;">
-                    Note: Domain-based HTTPS endpoints (DOH/DOT) only work if your device uses this project as its DNS server (at $LAN_IP).
-                </p>
-            </div>
-            <div class="card">
-                <h3 class="title-medium">Endpoint provisioning</h3>
-                <div id="dns-setup-trusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
-                    <p class="body-medium description">Globally trusted SSL is active through Let's Encrypt and deSEC. This enables zero-trust encrypted DNS on mobile devices without requiring you to install a certificate.</p>
-                    <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
-                        <li data-tooltip="For legacy devices within your home network."><b>Local LAN:</b> Configure your devices to use <code class="sensitive">$LAN_IP</code>.</li>
-                        <li data-tooltip="Requires establishing the WireGuard VPN tunnel when away from home."><b>VPN Tunnel:</b> Route all traffic through the Privacy Hub.</li>
-                        <li data-tooltip="Android 9+ native feature. Encrypts all DNS queries automatically."><b>Mobile Private DNS:</b> Use the hostname below for native encryption.</li>
-                    </ol>
-                    <div class="code-label" style="margin-top:12px;" data-tooltip="Use this hostname in your Android 'Private DNS' settings.">Mobile Private DNS Hostname</div>
-                    <div class="code-block sensitive" style="margin-top:4px;" onclick="copyToClipboard('$DESEC_DOMAIN', this)">$DESEC_DOMAIN</div>
-                    <div style="margin-top: auto; padding-top: 16px;">
-                        <div class="chip vpn" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
-                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-primary-container);">verified_user</span>
-                            <div style="display: flex; flex-direction: column; gap: 2px;">
-                                <span style="font-weight: 600;">Verified Certificate Authority</span>
-                                <span class="body-small" style="opacity: 0.8; white-space: normal;">Trust chain established with Let's Encrypt. Fully compatible with native Private DNS.</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div id="dns-setup-untrusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
-                    <p class="body-medium description" style="color:var(--md-sys-color-error);">Limited Encrypted DNS Coverage</p>
-                    <p class="body-small description">
-                        Android 'Private DNS' requires a domain name. Because no domain is configured, your mobile devices cannot use native encrypted DNS without the VPN.
-                        <br><br>
-                        After you acquire a valid SSL certificate, the configured deSEC domain will automatically be used as the domain name for this dashboard.
-                    </p>
-                    <div style="flex-grow: 1;">
-                        <div class="code-label" data-tooltip="The local IP address of your privacy hub.">Primary Gateway</div>
-                        <div class="code-block sensitive" onclick="copyToClipboard('$LAN_IP', this)">$LAN_IP</div>
-                    </div>
-                    <div style="margin-top: auto; padding-top: 16px;">
-                        <div class="chip admin" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
-                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
-                            <div style="display: flex; flex-direction: column; gap: 2px;">
-                                <span style="font-weight: 600;">Self-Signed (Local)</span>
-                                <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and Private DNS.</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div id="dns-setup-local" style="display:none; height: 100%; display: flex; flex-direction: column;">
-                    <p class="body-medium description">The system is running in local-only mode. To maintain your privacy, route all external traffic through the local infrastructure:</p>
-                    <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
-                        <li>Configure your router's WAN or LAN DNS to: <b class="sensitive">$LAN_IP</b></li>
-                        <li>Remote Access: Establish a WireGuard tunnel before you access services.</li>
-                        <li>Legacy Support: Standard Port 53 resolution for older hardware.</li>
-                    </ol>
-                    <div class="code-block sensitive" style="margin-top:12px;" onclick="copyToClipboard('$LAN_IP', this)">$LAN_IP</div>
-                    <div style="margin-top: auto; padding-top: 16px;">
-                        <div class="chip admin" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
-                            <span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
-                            <div style="display: flex; flex-direction: column; gap: 2px;">
-                                <span style="font-weight: 600;">Self-Signed (Local)</span>
-                                <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and full mobile support.</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        </section>
-
-        <section data-category="tools">
-        <div class="section-label title-medium">Service Utilities</div>
-        <div id="grid-tools" class="grid">
-            <!-- Dynamic Cards Injected Here -->
-        </div>
-        <div class="grid">
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <h3 class="title-medium">Odido status</h3>
-                    <div id="odido-speed-indicator" class="body-small" style="color: var(--md-sys-color-primary); font-weight: 500; display:none;">0 Mb/s</div>
-                </div>
-                <div id="odido-status-container" style="display: flex; flex-direction: column; height: 100%;">
-                    <div id="odido-not-configured" style="display:none;">
-                        <p class="body-medium" style="color:var(--md-sys-color-on-surface-variant);">Odido Bundle Booster service available. Configure credentials via API or link below.</p>
-                        <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-tonal" style="margin-top:12px;">Open API Docs</a>
-                    </div>
-                    <div id="odido-configured" style="display:none; padding-top: 8px; flex-grow: 1; display: flex; flex-direction: column;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                            <div>
-                                <div class="stat-row"><span class="stat-label label-medium">Remaining</span><span class="stat-value title-small" id="odido-remaining">--</span></div>
-                                <div class="stat-row"><span class="stat-label label-medium">Bundle</span><span class="stat-value title-small" id="odido-bundle-code">--</span></div>
-                                <div class="stat-row"><span class="stat-label label-medium">Rate</span><span class="stat-value title-small" id="odido-rate">--</span></div>
-                            </div>
-                            <div>
-                                <div class="stat-row"><span class="stat-label label-medium">Status</span><span class="stat-value title-small" id="odido-api-status">--</span></div>
-                                <div class="stat-row"><span class="stat-label label-medium">Threshold</span><span class="stat-value title-small" id="odido-threshold">--</span></div>
-                                <div class="stat-row"><span class="stat-label label-medium">Auto-Renew</span><span class="stat-value title-small" id="odido-auto-renew">--</span></div>
-                            </div>
-                        </div>
-                        
-                        <div style="margin-top: 24px; flex-grow: 1; min-height: 120px; position: relative; background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 12px;">
-                            <div style="position: absolute; top: 8px; left: 12px; font-size: 10px; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Consumption Rate (MB/min)</div>
-                            <svg id="odido-graph" width="100%" height="100%" viewBox="0 0 400 120" preserveAspectRatio="none" style="overflow: visible;">
-                                <defs>
-                                    <linearGradient id="graph-gradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stop-color="var(--md-sys-color-primary)" stop-opacity="0.3"></stop>
-                                        <stop offset="100%" stop-color="var(--md-sys-color-primary)" stop-opacity="0"></stop>
-                                    </linearGradient>
-                                </defs>
-                                <path id="graph-area" fill="url(#graph-gradient)" d=""></path>
-                                <path id="graph-line" fill="none" stroke="var(--md-sys-color-primary)" stroke-width="2.5" stroke-linejoin="round" d=""></path>
-                                <line x1="0" y1="120" x2="400" y2="120" stroke="var(--md-sys-color-outline-variant)" stroke-width="1"></line>
-                                <g id="graph-grid" stroke="var(--md-sys-color-outline-variant)" stroke-width="0.5" stroke-dasharray="2,2">
-                                    <line x1="0" y1="30" x2="400" y2="30"></line>
-                                    <line x1="0" y1="60" x2="400" y2="60"></line>
-                                    <line x1="0" y1="90" x2="400" y2="90"></line>
-                                </g>
-                            </svg>
-                        </div>
-
-                        <div id="odido-buy-status" class="body-small" style="text-align: center; margin-top: 8px; font-weight: 500;"></div>
-                        <div class="btn-group" style="justify-content:center; margin-top: 16px;">
-                            <button onclick="buyOdidoBundle()" class="btn btn-tertiary admin-only" id="odido-buy-btn">Buy bundle</button>
-                            <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh status</button>
-                            <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
-                        </div>
-                    </div>
-                    <div id="odido-loading" class="chip admin" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium); border: none; margin-top: 8px;">
-                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        <div style="display: flex; flex-direction: column; gap: 2px;">
-                            <span style="font-weight: 600;">Synchronizing Data</span>
-                            <span class="body-medium" style="opacity: 0.8; white-space: normal;">Connecting to Odido API to retrieve latest bundle status...</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="card admin-only">
-                <h3 class="title-medium">Configuration</h3>
-                <p class="body-medium description">Authentication and automation settings for backend services:</p>
-                <form onsubmit="saveOdidoConfig(); return false;">
-                    <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;" autocomplete="username" data-tooltip="The HUB_API_KEY from your .secrets file.">
-                    <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
-                        The <strong>Dashboard API Key</strong> (HUB_API_KEY) is required to authorize sensitive actions like saving settings. You can find this in your <code>.secrets</code> file on the host.
-                    </p>
-                    <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="OAuth token for Odido API authentication.">
-                    <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
-                        Download and extract the latest <a href="https://github.com/GuusBackup/Odido.Authenticator/releases/latest" target="_blank" style="color: var(--md-sys-color-primary);">Odido.Authenticator</a>.
-                        <br><br>
-                        <strong>How to use:</strong><br>
-                        1. Run <code>Odido.Authenticator.exe</code><br>
-                        2. Go to the URL provided in the tool: <code class="sensitive">https://www.odido.nl/login?...</code><br>
-                        3. Sign in to Odido<br>
-                        4. Grab the result URL: <code class="sensitive">https://www.odido.nl/loginappresult?token=...</code><br>
-                        5. Paste it into the tool and press enter<br>
-                        6. It will show the Refresh token now (Decrypted the response)<br>
-                        7. Press enter or Y to get an Authentication token from it (This will destroy the refresh token)
-                    </p>
-                    <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;" data-tooltip="The product code for your data bundle.">
-                    <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;" data-tooltip="Automatic renewal triggers when data falls below this level.">
-                    <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;" data-tooltip="Lead time before expiration to trigger renewal.">
-                    
-                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 16px;">
-                        <div style="flex: 1;">
-                            <span class="label-large">Secure API Routing (VPN)</span>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Routes requests through VPN by default to hide your home IP. Disable only if the Odido API blocks VPN traffic or you experience connectivity issues.</p>
-                        </div>
-                        <div class="switch-container" id="odido-vpn-switch" onclick="toggleOdidoVpn()" data-tooltip="Toggle between VPN and Home IP for Odido requests">
-                            <div class="switch-track">
-                                <div class="switch-thumb"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
-                        <div id="odido-config-status" class="body-small" style="font-weight: 500;"></div>
-                        <button type="submit" class="btn btn-tonal">Save configuration</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        
-        <div class="section-label admin-only">VPN Client Access (Inbound)</div>
-        <div class="grid admin-only">
-            <div class="card" style="grid-column: span 2;">
-                <div class="card-header">
-                    <h3 class="title-medium">Registered clients</h3>
-                    <div class="card-header-actions">
-                        <button onclick="openAddClientModal()" class="btn btn-filled" data-tooltip="Create a new client configuration">
-                            <span class="material-symbols-rounded">add</span> New client
-                        </button>
-                    </div>
-                </div>
-                <p class="body-medium description">Manage devices that can connect to this network via WireGuard.</p>
-                
-                <div id="wg-client-list" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
-                    <div style="padding: 24px; text-align: center; opacity: 0.6;">
-                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
-                        <span class="body-medium">Loading clients...</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Add Client Modal -->
-        <div id="add-client-modal" class="modal-overlay">
-            <div class="modal-card">
-                <div class="modal-header">
-                    <h2 class="headline-small">New WireGuard Client</h2>
-                    <button onclick="document.getElementById('add-client-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
-                </div>
-                <input type="text" id="new-client-name" class="text-field" placeholder="Client Name (e.g. My Phone)" style="margin-bottom: 24px;">
-                <div style="display: flex; justify-content: flex-end; gap: 12px;">
-                    <button onclick="createClient()" class="btn btn-filled">Create</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Client QR Modal -->
-        <div id="client-qr-modal" class="modal-overlay">
-            <div class="modal-card" style="text-align: center;">
-                <div class="modal-header">
-                    <h2 class="headline-small" id="qr-client-name">Client Config</h2>
-                    <button onclick="document.getElementById('client-qr-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
-                </div>
-                <div id="qrcode-container" style="background: white; padding: 16px; border-radius: 16px; display: inline-block; margin: 16px 0;"></div>
-                <div style="margin-top: 16px;">
-                    <a id="client-download-link" class="btn btn-tonal" download="wg.conf">Download .conf</a>
-                </div>
-            </div>
-        </div>
-
-        <div class="section-label admin-only">WireGuard Profiles</div>
-        <div class="grid admin-only">
-            <div class="card admin-only">
-                <h3 class="title-medium">Upload profile</h3>
-                <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;" data-tooltip="Give your profile a recognizable name.">
-                <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..." style="margin-bottom:16px;" data-tooltip="Paste the contents of your WireGuard .conf file."></textarea>
-                <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile. The VPN service will automatically restart to apply the new configuration (~15 seconds).">Upload & activate</button></div>
-            </div>
-            <div class="card profile-card admin-only">
-                <h3 data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available Profiles</h3>
-                <div id="profile-list" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; min-height: 100px;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
-                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        <span class="body-medium">Scanning Profiles...</span>
-                    </div>
-                </div>
-                <p class="body-small profile-hint" style="margin-top: auto; padding-top: 12px;">Click name to activate.</p>
-            </div>
-        </div>
-
-        <div class="section-label">Customization & Info</div>
-        <div class="grid">
-            <div class="card admin-only">
-                <div class="card-header">
-                    <h3 class="title-medium">Theme customization</h3>
-                    <div class="card-header-actions">
-                        <button onclick="localStorage.removeItem('theme_seed'); location.reload();" class="btn btn-icon" data-tooltip="Reset theme to default"><span class="material-symbols-rounded">refresh</span></button>
-                    </div>
-                </div>
-                <p class="body-medium description">Personalize the dashboard using Material Design 3 dynamic color algorithms.</p>
-                <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
-                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
-                        <div style="position: relative; width: 48px; height: 48px; border-radius: 24px; overflow: hidden; border: 2px solid var(--md-sys-color-primary);">
-                            <input type="color" id="theme-seed-color" onchange="applySeedColor(this.value)" style="position: absolute; top: -10px; left: -10px; width: 80px; height: 80px; cursor: pointer; border: none; background: transparent;">
-                        </div>
-                        <div style="flex: 1;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span class="label-large">Custom Seed Color</span>
-                                <span class="body-small monospace" id="theme-seed-hex" style="opacity: 0.7;">#D0BCFF</span>
-                            </div>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Tap the circle to choose a primary tone</p>
-                        </div>
-                    </div>
-
-                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
-                        <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <span class="label-large">Theme Presets</span>
-                        </div>
-                        <div id="static-presets" style="display: flex; gap: 12px; flex-wrap: wrap;">
-                            <!-- Static presets injected here -->
-                        </div>
-
-                        <div style="height: 1px; background: var(--md-sys-color-outline-variant); opacity: 0.5;"></div>
-
-                        <div style="display: flex; align-items: center; gap: 16px;">
-                            <label for="theme-image-upload" class="btn btn-filled" style="width: 48px; height: 48px; padding: 0; border-radius: 24px; cursor: pointer; flex-shrink: 0;" data-tooltip="Pick a wallpaper to extract colors">
-                                <span class="material-symbols-rounded">wallpaper</span>
-                            </label>
-                            <input type="file" id="theme-image-upload" accept="image/*" onchange="extractColorsFromImage(event)" style="display: none;">
-                            <div style="flex: 1;">
-                                <span class="label-large">Wallpaper Extraction</span>
-                                <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Upload image to generate palettes</p>
-                            </div>
-                        </div>
-                        
-                        <!-- Extracted Palette -->
-                        <div id="extracted-palette" style="display: flex; gap: 12px; flex-wrap: wrap; min-height: 48px; align-items: center;">
-                            <span class="body-small" style="opacity: 0.5; font-style: italic;">Extracted palettes will appear here...</span>
-                        </div>
-
-                        <!-- Manual Add -->
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" id="manual-color-input" class="text-field" placeholder="Add Hex (e.g. #FF0000)" style="border-radius: 8px; height: 40px; padding: 0 12px; font-family: monospace;">
-                            <button onclick="addManualColor()" class="btn btn-tonal" style="height: 40px;">Add</button>
-                        </div>
-                    </div>
-
-                    <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
-                        <button onclick="saveThemeSettings()" class="btn btn-tonal" style="flex-grow: 1;"><span class="material-symbols-rounded">save</span> Save theme</button>
-                    </div>
-                </div>
-            </div>
-            <div class="card admin-only">
-                <h3 class="title-medium">Security & privacy</h3>
-                <p class="body-medium description">Manage administrative session behavior and authentication security.</p>
-                <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
-                    <div id="session-cleanup-warning" class="chip admin" style="display: flex; width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-highest); color: var(--md-sys-color-on-surface-variant); border: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 4px; transition: all 0.3s ease;">
-                        <span class="material-symbols-rounded" id="session-warning-icon">info</span>
-                        <div style="display: flex; flex-direction: column; gap: 2px;">
-                            <span style="font-weight: 600;" id="session-warning-title">Security Recommendation</span>
-                            <span class="body-medium" id="session-warning-text" style="opacity: 0.8; white-space: normal;">Session auto-cleanup is currently active. Your admin session will expire automatically for safety.</span>
-                        </div>
-                    </div>
-                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
-                        <div style="flex: 1;">
-                            <span class="label-large">Update Strategy</span>
-                            <p class="body-small" id="strategy-desc" style="color: var(--md-sys-color-on-surface-variant);">Stable: Use official release tags (Recommended).</p>
-                        </div>
-                        <select id="update-strategy-select" class="btn btn-tonal" style="height: 40px; padding: 0 12px;" onchange="updateStrategyChange()">
-                            <option value="stable">Stable (Tags)</option>
-                            <option value="latest">Latest (Branch)</option>
-                        </select>
-                    </div>
-                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
-                        <div style="flex: 1;">
-                            <span class="label-large">Rollback Support</span>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Keep source-code snapshots before updates to allow reverting versions.</p>
-                        </div>
-                        <div class="switch-container" id="rollback-backup-switch" onclick="toggleRollbackBackup()" data-tooltip="Toggle automated backup before service updates">
-                            <div class="switch-track">
-                                <div class="switch-thumb"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
-                        <div style="flex: 1;">
-                            <span class="label-large">Session Auto-Cleanup</span>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Automatically expire admin sessions after inactivity.</p>
-                        </div>
-                        <div class="switch-container" id="session-cleanup-switch" onclick="toggleSessionCleanup()" data-tooltip="Toggle automatic session expiration">
-                            <div class="switch-track">
-                                <div class="switch-thumb"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
-                        <div style="flex: 1;">
-                            <span class="label-large">Session Timeout (Minutes)</span>
-                            <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Duration of inactivity before auto-logout (Default: 30 Minutes).</p>
-                        </div>
-                        <input type="number" id="session-timeout-input" class="text-field" style="width: 80px;" value="30" onchange="syncSettings()">
-                    </div>
-
-                </div>
-            </div>
-            <div class="card">
-                <h3 class="title-medium">System information</h3>
-                <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
-                <div class="flex-column flex-1">
-                    <div class="stat-row"><span class="stat-label label-medium">Secrets Location</span><span class="stat-value title-small monospace">$BASE_DIR/.secrets</span></div>
-                    <div class="stat-row"><span class="stat-label label-medium">Config Root</span><span class="stat-value title-small monospace">$BASE_DIR/config</span></div>
-                    <div class="stat-row"><span class="stat-label label-medium">Dashboard Port</span><span class="stat-value title-small">$PORT_DASHBOARD_WEB</span></div>
-                    <div class="stat-row"><span class="stat-label label-medium">Safe Display Mode</span><span class="stat-value title-small">Active (Local)</span></div>
-                </div>
-                <div class="admin-only mt-24 flex-column gap-12">
-                    <button onclick="checkUpdates()" class="btn btn-tonal w-full justify-start" data-tooltip="Check for updates">
-                        <span class="material-symbols-rounded">system_update_alt</span> Check for updates
-                    </button>
-                    <button id="update-all-btn" onclick="updateAllServices()" class="btn btn-tonal w-full justify-start" data-tooltip="Update all services" style="background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);">
-                        <span class="material-symbols-rounded">upgrade</span> Update all services
-                    </button>
-                    <button onclick="restartStack()" class="btn btn-tonal w-full justify-start" style="background: var(--md-sys-color-surface-container-highest);">
-                        <span class="material-symbols-rounded">restart_alt</span> Restart stack
-                    </button>
-                    <button onclick="backupSystem()" class="btn btn-tonal w-full justify-start" data-tooltip="Create a compressed backup of all secrets and configurations.">
-                        <span class="material-symbols-rounded">backup</span> Backup system
-                    </button>
-                    <button onclick="openRestoreModal()" class="btn btn-tonal w-full justify-start" data-tooltip="Restore system state from a previous backup file.">
-                        <span class="material-symbols-rounded">restore</span> Restore from backup
-                    </button>
-                    <button onclick="uninstallStack()" class="btn btn-tonal w-full justify-start" style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Permanently remove all containers and data.">
-                        <span class="material-symbols-rounded">delete_forever</span> Uninstall system
-                    </button>
-                </div>
-            </div>
-        </div>
-        </section>
-
-        <section data-category="logs">
-        <div class="section-label">System & Logs</div>
-        <div class="grid">
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="title-medium">System health</h3>
-                    <div class="card-header-actions">
-                        <div class="chip" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 0 12px; height: 28px; font-weight: 500; gap: 6px; box-shadow: var(--md-sys-elevation-1);">
-                            <span class="material-symbols-rounded" id="health-icon" style="font-size: 16px;">check_circle</span>
-                            <span id="health-text" style="font-size: 13px; letter-spacing: 0.3px;">Optimal</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex-column gap-12 flex-1">
-                    <div class="stat-row m-0"><span class="stat-label label-medium">System CPU</span><span class="stat-value title-small" id="sys-cpu">0%</span></div>
-                    <div class="metric-bar"><div id="sys-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
-                    
-                    <div class="stat-row m-0 mt-8"><span class="stat-label label-medium">System RAM</span><span class="stat-value title-small" id="sys-ram">0 MB / 0 MB</span></div>
-                    <div class="metric-bar"><div id="sys-ram-fill" class="metric-fill" style="width: 0%"></div></div>
-
-                    <div class="mt-16" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                        <div onclick="openProjectSizeModal()" class="clickable-stat flex-column gap-4" style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px; cursor: pointer; position: relative; transition: all 200ms ease; border: 1px solid transparent;" onmouseover="this.style.background='var(--md-sys-color-surface-container-high)'; this.style.borderColor='var(--md-sys-color-outline-variant)'" onmouseout="this.style.background='var(--md-sys-color-surface-container-highest)'; this.style.borderColor='transparent'">
-                            <div class="flex-row justify-between align-start">
-                                <span class="body-small" style="opacity: 0.7;">Project Size</span>
-                                <span class="material-symbols-rounded move-on-hover" style="font-size: 16px; opacity: 0.5; transition: transform 200ms ease;">arrow_forward</span>
-                            </div>
-                            <span class="label-large" id="sys-project-size">-- MB</span>
-                        </div>
-                        <div class="flex-column gap-4" style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px;">
-                            <span class="body-small" style="opacity: 0.7;">System Uptime</span>
-                            <span class="label-large" id="sys-uptime">--</span>
-                        </div>
-                    </div>
-
-                    <div class="mt-auto pt-16 flex-row justify-between align-center gap-16" style="border-top: 1px solid var(--md-sys-color-outline-variant);">
-                        <div class="flex-row align-center gap-12 flex-1">
-                            <span class="material-symbols-rounded" style="font-size: 20px; color: var(--md-sys-color-primary);">hard_drive</span>
-                            <span class="body-medium flex-row align-center gap-8" data-tooltip="SMART Health Status" id="drive-health-container">
-                                Drive Health: <strong id="sys-drive-status">Checking...</strong>
-                                <span id="sys-drive-pct" style="opacity: 0.8;"></span>
-                            </span>
-                        </div>
-                        <span class="body-small" id="sys-disk-percent" style="white-space: nowrap;">--% used</span>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="title-medium">System & deployment logs</h3>
-                    <div class="card-header-actions">
-                        <select id="log-filter-level" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
-                            <option value="ALL">All Levels</option>
-                            <option value="INFO">Info</option>
-                            <option value="WARN">Warn</option>
-                            <option value="ERROR">Error</option>
-                            <option value="SECURITY">Security</option>
-                        </select>
-                        <select id="log-filter-cat" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
-                            <option value="ALL">All Categories</option>
-                            <option value="SYSTEM">System</option>
-                            <option value="NETWORK">Network</option>
-                            <option value="MAINTENANCE">Maintenance</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="log-container" class="log-container sensitive" style="display: flex; align-items: center; justify-content: center;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
-                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        <span class="body-medium">Connecting to Log Stream...</span>
-                    </div>
-                </div>
-                <div id="log-status" class="body-small" style="color:var(--md-sys-color-on-surface-variant); text-align:right; margin-top:8px;">Connecting...</div>
-            </div>
-        </div>
-        </section>
-
-    <!-- Select updates modal -->
-    <div id="update-selection-modal" class="modal-overlay">
-        <div class="modal-card" style="max-width: 600px;">
-            <div class="modal-header">
-                <h2 class="headline-small">Select updates</h2>
-                <button onclick="closeUpdateModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
-            </div>
-            <div style="padding: 16px 0;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <span class="body-medium" id="update-fetch-status" style="color: var(--md-sys-color-on-surface-variant);">Scanning for updates...</span>
-                    <button onclick="toggleAllUpdates()" class="btn btn-tonal" style="height: 32px; font-size: 12px;">Reset or undo</button>
-                </div>
-                <div id="update-list-container" style="background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 8px; max-height: 300px; overflow-y: auto;">
-                    <!-- Checkboxes injected here -->
-                    <div style="padding: 24px; text-align: center; opacity: 0.6;">
-                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
-                        <span class="body-medium">Checking repositories...</span>
-                    </div>
-                </div>
-            </div>
-            <div class="btn-group" style="justify-content: flex-end;">
-                <button onclick="startBatchUpdate()" class="btn btn-filled" id="start-update-btn" disabled>Update selected</button>
-            </div>
-        </div>
+    <div class="filter-bar" id="category-filters">
+      <button class="chip filter-chip active" data-target="all" onclick="filterCategory('all')">All services</button>
+      <button class="chip filter-chip" data-target="apps" onclick="filterCategory('apps')">Applications</button>
+      <button class="chip filter-chip" data-target="system" onclick="filterCategory('system')">Infrastructure</button>
+      <button class="chip filter-chip" data-target="dns" onclick="filterCategory('dns')">DNS & Security</button>
+      <button class="chip filter-chip" data-target="tools" onclick="filterCategory('tools')">Utilities</button>
+      <button class="chip filter-chip admin-only" data-target="logs" onclick="filterCategory('logs')">System & Logs</button>
     </div>
 
-    <!-- Changelog modal -->
-    <div id="changelog-modal" class="modal-overlay" style="z-index: 26000;">
-        <div class="modal-card" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
-            <div class="modal-header">
-                <h2 class="headline-small" id="changelog-title">Changelog</h2>
-                <button onclick="document.getElementById('changelog-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
-            </div>
-            <div id="changelog-content" class="code-block" style="flex-grow: 1; overflow-y: auto; white-space: pre-wrap; margin-top: 16px; font-family: monospace; font-size: 13px;">
-                Loading...
-            </div>
+    <div id="update-banner" class="admin-only mb-32" style="display:none;">
+      <div class="card card-primary" style="min-height: auto;">
+        <div class="flex-row justify-between align-center gap-24 flex-wrap">
+          <div>
+            <h3 class="title-medium m-0" style="color: inherit;">Updates are available</h3>
+            <p class="body-medium mt-8" id="update-list" style="color: inherit; opacity: 0.9;">System detected new versions for your services.</p>
+          </div>
+          <div class="flex-row gap-12">
+            <button onclick="updateAllServices()" class="btn btn-filled" style="background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);" data-tooltip="Pull the latest source code and rebuild containers for all pending services.">Update all</button>
+            <button onclick="dismissUpdateBanner()" class="btn btn-outlined" style="border-color: currentColor; color: inherit;">Dismiss</button>
+          </div>
         </div>
+      </div>
     </div>
 
-    <!-- Generic dialog modal -->
-    <div id="dialog-modal" class="modal-overlay" style="z-index: 30000;">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h2 class="headline-small" id="dialog-title">Title</h2>
-                <button onclick="closeDialog()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+    <div id="mac-advisory" class="mb-32" style="display:none;">
+      <div class="card card-error" style="min-height: auto; padding: 16px 24px;">
+        <div class="flex-row justify-between align-start gap-24">
+          <div class="flex-row gap-16 align-start">
+            <span class="material-symbols-rounded mt-8">warning</span>
+            <div>
+              <h3 class="title-medium m-0" style="color: inherit;">Critical network advisory</h3>
+              <p class="body-medium mt-8" style="color: inherit; opacity: 0.9;">
+                To ensure firewall persistence and static IP reliability, <strong>disable dynamic or random MAC addresses</strong> in your host device's network settings.
+              </p>
             </div>
-            <p id="dialog-message" class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant); white-space: pre-wrap;"></p>
+          </div>
+          <button onclick="dismissMacAdvisory()" class="btn btn-icon" style="color: inherit; margin: -8px -8px 0 0;" data-tooltip="Dismiss">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+
+    <section data-category="apps">
+    <div class="section-label">Applications</div>
+    <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <span class="chip category-badge" data-tooltip="Services marked with 🔒 VPN are routed through a secure tunnel. These services only access the internet via the VPN gateway and are not reachable from the public internet."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
+      <span class="chip category-badge" data-tooltip="Local services accessed directly through the internal network interface."><span class="material-symbols-rounded">lan</span> Direct Access</span>
+      <span class="chip category-badge" data-tooltip="Manage advanced infrastructure and container telemetry with Portainer."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
+    </div>
+    <div id="grid-apps" class="grid">
+      <!-- Dynamic Cards Injected Here -->
+    </div>
+    </section>
+
+    <section data-category="system">
+    <div class="section-label title-medium">System Management</div>
+    <div class="section-hint body-medium" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+      <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);"><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
+    </div>
+    
+    <div class="section-hint mb-16 card-outline" style="padding: 16px; border-radius: var(--md-sys-shape-corner-large);">
+      <div class="w-full flex-row align-center gap-8 mb-8" style="color: var(--md-sys-color-primary);">
+        <span class="material-symbols-rounded" style="font-size: 20px;">vpn_lock</span>
+        <span class="label-large" style="font-weight: 600;">Outbound VPN Gateway (Gluetun)</span>
+      </div>
+      <span class="chip category-badge" id="hint-vpn-status" data-tooltip="Gluetun Outbound VPN Tunnel Status">VPN: Checking...</span>
+      <span class="chip category-badge" id="hint-vpn-ip" data-tooltip="Current Public VPN IP"><span class="material-symbols-rounded" style="font-size:14px;">public</span> IP: --</span>
+      <span class="chip category-badge" id="hint-vpn-speed" data-tooltip="Real-time VPN Throughput"><span class="material-symbols-rounded" style="font-size:14px;">speed</span> --</span>
+      <span class="chip category-badge" id="hint-vpn-usage" data-tooltip="VPN Session / Total Data Usage"><span class="material-symbols-rounded" style="font-size:14px;">data_usage</span> --</span>
+    </div>
+
+    <div class="section-hint card-outline" style="padding: 16px; border-radius: var(--md-sys-shape-corner-large);">
+      <div class="w-full flex-row align-center gap-8 mb-8" style="color: var(--md-sys-color-primary);">
+        <span class="material-symbols-rounded" style="font-size: 20px;">settings_input_antenna</span>
+        <span class="label-large" style="font-weight: 600;">Inbound Access Gateway (WireGuard)</span>
+      </div>
+      <span class="chip category-badge" id="hint-wge-clients" data-tooltip="WG-Easy Active/Total Clients"><span class="material-symbols-rounded" style="font-size:14px;">group</span> -- Clients</span>
+      <span class="chip category-badge" id="hint-wge-usage" data-tooltip="WG-Easy Inbound Data Usage (Session / Total)"><span class="material-symbols-rounded" style="font-size:14px;">move_up</span> --</span>
+    </div>
+    <div id="grid-system" class="grid">
+      <!-- Dynamic Cards Injected Here -->
+    </div>
+    </section>
+
+    <section data-category="dns">
+    <div class="section-label title-medium">DNS Configuration</div>
+    <div class="grid">
+      <div class="card">
+        <h3 class="title-medium">Certificate status</h3>
+        <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
+          <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label label-medium">Type</span><span class="stat-value title-small" id="cert-type">Checking...</span></div>
+          <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label label-medium">Domain</span><span class="stat-value title-small sensitive" id="cert-subject">Checking...</span></div>
+          <div class="stat-row" data-tooltip="The authority that issued this certificate"><span class="stat-label label-medium">Issuer</span><span class="stat-value title-small sensitive" id="cert-issuer">Checking...</span></div>
+          <div class="stat-row" data-tooltip="Date when this certificate will expire"><span class="stat-label label-medium">Expires</span><span class="stat-value title-small sensitive" id="cert-to">Checking...</span></div>
+          <div id="ssl-failure-info" style="display:none; margin-top: 16px; padding: 16px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border: 1px solid var(--md-sys-color-error);">
+            <div class="body-small" style="font-weight:600; margin-bottom:4px; display: flex; align-items: center; gap: 8px;">
+              <span class="material-symbols-rounded" style="font-size: 16px;">error</span>
+              Pipeline Error
+            </div>
+            <div class="body-small" id="ssl-failure-reason" style="opacity: 0.9;">--</div>
+          </div>
+          <div id="cert-loading" class="chip admin" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium); border: none; margin-top: 16px;">
+            <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-weight: 600;">Verifying pipeline</span>
+              <span class="body-medium" style="opacity: 0.8; white-space: normal;">Checking SSL certificate validity and issuance status...</span>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; gap: 16px; flex-wrap: wrap;">
+          <div id="cert-status-badge" class="chip" style="width: fit-content; flex: 0 0 auto;" data-tooltip="Overall health of the SSL certificate issuance pipeline">Not installed</div>
+          <button id="ssl-retry-btn" class="btn btn-icon btn-action" style="display:none;" data-tooltip="Force Let's Encrypt re-attempt" onclick="requestSslCheck()">
+            <span class="material-symbols-rounded">refresh</span>
+          </button>
+        </div>
+      </div>
+      <div class="card admin-only">
+        <h3 class="title-medium">deSEC configuration</h3>
+        <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
+        <form onsubmit="saveDesecConfig(); return false;">
+          <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. yourname.dedyn.io)" style="margin-bottom:12px;" autocomplete="username" data-tooltip="Enter your registered deSEC domain (e.g. yourname.dedyn.io). You can create one for free at desec.io.">
+          <input type="password" id="desec-token-input" class="text-field sensitive" placeholder="deSEC API Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="The secret API token from your deSEC account used to verify domain ownership.">
+          <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
+            Get your domain and token at <a href="https://desec.io" target="_blank" style="color: var(--md-sys-color-primary);">desec.io</a>.
+          </p>
+          <div style="text-align:right;">
+            <button type="submit" class="btn btn-tonal">Save deSEC config</button>
+          </div>
+        </form>
+      </div>
+      <div class="card">
+        <h3 class="title-medium">Device DNS settings</h3>
+        <p class="body-medium description">Use these standard encrypted endpoints to maintain digital independence:</p>
+        <div class="code-label" data-tooltip="Standard unencrypted DNS (Port 53). Recommended only for use within your local LAN.">Standard IPv4 (local LAN only)</div>
+        <div class="code-block sensitive" onclick="copyToClipboard('$LAN_IP:53', this)">$LAN_IP:53</div>
+        <div class="code-label" data-tooltip="DNS-over-QUIC (DOQ). Port 853. High-performance encrypted DNS designed for superior latency and stability.">Secure DOQ (modern clients)</div>
+        <div class="code-block sensitive" onclick="copyToClipboard('quic://$LAN_IP', this)">quic://$LAN_IP</div>
+        <div class="desec-only" style="display: none;">
+          <div class="code-label" data-tooltip="DNS-over-HTTPS (DOH). Standard for web browsers. Queries are indistinguishable from HTTPS traffic.">Secure DOH (browsers)</div>
+          <div class="code-block sensitive" onclick="copyToClipboard('https://$DESEC_DOMAIN/dns-query', this)">https://$DESEC_DOMAIN/dns-query</div>
+          <div class="code-label" data-tooltip="DNS-over-TLS (DOT). Port 853. The industry standard for Android 'Private DNS' and system resolvers.">Secure DOT (Android / system)</div>
+          <div class="code-block sensitive" onclick="copyToClipboard('$DESEC_DOMAIN:853', this)">$DESEC_DOMAIN:853</div>
+        </div>
+        <div class="no-desec-only" style="display: none;">
+          <div class="code-label" data-tooltip="Secured DNS via HTTPS">DNS-over-HTTPS</div>
+          <div class="code-block sensitive" onclick="copyToClipboard('https://$LAN_IP/dns-query', this)">https://$LAN_IP/dns-query</div>
+          <div class="code-label" data-tooltip="Secured DNS via TLS">DNS-over-TLS</div>
+          <div class="code-block sensitive" onclick="copyToClipboard('$LAN_IP:853', this)">$LAN_IP:853</div>
+        </div>
+        <p class="body-small" style="margin-top: 16px; opacity: 0.7; font-style: italic;">
+          Note: Domain-based HTTPS endpoints (DOH/DOT) only work if your device uses this project as its DNS server (at $LAN_IP).
+        </p>
+      </div>
+      <div class="card">
+        <h3 class="title-medium">Endpoint provisioning</h3>
+        <div id="dns-setup-trusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
+          <p class="body-medium description">Globally trusted SSL is active through Let's Encrypt and deSEC. This enables zero-trust encrypted DNS on mobile devices without requiring you to install a certificate.</p>
+          <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
+            <li data-tooltip="For legacy devices within your home network."><b>Local LAN:</b> Configure your devices to use <code class="sensitive">$LAN_IP</code>.</li>
+            <li data-tooltip="Requires establishing the WireGuard VPN tunnel when away from home."><b>VPN Tunnel:</b> Route all traffic through the Privacy Hub.</li>
+            <li data-tooltip="Android 9+ native feature. Encrypts all DNS queries automatically."><b>Mobile Private DNS:</b> Use the hostname below for native encryption.</li>
+          </ol>
+          <div class="code-label" style="margin-top:12px;" data-tooltip="Use this hostname in your Android 'Private DNS' settings.">Mobile private DNS hostname</div>
+          <div class="code-block sensitive" style="margin-top:4px;" onclick="copyToClipboard('$DESEC_DOMAIN', this)">$DESEC_DOMAIN</div>
+          <div style="margin-top: auto; padding-top: 16px;">
+            <div class="chip vpn" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
+              <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-primary-container);">verified_user</span>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-weight: 600;">Verified certificate authority</span>
+                <span class="body-small" style="opacity: 0.8; white-space: normal;">Trust chain established with Let's Encrypt. Fully compatible with native Private DNS.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="dns-setup-untrusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
+          <p class="body-medium description" style="color:var(--md-sys-color-error);">Limited encrypted DNS coverage</p>
+          <p class="body-small description">
+            Android 'Private DNS' requires a domain name. Because no domain is configured, your mobile devices cannot use native encrypted DNS without the VPN.
+            <br><br>
+            After you acquire a valid SSL certificate, the configured deSEC domain will automatically be used as the domain name for this dashboard.
+          </p>
+          <div style="flex-grow: 1;">
+            <div class="code-label" data-tooltip="The local IP address of your privacy hub.">Primary gateway</div>
+            <div class="code-block sensitive" onclick="copyToClipboard('$LAN_IP', this)">$LAN_IP</div>
+          </div>
+          <div style="margin-top: auto; padding-top: 16px;">
+            <div class="chip admin" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
+              <span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-weight: 600;">Self-signed (local)</span>
+                <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and Private DNS.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="dns-setup-local" style="display:none; height: 100%; display: flex; flex-direction: column;">
+          <p class="body-medium description">The system is running in local-only mode. To maintain your privacy, route all external traffic through the local infrastructure:</p>
+          <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
+            <li>Configure your router's WAN or LAN DNS to: <b class="sensitive">$LAN_IP</b></li>
+            <li>Remote Access: Establish a WireGuard tunnel before you access services.</li>
+            <li>Legacy Support: Standard Port 53 resolution for older hardware.</li>
+          </ol>
+          <div class="code-block sensitive" style="margin-top:12px;" onclick="copyToClipboard('$LAN_IP', this)">$LAN_IP</div>
+          <div style="margin-top: auto; padding-top: 16px;">
+            <div class="chip admin" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
+              <span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-weight: 600;">Self-Signed (Local)</span>
+                <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and full mobile support.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </section>
+
+    <section data-category="tools">
+    <div class="section-label title-medium">Service Utilities</div>
+    <div id="grid-tools" class="grid">
+      <!-- Dynamic Cards Injected Here -->
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <h3 class="title-medium">Odido status</h3>
+          <div id="odido-speed-indicator" class="body-small" style="color: var(--md-sys-color-primary); font-weight: 500; display:none;">0 Mb/s</div>
+        </div>
+        <div id="odido-status-container" style="display: flex; flex-direction: column; height: 100%;">
+          <div id="odido-not-configured" style="display:none;">
+            <p class="body-medium" style="color:var(--md-sys-color-on-surface-variant);">Odido Bundle Booster service available. Configure credentials via API or link below.</p>
+            <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-tonal" style="margin-top:12px;">Open API Docs</a>
+          </div>
+          <div id="odido-configured" style="display:none; padding-top: 8px; flex-grow: 1; display: flex; flex-direction: column;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div>
+                <div class="stat-row"><span class="stat-label label-medium">Remaining</span><span class="stat-value title-small" id="odido-remaining">--</span></div>
+                <div class="stat-row"><span class="stat-label label-medium">Bundle</span><span class="stat-value title-small" id="odido-bundle-code">--</span></div>
+                <div class="stat-row"><span class="stat-label label-medium">Rate</span><span class="stat-value title-small" id="odido-rate">--</span></div>
+              </div>
+              <div>
+                <div class="stat-row"><span class="stat-label label-medium">Status</span><span class="stat-value title-small" id="odido-api-status">--</span></div>
+                <div class="stat-row"><span class="stat-label label-medium">Threshold</span><span class="stat-value title-small" id="odido-threshold">--</span></div>
+                <div class="stat-row"><span class="stat-label label-medium">Auto-Renew</span><span class="stat-value title-small" id="odido-auto-renew">--</span></div>
+              </div>
+            </div>
             
-            <div id="dialog-input-container" style="display:none; margin-bottom: 24px;">
-                <input type="text" id="dialog-input" class="text-field" style="width: 100%;">
+            <div style="margin-top: 24px; flex-grow: 1; min-height: 120px; position: relative; background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 12px;">
+              <div style="position: absolute; top: 8px; left: 12px; font-size: 10px; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Consumption Rate (MB/min)</div>
+              <svg id="odido-graph" width="100%" height="100%" viewBox="0 0 400 120" preserveAspectRatio="none" style="overflow: visible;">
+                <defs>
+                  <linearGradient id="graph-gradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="var(--md-sys-color-primary)" stop-opacity="0.3"></stop>
+                    <stop offset="100%" stop-color="var(--md-sys-color-primary)" stop-opacity="0"></stop>
+                  </linearGradient>
+                </defs>
+                <path id="graph-area" fill="url(#graph-gradient)" d=""></path>
+                <path id="graph-line" fill="none" stroke="var(--md-sys-color-primary)" stroke-width="2.5" stroke-linejoin="round" d=""></path>
+                <line x1="0" y1="120" x2="400" y2="120" stroke="var(--md-sys-color-outline-variant)" stroke-width="1"></line>
+                <g id="graph-grid" stroke="var(--md-sys-color-outline-variant)" stroke-width="0.5" stroke-dasharray="2,2">
+                  <line x1="0" y1="30" x2="400" y2="30"></line>
+                  <line x1="0" y1="60" x2="400" y2="60"></line>
+                  <line x1="0" y1="90" x2="400" y2="90"></line>
+                </g>
+              </svg>
             </div>
 
-            <div class="btn-group" style="justify-content: flex-end;">
-                <button id="dialog-cancel-btn" class="btn btn-outlined">Cancel</button>
-                <button id="dialog-confirm-btn" class="btn btn-filled">Confirm</button>
+            <div id="odido-buy-status" class="body-small" style="text-align: center; margin-top: 8px; font-weight: 500;"></div>
+            <div class="btn-group" style="justify-content:center; margin-top: 16px;">
+              <button onclick="buyOdidoBundle()" class="btn btn-tertiary admin-only" id="odido-buy-btn">Buy bundle</button>
+              <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh status</button>
+              <a href="http://$LAN_IP:8085/docs" target="_blank" class="btn btn-outlined">API</a>
             </div>
+          </div>
+          <div id="odido-loading" class="chip admin" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium); border: none; margin-top: 8px;">
+            <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-weight: 600;">Synchronizing Data</span>
+              <span class="body-medium" style="opacity: 0.8; white-space: normal;">Connecting to Odido API to retrieve latest bundle status...</span>
+            </div>
+          </div>
         </div>
+      </div>
+      <div class="card admin-only">
+        <h3 class="title-medium">Configuration</h3>
+        <p class="body-medium description">Authentication and automation settings for backend services:</p>
+        <form onsubmit="saveOdidoConfig(); return false;">
+          <input type="text" id="odido-api-key" class="text-field sensitive" placeholder="Dashboard API Key" style="margin-bottom:12px;" autocomplete="username" data-tooltip="The HUB_API_KEY from your .secrets file.">
+          <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
+            The <strong>Dashboard API Key</strong> (HUB_API_KEY) is required to authorize sensitive actions like saving settings. You can find this in your <code>.secrets</code> file on the host.
+          </p>
+          <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="OAuth token for Odido API authentication.">
+          <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
+            Download and extract the latest <a href="https://github.com/GuusBackup/Odido.Authenticator/releases/latest" target="_blank" style="color: var(--md-sys-color-primary);">Odido.Authenticator</a>.
+            <br><br>
+            <strong>How to use:</strong><br>
+            1. Run <code>Odido.Authenticator.exe</code><br>
+            2. Go to the URL provided in the tool: <code class="sensitive">https://www.odido.nl/login?...</code><br>
+            3. Sign in to Odido<br>
+            4. Grab the result URL: <code class="sensitive">https://www.odido.nl/loginappresult?token=...</code><br>
+            5. Paste it into the tool and press enter<br>
+            6. It will show the Refresh token now (Decrypted the response)<br>
+            7. Press enter or Y to get an Authentication token from it (This will destroy the refresh token)
+          </p>
+          <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;" data-tooltip="The product code for your data bundle.">
+          <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;" data-tooltip="Automatic renewal triggers when data falls below this level.">
+          <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;" data-tooltip="Lead time before expiration to trigger renewal.">
+          
+          <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 16px;">
+            <div style="flex: 1;">
+              <span class="label-large">Secure API routing (VPN)</span>
+              <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Routes requests through VPN by default to hide your home IP. Disable only if the Odido API blocks VPN traffic or you experience connectivity issues.</p>
+            </div>
+            <div class="switch-container" id="odido-vpn-switch" onclick="toggleOdidoVpn()" data-tooltip="Toggle between VPN and Home IP for Odido requests">
+              <div class="switch-track">
+                <div class="switch-thumb"></div>
+              </div>
+            </div>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+            <div id="odido-config-status" class="body-small" style="font-weight: 500;"></div>
+            <button type="submit" class="btn btn-tonal">Save configuration</button>
+          </div>
+        </form>
+      </div>
     </div>
 
-    <!-- Service management modal -->
-    <div id="service-modal" class="modal-overlay">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h2 class="headline-small" id="modal-service-name">Service settings</h2>
-                <button onclick="closeServiceModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
-            </div>
-            <div id="modal-metrics" style="background: var(--md-sys-color-surface-container-low); padding: 16px; border-radius: 12px; display: flex; flex-direction: column; gap: 12px;">
-                <div class="stat-row row-layout m-0">
-                    <span class="stat-label label-medium">CPU usage</span>
-                    <span class="stat-value title-small" id="modal-cpu-text">0%</span>
-                </div>
-                <div class="metric-bar"><div id="modal-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
-                
-                <div class="stat-row row-layout m-0" style="margin-top:12px;">
-                    <span class="stat-label label-medium">Memory usage</span>
-                    <span class="stat-value title-small" id="modal-mem-text">0 MB / 0 MB</span>
-                </div>
-                <div class="metric-bar"><div id="modal-mem-fill" class="metric-fill" style="width: 0%"></div></div>
-            </div>
-            <div id="modal-actions" class="btn-group" style="flex-direction: column; gap: 8px;">
-                <!-- Actions injected via JS -->
-            </div>
+    
+    <div class="section-label admin-only">VPN client access (inbound)</div>
+    <div class="grid admin-only">
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-header">
+          <h3 class="title-medium">Registered clients</h3>
+          <div class="card-header-actions">
+            <button onclick="openAddClientModal()" class="btn btn-filled" data-tooltip="Create a new client configuration">
+              <span class="material-symbols-rounded">add</span> New client
+            </button>
+          </div>
         </div>
+        <p class="body-medium description">Manage devices that can connect to this network via WireGuard.</p>
+        
+        <div id="wg-client-list" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="padding: 24px; text-align: center; opacity: 0.6;">
+            <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
+            <span class="body-medium">Loading clients...</span>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Sign-in modal -->
-    <div id="signin-modal" class="modal-overlay">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h2 class="headline-small">Admin Sign in</h2>
-                <button onclick="closeSignInModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
-            </div>
-            <p class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant);">Enter your administrator password to unlock management features.</p>
-            <form onsubmit="submitSignIn(); return false;">
-                <!-- Hidden username field for accessibility/autofill -->
-                <input type="text" name="username" value="admin" style="display:none" autocomplete="username">
-                <input type="password" id="admin-password-input" name="password" class="text-field" placeholder="Password" style="margin-bottom: 24px; border-radius: 4px;" autocomplete="current-password">
-                <div style="display: flex; justify-content: flex-end; gap: 12px;">
-                    <button type="button" onclick="closeSignInModal()" class="btn btn-outlined">Cancel</button>
-                    <button type="submit" class="btn btn-filled">Sign in</button>
-                </div>
-            </form>
+    <!-- Add Client Modal -->
+    <div id="add-client-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 class="headline-small">New WireGuard Client</h2>
+          <button onclick="document.getElementById('add-client-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
         </div>
+        <input type="text" id="new-client-name" class="text-field" placeholder="Client Name (e.g. My Phone)" style="margin-bottom: 24px;">
+        <div style="display: flex; justify-content: flex-end; gap: 12px;">
+          <button onclick="createClient()" class="btn btn-filled">Create</button>
+        </div>
+      </div>
     </div>
 
-    <script>
+    <!-- Client QR Modal -->
+    <div id="client-qr-modal" class="modal-overlay">
+      <div class="modal-card" style="text-align: center;">
+        <div class="modal-header">
+          <h2 class="headline-small" id="qr-client-name">Client Config</h2>
+          <button onclick="document.getElementById('client-qr-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+        </div>
+        <div id="qrcode-container" style="background: white; padding: 16px; border-radius: 16px; display: inline-block; margin: 16px 0;"></div>
+        <div style="margin-top: 16px;">
+          <a id="client-download-link" class="btn btn-tonal" download="wg.conf">Download .conf</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label admin-only">WireGuard Profiles</div>
+    <div class="grid admin-only">
+      <div class="card admin-only">
+        <h3 class="title-medium">Upload profile</h3>
+        <input type="text" id="prof-name" class="text-field" placeholder="Optional: Custom Name" style="margin-bottom:12px;" data-tooltip="Give your profile a recognizable name.">
+        <textarea id="prof-conf" class="text-field sensitive" placeholder="Paste .conf content here..." style="margin-bottom:16px;" data-tooltip="Paste the contents of your WireGuard .conf file."></textarea>
+        <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile. The VPN service will automatically restart to apply the new configuration (~15 seconds).">Upload & activate</button></div>
+      </div>
+      <div class="card profile-card admin-only">
+        <h3 data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available Profiles</h3>
+        <div id="profile-list" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; min-height: 100px;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
+            <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <span class="body-medium">Scanning Profiles...</span>
+          </div>
+        </div>
+        <p class="body-small profile-hint" style="margin-top: auto; padding-top: 12px;">Click name to activate.</p>
+      </div>
+    </div>
+
+    <div class="section-label">Customization & Info</div>
+    <div class="grid">
+      <div class="card admin-only">
+        <div class="card-header">
+          <h3 class="title-medium">Theme customization</h3>
+          <div class="card-header-actions">
+            <button onclick="localStorage.removeItem('theme_seed'); location.reload();" class="btn btn-icon" data-tooltip="Reset theme to default"><span class="material-symbols-rounded">refresh</span></button>
+          </div>
+        </div>
+        <p class="body-medium description">Personalize the dashboard using Material Design 3 dynamic color algorithms.</p>
+        <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 16px;">
+          <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+            <div style="position: relative; width: 48px; height: 48px; border-radius: 24px; overflow: hidden; border: 2px solid var(--md-sys-color-primary);">
+              <input type="color" id="theme-seed-color" onchange="applySeedColor(this.value)" style="position: absolute; top: -10px; left: -10px; width: 80px; height: 80px; cursor: pointer; border: none; background: transparent;">
+            </div>
+            <div style="flex: 1;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="label-large">Custom Seed Color</span>
+                <span class="body-small monospace" id="theme-seed-hex" style="opacity: 0.7;">#D0BCFF</span>
+              </div>
+              <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Tap the circle to choose a primary tone</p>
+            </div>
+          </div>
+
+          <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span class="label-large">Theme Presets</span>
+            </div>
+            <div id="static-presets" style="display: flex; gap: 12px; flex-wrap: wrap;">
+              <!-- Static presets injected here -->
+            </div>
+
+            <div style="height: 1px; background: var(--md-sys-color-outline-variant); opacity: 0.5;"></div>
+
+            <div style="display: flex; align-items: center; gap: 16px;">
+              <label for="theme-image-upload" class="btn btn-filled" style="width: 48px; height: 48px; padding: 0; border-radius: 24px; cursor: pointer; flex-shrink: 0;" data-tooltip="Pick a wallpaper to extract colors">
+                <span class="material-symbols-rounded">wallpaper</span>
+              </label>
+              <input type="file" id="theme-image-upload" accept="image/*" onchange="extractColorsFromImage(event)" style="display: none;">
+              <div style="flex: 1;">
+                <span class="label-large">Wallpaper Extraction</span>
+                <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Upload image to generate palettes</p>
+              </div>
+            </div>
+            
+            <!-- Extracted Palette -->
+            <div id="extracted-palette" style="display: flex; gap: 12px; flex-wrap: wrap; min-height: 48px; align-items: center;">
+              <span class="body-small" style="opacity: 0.5; font-style: italic;">Extracted palettes will appear here...</span>
+            </div>
+
+            <!-- Manual Add -->
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="manual-color-input" class="text-field" placeholder="Add Hex (e.g. #FF0000)" style="border-radius: 8px; height: 40px; padding: 0 12px; font-family: monospace;">
+              <button onclick="addManualColor()" class="btn btn-tonal" style="height: 40px;">Add</button>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
+            <button onclick="saveThemeSettings()" class="btn btn-tonal" style="flex-grow: 1;"><span class="material-symbols-rounded">save</span> Save theme</button>
+          </div>
+        </div>
+      </div>
+      <div class="card admin-only">
+        <h3 class="title-medium">Security & privacy</h3>
+        <p class="body-medium description">Manage administrative session behavior and authentication security.</p>
+        <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+          <div id="session-cleanup-warning" class="chip admin" style="display: flex; width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-highest); color: var(--md-sys-color-on-surface-variant); border: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 4px; transition: all 0.3s ease;">
+            <span class="material-symbols-rounded" id="session-warning-icon">info</span>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-weight: 600;" id="session-warning-title">Security Recommendation</span>
+              <span class="body-medium" id="session-warning-text" style="opacity: 0.8; white-space: normal;">Session auto-cleanup is currently active. Your admin session will expire automatically for safety.</span>
+            </div>
+          </div>
+          <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+            <div style="flex: 1;">
+              <span class="label-large">Update Strategy</span>
+              <p class="body-small" id="strategy-desc" style="color: var(--md-sys-color-on-surface-variant);">Stable: Use official release tags (Recommended).</p>
+            </div>
+            <select id="update-strategy-select" class="btn btn-tonal" style="height: 40px; padding: 0 12px;" onchange="updateStrategyChange()">
+              <option value="stable">Stable (Tags)</option>
+              <option value="latest">Latest (Branch)</option>
+            </select>
+          </div>
+          <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+            <div style="flex: 1;">
+              <span class="label-large">Rollback Support</span>
+              <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Keep source-code snapshots before updates to allow reverting versions.</p>
+            </div>
+            <div class="switch-container" id="rollback-backup-switch" onclick="toggleRollbackBackup()" data-tooltip="Toggle automated backup before service updates">
+              <div class="switch-track">
+                <div class="switch-thumb"></div>
+              </div>
+            </div>
+          </div>
+          <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+            <div style="flex: 1;">
+              <span class="label-large">Session Auto-Cleanup</span>
+              <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Automatically expire admin sessions after inactivity.</p>
+            </div>
+            <div class="switch-container" id="session-cleanup-switch" onclick="toggleSessionCleanup()" data-tooltip="Toggle automatic session expiration">
+              <div class="switch-track">
+                <div class="switch-thumb"></div>
+              </div>
+            </div>
+          </div>
+          <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
+            <div style="flex: 1;">
+              <span class="label-large">Session Timeout (Minutes)</span>
+              <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Duration of inactivity before auto-logout (Default: 30 Minutes).</p>
+            </div>
+            <input type="number" id="session-timeout-input" class="text-field" style="width: 80px;" value="30" onchange="syncSettings()">
+          </div>
+
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="title-medium">System information</h3>
+        <p class="body-medium description">Sensitive credentials and core configuration details are stored securely on the host filesystem:</p>
+        <div class="flex-column flex-1">
+          <div class="stat-row"><span class="stat-label label-medium">Secrets Location</span><span class="stat-value title-small monospace">$BASE_DIR/.secrets</span></div>
+          <div class="stat-row"><span class="stat-label label-medium">Config Root</span><span class="stat-value title-small monospace">$BASE_DIR/config</span></div>
+          <div class="stat-row"><span class="stat-label label-medium">Dashboard Port</span><span class="stat-value title-small">$PORT_DASHBOARD_WEB</span></div>
+          <div class="stat-row"><span class="stat-label label-medium">Safe Display Mode</span><span class="stat-value title-small">Active (Local)</span></div>
+        </div>
+        <div class="admin-only mt-24 flex-column gap-12">
+          <button onclick="checkUpdates()" class="btn btn-tonal w-full justify-start" data-tooltip="Check for updates">
+            <span class="material-symbols-rounded">system_update_alt</span> Check for updates
+          </button>
+          <button id="update-all-btn" onclick="updateAllServices()" class="btn btn-tonal w-full justify-start" data-tooltip="Update all services" style="background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);">
+            <span class="material-symbols-rounded">upgrade</span> Update all services
+          </button>
+          <button onclick="restartStack()" class="btn btn-tonal w-full justify-start" style="background: var(--md-sys-color-surface-container-highest);">
+            <span class="material-symbols-rounded">restart_alt</span> Restart stack
+          </button>
+          <button onclick="backupSystem()" class="btn btn-tonal w-full justify-start" data-tooltip="Create a compressed backup of all secrets and configurations.">
+            <span class="material-symbols-rounded">backup</span> Backup system
+          </button>
+          <button onclick="openRestoreModal()" class="btn btn-tonal w-full justify-start" data-tooltip="Restore system state from a previous backup file.">
+            <span class="material-symbols-rounded">restore</span> Restore from backup
+          </button>
+          <button onclick="uninstallStack()" class="btn btn-tonal w-full justify-start" style="background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);" data-tooltip="Permanently remove all containers and data.">
+            <span class="material-symbols-rounded">delete_forever</span> Uninstall system
+          </button>
+        </div>
+      </div>
+    </div>
+    </section>
+
+    <section data-category="logs">
+    <div class="section-label">System & Logs</div>
+    <div class="grid">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="title-medium">System health</h3>
+          <div class="card-header-actions">
+            <div class="chip" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 0 12px; height: 28px; font-weight: 500; gap: 6px; box-shadow: var(--md-sys-elevation-1);">
+              <span class="material-symbols-rounded" id="health-icon" style="font-size: 16px;">check_circle</span>
+              <span id="health-text" style="font-size: 13px; letter-spacing: 0.3px;">Optimal</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex-column gap-12 flex-1">
+          <div class="stat-row m-0"><span class="stat-label label-medium">System CPU</span><span class="stat-value title-small" id="sys-cpu">0%</span></div>
+          <div class="metric-bar"><div id="sys-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
+          
+          <div class="stat-row m-0 mt-8"><span class="stat-label label-medium">System RAM</span><span class="stat-value title-small" id="sys-ram">0 MB / 0 MB</span></div>
+          <div class="metric-bar"><div id="sys-ram-fill" class="metric-fill" style="width: 0%"></div></div>
+
+          <div class="mt-16" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div onclick="openProjectSizeModal()" class="clickable-stat flex-column gap-4" style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px; cursor: pointer; position: relative; transition: all 200ms ease; border: 1px solid transparent;" onmouseover="this.style.background='var(--md-sys-color-surface-container-high)'; this.style.borderColor='var(--md-sys-color-outline-variant)'" onmouseout="this.style.background='var(--md-sys-color-surface-container-highest)'; this.style.borderColor='transparent'">
+              <div class="flex-row justify-between align-start">
+                <span class="body-small" style="opacity: 0.7;">Project Size</span>
+                <span class="material-symbols-rounded move-on-hover" style="font-size: 16px; opacity: 0.5; transition: transform 200ms ease;">arrow_forward</span>
+              </div>
+              <span class="label-large" id="sys-project-size">-- MB</span>
+            </div>
+            <div class="flex-column gap-4" style="background: var(--md-sys-color-surface-container-highest); padding: 12px; border-radius: 12px;">
+              <span class="body-small" style="opacity: 0.7;">System Uptime</span>
+              <span class="label-large" id="sys-uptime">--</span>
+            </div>
+          </div>
+
+          <div class="mt-auto pt-16 flex-row justify-between align-center gap-16" style="border-top: 1px solid var(--md-sys-color-outline-variant);">
+            <div class="flex-row align-center gap-12 flex-1">
+              <span class="material-symbols-rounded" style="font-size: 20px; color: var(--md-sys-color-primary);">hard_drive</span>
+              <span class="body-medium flex-row align-center gap-8" data-tooltip="SMART Health Status" id="drive-health-container">
+                Drive Health: <strong id="sys-drive-status">Checking...</strong>
+                <span id="sys-drive-pct" style="opacity: 0.8;"></span>
+              </span>
+            </div>
+            <span class="body-small" id="sys-disk-percent" style="white-space: nowrap;">--% used</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <h3 class="title-medium">System & deployment logs</h3>
+          <div class="card-header-actions">
+            <select id="log-filter-level" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
+              <option value="ALL">All Levels</option>
+              <option value="INFO">Info</option>
+              <option value="WARN">Warn</option>
+              <option value="ERROR">Error</option>
+              <option value="SECURITY">Security</option>
+            </select>
+            <select id="log-filter-cat" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
+              <option value="ALL">All Categories</option>
+              <option value="SYSTEM">System</option>
+              <option value="NETWORK">Network</option>
+              <option value="MAINTENANCE">Maintenance</option>
+            </select>
+          </div>
+        </div>
+        <div id="log-container" class="log-container sensitive" style="display: flex; align-items: center; justify-content: center;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
+            <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <span class="body-medium">Connecting to Log Stream...</span>
+          </div>
+        </div>
+        <div id="log-status" class="body-small" style="color:var(--md-sys-color-on-surface-variant); text-align:right; margin-top:8px;">Connecting...</div>
+      </div>
+    </div>
+    </section>
+
+  <!-- Select updates modal -->
+  <div id="update-selection-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2 class="headline-small">Select updates</h2>
+        <button onclick="closeUpdateModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+      </div>
+      <div style="padding: 16px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <span class="body-medium" id="update-fetch-status" style="color: var(--md-sys-color-on-surface-variant);">Scanning for updates...</span>
+          <button onclick="toggleAllUpdates()" class="btn btn-tonal" style="height: 32px; font-size: 12px;">Reset or undo</button>
+        </div>
+        <div id="update-list-container" style="background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 8px; max-height: 300px; overflow-y: auto;">
+          <!-- Checkboxes injected here -->
+          <div style="padding: 24px; text-align: center; opacity: 0.6;">
+            <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
+            <span class="body-medium">Checking repositories...</span>
+          </div>
+        </div>
+      </div>
+      <div class="btn-group" style="justify-content: flex-end;">
+        <button onclick="startBatchUpdate()" class="btn btn-filled" id="start-update-btn" disabled>Update selected</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Changelog modal -->
+  <div id="changelog-modal" class="modal-overlay" style="z-index: 26000;">
+    <div class="modal-card" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h2 class="headline-small" id="changelog-title">Changelog</h2>
+        <button onclick="document.getElementById('changelog-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+      </div>
+      <div id="changelog-content" class="code-block" style="flex-grow: 1; overflow-y: auto; white-space: pre-wrap; margin-top: 16px; font-family: monospace; font-size: 13px;">
+        Loading...
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic dialog modal -->
+  <div id="dialog-modal" class="modal-overlay" style="z-index: 30000;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="headline-small" id="dialog-title">Title</h2>
+        <button onclick="closeDialog()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+      </div>
+      <p id="dialog-message" class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant); white-space: pre-wrap;"></p>
+      
+      <div id="dialog-input-container" style="display:none; margin-bottom: 24px;">
+        <input type="text" id="dialog-input" class="text-field" style="width: 100%;">
+      </div>
+
+      <div class="btn-group" style="justify-content: flex-end;">
+        <button id="dialog-cancel-btn" class="btn btn-outlined">Cancel</button>
+        <button id="dialog-confirm-btn" class="btn btn-filled">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Service management modal -->
+  <div id="service-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="headline-small" id="modal-service-name">Service settings</h2>
+        <button onclick="closeServiceModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+      </div>
+      <div id="modal-metrics" style="background: var(--md-sys-color-surface-container-low); padding: 16px; border-radius: 12px; display: flex; flex-direction: column; gap: 12px;">
+        <div class="stat-row row-layout m-0">
+          <span class="stat-label label-medium">CPU usage</span>
+          <span class="stat-value title-small" id="modal-cpu-text">0%</span>
+        </div>
+        <div class="metric-bar"><div id="modal-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
+        
+        <div class="stat-row row-layout m-0" style="margin-top:12px;">
+          <span class="stat-label label-medium">Memory usage</span>
+          <span class="stat-value title-small" id="modal-mem-text">0 MB / 0 MB</span>
+        </div>
+        <div class="metric-bar"><div id="modal-mem-fill" class="metric-fill" style="width: 0%"></div></div>
+      </div>
+      <div id="modal-actions" class="btn-group" style="flex-direction: column; gap: 8px;">
+        <!-- Actions injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Sign-in modal -->
+  <div id="signin-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="headline-small">Admin Sign in</h2>
+        <button onclick="closeSignInModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+      </div>
+      <p class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant);">Enter your administrator password to unlock management features.</p>
+      <form onsubmit="submitSignIn(); return false;">
+        <!-- Hidden username field for accessibility/autofill -->
+        <input type="text" name="username" value="admin" style="display:none" autocomplete="username">
+        <input type="password" id="admin-password-input" name="password" class="text-field" placeholder="Password" style="margin-bottom: 24px; border-radius: 4px;" autocomplete="current-password">
+        <div style="display: flex; justify-content: flex-end; gap: 12px;">
+          <button type="button" onclick="closeSignInModal()" class="btn btn-outlined">Cancel</button>
+          <button type="submit" class="btn btn-filled">Sign in</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
 {{HUB_JS}}
-    </script>
-    <script>
-        // DNS setup visibility logic
-        (function() {
-            const hasDesec = "$DESEC_DOMAIN" !== "";
-            if (hasDesec) {
-                document.querySelectorAll('.desec-only').forEach(el => el.style.display = 'block');
-                document.getElementById('dns-setup-trusted').style.display = 'flex';
-            } else {
-                document.querySelectorAll('.no-desec-only').forEach(el => el.style.display = 'block');
-                document.getElementById('dns-setup-local').style.display = 'flex';
-            }
-        })();
-    </script>
-    <!-- Project size details modal -->
-    <div id="project-size-modal" class="modal-overlay">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h2 class="headline-small" id="modal-project-title">Storage breakdown</h2>
-                <button onclick="closeProjectSizeModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
-            </div>
-            <div id="project-size-details" style="display: flex; flex-direction: column; gap: 16px;">
-                <div class="loading-spinner" id="project-size-loading" style="margin: 20px auto;"></div>
-                <div id="project-size-content" style="display: none;">
-                    <div style="display: flex; flex-direction: column; gap: 12px;" id="project-size-list">
-                        <!-- Dynamic content -->
-                    </div>
-                    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; flex-direction: column; gap: 12px;">
-                        <button onclick="purgeUnusedImages(event)" class="btn btn-filled" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
-                            <span class="material-symbols-rounded">delete_sweep</span>
-                            <span>Prune unused images</span>
-                        </button>
-                        <p class="body-small" style="opacity: 0.7; text-align: center;">Safe removal of dangling images and unused build cache.</p>
-                    </div>
-                </div>
-            </div>
+  </script>
+  <script>
+    // DNS setup visibility logic
+    (function() {
+      const hasDesec = "$DESEC_DOMAIN" !== "";
+      if (hasDesec) {
+        document.querySelectorAll('.desec-only').forEach(el => el.style.display = 'block');
+        document.getElementById('dns-setup-trusted').style.display = 'flex';
+      } else {
+        document.querySelectorAll('.no-desec-only').forEach(el => el.style.display = 'block');
+        document.getElementById('dns-setup-local').style.display = 'flex';
+      }
+    })();
+  </script>
+  <!-- Project size details modal -->
+  <div id="project-size-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="headline-small" id="modal-project-title">Storage breakdown</h2>
+        <button onclick="closeProjectSizeModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+      </div>
+      <div id="project-size-details" style="display: flex; flex-direction: column; gap: 16px;">
+        <div class="loading-spinner" id="project-size-loading" style="margin: 20px auto;"></div>
+        <div id="project-size-content" style="display: none;">
+          <div style="display: flex; flex-direction: column; gap: 12px;" id="project-size-list">
+            <!-- Dynamic content -->
+          </div>
+          <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; flex-direction: column; gap: 12px;">
+            <button onclick="purgeUnusedImages(event)" class="btn btn-filled" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
+              <span class="material-symbols-rounded">delete_sweep</span>
+              <span>Prune unused images</span>
+            </button>
+            <p class="body-small" style="opacity: 0.7; text-align: center;">Safe removal of dangling images and unused build cache.</p>
+          </div>
         </div>
+      </div>
     </div>
+  </div>
 
-    <!-- System restoration modal -->
-    <div id="restore-modal" class="modal-overlay">
-        <div class="modal-card" style="max-width: 600px;">
-            <div class="modal-header">
-                <h2 class="headline-small">System restoration</h2>
-                <button onclick="closeRestoreModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
-            </div>
-            <div style="padding: 16px 0;">
-                <p class="body-medium mb-16" style="color: var(--md-sys-color-on-surface-variant);">Select a backup to restore the system configuration and secrets. <strong>Warning: This will overwrite current settings and restart the stack.</strong></p>
-                <div id="backup-list-container" style="background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 8px; max-height: 300px; overflow-y: auto;">
-                    <div style="padding: 24px; text-align: center; opacity: 0.6;">
-                        <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
-                        <span class="body-medium">Scanning for backups...</span>
-                    </div>
-                </div>
-            </div>
+  <!-- System restoration modal -->
+  <div id="restore-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2 class="headline-small">System restoration</h2>
+        <button onclick="closeRestoreModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+      </div>
+      <div style="padding: 16px 0;">
+        <p class="body-medium mb-16" style="color: var(--md-sys-color-on-surface-variant);">Select a backup to restore the system configuration and secrets. <strong>Warning: This will overwrite current settings and restart the stack.</strong></p>
+        <div id="backup-list-container" style="background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 8px; max-height: 300px; overflow-y: auto;">
+          <div style="padding: 24px; text-align: center; opacity: 0.6;">
+            <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
+            <span class="body-medium">Scanning for backups...</span>
+          </div>
         </div>
+      </div>
     </div>
+  </div>
 
 </body>
 </html>

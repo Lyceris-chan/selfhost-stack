@@ -1,0 +1,823 @@
+title Google TypeScript Style Guide
+section Google TypeScript Style Guide
+    This guide is based on the internal Google TypeScript style guide, but it has been slightly adjusted to remove Google-internal sections. Google's internal environment has different constraints on TypeScript than you might find outside of Google. The advice here is specifically useful for people authoring code they intend to import into Google, but otherwise may not apply in your external environment.
+    There is no automatic deployment process for this version as it's pushed on-demand by volunteers.
+  section Introduction
+    section Terminology notes
+    This Style Guide usesRFC 2119terminology when using the phrasesmust,must not,should,should not, andmay. The termspreferandavoidcorrespond toshouldandshould not, respectively. Imperative and declarative statements are prescriptive and correspond tomust.
+    section Guide notes
+    All examples given arenon-normativeand serve only to illustrate the normative language of the style guide. That is, while the examples are in Google Style, they may not illustrate theonlystylish way to represent the code. Optional formatting choices made in examples must not be enforced as rules.
+  section Source file basics
+    section File encoding: UTF-8
+    Source files are encoded inUTF-8.
+      section Whitespace characters
+    Aside from the line terminator sequence, the ASCII horizontal space character (0x20) is the only whitespace character that appears anywhere in a source file. This implies that all other whitespace characters in string literals are escaped.
+      section Special escape sequences
+    For any character that has a special escape sequence (\',\",\\,\b,\f,\n,\r,\t,\v), that sequence is used rather than the corresponding numeric escape (e.g\x0a,\u000a, or\u{a}). Legacy octal escapes are never used.
+      section Non-ASCII characters
+    For the remaining non-ASCII characters, use the actual Unicode character (e.g.∞). For non-printable characters, the equivalent hex or Unicode escapes (e.g.\u221e) can be used along with an explanatory comment.
+        code // Perfectly clear, even without a comment. const units = 'μs';  // Use escapes for non-printable characters. const output = '\ufeff' + content;  // byte order mark
+        code // Hard to read and prone to mistakes, even with the comment. const units = '\u03bcs'; // Greek letter mu, 's'  // The reader has no idea what this is. const output = '\ufeff' + content;
+  section Source file structure
+    Files consist of the following,in order:
+      - Copyright information, if present
+      - JSDoc with@fileoverview, if present
+      - Imports, if present
+      - The file’s implementation
+    Exactly one blank lineseparates each section that is present.
+    section Copyright information
+    If license or copyright information is necessary in a file, add it in a JSDoc at the top of the file.
+    section @fileoverviewJSDoc
+    A file may have a top-level@fileoverviewJSDoc. If present, it may provide a description of the file's content, its uses, or information about its dependencies. Wrapped lines are not indented.
+    Example:
+        code /**  * @fileoverview Description of file. Lorem ipsum dolor sit amet, consectetur  * adipiscing elit, sed do eiusmod tempor incididunt.  */
+    section Imports
+    There are four variants of import statements in ES6 and TypeScript:
+        code import * as foo from '...';
+        code import {SomeThing} from '...';
+        code import SomeThing from '...';
+        code import '...';
+        code // Good: choose between two options as appropriate (see below). import * as ng from '@angular/core'; import {Foo} from './foo';  // Only when needed: default imports. import Button from 'Button';  // Sometimes needed to import libraries for their side effects: import 'jasmine'; import '@polymer/paper-button';
+      section Import paths
+    TypeScript codemustuse paths to import other TypeScript code. Pathsmaybe relative, i.e. starting with.or..,  or rooted at the base directory, e.g.root/path/to/file.
+    Codeshoulduse relative imports (./foo) rather than absolute importspath/to/foowhen referring to files within the same (logical) project as this allows to move the project around without introducing changes in these imports.
+    Consider limiting the number of parent steps (../../../) as those can make module and path structures hard to understand.
+        code import {Symbol1} from 'path/from/root'; import {Symbol2} from '../parent/file'; import {Symbol3} from './sibling';
+      section Namespace versus named imports
+    Both namespace and named imports can be used.
+    Prefer named imports for symbols used frequently in a file or for symbols that have clear names, for example Jasmine'sdescribeandit. Named imports can be aliased to clearer names as needed withas.
+    Prefer namespace imports when using many different symbols from large APIs. A namespace import, despite using the*character, is not comparable to awildcardimport as seen in other languages. Instead, namespace imports give a name to all the exports of a module, and each exported symbol from the module becomes a property on the module name. Namespace imports can aid readability for exported symbols that have common names likeModelorControllerwithout the need to declare aliases.
+        code // Bad: overlong import statement of needlessly namespaced names. import {Item as TableviewItem, Header as TableviewHeader, Row as TableviewRow,   Model as TableviewModel, Renderer as TableviewRenderer} from './tableview';  let item: TableviewItem|undefined;
+        code // Better: use the module for namespacing. import * as tableview from './tableview';  let item: tableview.Item|undefined;
+        code import * as testing from './testing';  // Bad: The module name does not improve readability. testing.describe('foo', () => {   testing.it('bar', () => {     testing.expect(null).toBeNull();     testing.expect(undefined).toBeUndefined();   }); });
+        code // Better: give local names for these common functions. import {describe, it, expect} from './testing';  describe('foo', () => {   it('bar', () => {     expect(null).toBeNull();     expect(undefined).toBeUndefined();   }); });
+        section Special case: Apps JSPB protos
+    Apps JSPB protos must use named imports, even when it leads to long import lines.
+    This rule exists to aid in build performance and dead code elimination since often.protofiles contain manymessages that are not all needed together. By leveraging destructured imports the build system can create finer grained dependencies on Apps JSPB messages while preserving the ergonomics of path based imports.
+        code // Good: import the exact set of symbols you need from the proto file. import {Foo, Bar} from './foo.proto';  function copyFooBar(foo: Foo, bar: Bar) {...}
+      section Renaming imports
+    Codeshouldfix name collisions by using a namespace import or renaming the exports themselves. Codemayrename imports (import {SomeThing as SomeOtherThing}) if needed.
+    Three examples where renaming can be helpful:
+      - If it's necessary to avoid collisions with other imported symbols.
+      - If the imported symbol name is generated.
+      - If importing symbols whose names are unclear by themselves, renaming can improve code clarity. For example, when using RxJS thefromfunction might be more readable when renamed toobservableFrom.
+    section Exports
+    Use named exports in all code:
+        code // Use named exports: export class Foo { ... }
+    Do not use default exports. This ensures that all imports follow a uniform pattern.
+        code // Do not use default exports: export default class Foo { ... } // BAD!
+    Why?
+    Default exports provide no canonical name, which makes central maintenance difficult with relatively little benefit to code owners, including potentially decreased readability:
+        code import Foo from './bar';  // Legal. import Bar from './bar';  // Also legal.
+    Named exports have the benefit of erroring when import statements try to import something that hasn't been declared. Infoo.ts:
+        code const foo = 'blah'; export default foo;
+    And inbar.ts:
+        code import {fizz} from './foo';
+    Results inerror TS2614: Module '"./foo"' has no exported member 'fizz'.Whilebar.ts:
+        code import fizz from './foo';
+    Results infizz === foo, which is probably unexpected and difficult to debug.
+    Additionally, default exports encourage people to put everything into one big object to namespace it all together:
+        code export default class Foo {   static SOME_CONSTANT = ...   static someHelpfulFunction() { ... }   ... }
+    With the above pattern, we have file scope, which can be used as a namespace. We also have a perhaps needless second scope (the classFoo) that can be ambiguously used as both a type and a value in other files.
+    Instead, prefer use of file scope for namespacing, as well as named exports:
+        code export const SOME_CONSTANT = ... export function someHelpfulFunction() export class Foo {   // only class stuff here }
+      section Export visibility
+    TypeScript does not support restricting the visibility for exported symbols. Only export symbols that are used outside of the module. Generally minimize the exported API surface of modules.
+      section Mutable exports
+    Regardless of technical support, mutable exports can create hard to understand and debug code, in particular with re-exports across multiple modules. One way to paraphrase this style point is thatexport letis not allowed.
+        code export let foo = 3; // In pure ES6, foo is mutable and importers will observe the value change after a second. // In TS, if foo is re-exported by a second file, importers will not see the value change. window.setTimeout(() => {   foo = 4; }, 1000 /* ms */);
+    If one needs to support externally accessible and mutable bindings, theyshouldinstead use explicit getter functions.
+        code let foo = 3; window.setTimeout(() => {   foo = 4; }, 1000 /* ms */); // Use an explicit getter to access the mutable export. export function getFoo() { return foo; };
+    For the common pattern of conditionally exporting either of two values, first do the conditional check, then the export. Make sure that all exports are final after the module's body has executed.
+        code function pickApi() {   if (useOtherApi()) return OtherApi;   return RegularApi; } export const SomeApi = pickApi();
+      section Container classes
+    Do not create container classes with static methods or properties for the sake of namespacing.
+        code export class Container {   static FOO = 1;   static bar() { return 1; } }
+    Instead, export individual constants and functions:
+        code export const FOO = 1; export function bar() { return 1; }
+    section Import and export type
+      section Import type
+    You may useimport type {...}when you use the imported symbol only as a type. Use regular imports for values:
+        code import type {Foo} from './foo'; import {Bar} from './foo';  import {type Foo, Bar} from './foo';
+    Why?
+    The TypeScript compiler automatically handles the distinction and does not insert runtime loads for type references. So why annotate type imports?
+    The TypeScript compiler can run in 2 modes:
+      - In development mode, we typically want quick iteration loops. The compiler transpiles to JavaScript without full type information. This is much faster, but requiresimport typein certain cases.
+      - In production mode, we want correctness. The compiler type checks everything and ensuresimport typeis used correctly.
+    Note: If you need to force a runtime load for side effects, useimport '...';. See
+      section Export type
+    Useexport typewhen re-exporting a type, e.g.:
+        code export type {AnInterface} from './foo';
+    Why?
+    export typeis useful to allow type re-exports in file-by-file transpilation. SeeisolatedModulesdocs.
+        code isolatedModules
+    export typemight also seem useful to avoid ever exporting a value symbol for an API. However it does not give guarantees, either: downstream code might still import an API through a different path. A better way to split & guarantee type vs value usages of an API is to actually split the symbols into e.g.UserServiceandAjaxUserService. This is less error prone and also better communicates intent.
+      section Use modules not namespaces
+    TypeScript supports two methods to organize code:namespacesandmodules, but namespaces are disallowed.  That is, your codemustrefer to code in other files using imports and exports of the formimport {foo} from 'bar';
+    Your codemust notuse thenamespace Foo { ... }construct.namespacesmayonly be used when required to interface with external, third party code. To semantically namespace your code, use separate files.
+    Codemust notuserequire(as inimport x = require('...');) for imports. Use ES6 module syntax.
+        code // Bad: do not use namespaces: namespace Rocket {   function launch() { ... } }  // Bad: do not use <reference> /// <reference path="..."/>  // Bad: do not use require() import x = require('mydep');
+    NB: TypeScriptnamespaces used to be called internal modules and used to use themodulekeyword in the formmodule Foo { ... }. Don't use that either. Always use ES6 imports.
+  section Language features
+    This section delineates which features may or may not be used, and any additional constraints on their use.
+    Language features which are not discussed in this style guidemaybe used with no recommendations of their usage.
+    section Local variable declarations
+      section Use const and let
+    Always useconstorletto declare variables. Useconstby default, unless a variable needs to be reassigned. Never usevar.
+        code const foo = otherValue;  // Use if "foo" never changes. let bar = someValue;     // Use if "bar" is ever assigned into later on.
+    constandletare block scoped, like variables in most other languages.varin JavaScript is function scoped, which can cause difficult to understand bugs. Don't use it.
+        code var foo = someValue;     // Don't use - var scoping is complex and causes bugs.
+    Variablesmust notbe used before their declaration.
+      section One variable per declaration
+    Every local variable declaration declares only one variable: declarations such aslet a = 1, b = 2;are not used.
+    section Array literals
+      section Do not use theArrayconstructor
+    Do notuse theArray()constructor, with or withoutnew. It has confusing and contradictory usage:
+        code const a = new Array(2); // [undefined, undefined] const b = new Array(2, 3); // [2, 3];
+    Instead, always use bracket notation to initialize arrays, orfromto initialize anArraywith a certain size:
+        code const a = [2]; const b = [2, 3];  // Equivalent to Array(2): const c = []; c.length = 2;  // [0, 0, 0, 0, 0] Array.from<number>({length: 5}).fill(0);
+      section Do not define properties on arrays
+    Do not define or use non-numeric properties on an array (other thanlength). Use aMap(orObject) instead.
+      section Using spread syntax
+    Using spread syntax[...foo];is a convenient shorthand for shallow-copying or concatenating iterables.
+        code const foo = [   1, ];  const foo2 = [   ...foo,   6,   7, ];  const foo3 = [   5,   ...foo, ];  foo2[1] === 6; foo3[1] === 1;
+    When using spread syntax, the value being spreadmustmatch what is being created. When creating an array, only spread iterables. Primitives (includingnullandundefined)must notbe spread.
+        code const foo = [7]; const bar = [5, ...(shouldUseFoo && foo)]; // might be undefined  // Creates {0: 'a', 1: 'b', 2: 'c'} but has no length const fooStrings = ['a', 'b', 'c']; const ids = {...fooStrings};
+        code const foo = shouldUseFoo ? [7] : []; const bar = [5, ...foo]; const fooStrings = ['a', 'b', 'c']; const ids = [...fooStrings, 'd', 'e'];
+      section Array destructuring
+    Array literals may be used on the left-hand side of an assignment to perform destructuring (such as when unpacking multiple values from a single array or iterable). A finalrestelement may be included (with no space between the...and the variable name). Elements should be omitted if they are unused.
+        code const [a, b, c, ...rest] = generateResults(); let [, b,, d] = someArray;
+    Destructuring may also be used for function parameters. Always specify[]as the default value if a destructured array parameter is optional, and provide default values on the left hand side:
+        code function destructured([a = 4, b = 2] = []) { … }
+    Disallowed:
+        code function badDestructuring([a, b] = [4, 2]) { … }
+    Tip: For (un)packing multiple values into a function’s parameter or return, prefer object destructuring to array destructuring when possible, as it allows naming the individual elements and specifying a different type for each.
+    section Object literals
+      section Do not use theObjectconstructor
+    TheObjectconstructor is disallowed. Use an object literal ({}or{a: 0, b: 1, c: 2}) instead.
+      section Iterating objects
+    Iterating objects withfor (... in ...)is error prone. It will include enumerable properties from the prototype chain.
+    Do not use unfilteredfor (... in ...)statements:
+        code for (const x in someObj) {   // x could come from some parent prototype! }
+    Either filter values explicitly with anifstatement, or usefor (... of Object.keys(...)).
+        code for (const x in someObj) {   if (!someObj.hasOwnProperty(x)) continue;   // now x was definitely defined on someObj } for (const x of Object.keys(someObj)) { // note: for _of_!   // now x was definitely defined on someObj } for (const [key, value] of Object.entries(someObj)) { // note: for _of_!   // now key was definitely defined on someObj }
+      section Using spread syntax
+    Using spread syntax{...bar}is a convenient shorthand for creating a shallow copy of an object. When using spread syntax in object initialization, later values replace earlier values at the same key.
+        code const foo = {   num: 1, };  const foo2 = {   ...foo,   num: 5, };  const foo3 = {   num: 5,   ...foo, }  foo2.num === 5; foo3.num === 1;
+    When using spread syntax, the value being spreadmustmatch what is being created. That is, when creating an object, only objects may be spread; arrays and primitives (includingnullandundefined)must notbe spread. Avoid spreading objects that have prototypes other than the Object prototype (e.g. class definitions, class instances, functions) as the behavior is unintuitive (only enumerable non-prototype properties are shallow-copied).
+        code const foo = {num: 7}; const bar = {num: 5, ...(shouldUseFoo && foo)}; // might be undefined  // Creates {0: 'a', 1: 'b', 2: 'c'} but has no length const fooStrings = ['a', 'b', 'c']; const ids = {...fooStrings};
+        code const foo = shouldUseFoo ? {num: 7} : {}; const bar = {num: 5, ...foo};
+      section Computed property names
+    Computed property names (e.g.{['key' + foo()]: 42}) are allowed, and are considered dict-style (quoted) keys (i.e., must not be mixed with non-quoted keys) unless the computed property is asymbol(e.g.[Symbol.iterator]).
+      section Object destructuring
+    Object destructuring patterns may be used on the left-hand side of an assignment to perform destructuring and unpack multiple values from a single object.
+    Destructured objects may also be used as function parameters, but should be kept as simple as possible: a single level of unquoted shorthand properties. Deeper levels of nesting and computed properties may not be used in parameter destructuring. Specify any default values in the left-hand-side of the destructured parameter ({str = 'some default'} = {}, rather than{str} = {str: 'some default'}), and if a destructured object is itself optional, it must default to{}.
+    Example:
+        code interface Options {   /** The number of times to do something. */   num?: number;    /** A string to do stuff to. */   str?: string; }  function destructured({num, str = 'default'}: Options = {}) {}
+    Disallowed:
+        code function nestedTooDeeply({x: {num, str}}: {x: Options}) {} function nontrivialDefault({num, str}: Options = {num: 42, str: 'default'}) {}
+    section Classes
+      section Class declarations
+    Class declarationsmust notbe terminated with semicolons:
+        code class Foo { }
+        code class Foo { }; // Unnecessary semicolon
+    In contrast, statements that contain class expressionsmustbe terminated with a semicolon:
+        code export const Baz = class extends Bar {   method(): number {     return this.x;   } }; // Semicolon here as this is a statement, not a declaration
+        code exports const Baz = class extends Bar {   method(): number {     return this.x;   } }
+    It is neither encouraged nor discouraged to have blank lines separating class declaration braces from other class content:
+        code // No spaces around braces - fine. class Baz {   method(): number {     return this.x;   } }  // A single space around both braces - also fine. class Foo {    method(): number {     return this.x;   }  }
+      section Class method declarations
+    Class method declarationsmust notuse a semicolon to separate individual method declarations:
+        code class Foo {   doThing() {     console.log("A");   } }
+        code class Foo {   doThing() {     console.log("A");   }; // <-- unnecessary }
+    Method declarations should be separated from surrounding code by a single blank line:
+        code class Foo {   doThing() {     console.log("A");   }    getOtherThing(): number {     return 4;   } }
+        code class Foo {   doThing() {     console.log("A");   }   getOtherThing(): number {     return 4;   } }
+        section Overriding toString
+    ThetoStringmethod may be overridden, but must always succeed and never have visible side effects.
+    Tip: Beware, in particular, of calling other methods from toString, since exceptional conditions could lead to infinite loops.
+      section Static methods
+        section Avoid private static methods
+    Where it does not interfere with readability, prefer module-local functions over private static methods.
+        section Do not rely on dynamic dispatch
+    Codeshould notrely on dynamic dispatch of static methods. Static methodsshouldonly be called on the base class itself (which defines it directly). Static methodsshould notbe called on variables containing a dynamic instance that may be either the constructor or a subclass constructor (andmustbe defined with@nocollapseif this is done), andmust notbe called directly on a subclass that doesn’t define the method itself.
+    Disallowed:
+        code // Context for the examples below (this class is okay by itself) class Base {   /** @nocollapse */ static foo() {} } class Sub extends Base {}  // Discouraged: don't call static methods dynamically function callFoo(cls: typeof Base) {   cls.foo(); }  // Disallowed: don't call static methods on subclasses that don't define it themselves Sub.foo();  // Disallowed: don't access this in static methods. class MyClass {   static foo() {     return this.staticField;   } } MyClass.staticField = 1;
+        section Avoid staticthisreferences
+    Codemust notusethisin a static context.
+    JavaScript allows accessing static fields throughthis. Different from other languages, static fields are also inherited.
+        code class ShoeStore {   static storage: Storage = ...;    static isAvailable(s: Shoe) {     // Bad: do not use `this` in a static method.     return this.storage.has(s.id);   } }  class EmptyShoeStore extends ShoeStore {   static storage: Storage = EMPTY_STORE;  // overrides storage from ShoeStore }
+    Why?
+    This code is generally surprising: authors might not expect that static fields can be accessed through the this pointer, and might be surprised to find that they can be overridden - this feature is not commonly used.
+    This code also encourages an anti-pattern of having substantial static state, which causes problems with testability.
+      section Constructors
+    Constructor callsmustuse parentheses, even when no arguments are passed:
+        code const x = new Foo;
+        code const x = new Foo();
+    Omitting parentheses can lead to subtle mistakes. These two lines are not equivalent:
+        code new Foo().Bar(); new Foo.Bar();
+    It is unnecessary to provide an empty constructor or one that simply delegates into its parent class because ES2015 provides a default class constructor if one is not specified. However constructors with parameter properties, visibility modifiers or parameter decoratorsshould notbe omitted even if the body of the constructor is empty.
+        code class UnnecessaryConstructor {   constructor() {} }
+        code class UnnecessaryConstructorOverride extends Base {     constructor(value: number) {       super(value);     } }
+        code class DefaultConstructor { }  class ParameterProperties {   constructor(private myService) {} }  class ParameterDecorators {   constructor(@SideEffectDecorator myService) {} }  class NoInstantiation {   private constructor() {} }
+    The constructor should be separated from surrounding code both above and below by a single blank line:
+        code class Foo {   myField = 10;    constructor(private readonly ctorParam) {}    doThing() {     console.log(ctorParam.getThing() + myField);   } }
+        code class Foo {   myField = 10;   constructor(private readonly ctorParam) {}   doThing() {     console.log(ctorParam.getThing() + myField);   } }
+      section Class members
+        section No #private fields
+    Do not use private fields (also known as private identifiers):
+        code class Clazz {   #ident = 1; }
+    Instead, use TypeScript's visibility annotations:
+        code class Clazz {   private ident = 1; }
+    Why?
+    Private identifiers cause substantial emit size and performance regressions when down-leveled by TypeScript, and are unsupported before ES2015. They can only be downleveled to ES2015, not lower. At the same time, they do not offer substantial benefits when static type checking is used to enforce visibility.
+        section Use readonly
+    Mark properties that are never reassigned outside of the constructor with thereadonlymodifier (these need not be deeply immutable).
+        section Parameter properties
+    Rather than plumbing an obvious initializer through to a class member, use a TypeScriptparameter property.
+        code class Foo {   private readonly barService: BarService;    constructor(barService: BarService) {     this.barService = barService;   } }
+        code class Foo {   constructor(private readonly barService: BarService) {} }
+    If the parameter property needs documentation,use an@paramJSDoc tag.
+        code @param
+        section Field initializers
+    If a class member is not a parameter, initialize it where it's declared, which sometimes lets you drop the constructor entirely.
+        code class Foo {   private readonly userList: string[];    constructor() {     this.userList = [];   } }
+        code class Foo {   private readonly userList: string[] = []; }
+    Tip: Properties should never be added to or removed from an instance after the constructor is finished, since it significantly hinders VMs’ ability to optimize classes'shape. Optional fields that may be filled in later should be explicitly initialized toundefinedto prevent later shape changes.
+        section Properties used outside of class lexical scope
+    Properties used from outside the lexical scope of their containing class, such as an Angular component's properties used from a template,must notuseprivatevisibility, as they are used outside of the lexical scope of their containing class.
+    Use eitherprotectedorpublicas appropriate to the property in question. Angular and AngularJS template properties should useprotected, but Polymer should usepublic.
+    TypeScript codemust notuseobj['foo']to bypass the visibility of a property.
+    Why?
+    When a property isprivate, you are declaring to both automated systems and humans that the property accesses are scoped to the methods of the declaring class, and they will rely on that. For example, a check for unused code will flag a private property that appears to be unused, even if some other file manages to bypass the visibility restriction.
+    Though it might appear thatobj['foo']can bypass visibility in the TypeScript compiler, this pattern can be broken by rearranging the build rules, and also violatesoptimization compatibility.
+        section Getters and setters
+    Getters and setters, also known as accessors, for class membersmaybe used. The getter methodmustbe apure function(i.e., result is consistent and has no side effects: gettersmust notchange observable state). They are also useful as a means of restricting the visibility of internal or verbose implementation details (shown below).
+        code class Foo {   constructor(private readonly someService: SomeService) {}    get someMember(): string {     return this.someService.someVariable;   }    set someMember(newValue: string) {     this.someService.someVariable = newValue;   } }
+        code class Foo {   nextId = 0;   get next() {     return this.nextId++; // Bad: getter changes observable state   } }
+    If an accessor is used to hide a class property, the hidden propertymaybe prefixed or suffixed with any whole word, likeinternalorwrapped. When using these private properties, access the value through the accessor whenever possible. At least one accessor for a propertymustbe non-trivial: do not definepass-throughaccessors only for the purpose of hiding a property. Instead, make the property public (or consider making itreadonlyrather than just defining a getter with no setter).
+        code class Foo {   private wrappedBar = '';   get bar() {     return this.wrappedBar || 'bar';   }    set bar(wrapped: string) {     this.wrappedBar = wrapped.trim();   } }
+        code class Bar {   private barInternal = '';   // Neither of these accessors have logic, so just make bar public.   get bar() {     return this.barInternal;   }    set bar(value: string) {     this.barInternal = value;   } }
+    Getters and settersmust notbe defined usingObject.defineProperty, since this interferes with property renaming.
+        section Computed properties
+    Computed properties may only be used in classes when the property is a symbol. Dict-style properties (that is, quoted or computed non-symbol keys) are not allowed (seerationale for not mixing key types. A[Symbol.iterator]method should be defined for any classes that are logically iterable. Beyond this,Symbolshould be used sparingly.
+    Tip: be careful of using any other built-in symbols (e.g.Symbol.isConcatSpreadable) as they are not polyfilled by the compiler and will therefore not work in older browsers.
+      section Visibility
+    Restricting visibility of properties, methods, and entire types helps with keeping code decoupled.
+      - Limit symbol visibility as much as possible.
+      - Consider converting private methods to non-exported functions within the same file but outside of any class, and moving private properties into a separate, non-exported class.
+      - TypeScript symbols are public by default. Never use thepublicmodifier except when declaring non-readonly public parameter properties (in constructors).
+        code class Foo {   public bar = new Bar();  // BAD: public modifier not needed    constructor(public readonly baz: Baz) {}  // BAD: readonly implies it's a property which defaults to public }
+        code class Foo {   bar = new Bar();  // GOOD: public modifier not needed    constructor(public baz: Baz) {}  // public modifier allowed }
+    See alsoexport visibility.
+      section Disallowed class patterns
+        section Do not manipulateprototypes directly
+    Theclasskeyword allows clearer and more readable class definitions than definingprototypeproperties. Ordinary implementation code has no business manipulating these objects. Mixins and modifying the prototypes of builtin objects are explicitly forbidden.
+    Exception: Framework code (such as Polymer, or Angular) may need to useprototypes, and should not resort to even-worse workarounds to avoid doing so.
+    section Functions
+      section Terminology
+    There are many different types of functions, with subtle distinctions between them. This guide uses the following terminology, which aligns withMDN:
+      - function declaration: a declaration (i.e. not an expression) using thefunctionkeyword
+      - function expression: an expression, typically used in an assignment or passed as a parameter, using thefunctionkeyword
+      - arrow function: an expression using the=>syntax
+      - block body: right hand side of an arrow function with braces
+      - concise body: right hand side of an arrow function without braces
+    Methods and classes/constructors are not covered in this section.
+      section Prefer function declarations for named functions
+    Prefer function declarations over arrow functions or function expressions when defining named functions.
+        code function foo() {   return 42; }
+        code const foo = () => 42;
+    Arrow functionsmaybe used, for example, when an explicit type annotation is required.
+        code interface SearchFunction {   (source: string, subString: string): boolean; }  const fooSearch: SearchFunction = (source, subString) => { ... };
+      section Nested functions
+    Functions nested within other methods or functionsmayuse function declarations or arrow functions, as appropriate. In method bodies in particular, arrow functions are preferred because they have access to the outerthis.
+      section Do not use function expressions
+    Do not use function expressions. Use arrow functions instead.
+        code bar(() => { this.doSomething(); })
+        code bar(function() { ... })
+    Exception:Function expressionsmaybe usedonly ifcode has to dynamically rebindthis(but this isdiscouraged), or for generator functions (which do not have an arrow syntax).
+      section Arrow function bodies
+    Use arrow functions with concise bodies (i.e. expressions) or block bodies as appropriate.
+        code // Top level functions use function declarations. function someFunction() {   // Block bodies are fine:   const receipts = books.map((b: Book) => {     const receipt = payMoney(b.price);     recordTransaction(receipt);     return receipt;   });    // Concise bodies are fine, too, if the return value is used:   const longThings = myValues.filter(v => v.length > 1000).map(v => String(v));    function payMoney(amount: number) {     // function declarations are fine, but must not access `this`.   }    // Nested arrow functions may be assigned to a const.   const computeTax = (amount: number) => amount * 0.12; }
+    Only use a concise body if the return value of the function is actually used. The block body makes sure the return type isvoidthen and prevents potential side effects.
+        code // BAD: use a block body if the return value of the function is not used. myPromise.then(v => console.log(v)); // BAD: this typechecks, but the return value still leaks. let f: () => void; f = () => 1;
+        code // GOOD: return value is unused, use a block body. myPromise.then(v => {   console.log(v); }); // GOOD: code may use blocks for readability. const transformed = [1, 2, 3].map(v => {   const intermediate = someComplicatedExpr(v);   const more = acrossManyLines(intermediate);   return worthWrapping(more); }); // GOOD: explicit `void` ensures no leaked return value myPromise.then(v => void console.log(v));
+    Tip: Thevoidoperator can be used to ensure an arrow function with an expression body returnsundefinedwhen the result is unused.
+      section Rebindingthis
+    Function expressions and function declarationsmust notusethisunless they specifically exist to rebind thethispointer. Rebindingthiscan in most cases be avoided by using arrow functions or explicit parameters.
+        code function clickHandler() {   // Bad: what's `this` in this context?   this.textContent = 'Hello'; } // Bad: the `this` pointer reference is implicitly set to document.body. document.body.onclick = clickHandler;
+        code // Good: explicitly reference the object from an arrow function. document.body.onclick = () => { document.body.textContent = 'hello'; }; // Alternatively: take an explicit parameter const setTextFn = (e: HTMLElement) => { e.textContent = 'hello'; }; document.body.onclick = setTextFn.bind(null, document.body);
+    Prefer arrow functions over other approaches to bindingthis, such asf.bind(this),goog.bind(f, this), orconst self = this.
+      section Prefer passing arrow functions as callbacks
+    Callbacks can be invoked with unexpected arguments that can pass a type check but still result in logical errors.
+    Avoid passing a named callback to a higher-order function, unless you are sure of the stability of both functions' call signatures. Beware, in particular, of less-commonly-used optional parameters.
+        code // BAD: Arguments are not explicitly passed, leading to unintended behavior // when the optional `radix` argument gets the array indices 0, 1, and 2. const numbers = ['11', '5', '10'].map(parseInt); // > [11, NaN, 2];
+    Instead, prefer passing an arrow-function that explicitly forwards parameters to the named callback.
+        code // GOOD: Arguments are explicitly passed to the callback const numbers = ['11', '5', '3'].map((n) => parseInt(n)); // > [11, 5, 3]  // GOOD: Function is locally defined and is designed to be used as a callback function dayFilter(element: string|null|undefined) {   return element != null && element.endsWith('day'); }  const days = ['tuesday', undefined, 'juice', 'wednesday'].filter(dayFilter);
+      section Arrow functions as properties
+    Classes usuallyshould notcontain properties initialized to arrow functions. Arrow function properties require the calling function to understand that the callee'sthisis already bound, which increases confusion about whatthisis, and call sites and references using such handlers look broken (i.e. require non-local knowledge to determine that they are correct). Codeshouldalways use arrow functions to call instance methods (const handler = (x) => { this.listener(x); };), andshould notobtain or pass references to instance methods (const handler = this.listener; handler(x);).
+        code const handler = this.listener; handler(x);
+    Note: in some specific situations, e.g. when binding functions in a template, arrow functions as properties are useful and create much more readable code. Use judgement with this rule. Also, see theEvent Handlerssection below.
+        code Event Handlers
+        code class DelayHandler {   constructor() {     // Problem: `this` is not preserved in the callback. `this` in the callback     // will not be an instance of DelayHandler.     setTimeout(this.patienceTracker, 5000);   }   private patienceTracker() {     this.waitedPatiently = true;   } }
+        code // Arrow functions usually should not be properties. class DelayHandler {   constructor() {     // Bad: this code looks like it forgot to bind `this`.     setTimeout(this.patienceTracker, 5000);   }   private patienceTracker = () => {     this.waitedPatiently = true;   } }
+        code // Explicitly manage `this` at call time. class DelayHandler {   constructor() {     // Use anonymous functions if possible.     setTimeout(() => {       this.patienceTracker();     }, 5000);   }   private patienceTracker() {     this.waitedPatiently = true;   } }
+      section Event handlers
+    Event handlersmayuse arrow functions when there is no need to uninstall the handler (for example, if the event is emitted by the class itself). If the handler requires uninstallation, arrow function properties are the right approach, because they automatically capturethisand provide a stable reference to uninstall.
+        code // Event handlers may be anonymous functions or arrow function properties. class Component {   onAttached() {     // The event is emitted by this class, no need to uninstall.     this.addEventListener('click', () => {       this.listener();     });     // this.listener is a stable reference, we can uninstall it later.     window.addEventListener('onbeforeunload', this.listener);   }   onDetached() {     // The event is emitted by window. If we don't uninstall, this.listener will     // keep a reference to `this` because it's bound, causing a memory leak.     window.removeEventListener('onbeforeunload', this.listener);   }   // An arrow function stored in a property is bound to `this` automatically.   private listener = () => {     confirm('Do you want to exit the page?');   } }
+    Do not usebindin the expression that installs an event handler, because it creates a temporary reference that can't be uninstalled.
+        code // Binding listeners creates a temporary reference that prevents uninstalling. class Component {   onAttached() {     // This creates a temporary reference that we won't be able to uninstall     window.addEventListener('onbeforeunload', this.listener.bind(this));   }   onDetached() {     // This bind creates a different reference, so this line does nothing.     window.removeEventListener('onbeforeunload', this.listener.bind(this));   }   private listener() {     confirm('Do you want to exit the page?');   } }
+      section Parameter initializers
+    Optional function parametersmaybe given a default initializer to use when the argument is omitted. Initializersmust nothave any observable side effects. Initializersshouldbe kept as simple as possible.
+        code function process(name: string, extraContext: string[] = []) {} function activate(index = 0) {}
+        code // BAD: side effect of incrementing the counter let globalCounter = 0; function newId(index = globalCounter++) {}  // BAD: exposes shared mutable state, which can introduce unintended coupling // between function calls class Foo {   private readonly defaultPaths: string[];   frobnicate(paths = defaultPaths) {} }
+    Use default parameters sparingly. Preferdestructuringto create readable APIs when there are more than a small handful of optional parameters that do not have a natural order.
+      section Prefer rest and spread when appropriate
+    Use arestparameter instead of accessingarguments. Never name a local variable or parameterarguments, which confusingly shadows the built-in name.
+        code function variadic(array: string[], ...numbers: number[]) {}
+    Use function spread syntax instead ofFunction.prototype.apply.
+      section Formatting functions
+    Blank lines at the start or end of the function body are not allowed.
+    A single blank linemaybe used within function bodies sparingly to createlogical groupingsof statements.
+    Generators should attach the*to thefunctionandyieldkeywords, as infunction* foo()andyield* iter, rather thanfunction *foo()oryield *iter.
+        code function *foo()
+        code yield *iter
+    Parentheses around the left-hand side of a single-argument arrow function are recommended but not required.
+    Do not put a space after the...in rest or spread syntax.
+        code function myFunction(...elements: number[]) {} myFunction(...array, ...iterable, ...generator());
+    section this
+    Only usethisin class constructors and methods, functions that have an explicitthistype declared (e.g.function func(this: ThisType, ...)), or in arrow functions defined in a scope wherethismay be used.
+    Never usethisto refer to the global object, the context of aneval, the target of an event, or unnecessarilycall()ed orapply()ed functions.
+        code this.alert('Hello');
+    section Interfaces
+    section Primitive literals
+      section String literals
+        section Use single quotes
+    Ordinary string literals are delimited with single quotes ('), rather than double quotes (").
+    Tip: if a string contains a single quote character, consider using a template string to avoid having to escape the quote.
+        section No line continuations
+    Do not useline continuations(that is, ending a line inside a string literal with a backslash) in either ordinary or template string literals. Even though ES5 allows this, it can lead to tricky errors if any trailing whitespace comes after the slash, and is less obvious to readers.
+    Disallowed:
+        code const LONG_STRING = 'This is a very very very very very very very long string. \     It inadvertently contains long stretches of spaces due to how the \     continued lines are indented.';
+    Instead, write
+        code const LONG_STRING = 'This is a very very very very very very long string. ' +     'It does not contain long stretches of spaces because it uses ' +     'concatenated strings.'; const SINGLE_STRING =     'http://it.is.also/acceptable_to_use_a_single_long_string_when_breaking_would_hinder_search_discoverability';
+        section Template literals
+    Use template literals (delimited with`) over complex string concatenation, particularly if multiple string literals are involved. Template literals may span multiple lines.
+    If a template literal spans multiple lines, it does not need to follow the indentation of the enclosing block, though it may if the added whitespace does not matter.
+    Example:
+        code function arithmetic(a: number, b: number) {   return `Here is a table of arithmetic operations: ${a} + ${b} = ${a + b} ${a} - ${b} = ${a - b} ${a} * ${b} = ${a * b} ${a} / ${b} = ${a / b}`; }
+      section Number literals
+    Numbers may be specified in decimal, hex, octal, or binary. Use exactly0x,0o, and0bprefixes, with lowercase letters, for hex, octal, and binary, respectively. Never include a leading zero unless it is immediately followed byx,o, orb.
+      section Type coercion
+    TypeScript codemayuse theString()andBoolean()(note: nonew!) functions, string template literals, or!!to coerce types.
+        code const bool = Boolean(false); const str = String(aNumber); const bool2 = !!str; const str2 = `result: ${bool2}`;
+    Values of enum types (including unions of enum types and other types)must notbe converted to booleans withBoolean()or!!, and must instead be compared explicitly with comparison operators.
+        code enum SupportLevel {   NONE,   BASIC,   ADVANCED, }  const level: SupportLevel = ...; let enabled = Boolean(level);  const maybeLevel: SupportLevel|undefined = ...; enabled = !!maybeLevel;
+        code enum SupportLevel {   NONE,   BASIC,   ADVANCED, }  const level: SupportLevel = ...; let enabled = level !== SupportLevel.NONE;  const maybeLevel: SupportLevel|undefined = ...; enabled = level !== undefined && level !== SupportLevel.NONE;
+    Why?
+    For most purposes, it doesn't matter what number or string value an enum name is mapped to at runtime, because values of enum types are referred to by name in source code. Consequently, engineers are accustomed to not thinking about this, and so situations where itdoesmatter are undesirable because they will be surprising. Such is the case with conversion of enums to booleans; in particular, by default, the first declared enum value is falsy (because it is 0) while the others are truthy, which is likely to be unexpected. Readers of code that uses an enum value may not even know whether it's the first declared value or not.
+    Using string concatenation to cast to string is discouraged, as we check that operands to the plus operator are of matching types.
+    CodemustuseNumber()to parse numeric values, andmustcheck its return forNaNvalues explicitly, unless failing to parse is impossible from context.
+    Note:Number(''),Number(' '), andNumber('\t')would return0instead ofNaN.Number('Infinity')andNumber('-Infinity')would returnInfinityand-Infinityrespectively. Additionally, exponential notation such asNumber('1e+309')andNumber('-1e+309')can overflow intoInfinity. These cases may require special handling.
+        code const aNumber = Number('123'); if (!isFinite(aNumber)) throw new Error(...);
+    Codemust notuse unary plus (+) to coerce strings to numbers. Parsing numbers can fail, has surprising corner cases, and can be a code smell (parsing at the wrong layer). A unary plus is too easy to miss in code reviews given this.
+        code const x = +y;
+    Code alsomust notuseparseIntorparseFloatto parse numbers, except for non-base-10 strings (see below). Both of those functions ignore trailing characters in the string, which can shadow error conditions (e.g. parsing12 dwarvesas12).
+        code const n = parseInt(someString, 10);  // Error prone, const f = parseFloat(someString);    // regardless of passing a radix.
+    Code that requires parsing with a radixmustcheck that its input contains only appropriate digits for that radix before calling intoparseInt;
+        code if (!/^[a-fA-F0-9]+$/.test(someString)) throw new Error(...); // Needed to parse hexadecimal. // tslint:disable-next-line:ban const n = parseInt(someString, 16);  // Only allowed for radix != 10
+    UseNumber()followed byMath.floororMath.trunc(where available) to parse integer numbers:
+        code let f = Number(someString); if (isNaN(f)) handleError(); f = Math.floor(f);
+        section Implicit coercion
+    Do not use explicit boolean coercions in conditional clauses that have implicit boolean coercion. Those are the conditions in anif,forandwhilestatements.
+        code const foo: MyInterface|null = ...; if (!!foo) {...} while (!!foo) {...}
+        code const foo: MyInterface|null = ...; if (foo) {...} while (foo) {...}
+    As with explicit conversions, values of enum types (including unions of enum types and other types)must notbe implicitly coerced to booleans, and must instead be compared explicitly with comparison operators.
+        code enum SupportLevel {   NONE,   BASIC,   ADVANCED, }  const level: SupportLevel = ...; if (level) {...}  const maybeLevel: SupportLevel|undefined = ...; if (level) {...}
+        code enum SupportLevel {   NONE,   BASIC,   ADVANCED, }  const level: SupportLevel = ...; if (level !== SupportLevel.NONE) {...}  const maybeLevel: SupportLevel|undefined = ...; if (level !== undefined && level !== SupportLevel.NONE) {...}
+    Other types of values may be either implicitly coerced to booleans or compared explicitly with comparison operators:
+        code // Explicitly comparing > 0 is OK: if (arr.length > 0) {...} // so is relying on boolean coercion: if (arr.length) {...}
+    section Control structures
+      section Control flow statements and blocks
+    Control flow statements (if,else,for,do,while, etc) always use braced blocks for the containing code, even if the body contains only a single statement. The first statement of a non-empty block must begin on its own line.
+        code for (let i = 0; i < x; i++) {   doSomethingWith(i); }  if (x) {   doSomethingWithALongMethodNameThatForcesANewLine(x); }
+        code if (x)   doSomethingWithALongMethodNameThatForcesANewLine(x);  for (let i = 0; i < x; i++) doSomethingWith(i);
+    Exception:ifstatements fitting on one linemayelide the block.
+        code if (x) x.doFoo();
+        section Assignment in control statements
+    Prefer to avoid assignment of variables inside control statements. Assignment can be easily mistaken for equality checks inside control statements.
+        code if (x = someFunction()) {   // Assignment easily mistaken with equality check   // ... }
+        code x = someFunction(); if (x) {   // ... }
+    In cases where assignment inside the control statement is preferred, enclose the assignment in additional parenthesis to indicate it is intentional.
+        code while ((x = someFunction())) {   // Double parenthesis shows assignment is intentional   // ... }
+        section Iterating containers
+    Preferfor (... of someArr)to iterate over arrays.Array.prototype.forEachand vanillaforloops are also allowed:
+        code for (const x of someArr) {   // x is a value of someArr. }  for (let i = 0; i < someArr.length; i++) {   // Explicitly count if the index is needed, otherwise use the for/of form.   const x = someArr[i];   // ... } for (const [i, x] of someArr.entries()) {   // Alternative version of the above. }
+    for-inloops may only be used on dict-style objects (seebelowfor more info). Do not usefor (... in ...)to iterate over arrays as it will counterintuitively give the array's indices (as strings!), not values:
+        code for (const x in someArray) {   // x is the index! }
+    Object.prototype.hasOwnPropertyshould be used infor-inloops to exclude unwanted prototype properties. Preferfor-ofwithObject.keys,Object.values, orObject.entriesoverfor-inwhen possible.
+        code for (const key in obj) {   if (!obj.hasOwnProperty(key)) continue;   doWork(key, obj[key]); } for (const key of Object.keys(obj)) {   doWork(key, obj[key]); } for (const value of Object.values(obj)) {   doWorkValOnly(value); } for (const [key, value] of Object.entries(obj)) {   doWork(key, value); }
+      section Grouping parentheses
+    Optional grouping parentheses are omitted only when the author and reviewer agree that there is no reasonable chance that the code will be misinterpreted without them, nor would they have made the code easier to read. It isnotreasonable to assume that every reader has the entire operator precedence table memorized.
+    Do not use unnecessary parentheses around the entire expression followingdelete,typeof,void,return,throw,case,in,of, oryield.
+      section Exception handling
+    Exceptions are an important part of the language and should be used whenever exceptional cases occur.
+    Custom exceptions provide a great way to convey additional error information from functions. They should be defined and used wherever the nativeErrortype is insufficient.
+    Prefer throwing exceptions over ad-hoc error-handling approaches (such as passing an error container reference type, or returning an object with an error property).
+        section Instantiate errors usingnew
+    Always usenew Error()when instantiating exceptions, instead of just callingError(). Both forms create a newErrorinstance, but usingnewis more consistent with how other objects are instantiated.
+        code throw new Error('Foo is not a valid bar.');
+        code throw Error('Foo is not a valid bar.');
+        section Only throw errors
+    JavaScript (and thus TypeScript) allow throwing or rejecting a Promise with arbitrary values. However if the thrown or rejected value is not anError, it does not populate stack trace information, making debugging hard. This treatment extends toPromiserejection values asPromise.reject(obj)is equivalent tothrow obj;in async functions.
+        code // bad: does not get a stack trace. throw 'oh noes!'; // For promises new Promise((resolve, reject) => void reject('oh noes!')); Promise.reject(); Promise.reject('oh noes!');
+    Instead, only throw (subclasses of)Error:
+        code // Throw only Errors throw new Error('oh noes!'); // ... or subtypes of Error. class MyError extends Error {} throw new MyError('my oh noes!'); // For promises new Promise((resolve) => resolve()); // No reject is OK. new Promise((resolve, reject) => void reject(new Error('oh noes!'))); Promise.reject(new Error('oh noes!'));
+        section Catching and rethrowing
+    When catching errors, codeshouldassume that all thrown errors are instances ofError.
+        code function assertIsError(e: unknown): asserts e is Error {   if (!(e instanceof Error)) throw new Error("e is not an Error"); }  try {   doSomething(); } catch (e: unknown) {   // All thrown errors must be Error subtypes. Do not handle   // other possible values unless you know they are thrown.   assertIsError(e);   displayError(e.message);   // or rethrow:   throw e; }
+    Exception handlersmust notdefensively handle non-Errortypes unless the called API is conclusively known to throw non-Errors in violation of the above rule. In that case, a comment should be included to specifically identify where the non-Errors originate.
+        code try {   badApiThrowingStrings(); } catch (e: unknown) {   // Note: bad API throws strings instead of errors.   if (typeof e === 'string') { ... } }
+    Why?
+    Avoidoverly defensive programming. Repeating the same defenses against a problem that will not exist in most code leads to boiler-plate code that is not useful.
+        section Empty catch blocks
+    It is very rarely correct to do nothing in response to a caught exception. When it truly is appropriate to take no action whatsoever in a catch block, the reason this is justified is explained in a comment.
+        code try {     return handleNumericResponse(response);   } catch (e: unknown) {     // Response is not numeric. Continue to handle as text.   }   return handleTextResponse(response);
+    Disallowed:
+        code try {     shouldFail();     fail('expected an error');   } catch (expected: unknown) {   }
+    Tip: Unlike in some other languages, patterns like the above simply don’t work since this will catch the error thrown byfail. UseassertThrows()instead.
+      section Switch statements
+    Allswitchstatementsmustcontain adefaultstatement group, even if it contains no code. Thedefaultstatement group must be last.
+        code switch (x) {   case Y:     doSomethingElse();     break;   default:     // nothing to do. }
+    Within a switch block, each statement group either terminates abruptly with abreak, areturnstatement, or by throwing an exception. Non-empty statement groups (case ...)must notfall through (enforced by the compiler):
+        code switch (x) {   case X:     doSomething();     // fall through - not allowed!   case Y:     // ... }
+    Empty statement groups are allowed to fall through:
+        code switch (x) {   case X:   case Y:     doSomething();     break;   default: // nothing to do. }
+      section Equality checks
+    Always use triple equals (===) and not equals (!==). The double equality operators cause error prone type coercions that are hard to understand and slower to implement for JavaScript Virtual Machines. See also theJavaScript equality table.
+        code if (foo == 'bar' || baz != bam) {   // Hard to understand behaviour due to type coercion. }
+        code if (foo === 'bar' || baz !== bam) {   // All good here. }
+    Exception:Comparisons to the literalnullvaluemayuse the==and!=operators to cover bothnullandundefinedvalues.
+        code if (foo == null) {   // Will trigger when foo is null or undefined. }
+      section Type and non-nullability assertions
+    Type assertions (x as SomeType) and non-nullability assertions (y!) are unsafe. Both only silence the TypeScript compiler, but do not insert any runtime checks to match these assertions, so they can cause your program to crash at runtime.
+    Because of this, youshould notuse type and non-nullability assertions without an obvious or explicit reason for doing so.
+    Instead of the following:
+        code (x as Foo).foo();  y!.bar();
+    When you want to assert a type or non-nullability the best answer is to explicitly write a runtime check that performs that check.
+        code // assuming Foo is a class. if (x instanceof Foo) {   x.foo(); }  if (y) {   y.bar(); }
+    Sometimes due to some local property of your code you can be sure that the assertion form is safe. In those situations, youshouldadd clarification to explain why you are ok with the unsafe behavior:
+        code // x is a Foo, because ... (x as Foo).foo();  // y cannot be null, because ... y!.bar();
+    If the reasoning behind a type or non-nullability assertion is obvious, the commentsmaynot be necessary. For example, generated proto code is always nullable, but perhaps it is well-known in the context of the code that certain fields are always provided by the backend. Use your judgement.
+        section Type assertion syntax
+    Type assertionsmustuse theassyntax (as opposed to the angle brackets syntax). This enforces parentheses around the assertion when accessing a member.
+        code const x = (<Foo>z).length; const y = <Foo>z.length;
+        code // z must be Foo because ... const x = (z as Foo).length;
+        section Double assertions
+    From theTypeScript handbook, TypeScript only allows type assertions which convert to amore specificorless specificversion of a type. Adding a type assertion (x as Foo) which does not meet this criteria will give the error:Conversion of type 'X' to type 'Y' may be a mistake because neither type sufficiently overlaps with the other.
+    If you are sure an assertion is safe, you can perform adouble assertion. This involves casting throughunknownsince it is less specific than all types.
+        code // x is a Foo here, because... (x as unknown as Foo).fooMethod();
+    Useunknown(instead ofanyor{}) as the intermediate type.
+        section Type assertions and object literals
+    Use type annotations (: Foo) instead of type assertions (as Foo) to specify the type of an object literal. This allows detecting refactoring bugs when the fields of an interface change over time.
+        code interface Foo {   bar: number;   baz?: string;  // was "bam", but later renamed to "baz". }  const foo = {   bar: 123,   bam: 'abc',  // no error! } as Foo;  function func() {   return {     bar: 123,     bam: 'abc',  // no error!   } as Foo; }
+        code interface Foo {   bar: number;   baz?: string; }  const foo: Foo = {   bar: 123,   bam: 'abc',  // complains about "bam" not being defined on Foo. };  function func(): Foo {   return {     bar: 123,     bam: 'abc',   // complains about "bam" not being defined on Foo.   }; }
+      section Keep try blocks focused
+    Limit the amount of code inside a try block, if this can be done without hurting readability.
+        code try {   const result = methodThatMayThrow();   use(result); } catch (error: unknown) {   // ... }
+        code let result; try {   result = methodThatMayThrow(); } catch (error: unknown) {   // ... } use(result);
+    Moving the non-throwable lines out of the try/catch block helps the reader learn which method throws exceptions. Some inline calls that do not throw exceptions could stay inside because they might not be worth the extra complication of a temporary variable.
+    Exception:There may be performance issues if try blocks are inside a loop. Widening try blocks to cover a whole loop is ok.
+    section Decorators
+    Decorators are syntax with an@prefix, like@MyDecorator.
+    Do not define new decorators. Only use the decorators defined by frameworks:
+      - Angular (e.g.@Component,@NgModule, etc.)
+      - Polymer (e.g.@property)
+    Why?
+    We generally want to avoid decorators, because they were an experimental feature that have since diverged from the TC39 proposal and have known bugs that won't be fixed.
+    When using decorators, the decoratormustimmediately precede the symbol it decorates, with no empty lines between:
+        code /** JSDoc comments go before decorators */ @Component({...})  // Note: no empty line after the decorator. class MyComp {   @Input() myField: string;  // Decorators on fields may be on the same line...    @Input()   myOtherField: string;  // ... or wrap. }
+    section Disallowed features
+      section Wrapper objects for primitive types
+    TypeScript codemust notinstantiate the wrapper classes for the primitive typesString,Boolean, andNumber. Wrapper classes have surprising behavior, such asnew Boolean(false)evaluating totrue.
+        code const s = new String('hello'); const b = new Boolean(false); const n = new Number(5);
+    The wrappers may be called as functions for coercing (which is preferred over using+or concatenating the empty string) or creating symbols. Seetype coercionfor more information.
+      section Automatic Semicolon Insertion
+    Do not rely on Automatic Semicolon Insertion (ASI). Explicitly end all statements using a semicolon. This prevents bugs due to incorrect semicolon insertions and ensures compatibility with tools with limited ASI support (e.g. clang-format).
+      section Const enums
+    Codemust notuseconst enum; use plainenuminstead.
+    Why?
+    TypeScript enums already cannot be mutated;const enumis a separate language feature related to optimization that makes the enum invisible to JavaScript users of the module.
+      section Debugger statements
+    Debugger statementsmust notbe included in production code.
+        code function debugMe() {   debugger; }
+      section with
+    Do not use thewithkeyword. It makes your code harder to understand andhas been banned in strict mode since ES5.
+      section Dynamic code evaluation
+    Do not useevalor theFunction(...string)constructor (except for code loaders). These features are potentially dangerous and simply do not work in environments using strictContent Security Policies.
+      section Non-standard features
+    Do not use non-standard ECMAScript or Web Platform features.
+    This includes:
+      - Old features that have been marked deprecated or removed entirely from ECMAScript / the Web Platform (seeMDN)
+      - New ECMAScript features that are not yet standardizedAvoid using features that are in current TC39 working draft or currently in theproposal processUse only ECMAScript features defined in the current ECMA-262 specification
+      - Avoid using features that are in current TC39 working draft or currently in theproposal process
+      - Use only ECMAScript features defined in the current ECMA-262 specification
+      - Proposed but not-yet-complete web standards:WHATWG proposals that have not completed theproposal process.
+      - WHATWG proposals that have not completed theproposal process.
+      - Non-standard language “extensions” (such as those provided by some external transpilers)
+    Projects targeting specific JavaScript runtimes, such as latest-Chrome-only, Chrome extensions, Node.JS, Electron, can obviously use those APIs. Use caution when considering an API surface that is proprietary and only implemented in some browsers; consider whether there is a common library that can abstract this API surface away for you.
+      section Modifying builtin objects
+    Never modify builtin types, either by adding methods to their constructors or to their prototypes. Avoid depending on libraries that do this.
+    Do not add symbols to the global object unless absolutely necessary (e.g. required by a third-party API).
+  section Naming
+    section Identifiers
+    Identifiersmustuse only ASCII letters, digits, underscores (for constants and structured test method names), and (rarely) the '$' sign.
+      section Naming style
+    TypeScript expresses information in types, so namesshould notbe decorated with information that is included in the type. (See alsoTesting Blogfor more about what not to include.)
+    Some concrete examples of this rule:
+      - Do not use trailing or leading underscores for private properties or methods.
+      - Do not use theopt_prefix for optional parameters.For accessors, seeaccessor rulesbelow.
+      - For accessors, seeaccessor rulesbelow.
+      - Do not mark interfaces specially (IMyInterfaceorMyFooInterface) unless it's idiomatic in its environment. When introducing an interface for a class, give it a name that expresses why the interface exists in the first place (e.g.class TodoItemandinterface TodoItemStorageif the interface expresses the format used for storage/serialization in JSON).
+        code IMyInterface
+        code MyFooInterface
+      - SuffixingObservables with$is a common external convention and can help resolve confusion regarding observable values vs concrete values. Judgement on whether this is a useful convention is left up to individual teams, butshouldbe consistent within projects.
+      section Descriptive names
+    Namesmustbe descriptive and clear to a new reader. Do not use abbreviations that are ambiguous or unfamiliar to readers outside your project, and do not abbreviate by deleting letters within a word.
+      - Exception:Variables that are in scope for 10 lines or fewer, including arguments that arenotpart of an exported API,mayuse short (e.g. single letter) variable names.
+        code // Good identifiers: errorCount          // No abbreviation. dnsConnectionIndex  // Most people know what "DNS" stands for. referrerUrl         // Ditto for "URL". customerId          // "Id" is both ubiquitous and unlikely to be misunderstood.
+        code // Disallowed identifiers: n                   // Meaningless. nErr                // Ambiguous abbreviation. nCompConns          // Ambiguous abbreviation. wgcConnections      // Only your group knows what this stands for. pcReader            // Lots of things can be abbreviated "pc". cstmrId             // Deletes internal letters. kSecondsPerDay      // Do not use Hungarian notation. customerID          // Incorrect camelcase of "ID".
+      section Camel case
+    Treat abbreviations like acronyms in names as whole words, i.e. useloadHttpUrl, notloadHTTPURL, unless required by a platform name (e.g.XMLHttpRequest).
+        code loadHTTPURL
+      section Dollar sign
+    Identifiersshould notgenerally use$, except when required by naming conventions for third party frameworks.See abovefor more on using$withObservablevalues.
+    section Rules by identifier type
+    Most identifier names should follow the casing in the table below, based on the identifier's type.
+        code UpperCamelCase
+        code lowerCamelCase
+        code CONSTANT_CASE
+        code #ident
+      section Type parameters
+    Type parameters, like inArray<T>,mayuse a single upper case character (T) orUpperCamelCase.
+      section Test names
+    Test method names inxUnit-style test frameworksmaybe structured with_separators, e.g.testX_whenY_doesZ().
+      section _prefix/suffix
+    Identifiers must not use_as a prefix or suffix.
+    This also means that_must notbe used as an identifier by itself (e.g. to indicate a parameter is unused).
+    Tip: If you only need some of the elements from an array (or TypeScript tuple), you can insert extra commas in a destructuring statement to ignore in-between elements:
+        code const [a, , b] = [1, 5, 10];  // a <- 1, b <- 10
+      section Imports
+    Module namespace imports arelowerCamelCasewhile files aresnake_case, which means that imports correctly will not match in casing style, such as
+        code import * as fooBar from './foo_bar';
+    Some libraries might commonly use a namespace import prefix that violates this naming scheme, but overbearingly common open source use makes the violating style more readable. The only libraries that currently fall under this exception are:
+      - jquery, using the$prefix
+      - threejs, using theTHREEprefix
+      section Constants
+    Immutable:CONSTANT_CASEindicates that a value isintendedto not be changed, andmaybe used for values that can technically be modified (i.e. values that are not deeply frozen) to indicate to users that they must not be modified.
+        code const UNIT_SUFFIXES = {   'milliseconds': 'ms',   'seconds': 's', }; // Even though per the rules of JavaScript UNIT_SUFFIXES is // mutable, the uppercase shows users to not modify it.
+    A constant can also be astatic readonlyproperty of a class.
+        code class Foo {   private static readonly MY_SPECIAL_NUMBER = 5;    bar() {     return 2 * Foo.MY_SPECIAL_NUMBER;   } }
+    Global: Only symbols declared on the module level, static fields of module level classes, and values of module level enums,mayuseCONST_CASE. If a value can be instantiated more than once over the lifetime of the program (e.g. a local variable declared within a function, or a static field on a class nested in a function) then itmustuselowerCamelCase.
+    If a value is an arrow function that implements an interface, then itmaybe declaredlowerCamelCase.
+      section Aliases
+    When creating a local-scope alias of an existing symbol, use the format of the existing identifier. The local aliasmustmatch the existing naming and format of the source. For variables useconstfor your local aliases, and for class fields use thereadonlyattribute.
+    Note: If you're creating an alias just to expose it to a template in your framework of choice, remember to also apply the properaccess modifiers.
+        code const {BrewStateEnum} = SomeType; const CAPACITY = 5;  class Teapot {   readonly BrewStateEnum = BrewStateEnum;   readonly CAPACITY = CAPACITY; }
+  section Type system
+    section Type inference
+    Codemayrely on type inference as implemented by the TypeScript compiler for all type expressions (variables, fields, return types, etc).
+        code const x = 15;  // Type inferred.
+    Leave out type annotations for trivially inferred types: variables or parameters initialized to astring,number,boolean,RegExpliteral ornewexpression.
+        code const x: boolean = true;  // Bad: 'boolean' here does not aid readability
+        code // Bad: 'Set' is trivially inferred from the initialization const x: Set<string> = new Set();
+    Explicitly specifying types may be required to prevent generic type parameters from being inferred asunknown. For example, initializing generic types with no values (e.g. empty arrays, objects,Maps, orSets).
+        code const x = new Set<string>();
+    For more complex expressions, type annotations can help with readability of the program:
+        code // Hard to reason about the type of 'value' without an annotation. const value = await rpc.getSomeValue().transform();
+        code // Can tell the type of 'value' at a glance. const value: string[] = await rpc.getSomeValue().transform();
+    Whether an annotation is required is decided by the code reviewer.
+      section Return types
+    Whether to include return type annotations for functions and methods is up to the code author. Reviewersmayask for annotations to clarify complex return types that are hard to understand. Projectsmayhave a local policy to always require return types, but this is not a general TypeScript style requirement.
+    There are two benefits to explicitly typing out the implicit return values of functions and methods:
+      - More precise documentation to benefit readers of the code.
+      - Surface potential type errors faster in the future if there are code changes that change the return type of the function.
+    section Undefined and null
+    TypeScript supportsundefinedandnulltypes. Nullable types can be constructed as a union type (string|null); similarly withundefined. There is no special syntax for unions ofundefinedandnull.
+    TypeScript code can use eitherundefinedornullto denote absence of a value, there is no general guidance to prefer one over the other. Many JavaScript APIs useundefined(e.g.Map.get), while many DOM and Google APIs usenull(e.g.Element.getAttribute), so the appropriate absent value depends on the context.
+      section Nullable/undefined type aliases
+    Type aliasesmust notinclude|nullor|undefinedin a union type. Nullable aliases typically indicate that null values are being passed around through too many layers of an application, and this clouds the source of the original issue that resulted innull. They also make it unclear when specific values on a class or interface might be absent.
+    Instead, codemustonly add|nullor|undefinedwhen the alias is actually used. Codeshoulddeal with null values close to where they arise, using the above techniques.
+        code // Bad type CoffeeResponse = Latte|Americano|undefined;  class CoffeeService {   getLatte(): CoffeeResponse { ... }; }
+        code // Better type CoffeeResponse = Latte|Americano;  class CoffeeService {   getLatte(): CoffeeResponse|undefined { ... }; }
+      section Prefer optional over|undefined
+    In addition, TypeScript supports a special construct for optional parameters and fields, using?:
+        code interface CoffeeOrder {   sugarCubes: number;   milk?: Whole|LowFat|HalfHalf; }  function pourCoffee(volume?: Milliliter) { ... }
+    Optional parameters implicitly include|undefinedin their type. However, they are different in that they can be left out when constructing a value or calling a method. For example,{sugarCubes: 1}is a validCoffeeOrderbecausemilkis optional.
+    Use optional fields (on interfaces or classes) and parameters rather than a|undefinedtype.
+    For classes preferably avoid this pattern altogether and initialize as many fields as possible.
+        code class MyClass {   field = ''; }
+    section Use structural types
+    TypeScript's type system is structural, not nominal. That is, a value matches a type if it has at least all the properties the type requires and the properties' types match, recursively.
+    When providing a structural-based implementation, explicitly include the type at the declaration of the symbol (this allows more precise type checking and error reporting).
+        code const foo: Foo = {   a: 123,   b: 'abc', }
+        code const badFoo = {   a: 123,   b: 'abc', }
+    Use interfaces to define structural types, not classes
+        code interface Foo {   a: number;   b: string; }  const foo: Foo = {   a: 123,   b: 'abc', }
+        code class Foo {   readonly a: number;   readonly b: number; }  const foo: Foo = {   a: 123,   b: 'abc', }
+    Why?
+    ThebadFooobject above relies on type inference. Additional fields could be added tobadFooand the type is inferred based on the object itself.
+    When passing abadFooto a function that takes aFoo, the error will be at the function call site, rather than at the object declaration site. This is also useful when changing the surface of an interface across broad codebases.
+        code interface Animal {   sound: string;   name: string; }  function makeSound(animal: Animal) {}  /**  * 'cat' has an inferred type of '{sound: string}'  */ const cat = {   sound: 'meow', };  /**  * 'cat' does not meet the type contract required for the function, so the  * TypeScript compiler errors here, which may be very far from where 'cat' is  * defined.  */ makeSound(cat);  /**  * Horse has a structural type and the type error shows here rather than the  * function call.  'horse' does not meet the type contract of 'Animal'.  */ const horse: Animal = {   sound: 'niegh', };  const dog: Animal = {   sound: 'bark',   name: 'MrPickles', };  makeSound(dog); makeSound(horse);
+    section Prefer interfaces over type literal aliases
+    TypeScript supportstype aliasesfor naming a type expression. This can be used to name primitives, unions, tuples, and any other types.
+    However, when declaring types for objects, use interfaces instead of a type alias for the object literal expression.
+        code interface User {   firstName: string;   lastName: string; }
+        code type User = {   firstName: string,   lastName: string, }
+    Why?
+    These forms are nearly equivalent, so under the principle of just choosing one out of two forms to prevent variation, we should choose one. Additionally, there are alsointeresting technical reasons to prefer interface. That page quotes the TypeScript team lead:Honestly, my take is that it should really just be interfaces for anything that they can model. There is no benefit to type aliases when there are so many issues around display/perf.
+    section Array<T>Type
+    For simple types (containing just alphanumeric characters and dot), use the syntax sugar for arrays,T[]orreadonly T[], rather than the longer formArray<T>orReadonlyArray<T>.
+    For multi-dimensional non-readonlyarrays of simple types, use the syntax sugar form (T[][],T[][][], and so on) rather than the longer form.
+    For anything more complex, use the longer formArray<T>.
+    These rules apply at each level of nesting, i.e. a simpleT[]nested in a more complex type would still be spelled asT[], using the syntax sugar.
+        code let a: string[]; let b: readonly string[]; let c: ns.MyObj[]; let d: string[][]; let e: Array<{n: number, s: string}>; let f: Array<string|number>; let g: ReadonlyArray<string|number>; let h: InjectionToken<string[]>;  // Use syntax sugar for nested types. let i: ReadonlyArray<string[]>; let j: Array<readonly string[]>;
+        code let a: Array<string>;  // The syntax sugar is shorter. let b: ReadonlyArray<string>; let c: Array<ns.MyObj>; let d: Array<string[]>; let e: {n: number, s: string}[];  // The braces make it harder to read. let f: (string|number)[];         // Likewise with parens. let g: readonly (string | number)[]; let h: InjectionToken<Array<string>>; let i: readonly string[][]; let j: (readonly string[])[];
+    section Indexable types / index signatures ({[key: string]: T})
+    In JavaScript, it's common to use an object as an associative array (akamap,hash, ordict). Such objects can be typed using anindex signature([k: string]: T) in TypeScript:
+        code const fileSizes: {[fileName: string]: number} = {}; fileSizes['readme.txt'] = 541;
+    In TypeScript, provide a meaningful label for the key. (The label only exists for documentation; it's unused otherwise.)
+        code const users: {[key: string]: number} = ...;
+        code const users: {[userName: string]: number} = ...;
+    Rather than using one of these, consider using the ES6MapandSettypes instead. JavaScript objects havesurprising undesirable behaviorsand the ES6 types more explicitly convey your intent. Also,Maps can be keyed by—andSets can contain—types other thanstring.
+    TypeScript's builtinRecord<Keys, ValueType>type allows constructing types with a defined set of keys. This is distinct from associative arrays in that the keys are statically known. See advice on thatbelow.
+    section Mapped and conditional types
+    TypeScript'smapped typesandconditional typesallow specifying new types based on other types. TypeScript's standard library includes several type operators based on these (Record,Partial,Readonlyetc).
+    These type system features allow succinctly specifying types and constructing powerful yet type safe abstractions. They come with a number of drawbacks though:
+      - Compared to explicitly specifying properties and type relations (e.g. using interfaces and extension, see below for an example), type operators require the reader to mentally evaluate the type expression. This can make programs substantially harder to read, in particular combined with type inference and expressions crossing file boundaries.
+      - Mapped & conditional types' evaluation model, in particular when combined with type inference, is underspecified, not always well understood, and often subject to change in TypeScript compiler versions. Code canaccidentallycompile or seem to give the right results. This increases future support cost of code using type operators.
+      - Mapped & conditional types are most powerful when deriving types from complex and/or inferred types. On the flip side, this is also when they are most prone to create hard to understand and maintain programs.
+      - Some language tooling does not work well with these type system features. E.g. your IDE's find references (and thus rename property refactoring) will not find properties in aPick<T, Keys>type, and Code Search won't hyperlink them.
+    The style recommendation is:
+      - Always use the simplest type construct that can possibly express your code.
+      - A little bit of repetition or verbosity is often much cheaper than the long term cost of complex type expressions.
+      - Mapped & conditional types may be used, subject to these considerations.
+    For example, TypeScript's builtinPick<T, Keys>type allows creating a new type by subsetting another typeT, but simple interface extension can often be easier to understand.
+        code interface User {   shoeSize: number;   favoriteIcecream: string;   favoriteChocolate: string; }  // FoodPreferences has favoriteIcecream and favoriteChocolate, but not shoeSize. type FoodPreferences = Pick<User, 'favoriteIcecream'|'favoriteChocolate'>;
+    This is equivalent to spelling out the properties onFoodPreferences:
+        code interface FoodPreferences {   favoriteIcecream: string;   favoriteChocolate: string; }
+    To reduce duplication,Usercould extendFoodPreferences, or (possibly better) nest a field for food preferences:
+        code interface FoodPreferences { /* as above */ } interface User extends FoodPreferences {   shoeSize: number;   // also includes the preferences. }
+    Using interfaces here makes the grouping of properties explicit, improves IDE support, allows better optimization, and arguably makes the code easier to understand.
+    section anyType
+    TypeScript'sanytype is a super and subtype of all other types, and allows dereferencing all properties. As such,anyis dangerous - it can mask severe programming errors, and its use undermines the value of having static types in the first place.
+    Considernotto useany.In circumstances where you want to useany, consider one of:
+        code any
+      - Provide a more specific type
+      - Useunknown
+        code unknown
+      - Suppress the lint warning and document why
+      section Providing a more specific type
+    Use interfaces , an inline object type, or a type alias:
+        code // Use declared interfaces to represent server-side JSON. declare interface MyUserJson {   name: string;   email: string; }  // Use type aliases for types that are repetitive to write. type MyType = number|string;  // Or use inline object types for complex returns. function getTwoThings(): {something: number, other: string} {   // ...   return {something, other}; }  // Use a generic type, where otherwise a library would say `any` to represent // they don't care what type the user is operating on (but note "Return type // only generics" below). function nicestElement<T>(items: T[]): T {   // Find the nicest element in items.   // Code can also put constraints on T, e.g. <T extends HTMLElement>. }
+      section Usingunknownoverany
+    Theanytype allows assignment into any other type and dereferencing any property off it. Often this behaviour is not necessary or desirable, and code just needs to express that a type is unknown. Use the built-in typeunknownin that situation — it expresses the concept and is much safer as it does not allow dereferencing arbitrary properties.
+        code // Can assign any value (including null or undefined) into this but cannot // use it without narrowing the type or casting. const val: unknown = value;
+        code const danger: any = value /* result of an arbitrary expression */; danger.whoops();  // This access is completely unchecked!
+    To safely useunknownvalues, narrow the type using atype guard
+      section Suppressinganylint warnings
+    Sometimes usinganyis legitimate, for example in tests to construct a mock object. In such cases, add a comment that suppresses the lint warning, and document why it is legitimate.
+        code // This test only needs a partial implementation of BookService, and if // we overlooked something the test will fail in an obvious way. // This is an intentionally unsafe partial mock // tslint:disable-next-line:no-any const mockBookService = ({get() { return mockBook; }} as any) as BookService; // Shopping cart is not used in this test // tslint:disable-next-line:no-any const component = new MyComponent(mockBookService, /* unused ShoppingCart */ null as any);
+    section {}Type
+    The{}type, also known as anempty interfacetype, represents a interface with no properties. An empty interface type has no specified properties and therefore any non-nullish value is assignable to it.
+        code let player: {};  player = {   health: 50, }; // Allowed.  console.log(player.health) // Property 'health' does not exist on type '{}'.
+        code function takeAnything(obj:{}) {  }  takeAnything({}); takeAnything({ a: 1, b: 2 });
+    Google3 codeshould notuse{}for most use cases.{}represents any non-nullish primitive or object type, which is rarely appropriate. Prefer one of the following more-descriptive types:
+      - unknowncan hold any value, includingnullorundefined, and is generally more appropriate for opaque values.
+      - Record<string, T>is better for dictionary-like objects, and provides better type safety by being explicit about the typeTof contained values (which may itself beunknown).
+      - objectexcludes primitives as well, leaving only non-nullish functions and objects, but without any other assumptions about what properties may be available.
+    section Tuple types
+    If you are tempted to create a Pair type, instead use a tuple type:
+        code interface Pair {   first: string;   second: string; } function splitInHalf(input: string): Pair {   ...   return {first: x, second: y}; }
+        code function splitInHalf(input: string): [string, string] {   ...   return [x, y]; }  // Use it like: const [leftHalf, rightHalf] = splitInHalf('my string');
+    However, often it's clearer to provide meaningful names for the properties.
+    If declaring aninterfaceis too heavyweight, you can use an inline object literal type:
+        code function splitHostPort(address: string): {host: string, port: number} {   ... }  // Use it like: const address = splitHostPort(userAddress); use(address.port);  // You can also get tuple-like behavior using destructuring: const {host, port} = splitHostPort(userAddress);
+    section Wrapper types
+    There are a few types related to JavaScript primitives thatshould notever be used:
+      - String,Boolean, andNumberhave slightly different meaning from the corresponding primitive typesstring,boolean, andnumber. Always use the lowercase version.
+      - Objecthas similarities to both{}andobject, but is slightly looser. Use{}for a type that include everything exceptnullandundefined, or lowercaseobjectto further exclude the other primitive types (the three mentioned above, plussymbolandbigint).
+    Further, never invoke the wrapper types as constructors (withnew).
+    section Return type only generics
+    Avoid creating APIs that have return type only generics. When working with existing APIs that have return type only generics always explicitly specify the generics.
+  section Toolchain requirements
+    Google style requires using a number of tools in specific ways, outlined here.
+    section TypeScript compiler
+    All TypeScript files must pass type checking using the standard  tool chain.
+      section @ts-ignore
+    Do not use@ts-ignorenor the variants@ts-expect-erroror@ts-nocheck.
+    Why?
+    They superficially seem to be an easy way tofixa compiler error, but in practice, a specific compiler error is often caused by a larger problem that can be fixed more directly.
+    For example, if you are using@ts-ignoreto suppress a type error, then it's hard to predict what types the surrounding code will end up seeing. For many type errors, the advice inhow to best useanyis useful.
+        code any
+    You may use@ts-expect-errorin unit tests, though you generallyshould not.@ts-expect-errorsuppresses all errors. It's easy to accidentally over-match and suppress more serious errors. Consider one of:
+      - When testing APIs that need to deal with unchecked values at runtime, add casts to the expected type or toanyand add an explanatory comment. This limits error suppression to a single expression.
+      - Suppress the lint warning and document why, similar tosuppressinganylint warnings.
+        code any
+    section Conformance
+    Google TypeScript includes severalconformance frameworks,tsetseandtsec.
+    These rules are commonly used to enforce critical restrictions (such as defining globals, which could break the codebase) and security patterns (such as usingevalor assigning toinnerHTML), or more loosely to improve code quality.
+    Google-style TypeScript must abide by any applicable global or framework-local conformance rules.
+  section Comments and documentation
+      section JSDoc versus comments
+    There are two types of comments, JSDoc (/** ... */) and non-JSDoc ordinary comments (// ...or/* ... */).
+      - Use/** JSDoc */comments for documentation, i.e. comments a user of the code should read.
+      - Use// line commentsfor implementation comments, i.e. comments that only concern the implementation of the code itself.
+    JSDoc comments are understood by tools (such as editors and documentation generators), while ordinary comments are only for other humans.
+      section Multi-line comments
+    Multi-line comments are indented at the same level as the surrounding code. Theymustuse multiple single-line comments (//-style), not block comment style (/* */).
+        code // This is // fine
+        code /*  * This should  * use multiple  * single-line comments  */  /* This should use // */
+    Comments are not enclosed in boxes drawn with asterisks or other characters.
+    section JSDoc general form
+    The basic formatting of JSDoc comments is as seen in this example:
+        code /**  * Multiple lines of JSDoc text are written here,  * wrapped normally.  * @param arg A number to do something to.  */ function doSomething(arg: number) { … }
+    or in this single-line example:
+        code /** This short jsdoc describes the function. */ function doSomething(arg: number) { … }
+    If a single-line comment overflows into multiple lines, itmustuse the multi-line style with/**and*/on their own lines.
+    Many tools extract metadata from JSDoc comments to perform code validation and optimization. As such, these commentsmustbe well-formed.
+    section Markdown
+    JSDoc is written in Markdown, though itmayinclude HTML when necessary.
+    This means that tooling parsing JSDoc will ignore plain text formatting, so if you did this:
+        code /**  * Computes weight based on three factors:  *   items sent  *   items received  *   last timestamp  */
+    it will be rendered like this:
+        code Computes weight based on three factors: items sent items received last timestamp
+    Instead, write a Markdown list:
+        code /**  * Computes weight based on three factors:  *  * - items sent  * - items received  * - last timestamp  */
+    section JSDoc tags
+    Google style allows a subset of JSDoc tags.  Most tags must occupy their own line, with the tag at the beginning of the line.
+        code /**  * The "param" tag must occupy its own line and may not be combined.  * @param left A description of the left param.  * @param right A description of the right param.  */ function add(left: number, right: number) { ... }
+        code /**  * The "param" tag must occupy its own line and may not be combined.  * @param left @param right  */ function add(left: number, right: number) { ... }
+    section Line wrapping
+    Line-wrapped block tags are indented four spaces. Wrapped description textmaybe lined up with the description on previous lines, but this horizontal alignment is discouraged.
+        code /**  * Illustrates line wrapping for long param/return descriptions.  * @param foo This is a param with a particularly long description that just  *     doesn't fit on one line.  * @return This returns something that has a lengthy description too long to fit  *     in one line.  */ exports.method = function(foo) {   return 5; };
+    Do not indent when wrapping a@descor@fileoverviewdescription.
+    section Document all top-level exports of modules
+    Use/** JSDoc */comments to communicate information to the users of your code. Avoid merely restating the property or parameter name. Youshouldalso document all properties and methods (exported/public or not) whose purpose is not immediately obvious from their name, as judged by your reviewer.
+    Exception:Symbols that are only exported to be consumed by tooling, such as @NgModule classes, do not require comments.
+    section Class comments
+    JSDoc comments for classes should provide the reader with enough information to know how and when to use the class, as well as any additional considerations necessary to correctly use the class. Textual descriptions may be omitted on the constructor.
+    section Method and function comments
+    Method, parameter, and return descriptions may be omitted if they are obvious from the rest of the method’s JSDoc or from the method name and type signature.
+    Method descriptions begin with a verb phrase that describes what the method does. This phrase is not an imperative sentence, but instead is written in the third person, as if there is an impliedThis method ...before it.
+    section Parameter property comments
+    Aparameter propertyis a constructor parameter that is prefixed by one of the modifiersprivate,protected,public, orreadonly. A parameter property declares both a parameter and an instance property, and implicitly assigns into it. For example,constructor(private readonly foo: Foo), declares that the constructor takes a parameterfoo, but also declares a private readonly propertyfoo, and assigns the parameter into that property before executing the remainder of the constructor.
+    To document these fields, use JSDoc's@paramannotation. Editors display the description on constructor calls and property accesses.
+        code /** This class demonstrates how parameter properties are documented. */ class ParamProps {   /**    * @param percolator The percolator used for brewing.    * @param beans The beans to brew.    */   constructor(     private readonly percolator: Percolator,     private readonly beans: CoffeeBean[]) {} }
+        code /** This class demonstrates how ordinary fields are documented. */ class OrdinaryClass {   /** The bean that will be used in the next call to brew(). */   nextBean: CoffeeBean;    constructor(initialBean: CoffeeBean) {     this.nextBean = initialBean;   } }
+    section JSDoc type annotations
+    JSDoc type annotations are redundant in TypeScript source code. Do not declare types in@paramor@returnblocks, do not write@implements,@enum,@private,@overrideetc. on code that uses theimplements,enum,private,overrideetc. keywords.
+    section Make comments that actually add information
+    For non-exported symbols, sometimes the name and type of the function or parameter is enough. Code willusuallybenefit from more documentation than just variable names though!
+      - Avoid comments that just restate the parameter name and type, e.g./** @param fooBarService The Bar service for the Foo application. */
+      - Because of this rule,@paramand@returnlines are only required when they add information, andmayotherwise be omitted./**  * POSTs the request to start coffee brewing.  * @param amountLitres The amount to brew. Must fit the pot size!  */ brew(amountLitres: number, logger: Logger) {   // ... }
+      section Comments when calling a function
+    “Parameter name” comments should be used whenever the method name and parameter value do not sufficiently convey the meaning of the parameter.
+    Before adding these comments, consider refactoring the method to instead accept an interface and destructure it to greatly improve call-site readability.
+    Parameter namecomments go before the parameter value, and include the parameter name and a=suffix:
+        code someFunction(obviousParam, /* shouldRender= */ true, /* name= */ 'hello');
+    Existing code may use a legacy parameter name comment style, which places these comments ~after~ the parameter value and omits the=. Continuing to use this style within the file for consistency is acceptable.
+        code someFunction(obviousParam, true /* shouldRender */, 'hello' /* name */);
+    section Place documentation prior to decorators
+    When a class, method, or property have both decorators like@Componentand JsDoc, please make sure to write the JsDoc before the decorator.
+      - Do not write JsDoc between the Decorator and the decorated statement.@Component({   selector: 'foo',   template: 'bar', }) /** Component that prints "bar". */ export class FooComponent {}
+      - Write the JsDoc block before the Decorator./** Component that prints "bar". */ @Component({   selector: 'foo',   template: 'bar', }) export class FooComponent {}
+  section Policies
+    section Consistency
+    For any style question that isn't settled definitively by this specification, do what the other code in the same file is already doing (be consistent). If that doesn't resolve the question, consider emulating the other files in the same directory.
+    Brand new filesmustuse Google Style, regardless of the style choices of other files in the same package. When adding new code to a file that is not in Google Style, reformatting the existing code first is recommended, subject to the advicebelow. If this reformatting is not done, then new codeshouldbe as consistent as possible with existing code in the same file, butmust notviolate the style guide.
+      section Reformatting existing code
+    You will occasionally encounter files in the codebase that are not in proper Google Style. These may have come from an acquisition, or may have been written before Google Style took a position on some issue, or may be in non-Google Style for any other reason.
+    When updating the style of existing code, follow these guidelines.
+      - It is not required to change all existing code to meet current style guidelines. Reformatting existing code is a trade-off between code churn and consistency. Style rules evolve over time and these kinds of tweaks to maintain compliance would create unnecessary churn. However, if significant changes are being made to a file it is expected that the file will be in Google Style.
+      - Be careful not to allow opportunistic style fixes to muddle the focus of a CL. If you find yourself making a lot of style changes that aren’t critical to the central focus of a CL, promote those changes to a separate CL.
+    section Deprecation
+    Mark deprecated methods, classes or interfaces with an@deprecatedJSDoc annotation. A deprecation comment must include simple, clear directions for people to fix their call sites.
+    section Generated code: mostly exempt
+    Source code generated by the build process is not required to be in Google Style. However, any generated identifiers that will be referenced from hand-written source code must follow the naming requirements. As a special exception, such identifiers are allowed to contain underscores, which may help to avoid conflicts with hand-written identifiers.
+      section Style guide goals
+    In general, engineers usually know best about what's needed in their code, so if there are multiple options and the choice is situation dependent, we should let decisions be made locally. So the default answer should beleave it out.
+    The following points are the exceptions, which are the reasons we have some global rules. Evaluate your style guide proposal against the following:
+      - Code should avoid patterns that are known to cause problems, especially for users new to the language.
+      - Code across projects should be consistent across irrelevant variations.When there are two options that are equivalent in a superficial way, we should consider choosing one just so we don't divergently evolve for no reason and avoid pointless debates in code reviews.Examples:The capitalization style of names.x as Tsyntax vs the equivalent<T>xsyntax (disallowed).Array<[number, number]>vs[number, number][].
+      - The capitalization style of names.
+      - x as Tsyntax vs the equivalent<T>xsyntax (disallowed).
+      - Array<[number, number]>vs[number, number][].
+      - Code should be maintainable in the long term.Code usually lives longer than the original author works on it, and the TypeScript team must keep all of Google working into the future.Examples:We use software to automate changes to code, so code is autoformatted so it's easy for software to meet whitespace rules.We require a single set of compiler flags, so a given TS library can be written assuming a specific set of flags, and users can always safely use a shared library.Code must import the libraries it uses (strict deps) so that a refactor in a dependency doesn't change the dependencies of its users.We ask users to write tests. Without tests we cannot have confidence that changes that we make to the language,  don't break users.
+      - We use software to automate changes to code, so code is autoformatted so it's easy for software to meet whitespace rules.
+      - We require a single set of compiler flags, so a given TS library can be written assuming a specific set of flags, and users can always safely use a shared library.
+      - Code must import the libraries it uses (strict deps) so that a refactor in a dependency doesn't change the dependencies of its users.
+      - We ask users to write tests. Without tests we cannot have confidence that changes that we make to the language,  don't break users.
+      - Code reviewers should be focused on improving the quality of the code, not enforcing arbitrary rules.If it's possible to implement your rule as an  automated check that is often a good sign. This also supports principle 3.If it really just doesn't matter that much -- if it's an obscure corner of the language or if it avoids a bug that is unlikely to occur -- it's probably worth leaving out.
+      - Namespace imports are often called 'module imports'↩
+      - named imports are sometimes called 'destructuring imports' because they use similar syntax to destructuring assignments.↩

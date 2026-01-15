@@ -4,44 +4,44 @@ set -euo pipefail
 
 # Helper to check if a service should be deployed
 should_deploy() {
-  local srv="$1"
-  if [[ -z "${SELECTED_SERVICES:-}" ]]; then
-    return 0
-  fi
-  if echo "${SELECTED_SERVICES}" | grep -qE "(^|,)$srv(,|$)"; then
-    return 0
-  fi
-  return 1
+ local srv="$1"
+ if [[ -z "${SELECTED_SERVICES:-}" ]]; then
+  return 0
+ fi
+ if echo "${SELECTED_SERVICES}" | grep -qE "(^|,)$srv(,|$)"; then
+  return 0
+ fi
+ return 1
 }
 
 # Service definition functions
 append_hub_api() {
-  local dockerfile=""
-  local cors_json=""
+ local dockerfile=""
+ local cors_json=""
 
-  if ! should_deploy "hub-api"; then
-    return 0
-  fi
-  dockerfile=$(detect_dockerfile "${SRC_DIR}/hub-api" || echo "Dockerfile")
+ if ! should_deploy "hub-api"; then
+  return 0
+ fi
+ dockerfile=$(detect_dockerfile "${SRC_DIR}/hub-api" || echo "Dockerfile")
 
-  # Generate robust JSON for CORS_ORIGINS using Python to avoid string formatting errors
-  cors_json=$(LAN_IP="${LAN_IP}" DASH_PORT="${PORT_DASHBOARD_WEB}" DESEC_DOMAIN="${DESEC_DOMAIN}" "${PYTHON_CMD}" -c "
+ # Generate robust JSON for CORS_ORIGINS using Python to avoid string formatting errors
+ cors_json=$(LAN_IP="${LAN_IP}" DASH_PORT="${PORT_DASHBOARD_WEB}" DESEC_DOMAIN="${DESEC_DOMAIN}" "${PYTHON_CMD}" -c "
 import json, os
 try:
-    lan_ip = os.environ.get('LAN_IP', '127.0.0.1')
-    port = os.environ.get('DASH_PORT', '8088')
-    domain = os.environ.get('DESEC_DOMAIN', '')
-    origins = [
-        'http://localhost',
-        'http://localhost:' + port,
-        'http://' + lan_ip,
-        'http://' + lan_ip + ':' + port
-    ]
-    if domain:
-        origins.append('https://' + domain)
-    print(json.dumps(origins))
+  lan_ip = os.environ.get('LAN_IP', '127.0.0.1')
+  port = os.environ.get('DASH_PORT', '8088')
+  domain = os.environ.get('DESEC_DOMAIN', '')
+  origins = [
+    'http://localhost',
+    'http://localhost:' + port,
+    'http://' + lan_ip,
+    'http://' + lan_ip + ':' + port
+  ]
+  if domain:
+    origins.append('https://' + domain)
+  print(json.dumps(origins))
 except Exception:
-    print('[\"http://localhost\"]')
+  print('[\"http://localhost\"]')
 ")
 
   cat >> "${COMPOSE_FILE}" <<EOF
@@ -107,16 +107,16 @@ EOF
 }
 
 append_odido_booster() {
-  local dockerfile=""
-  local vpn_mode="true"
+ local dockerfile=""
+ local vpn_mode="true"
 
-  if ! should_deploy "odido-booster"; then
-    return 0
-  fi
-  dockerfile=$(detect_dockerfile "${SRC_DIR}/odido-bundle-booster" || echo "Dockerfile")
-  if [[ -f "${CONFIG_DIR}/theme.json" ]]; then
-    vpn_mode=$(grep -o '"odido_use_vpn"[[:space:]]*:[[:space:]]*\(true\|false\)' "${CONFIG_DIR}/theme.json" 2>/dev/null | grep -o 'true\|false' || echo "true")
-  fi
+ if ! should_deploy "odido-booster"; then
+  return 0
+ fi
+ dockerfile=$(detect_dockerfile "${SRC_DIR}/odido-bundle-booster" || echo "Dockerfile")
+ if [[ -f "${CONFIG_DIR}/theme.json" ]]; then
+  vpn_mode=$(grep -o '"odido_use_vpn"[[:space:]]*:[[:space:]]*\(true\|false\)' "${CONFIG_DIR}/theme.json" 2>/dev/null | grep -o 'true\|false' || echo "true")
+ fi
 
   cat >> "${COMPOSE_FILE}" <<EOF
   odido-booster:
@@ -128,18 +128,18 @@ append_odido_booster() {
     container_name: ${CONTAINER_PREFIX}odido-booster
 EOF
 
-  if [[ "${vpn_mode}" == "true" ]]; then
+ if [[ "${vpn_mode}" == "true" ]]; then
     cat >> "${COMPOSE_FILE}" <<EOF
     network_mode: "container:${CONTAINER_PREFIX}gluetun"
     depends_on:
       gluetun: {condition: service_healthy}
 EOF
-  else
+ else
     cat >> "${COMPOSE_FILE}" <<EOF
     networks: [frontend]
     ports: ["${LAN_IP}:8085:8085"]
 EOF
-  fi
+ fi
 
   cat >> "${COMPOSE_FILE}" <<EOF
     environment:
@@ -162,9 +162,9 @@ EOF
 }
 
 append_memos() {
-  if ! should_deploy "memos"; then
-    return 0
-  fi
+ if ! should_deploy "memos"; then
+  return 0
+ fi
   cat >> "${COMPOSE_FILE}" <<EOF
   memos:
     image: ghcr.io/usememos/memos:latest
@@ -189,9 +189,9 @@ EOF
 }
 
 append_gluetun() {
-  if ! should_deploy "gluetun"; then
-    return 0
-  fi
+ if ! should_deploy "gluetun"; then
+  return 0
+ fi
 
   cat >> "${COMPOSE_FILE}" <<EOF
   gluetun:
@@ -251,17 +251,17 @@ EOF
 }
 
 append_dashboard() {
-  if ! should_deploy "dashboard"; then
-    return 0
-  fi
-  "${SUDO}" mkdir -p "${SRC_DIR}/dashboard"
-  cat <<DASHEOF | "${SUDO}" tee "${SRC_DIR}/dashboard/Dockerfile" >/dev/null
+ if ! should_deploy "dashboard"; then
+  return 0
+ fi
+ "${SUDO}" mkdir -p "${SRC_DIR}/dashboard"
+ cat <<DASHEOF | "${SUDO}" tee "${SRC_DIR}/dashboard/Dockerfile" >/dev/null
 FROM nginx:alpine
 RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run/nginx /var/lib/nginx /usr/share/nginx/html && \
-    chown -R 1000:1000 /var/cache/nginx /var/log/nginx /var/run/nginx /var/lib/nginx /usr/share/nginx/html && \
-    chmod -R 755 /usr/share/nginx/html && \
-    sed -i 's/^user/#user/' /etc/nginx/nginx.conf && \
-    sed -i 's|pid .*|pid /tmp/nginx.pid;|g' /etc/nginx/nginx.conf
+  chown -R 1000:1000 /var/cache/nginx /var/log/nginx /var/run/nginx /var/lib/nginx /usr/share/nginx/html && \
+  chmod -R 755 /usr/share/nginx/html && \
+  sed -i 's/^user/#user/' /etc/nginx/nginx.conf && \
+  sed -i 's|pid .*|pid /tmp/nginx.pid;|g' /etc/nginx/nginx.conf
 USER 1000
 COPY . /usr/share/nginx/html
 EXPOSE ${PORT_DASHBOARD_WEB}
@@ -310,11 +310,11 @@ EOF
 }
 
 append_portainer() {
-  if ! should_deploy "portainer"; then
-    return 0
-  fi
-  "${SUDO}" mkdir -p "${SRC_DIR}/portainer"
-  cat <<PORTEOF | "${SUDO}" tee "${SRC_DIR}/portainer/Dockerfile" >/dev/null
+ if ! should_deploy "portainer"; then
+  return 0
+ fi
+ "${SUDO}" mkdir -p "${SRC_DIR}/portainer"
+ cat <<PORTEOF | "${SUDO}" tee "${SRC_DIR}/portainer/Dockerfile" >/dev/null
 FROM alpine:3.20
 COPY --from=portainer/portainer-ce:latest /portainer /portainer
 COPY --from=portainer/portainer-ce:latest /public /public
@@ -346,9 +346,9 @@ EOF
 }
 
 append_adguard() {
-  if ! should_deploy "adguard"; then
-    return 0
-  fi
+ if ! should_deploy "adguard"; then
+  return 0
+ fi
   cat >> "${COMPOSE_FILE}" <<EOF
   adguard:
     image: adguard/adguardhome:latest
@@ -378,9 +378,9 @@ EOF
 }
 
 append_unbound() {
-  if ! should_deploy "unbound"; then
-    return 0
-  fi
+ if ! should_deploy "unbound"; then
+  return 0
+ fi
   cat >> "${COMPOSE_FILE}" <<EOF
   unbound:
     image: klutchell/unbound:latest
@@ -404,9 +404,9 @@ EOF
 }
 
 append_wg_easy() {
-  if ! should_deploy "wg-easy"; then
-    return 0
-  fi
+ if ! should_deploy "wg-easy"; then
+  return 0
+ fi
   cat >> "${COMPOSE_FILE}" <<EOF
   wg-easy:
     image: ghcr.io/wg-easy/wg-easy:latest
@@ -434,9 +434,9 @@ EOF
 }
 
 append_redlib() {
-  if ! should_deploy "redlib"; then
-    return 0
-  fi
+ if ! should_deploy "redlib"; then
+  return 0
+ fi
   cat >> "${COMPOSE_FILE}" <<EOF
   redlib:
     image: quay.io/redlib/redlib:latest
@@ -473,13 +473,13 @@ EOF
 }
 
 append_wikiless() {
-  local dockerfile=""
-  local redis_url="redis://127.0.0.1:6379"
+ local dockerfile=""
+ local redis_url="redis://127.0.0.1:6379"
 
-  if ! should_deploy "wikiless"; then
-    return 0
-  fi
-  dockerfile=$(detect_dockerfile "${SRC_DIR}/wikiless" || echo "Dockerfile")
+ if ! should_deploy "wikiless"; then
+  return 0
+ fi
+ dockerfile=$(detect_dockerfile "${SRC_DIR}/wikiless" || echo "Dockerfile")
 
   cat >> "${COMPOSE_FILE}" <<EOF
   wikiless:
@@ -541,11 +541,11 @@ EOF
 }
 
 append_invidious() {
-  local companion_url="http://127.0.0.1:8282/companion"
+ local companion_url="http://127.0.0.1:8282/companion"
 
-  if ! should_deploy "invidious"; then
-    return 0
-  fi
+ if ! should_deploy "invidious"; then
+  return 0
+ fi
 
   cat >> "${COMPOSE_FILE}" <<EOF
   invidious:
@@ -642,9 +642,9 @@ EOF
 }
 
 append_rimgo() {
-  if ! should_deploy "rimgo"; then
-    return 0
-  fi
+ if ! should_deploy "rimgo"; then
+  return 0
+ fi
   cat >> "${COMPOSE_FILE}" <<EOF
   rimgo:
     image: codeberg.org/rimgo/rimgo:latest
@@ -672,14 +672,14 @@ EOF
 }
 
 append_breezewiki() {
-  local bw_origin="fandom.com"
+ local bw_origin="fandom.com"
 
-  if ! should_deploy "breezewiki"; then
-    return 0
-  fi
-  if [[ -f "${CONFIG_DIR}/breezewiki/breezewiki.ini" ]]; then
-    bw_origin=$(grep "^canonical_origin" "${CONFIG_DIR}/breezewiki/breezewiki.ini" | cut -d'=' -f2 | tr -d ' ' || echo "fandom.com")
-  fi
+ if ! should_deploy "breezewiki"; then
+  return 0
+ fi
+ if [[ -f "${CONFIG_DIR}/breezewiki/breezewiki.ini" ]]; then
+  bw_origin=$(grep "^canonical_origin" "${CONFIG_DIR}/breezewiki/breezewiki.ini" | cut -d'=' -f2 | tr -d ' ' || echo "fandom.com")
+ fi
 
   cat >> "${COMPOSE_FILE}" <<EOF
   breezewiki:
@@ -709,9 +709,9 @@ EOF
 }
 
 append_anonymousoverflow() {
-  if ! should_deploy "anonymousoverflow"; then
-    return 0
-  fi
+ if ! should_deploy "anonymousoverflow"; then
+  return 0
+ fi
   cat >> "${COMPOSE_FILE}" <<EOF
   anonymousoverflow:
     image: ghcr.io/httpjamesm/anonymousoverflow:release
@@ -737,12 +737,12 @@ EOF
 }
 
 append_scribe() {
-  local dockerfile=""
+ local dockerfile=""
 
-  if ! should_deploy "scribe"; then
-    return 0
-  fi
-  dockerfile=$(detect_dockerfile "${SRC_DIR}/scribe" || echo "Dockerfile")
+ if ! should_deploy "scribe"; then
+  return 0
+ fi
+ dockerfile=$(detect_dockerfile "${SRC_DIR}/scribe" || echo "Dockerfile")
   cat >> "${COMPOSE_FILE}" <<EOF
   scribe:
     pull_policy: build
@@ -773,9 +773,9 @@ EOF
 }
 
 append_vert() {
-  if ! should_deploy "vert"; then
-    return 0
-  fi
+ if ! should_deploy "vert"; then
+  return 0
+ fi
   cat >> "${COMPOSE_FILE}" <<EOF
   vertd:
     container_name: ${CONTAINER_PREFIX}vertd
@@ -834,9 +834,9 @@ EOF
 }
 
 append_cobalt() {
-  if ! should_deploy "cobalt"; then
-    return 0
-  fi
+ if ! should_deploy "cobalt"; then
+  return 0
+ fi
   cat >> "${COMPOSE_FILE}" <<EOF
   cobalt:
     image: ghcr.io/imputnet/cobalt:${COBALT_IMAGE_TAG:-latest}
@@ -863,10 +863,10 @@ EOF
 }
 
 append_cobalt_web() {
-  if ! should_deploy "cobalt-web"; then
-    return 0
-  fi
-  local dockerfile="web/Dockerfile"
+ if ! should_deploy "cobalt-web"; then
+  return 0
+ fi
+ local dockerfile="web/Dockerfile"
   cat >> "${COMPOSE_FILE}" <<EOF
   cobalt-web:
     pull_policy: build
@@ -895,9 +895,9 @@ EOF
 }
 
 append_searxng() {
-  if ! should_deploy "searxng"; then
-    return 0
-  fi
+ if ! should_deploy "searxng"; then
+  return 0
+ fi
   cat >> "${COMPOSE_FILE}" <<EOF
   searxng:
     image: searxng/searxng:${SEARXNG_IMAGE_TAG:-latest}
@@ -946,12 +946,12 @@ EOF
 }
 
 append_immich() {
-  if ! should_deploy "immich"; then
-    return 0
-  fi
-  local db_host="${CONTAINER_PREFIX}immich-db"
-  local redis_host="${CONTAINER_PREFIX}immich-redis"
-  local ml_url="http://127.0.0.1:3003"
+ if ! should_deploy "immich"; then
+  return 0
+ fi
+ local db_host="${CONTAINER_PREFIX}immich-db"
+ local redis_host="${CONTAINER_PREFIX}immich-redis"
+ local ml_url="http://127.0.0.1:3003"
 
   cat >> "${COMPOSE_FILE}" <<EOF
   immich-server:
@@ -1049,9 +1049,9 @@ EOF
 }
 
 append_watchtower() {
-  if ! should_deploy "watchtower"; then
-    return 0
-  fi
+ if ! should_deploy "watchtower"; then
+  return 0
+ fi
   cat >> "${COMPOSE_FILE}" <<EOF
   watchtower:
     image: containrrr/watchtower:latest
@@ -1073,28 +1073,28 @@ EOF
 }
 
 generate_compose() {
-  log_info "Generating Docker Compose Configuration..."
+ log_info "Generating Docker Compose Configuration..."
 
-  # Set defaults for VERT variables
-  local VERTD_PUB_URL="${VERTD_PUB_URL:-http://$LAN_IP:$PORT_VERTD}"
-  local VERT_PUB_HOSTNAME="${VERT_PUB_HOSTNAME:-$LAN_IP}"
-  local VERTD_DEVICES="${VERTD_DEVICES:-}"
+ # Set defaults for VERT variables
+ local VERTD_PUB_URL="${VERTD_PUB_URL:-http://$LAN_IP:$PORT_VERTD}"
+ local VERT_PUB_HOSTNAME="${VERT_PUB_HOSTNAME:-$LAN_IP}"
+ local VERTD_DEVICES="${VERTD_DEVICES:-}"
 
-  # Prepare escaped passwords for docker-compose (v2 requires $$ for literal $)
-  local ADMIN_PASS_COMPOSE="${ADMIN_PASS_RAW//$/$$}"
-  local VPN_PASS_COMPOSE="${VPN_PASS_RAW//$/$$}"
-  local HUB_API_KEY_COMPOSE="${HUB_API_KEY//$/$$}"
-  local PORTAINER_PASS_COMPOSE="${PORTAINER_PASS_RAW//$/$$}"
-  local AGH_PASS_COMPOSE="${AGH_PASS_RAW//$/$$}"
-  local INVIDIOUS_DB_PASS_COMPOSE="${INVIDIOUS_DB_PASSWORD//$/$$}"
-  local IMMICH_DB_PASS_COMPOSE="${IMMICH_DB_PASSWORD//$/$$}"
-  local WG_HASH_COMPOSE="${WG_HASH_CLEAN//$/$$}"
-  local PORTAINER_HASH_COMPOSE="${PORTAINER_PASS_HASH//$/$$}"
+ # Prepare escaped passwords for docker-compose (v2 requires $$ for literal $)
+ local ADMIN_PASS_COMPOSE="${ADMIN_PASS_RAW//$/$$}"
+ local VPN_PASS_COMPOSE="${VPN_PASS_RAW//$/$$}"
+ local HUB_API_KEY_COMPOSE="${HUB_API_KEY//$/$$}"
+ local PORTAINER_PASS_COMPOSE="${PORTAINER_PASS_RAW//$/$$}"
+ local AGH_PASS_COMPOSE="${AGH_PASS_RAW//$/$$}"
+ local INVIDIOUS_DB_PASS_COMPOSE="${INVIDIOUS_DB_PASSWORD//$/$$}"
+ local IMMICH_DB_PASS_COMPOSE="${IMMICH_DB_PASSWORD//$/$$}"
+ local WG_HASH_COMPOSE="${WG_HASH_CLEAN//$/$$}"
+ local PORTAINER_HASH_COMPOSE="${PORTAINER_PASS_HASH//$/$$}"
 
-  # Ensure required directories exist
-  mkdir -p "${BASE_DIR}" "${SRC_DIR}" "${ENV_DIR}" "${CONFIG_DIR}" "${DATA_DIR}"
+ # Ensure required directories exist
+ mkdir -p "${BASE_DIR}" "${SRC_DIR}" "${ENV_DIR}" "${CONFIG_DIR}" "${DATA_DIR}"
 
-  # Header
+ # Header
   cat > "${COMPOSE_FILE}" <<EOF
 name: ${APP_NAME}
 networks:
@@ -1138,35 +1138,35 @@ services:
 
 EOF
 
-  # Core Infrastructure
-  append_hub_api
-  append_gluetun
-  append_adguard
-  append_unbound
-  append_wg_easy
-  append_dashboard
-  append_portainer
+ # Core Infrastructure
+ append_hub_api
+ append_gluetun
+ append_adguard
+ append_unbound
+ append_wg_easy
+ append_dashboard
+ append_portainer
 
-  # Privacy Frontends
-  append_redlib
-  append_wikiless
-  append_invidious
-  append_rimgo
-  append_breezewiki
-  append_anonymousoverflow
-  append_scribe
+ # Privacy Frontends
+ append_redlib
+ append_wikiless
+ append_invidious
+ append_rimgo
+ append_breezewiki
+ append_anonymousoverflow
+ append_scribe
 
-  # Utilities & Others
-  append_memos
-  append_odido_booster
-  append_vert
-  append_cobalt
-  append_cobalt_web
-  append_searxng
-  append_immich
-  append_watchtower
+ # Utilities & Others
+ append_memos
+ append_odido_booster
+ append_vert
+ append_cobalt
+ append_cobalt_web
+ append_searxng
+ append_immich
+ append_watchtower
 
-  # CasaOS Metadata
+ # CasaOS Metadata
   cat >> "${COMPOSE_FILE}" <<EOF
 x-casaos:
   architectures:

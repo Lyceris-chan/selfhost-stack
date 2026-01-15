@@ -19,7 +19,7 @@ def main():
 
     path = Path(sys.argv[1])
     env_path = path.parent / "gluetun.env"
-    
+
     try:
         text = path.read_text()
         text = text.replace("\r", "")
@@ -35,7 +35,7 @@ def main():
                 if "127.0.0.1" in line:
                     line = line.replace("127.0.0.1", "172.20.0.1")
             final_lines.append(line)
-        
+
         # Save formatted config back
         path.write_text("\n".join(final_lines) + ("\n" if final_lines else ""))
         print(f"Formatted {path}")

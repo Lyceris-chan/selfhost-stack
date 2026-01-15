@@ -1,8 +1,9 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Service Logic Modules
-# Broken down for maintainability
+#!/bin/bash
+#
+# Orchestrates the loading of service logic modules.
+#
+# This script sources all necessary service-specific scripts to ensure
+# their functions and variables are available to the main orchestrator.
 
 source "$SCRIPT_DIR/lib/services/sync.sh"
 source "$SCRIPT_DIR/lib/services/images.sh"

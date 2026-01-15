@@ -1,6 +1,10 @@
-import os
+"""UI asset management utilities for the Privacy Hub API.
 
-import requests
+This module ensures that the necessary branding assets and icons exist
+in the assets directory.
+"""
+
+import os
 
 from ..core.config import settings
 from .logging import log_structured
@@ -15,13 +19,15 @@ def ensure_assets():
     try:
         if not os.path.exists(settings.ASSETS_DIR):
             os.makedirs(settings.ASSETS_DIR, exist_ok=True)
-        
+
         # Generate SVG Icon if missing
         app_name_raw = settings.APP_NAME
-        app_name = "".join([c if c.isalnum() else '-' for c in app_name_raw]).lower()
-        while '--' in app_name: app_name = app_name.replace('--', '-')
+        app_name = "".join(
+            [c if c.isalnum() else '-' for c in app_name_raw]).lower()
+        while '--' in app_name:
+            app_name = app_name.replace('--', '-')
         app_name = app_name.strip('-')
-        
+
         svg_path = os.path.join(settings.ASSETS_DIR, f"{app_name}.svg")
         if not os.path.exists(svg_path):
             svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
@@ -32,6 +38,6 @@ def ensure_assets():
             with open(svg_path, "w", encoding="utf-8") as f:
                 f.write(svg)
             log_structured("INFO", f"Generated {app_name}.svg", "ASSETS")
-            
-    except Exception as e:
-        log_structured("WARN", f"Asset ensure failed: {e}", "ASSETS")
+
+    except Exception as err:
+        log_structured("WARN", f"Asset ensure failed: {err}", "ASSETS")

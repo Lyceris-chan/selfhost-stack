@@ -7,6 +7,7 @@ telemetry and log synchronization.
 
 import json
 import threading
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import Depends, FastAPI, Request
@@ -21,21 +22,19 @@ from .services.background import (log_sync_thread, metrics_collector_thread,
 from .utils.assets import ensure_assets
 from .utils.logging import init_db, log_structured
 
-from contextlib import asynccontextmanager
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-  """Manages the application lifecycle, initializing DB and background workers."""
-  # Startup
-  init_db()
-  ensure_assets()
-  # Start background threads
-  threading.Thread(target=metrics_collector_thread, daemon=True).start()
-  threading.Thread(target=log_sync_thread, daemon=True).start()
-  threading.Thread(target=odido_retrieval_thread, daemon=True).start()
-  yield
-  # Shutdown logic (if any) can go here
+    """Manages the application lifecycle, initializing DB and background workers."""
+    # Startup
+    init_db()
+    ensure_assets()
+    # Start background threads
+    threading.Thread(target=metrics_collector_thread, daemon=True).start()
+    threading.Thread(target=log_sync_thread, daemon=True).start()
+    threading.Thread(target=odido_retrieval_thread, daemon=True).start()
+    yield
+    # Shutdown logic (if any) can go here
 
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
@@ -60,40 +59,48 @@ app.include_router(odido.router)
 
 @app.post("/watchtower")
 async def watchtower_notification(
-    request: Request, user: str = Depends(get_api_key_or_query_token)):
-  """Receives and logs notifications from the Watchtower update service.
+        request: Request, user: str = Depends(get_api_key_or_query_token)):
+    """Receives and logs notifications from the Watchtower update service.
 
-  Args:
-      request: Incoming webhook request.
-      user: Authenticated service user.
+    Args:
+        request: Incoming webhook request.
+        user: Authenticated service user.
 
-  Returns:
-      Success status.
-  """
-  try:
-    data = await request.json()
-    log_structured("INFO", f"Watchtower Notification: {json.dumps(data)}",
-                   "MAINTENANCE")
-    return {"success": True}
-  except Exception:
-    # Fallback for non-JSON notifications
-    body = await request.body()
-    log_structured(
-        "INFO",
-        f"Watchtower Notification (Plain): {body.decode(errors='replace')}",
-        "MAINTENANCE")
-    return {"success": True}
+    Returns:
+        Success status.
+    """
+    try:
+        data = await request.json()
+        log_structured("INFO", f"Watchtower Notification: {json.dumps(data)}",
+                       "MAINTENANCE")
+        return {"success": True}
+    except Exception:
+        # Fallback for non-JSON notifications
+        body = await request.body()
+        log_structured(
+            "INFO",
+            f"Watchtower Notification (Plain): {body.decode(errors='replace')}",
+            "MAINTENANCE")
+        return {"success": True}
 
 
 @app.middleware("http")
-async def update_activity_middleware(request, call_next):
-  """Middleware to track active monitoring for metrics collection."""
-  if request.url.path == "/metrics":
-    update_metrics_activity()
-  response = await call_next(request)
-  return response
+async def update_activity_middleware(request: Request, call_next):
+    """Middleware to track active monitoring for metrics collection.
+
+    Args:
+        request: The incoming request.
+        call_next: The next middleware or endpoint.
+
+    Returns:
+        The response from the next middleware.
+    """
+    if request.url.path == "/metrics":
+        update_metrics_activity()
+    response = await call_next(request)
+    return response
 
 
 if __name__ == "__main__":
-  uvicorn.run(
-      "app.main:app", host="0.0.0.0", port=settings.PORT, log_level="info")
+    uvicorn.run(
+        "app.main:app", host="0.0.0.0", port=settings.PORT, log_level="info", access_log=False)

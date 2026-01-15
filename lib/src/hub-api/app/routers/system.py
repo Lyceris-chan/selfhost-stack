@@ -1,17 +1,23 @@
+"""System health and infrastructure monitoring router for the Privacy Hub API.
+
+This module provides endpoints for retrieving system metrics, SSL certificate
+status, container health, and triggering system-level operations like backups.
+"""
+
 import json
 import os
 import re
 import sqlite3
 import subprocess
-import threading
 import time
 from datetime import datetime
+import tempfile
 
 import psutil
 from fastapi import APIRouter, BackgroundTasks, Depends
 
 from ..core.config import settings
-from ..core.security import get_admin_user, get_current_user, get_optional_user
+from ..core.security import get_admin_user, get_optional_user
 from ..utils.logging import log_structured
 from ..utils.process import run_command
 
@@ -20,38 +26,50 @@ router = APIRouter()
 
 @router.get("/certificate-status")
 def get_certificate_status():
-    """Returns the status and details of the current SSL certificate."""
+    """Returns the status and details of the current SSL certificate.
+
+    Returns:
+        A dictionary containing certificate details or error information.
+    """
     cert_path = "/etc/adguard/conf/ssl.crt"
-    
+
     if not os.path.exists(cert_path):
         return {"error": "Certificate not found", "installed": False}
-    
+
     try:
         # Use openssl to parse cert info
         cmd = ["openssl", "x509", "-in", cert_path, "-noout", "-text"]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        result = subprocess.run(cmd,
+                                capture_output=True,
+                                text=True,
+                                timeout=5,
+                                check=False)
         if result.returncode != 0:
             return {"error": "Failed to parse certificate", "installed": False}
-        
+
         output = result.stdout
-        
+
         # Extract fields
         subject = ""
         issuer = ""
         not_after = ""
-        
+
         sub_match = re.search(r"Subject:.*CN\s*=\s*([^\s,/]+)", output)
-        if sub_match: subject = sub_match.group(1)
-        
+        if sub_match:
+            subject = sub_match.group(1)
+
         iss_match = re.search(r"Issuer:.*CN\s*=\s*([^\s,/]+)", output)
-        if iss_match: issuer = iss_match.group(1)
-        
+        if iss_match:
+            issuer = iss_match.group(1)
+
         exp_match = re.search(r"Not After : (.*)", output)
-        if exp_match: not_after = exp_match.group(1).strip()
-        
+        if exp_match:
+            not_after = exp_match.group(1).strip()
+
         # Determine type
         cert_type = "Self-Signed"
-        if "Let's Encrypt" in issuer or "R3" in issuer or "R10" in issuer or "R11" in issuer:
+        trusted_issuers = ["Let's Encrypt", "R3", "R10", "R11"]
+        if any(ti in issuer for ti in trusted_issuers):
             cert_type = "Let's Encrypt (Trusted)"
         elif issuer and issuer != subject:
             cert_type = f"Issued by {issuer}"
@@ -63,15 +81,22 @@ def get_certificate_status():
             "expires": not_after,
             "type": cert_type
         }
-    except Exception as e:
-        return {"error": str(e), "installed": False}
+    except Exception as err:
+        return {"error": str(err), "installed": False}
 
 
 def get_total_usage(path):
-    """Retrieves accumulated data usage from a JSON file."""
+    """Retrieves accumulated data usage from a JSON file.
+
+    Args:
+        path: Path to the JSON usage file.
+
+    Returns:
+        A tuple of (rx, tx) bytes.
+    """
     try:
         if os.path.exists(path) and os.path.getsize(path) > 0:
-            with open(path, 'r') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 return int(data.get('rx', 0)), int(data.get('tx', 0))
     except Exception:
@@ -80,16 +105,22 @@ def get_total_usage(path):
 
 
 def save_total_usage(path, rx, tx):
-    """Saves accumulated data usage to a JSON file atomically."""
+    """Saves accumulated data usage to a JSON file atomically.
+
+    Args:
+        path: Path to the JSON usage file.
+        rx: Received bytes.
+        tx: Transmitted bytes.
+    """
+    temp_name = None
     try:
-        import tempfile
         dirname = os.path.dirname(path)
         with tempfile.NamedTemporaryFile('w', dir=dirname, delete=False) as tf:
             json.dump({'rx': int(rx), 'tx': int(tx)}, tf)
             temp_name = tf.name
         os.replace(temp_name, path)
     except Exception:
-        if 'temp_name' in locals() and os.path.exists(temp_name):
+        if temp_name and os.path.exists(temp_name):
             os.remove(temp_name)
 
 
@@ -109,27 +140,31 @@ def get_status(user: str = Depends(get_optional_user)):
         json_start = output.find('{')
         json_end = output.rfind('}')
         if json_start != -1 and json_end != -1:
-            output = output[json_start:json_end+1]
-        
+            output = output[json_start:json_end + 1]
+
         status_data = json.loads(output)
-        
+
         # Update total usage for Gluetun
-        g = status_data.get('gluetun', {})
-        if g.get('status') == 'up':
+        gluetun_status = status_data.get('gluetun', {})
+        if gluetun_status.get('status') == 'up':
             total_rx, total_tx = get_total_usage(settings.DATA_USAGE_FILE)
-            current_rx = int(g.get('session_rx', 0))
-            current_tx = int(g.get('session_tx', 0))
-            save_total_usage(settings.DATA_USAGE_FILE, total_rx + current_rx, total_tx + current_tx)
-            status_data['gluetun']['total_rx'], status_data['gluetun']['total_tx'] = get_total_usage(settings.DATA_USAGE_FILE)
-        
+            current_rx = int(gluetun_status.get('session_rx', 0))
+            current_tx = int(gluetun_status.get('session_tx', 0))
+            save_total_usage(settings.DATA_USAGE_FILE, total_rx + current_rx,
+                             total_tx + current_tx)
+            status_data['gluetun']['total_rx'], status_data['gluetun'][
+                'total_tx'] = get_total_usage(settings.DATA_USAGE_FILE)
+
         # Update total usage for WG-Easy
-        w = status_data.get('wgeasy', {})
-        if w.get('status') == 'up':
+        wgeasy_status = status_data.get('wgeasy', {})
+        if wgeasy_status.get('status') == 'up':
             total_rx, total_tx = get_total_usage(settings.WGE_DATA_USAGE_FILE)
-            current_rx = int(w.get('session_rx', 0))
-            current_tx = int(w.get('session_tx', 0))
-            save_total_usage(settings.WGE_DATA_USAGE_FILE, total_rx + current_rx, total_tx + current_tx)
-            status_data['wgeasy']['total_rx'], status_data['wgeasy']['total_tx'] = get_total_usage(settings.WGE_DATA_USAGE_FILE)
+            current_rx = int(wgeasy_status.get('session_rx', 0))
+            current_tx = int(wgeasy_status.get('session_tx', 0))
+            save_total_usage(settings.WGE_DATA_USAGE_FILE, total_rx + current_rx,
+                             total_tx + current_tx)
+            status_data['wgeasy']['total_rx'], status_data['wgeasy'][
+                'total_tx'] = get_total_usage(settings.WGE_DATA_USAGE_FILE)
 
         # Redaction for guests
         if user == "guest":
@@ -149,9 +184,9 @@ def get_status(user: str = Depends(get_optional_user)):
                 }
 
         return status_data
-    except Exception as e:
-        log_structured("ERROR", f"Status check failed: {e}")
-        return {"error": str(e)}
+    except Exception as err:
+        log_structured("ERROR", f"Status check failed: {err}")
+        return {"error": str(err)}
 
 
 @router.get("/system-health")
@@ -162,34 +197,56 @@ def get_system_health(user: str = Depends(get_optional_user)):
         cpu_usage = psutil.cpu_percent(interval=0.1)
         ram = psutil.virtual_memory()
         disk = psutil.disk_usage('/')
-        
+
         project_size_bytes = 0
         if user != "guest":
             try:
-                for d in ['/app/sources', '/app/config', '/app/data']:
-                    if os.path.exists(d):
-                        res = subprocess.run(['du', '-sk', d], capture_output=True, text=True, timeout=5)
+                for directory in ['/app/sources', '/app/config', '/app/data']:
+                    if os.path.exists(directory):
+                        res = subprocess.run(['du', '-sk', directory],
+                                             capture_output=True,
+                                             text=True,
+                                             timeout=5,
+                                             check=False)
                         if res.returncode == 0:
-                            project_size_bytes += int(res.stdout.split()[0]) * 1024
-                
-                img_res = subprocess.run(['docker', 'images', '--format', '{{.Size}}\t{{.Repository}}'], capture_output=True, text=True, timeout=5)
+                            project_size_bytes += int(
+                                res.stdout.split()[0]) * 1024
+
+                img_res = subprocess.run([
+                    'docker', 'images', '--format',
+                    '{{.Size}}\t{{.Repository}}'
+                ],
+                                         capture_output=True,
+                                         text=True,
+                                         timeout=5,
+                                         check=False)
                 if img_res.returncode == 0:
                     for line in img_res.stdout.strip().split('\n'):
-                        if not line: continue
+                        if not line:
+                            continue
                         parts = line.split('\t')
-                        if len(parts) < 2: continue
+                        if len(parts) < 2:
+                            continue
                         size_str, repo = parts[0], parts[1]
-                        if repo.startswith('selfhost/') or any(x in repo for x in ['immich', 'gluetun', 'postgres', 'redis', 'adguard', 'unbound', 'portainer']):
+                        monitored_images = [
+                            'immich', 'gluetun', 'postgres', 'redis', 'adguard',
+                            'unbound', 'portainer'
+                        ]
+                        if repo.startswith('selfhost/') or any(
+                                x in repo for x in monitored_images):
                             mult = 1
-                            if 'GB' in size_str.upper(): mult = 1024*1024*1024
-                            elif 'MB' in size_str.upper(): mult = 1024*1024
-                            elif 'KB' in size_str.upper(): mult = 1024
+                            if 'GB' in size_str.upper():
+                                mult = 1024 * 1024 * 1024
+                            elif 'MB' in size_str.upper():
+                                mult = 1024 * 1024
+                            elif 'KB' in size_str.upper():
+                                mult = 1024
                             try:
                                 sz_val = float(re.sub(r'[^0-9.]', '', size_str))
                                 project_size_bytes += int(sz_val * mult)
-                            except:
+                            except Exception:
                                 pass
-            except:
+            except Exception:
                 pass
 
         drive_health_pct = 100 - disk.percent
@@ -213,10 +270,10 @@ def get_system_health(user: str = Depends(get_optional_user)):
         }
         if user != "guest":
             data["project_size"] = project_size_bytes / (1024 * 1024)
-        
+
         return data
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception as err:
+        return {"error": str(err)}
 
 
 @router.get("/metrics")
@@ -224,44 +281,53 @@ def get_metrics(user: str = Depends(get_optional_user)):
     """Retrieves container-level performance metrics from the database."""
     try:
         conn = sqlite3.connect(settings.DB_FILE)
-        c = conn.cursor()
-        c.execute('''SELECT container, cpu_percent, mem_usage, mem_limit 
-                     FROM metrics WHERE id IN (SELECT MAX(id) FROM metrics GROUP BY container)''')
-        rows = c.fetchall()
+        cursor = conn.cursor()
+        cursor.execute('''SELECT container, cpu_percent, mem_usage, mem_limit
+                     FROM metrics WHERE id IN (SELECT MAX(id) FROM metrics GROUP BY container)'''
+                       )
+        rows = cursor.fetchall()
         conn.close()
-        metrics = {r[0]: {"cpu": r[1], "mem": r[2], "limit": r[3]} for r in rows}
-        return {"metrics": metrics}
-    except Exception as e:
-        return {"error": str(e)}
+        container_metrics = {
+            r[0]: {
+                "cpu": r[1],
+                "mem": r[2],
+                "limit": r[3]
+            } for r in rows
+        }
+        return {"metrics": container_metrics}
+    except Exception as err:
+        return {"error": str(err)}
 
 
 @router.get("/containers")
 def get_containers(user: str = Depends(get_optional_user)):
     """Lists all stack containers and their hardening status."""
     try:
-        result = run_command(
-            ['docker', 'ps', '-a', '--no-trunc', '--format', '{{.Names}}\t{{.ID}}\t{{.Labels}}'],
-            timeout=10
-        )
-        containers = {}
+        result = run_command([
+            'docker', 'ps', '-a', '--no-trunc', '--format',
+            '{{.Names}}\t{{.ID}}\t{{.Labels}}'
+        ],
+                             timeout=10)
+        containers_info = {}
         for line in result.stdout.strip().split('\n'):
             parts = line.split('\t')
             if len(parts) >= 2:
                 name, cid = parts[0], parts[1]
-                if settings.CONTAINER_PREFIX and name.startswith(settings.CONTAINER_PREFIX):
+                if settings.CONTAINER_PREFIX and name.startswith(
+                        settings.CONTAINER_PREFIX):
                     name = name[len(settings.CONTAINER_PREFIX):]
                 labels = parts[2] if len(parts) > 2 else ""
                 is_hardened = "io.privacyhub.hardened=true" in labels
-                
+
                 # Redact CID for guest
                 c_data = {"hardened": is_hardened}
                 if user != "guest":
                     c_data["id"] = cid
-                
-                containers[name] = c_data
-        return {"containers": containers}
-    except Exception as e:
-        return {"error": str(e)}
+
+                containers_info[name] = c_data
+        return {"containers": containers_info}
+    except Exception as err:
+        return {"error": str(err)}
 
 
 @router.get("/project-details")
@@ -270,17 +336,29 @@ def get_project_details(user: str = Depends(get_admin_user)):
     breakdown = []
     total_size = 0
     reclaimable = 0
-    
-    paths = [
-        {"path": "/app/sources", "category": "Source code", "icon": "code"},
-        {"path": "/app/data", "category": "Application data", "icon": "database"},
-        {"path": "/etc/adguard/conf", "category": "Configuration", "icon": "settings"}
-    ]
-    
+
+    paths = [{
+        "path": "/app/sources",
+        "category": "Source code",
+        "icon": "code"
+    }, {
+        "path": "/app/data",
+        "category": "Application data",
+        "icon": "database"
+    }, {
+        "path": "/etc/adguard/conf",
+        "category": "Configuration",
+        "icon": "settings"
+    }]
+
     for p in paths:
         if os.path.exists(p['path']):
             try:
-                res = subprocess.run(['du', '-sk', p['path']], capture_output=True, text=True, timeout=5)
+                res = subprocess.run(['du', '-sk', p['path']],
+                                     capture_output=True,
+                                     text=True,
+                                     timeout=5,
+                                     check=False)
                 if res.returncode == 0:
                     size_mb = int(res.stdout.split()[0]) / 1024
                     breakdown.append({
@@ -289,42 +367,65 @@ def get_project_details(user: str = Depends(get_admin_user)):
                         "icon": p['icon']
                     })
                     total_size += size_mb
-            except:
+            except Exception:
                 pass
-                
+
     # Docker storage
     try:
-        img_res = subprocess.run(['docker', 'images', '--format', '{{.Size}}'], capture_output=True, text=True, timeout=5)
+        img_res = subprocess.run(['docker', 'images', '--format', '{{.Size}}'],
+                                 capture_output=True,
+                                 text=True,
+                                 timeout=5,
+                                 check=False)
         docker_size = 0
         if img_res.returncode == 0:
             for line in img_res.stdout.strip().split('\n'):
-                if not line: continue
+                if not line:
+                    continue
                 mult = 1
-                if 'GB' in line.upper(): mult = 1024
-                elif 'MB' in line.upper(): mult = 1
-                elif 'KB' in line.upper(): mult = 1/1024
+                if 'GB' in line.upper():
+                    mult = 1024
+                elif 'MB' in line.upper():
+                    mult = 1
+                elif 'KB' in line.upper():
+                    mult = 1 / 1024
                 try:
                     val = float(re.sub(r'[^0-9.]', '', line))
                     docker_size += val * mult
-                except: pass
-        
+                except Exception:
+                    pass
+
         if docker_size > 0:
-            breakdown.append({"category": "Container images", "size": docker_size, "icon": "layers"})
+            breakdown.append({
+                "category": "Container images",
+                "size": docker_size,
+                "icon": "layers"
+            })
             total_size += docker_size
-            
-        prune_res = subprocess.run(['docker', 'system', 'df', '--format', '{{.Reclaimable}}'], capture_output=True, text=True, timeout=5)
+
+        prune_res = subprocess.run(
+            ['docker', 'system', 'df', '--format', '{{.Reclaimable}}'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False)
         if prune_res.returncode == 0:
             for line in prune_res.stdout.strip().split('\n'):
-                if not line: continue
+                if not line:
+                    continue
                 mult = 1
-                if 'GB' in line.upper(): mult = 1024
-                elif 'MB' in line.upper(): mult = 1
-                elif 'KB' in line.upper(): mult = 1/1024
+                if 'GB' in line.upper():
+                    mult = 1024
+                elif 'MB' in line.upper():
+                    mult = 1
+                elif 'KB' in line.upper():
+                    mult = 1 / 1024
                 try:
                     val = float(re.sub(r'[^0-9.]', '', line))
                     reclaimable += val * mult
-                except: pass
-    except:
+                except Exception:
+                    pass
+    except Exception:
         pass
 
     return {
@@ -341,24 +442,30 @@ def purge_images(user: str = Depends(get_admin_user)):
         res = run_command(['docker', 'image', 'prune', '-f'], timeout=60)
         reclaimed_msg = "Unused images and build cache cleared."
         if "Total reclaimed space:" in res.stdout:
-            reclaimed = res.stdout.split("Total reclaimed space:")[1].strip().split('\n')[0]
+            reclaimed = res.stdout.split(
+                "Total reclaimed space:")[1].strip().split('\n')[0]
             reclaimed_msg = f"Successfully reclaimed {reclaimed} of storage space."
-        
+
         run_command(['docker', 'builder', 'prune', '-f'], timeout=60)
         return {"success": True, "message": reclaimed_msg}
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception as err:
+        return {"error": str(err)}
 
 
 @router.post("/restart-stack")
-def restart_stack(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+def restart_stack(background_tasks: BackgroundTasks,
+                  user: str = Depends(get_admin_user)):
     """Triggers a restart of all containers in the stack."""
+
     def _restart():
         time.sleep(2)
-        subprocess.run(["docker", "compose", "-f", "/app/docker-compose.yml", "restart"])
-    
+        subprocess.run(
+            ["docker", "compose", "-f", "/app/docker-compose.yml", "restart"],
+            check=False)
+
     background_tasks.add_task(_restart)
-    log_structured("SYSTEM", "Full stack restart triggered via Dashboard", "ORCHESTRATION")
+    log_structured("SYSTEM", "Full stack restart triggered via Dashboard",
+                   "ORCHESTRATION")
     return {"success": True, "message": "Stack restart initiated"}
 
 
@@ -368,58 +475,76 @@ def list_backups(user: str = Depends(get_admin_user)):
     backup_dir = "/app/backups"
     if not os.path.exists(backup_dir):
         return {"backups": []}
-    
-    backups = []
-    for f in os.listdir(backup_dir):
-        if f.endswith(".tar.gz"):
-            path = os.path.join(backup_dir, f)
-            stat = os.stat(path)
-            backups.append({
-                "filename": f,
-                "size": stat.st_size / (1024 * 1024),
-                "timestamp": datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+
+    backups_list = []
+    for filename in os.listdir(backup_dir):
+        if filename.endswith(".tar.gz"):
+            path = os.path.join(backup_dir, filename)
+            file_stat = os.stat(path)
+            backups_list.append({
+                "filename":
+                filename,
+                "size":
+                file_stat.st_size / (1024 * 1024),
+                "timestamp":
+                datetime.fromtimestamp(file_stat.st_mtime).strftime(
+                    '%Y-%m-%d %H:%M:%S')
             })
-    
-    return {"backups": sorted(backups, key=lambda x: x['timestamp'], reverse=True)}
+
+    return {
+        "backups":
+        sorted(backups_list, key=lambda x: x['timestamp'], reverse=True)
+    }
 
 
 @router.post("/backup")
-def trigger_backup(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+def trigger_backup(background_tasks: BackgroundTasks,
+                   user: str = Depends(get_admin_user)):
     """Triggers a background system backup task."""
+
     def _backup():
         log_structured("INFO", "System backup initiated", "MAINTENANCE")
-        subprocess.run(["bash", "/app/zima.sh", "-b"], cwd="/app")
-    
+        subprocess.run(["bash", "/app/zima.sh", "-b"], cwd="/app", check=False)
+
     background_tasks.add_task(_backup)
     return {"success": True, "message": "Backup sequence started in background"}
 
 
 @router.post("/restore")
-def trigger_restore(filename: str, background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+def trigger_restore(filename: str,
+                    background_tasks: BackgroundTasks,
+                    user: str = Depends(get_admin_user)):
     """Triggers a system restoration from a specific backup file."""
     backup_path = os.path.join("/app/backups", filename)
     if not os.path.exists(backup_path):
         return {"error": "Backup file not found"}
 
     def _restore():
-        log_structured("INFO", f"System restore initiated from {filename}", "MAINTENANCE")
+        log_structured("INFO", f"System restore initiated from {filename}",
+                       "MAINTENANCE")
         # Restoring might disrupt the API itself, but zima.sh -r just extracts files.
-        subprocess.run(["bash", "/app/zima.sh", "-r", backup_path], cwd="/app")
+        subprocess.run(["bash", "/app/zima.sh", "-r", backup_path],
+                       cwd="/app",
+                       check=False)
         # After restore, we should probably restart everything
-        subprocess.run(["docker", "compose", "-f", "/app/docker-compose.yml", "restart"])
-    
+        subprocess.run(
+            ["docker", "compose", "-f", "/app/docker-compose.yml", "restart"],
+            check=False)
+
     background_tasks.add_task(_restore)
     return {"success": True, "message": "Restore sequence started in background"}
 
 
 @router.post("/uninstall")
-def uninstall(background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)):
+def uninstall(background_tasks: BackgroundTasks,
+              user: str = Depends(get_admin_user)):
     """Triggers the full uninstallation sequence."""
+
     def _uninstall():
         log_structured("INFO", "Uninstall sequence started", "MAINTENANCE")
         time.sleep(5)
-        subprocess.run(["bash", "/app/zima.sh", "-x"], cwd="/app")
-    
+        subprocess.run(["bash", "/app/zima.sh", "-x"], cwd="/app", check=False)
+
     background_tasks.add_task(_uninstall)
     return {"success": True, "message": "Uninstall sequence started"}
 

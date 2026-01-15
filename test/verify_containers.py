@@ -167,20 +167,20 @@ def main():
 
     for container in sorted(containers):
         print(f"Checking {container}...")
-        
+
         # 1. State & Health Check
         state = _inspect_container(container)
         status = state.get("Status", "unknown")
         health_obj = state.get("Health", {})
         health_status = health_obj.get("Status", "n/a")
-        
+
         status_msg = f"Status: {status.upper()}"
         if health_status != "n/a":
             status_msg += f", Health: {health_status.upper()}"
-        
+
         is_running = (status == "running")
         is_healthy = (health_status == "healthy" or health_status == "n/a")
-        
+
         if is_running and is_healthy:
             print(f"  \033[32m[PASS]\033[0m State: {status_msg}")
             passed_count += 1
@@ -188,25 +188,25 @@ def main():
             print(f"  \033[31m[FAIL]\033[0m State: {status_msg}")
             failed_count += 1
             # Dump logs for failed container
-            print(f"  --- Last 10 log lines for context ---")
-            log_dump = _audit_logs(container, 10)
-            for l in log_dump: # Actually audit_logs filters, so we just run command raw
-                 _l, _, _ = _run_command(f"{_DOCKER_CMD} logs --tail 10 {container}")
-                 print(_l)
+            print("  --- Last 10 log lines for context ---")
+            log_stdout, _, _ = _run_command(
+                f"{_DOCKER_CMD} logs --tail 10 {container}")
+            if log_stdout:
+                print(log_stdout)
             print("  -------------------------------------")
-            continue # Skip further checks for this container if it's dead
+            continue  # Skip further checks for this container if it's dead
 
         # 2. Log Audit
         log_errors = _audit_logs(container)
         if log_errors:
             print(f"  \033[31m[FAIL]\033[0m Logs: Found {len(log_errors)} critical errors")
-            for err in log_errors[:3]: # Show first 3
+            for err in log_errors[:3]:  # Show first 3
                 print(f"    - {err}")
             if len(log_errors) > 3:
                 print(f"    ... and {len(log_errors) - 3} more")
-            failed_count += 1 # Strict failure on critical logs?
+            failed_count += 1
         else:
-             print(f"  \033[32m[PASS]\033[0m Logs: Clean")
+            print("  \033[32m[PASS]\033[0m Logs: Clean")
 
     print("\n==================================================")
     print(f"AUDIT SUMMARY")

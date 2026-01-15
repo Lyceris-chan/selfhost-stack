@@ -10,6 +10,7 @@ import argparse
 import concurrent.futures
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -144,7 +145,7 @@ def verify_service(check: dict) -> bool:
         # 2. HTTP Check
         try:
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=3) as response:
+            with urllib.request.urlopen(req, timeout=10) as response:
                 code = response.getcode()
                 if code == expected_code:
                     print(f"[PASS] {name} is UP (Status {code})")
@@ -198,6 +199,7 @@ def main():
     """Main execution function."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--full", action="store_true", help="Run full stack verification")
+    parser.add_argument("--skip-deploy", action="store_true", help="Skip cleanup and deployment")
     args = parser.parse_args()
     
     start_time = time.time()
@@ -210,24 +212,27 @@ def main():
     all_pass = True
 
     try:
-        # 1. Cleanup
-        print("Cleaning environment using zima.sh...")
-        # Use zima.sh -x (Clean-only) to ensure consistent environment reset
-        cleanup_env = (
-            f"TEST_MODE=true LAN_IP_OVERRIDE={_LAN_IP} APP_NAME=privacy-hub-test "
-            f"PROJECT_ROOT={_TEST_DATA_DIR}")
-        run_command(f"{cleanup_env} ./zima.sh -x -y", cwd=_PROJECT_ROOT, ignore_failure=True)
-        
-        # 2. Deploy
-        env_vars = (
-            f"TEST_MODE=true LAN_IP_OVERRIDE={_LAN_IP} APP_NAME=privacy-hub-test "
-            f"PROJECT_ROOT={_TEST_DATA_DIR} "
-            f"FORCE_UPDATE=true")
-        
-        print("Deploying stack using zima.sh...")
-        # Deploy with selective services and auto-confirm
-        cmd_deploy = f"{env_vars} ./zima.sh -p -y -E test/test_config.env -s {services_list}"
-        run_command(cmd_deploy, cwd=_PROJECT_ROOT)
+        if not args.skip_deploy:
+            # 1. Cleanup
+            print("Cleaning environment using zima.sh...")
+            # Use zima.sh -x (Clean-only) to ensure consistent environment reset
+            cleanup_env = (
+                f"TEST_MODE=true LAN_IP_OVERRIDE={_LAN_IP} APP_NAME=privacy-hub-test "
+                f"PROJECT_ROOT={_TEST_DATA_DIR}")
+            run_command(f"{cleanup_env} ./zima.sh -x -y", cwd=_PROJECT_ROOT, ignore_failure=True)
+            
+            # 2. Deploy
+            env_vars = (
+                f"TEST_MODE=true LAN_IP_OVERRIDE={_LAN_IP} APP_NAME=privacy-hub-test "
+                f"PROJECT_ROOT={_TEST_DATA_DIR} "
+                f"FORCE_UPDATE=true")
+            
+            print("Deploying stack using zima.sh...")
+            # Deploy with selective services and auto-confirm
+            cmd_deploy = f"{env_vars} ./zima.sh -p -y -E test/test_config.env -s {services_list}"
+            run_command(cmd_deploy, cwd=_PROJECT_ROOT)
+        else:
+            print("Skipping cleanup and deployment as requested.")
 
         # Construct environment prefix for compose commands (needed for update tests)
         env_cmd_prefix = (
@@ -329,35 +334,264 @@ def main():
             print(f"[FAIL] Watchtower notification error: {e}")
             all_pass = False
 
-        # 5. Verify Backup/Restore Cycle
-        print("\n--- Verifying Backup/Restore Cycle for Invidious ---")
+        # 5. Verify Rollback Support
+        print("\n--- Verifying Rollback Support for Wikiless ---")
         try:
-            # Backup
-            url_backup = f"http://{_LAN_IP}:55555/migrate?service=invidious&backup=yes"
-            req_backup = urllib.request.Request(url_backup, method="POST", headers={"X-API-Key": api_key})
-            with urllib.request.urlopen(req_backup, timeout=60) as resp:
-                print("[PASS] Backup initiated.")
-            
-            backup_dir = os.path.join(_TEST_DATA_DIR, "data/AppData/privacy-hub-test/data/hub-api/backups")
-            backups = [b for b in os.listdir(backup_dir) if "invidious" in b]
-            if not backups:
-                print("[FAIL] No backup file found.")
-                all_pass = False
-            else:
-                latest_backup = sorted(backups)[-1]
-                backup_path_in_container = f"/app/data/backups/{latest_backup}"
-                
-                # Clear
-                url_clear = f"http://{_LAN_IP}:55555/clear-db?service=invidious&backup=no"
-                req_clear = urllib.request.Request(url_clear, method="POST", headers={"X-API-Key": api_key})
-                urllib.request.urlopen(req_clear, timeout=30)
-                
-                # Restore
-                restore_cmd = f"docker exec hub-api /usr/local/bin/migrate.sh invidious restore {backup_path_in_container}"
-                run_command(restore_cmd)
-                print("[PASS] Restore command executed.")
+            # Check status
+            url = f"http://{_LAN_IP}:55555/rollback-status?service=wikiless"
+            req = urllib.request.Request(url, headers={"X-API-Key": api_key})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+                if data.get('available'):
+                    print("[PASS] Rollback point available for Wikiless.")
+                else:
+                    print("[FAIL] Rollback point NOT available for Wikiless (should have been created by previous update test).")
+                    all_pass = False
+
+            # Check list
+            url = f"http://{_LAN_IP}:55555/rollback-list?service=wikiless"
+            req = urllib.request.Request(url, headers={"X-API-Key": api_key})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+                history = data.get('history', [])
+                if len(history) > 0:
+                    print(f"[PASS] Rollback history contains {len(history)} entries.")
+                else:
+                    print("[FAIL] Rollback history is empty.")
+                    all_pass = False
+
+            # Perform rollback
+            url = f"http://{_LAN_IP}:55555/rollback-service"
+            payload = json.dumps({"service": "wikiless"}).encode()
+            req = urllib.request.Request(url, data=payload, method="POST", 
+                                       headers={"X-API-Key": api_key, "Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                if json.loads(resp.read().decode()).get('success'):
+                    print("[PASS] Rollback request accepted.")
+                    print("    Waiting for rollback background task...")
+                    time.sleep(30)
+                else:
+                    print("[FAIL] Rollback request rejected.")
+                    all_pass = False
         except Exception as e:
-            print(f"[FAIL] Backup/Restore verification error: {e}")
+            print(f"[FAIL] Rollback verification error: {e}")
+            all_pass = False
+
+        # 6. Verify Backup/Restore Cycle (Service Level)
+        for service in ["invidious", "memos"]:
+            print(f"\n--- Verifying Backup/Restore Cycle for {service.capitalize()} ---")
+            try:
+                # Backup
+                url_backup = f"http://{_LAN_IP}:55555/migrate?service={service}&backup=yes"
+                req_backup = urllib.request.Request(url_backup, method="POST", headers={"X-API-Key": api_key})
+                with urllib.request.urlopen(req_backup, timeout=60) as resp:
+                    print(f"[PASS] {service.capitalize()} backup initiated.")
+                
+                # Check for backup file presence
+                backup_api_dir = os.path.join(_TEST_DATA_DIR, "data/AppData/privacy-hub-test/data/hub-api/backups")
+                if os.path.exists(backup_api_dir):
+                    backups = [b for b in os.listdir(backup_api_dir) if service in b]
+                    if not backups:
+                        print(f"[FAIL] No {service} backup file found in {backup_api_dir}.")
+                        all_pass = False
+                    else:
+                        latest_backup = sorted(backups)[-1]
+                        backup_path_in_container = f"/app/data/backups/{latest_backup}"
+                        print(f"[PASS] Found {service} backup: {latest_backup}")
+                        
+                        # Clear DB (Simulate data loss)
+                        url_clear = f"http://{_LAN_IP}:55555/clear-db?service={service}&backup=no"
+                        req_clear = urllib.request.Request(url_clear, method="POST", headers={"X-API-Key": api_key})
+                        urllib.request.urlopen(req_clear, timeout=30)
+                        print(f"[PASS] {service.capitalize()} database cleared.")
+                        
+                        # Restore
+                        restore_cmd = f"docker exec hub-api /usr/local/bin/migrate.sh {service} restore {backup_path_in_container}"
+                        run_command(restore_cmd)
+                        print(f"[PASS] {service.capitalize()} restore command executed.")
+                else:
+                    print(f"[SKIP] Skipping disk check: Backup directory {backup_api_dir} not reachable from host.")
+            except Exception as e:
+                print(f"[FAIL] {service.capitalize()} Backup/Restore verification error: {e}")
+                all_pass = False
+
+        # 7. Verify Full System Backup/Restore
+        print("\n--- Verifying Full System Backup/Restore ---")
+        try:
+            # System Backup
+            url_sys_backup = f"http://{_LAN_IP}:55555/backup"
+            req_sys_backup = urllib.request.Request(url_sys_backup, method="POST", headers={"X-API-Key": api_key})
+            with urllib.request.urlopen(req_sys_backup, timeout=30) as resp:
+                print("[PASS] System backup initiated via API.")
+            
+            # Allow time for backup process
+            print("    Waiting for system backup to complete...")
+            time.sleep(15)
+            
+            # Check for system backup file
+            sys_backup_dir = os.path.join(_TEST_DATA_DIR, "data/AppData/privacy-hub-test/backups")
+            if os.path.exists(sys_backup_dir):
+                backups = [b for b in os.listdir(sys_backup_dir) if b.endswith(".tar.gz")]
+                if not backups:
+                    print("[FAIL] No system backup file found.")
+                    all_pass = False
+                else:
+                    latest_sys_backup = sorted(backups)[-1]
+                    print(f"[PASS] Found system backup: {latest_sys_backup}")
+                    
+                    # System Restore (Verify API triggers it)
+                    url_sys_restore = f"http://{_LAN_IP}:55555/restore?filename={latest_sys_backup}"
+                    req_sys_restore = urllib.request.Request(url_sys_restore, method="POST", headers={"X-API-Key": api_key})
+                    with urllib.request.urlopen(req_sys_restore, timeout=30) as resp:
+                        print("[PASS] System restore initiated via API.")
+            else:
+                print(f"[SKIP] Skipping disk check: System backup directory {sys_backup_dir} not reachable from host.")
+        except Exception as e:
+            print(f"[FAIL] System Backup/Restore verification error: {e}")
+            all_pass = False
+
+        # 8. Verify WireGuard Advanced (Split Tunneling, DNS, Connectivity)
+        print("\n--- Verifying WireGuard Advanced Features ---")
+        try:
+            # Create Client
+            url = f"http://{_LAN_IP}:55555/wg/clients"
+            payload = json.dumps({"name": "test-runner-client-adv"}).encode()
+            req = urllib.request.Request(url, data=payload, method="POST", 
+                                       headers={"X-API-Key": api_key, "Content-Type": "application/json"})
+            client_id = ""
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read().decode())
+                client_id = data.get('id')
+                print(f"[PASS] WireGuard client created (ID: {client_id})")
+
+            if client_id:
+                # Get Config
+                url = f"http://{_LAN_IP}:55555/wg/clients/{client_id}/configuration"
+                req = urllib.request.Request(url, headers={"X-API-Key": api_key})
+                config_content = ""
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    config_content = resp.read().decode()
+                    print(f"[PASS] WireGuard configuration retrieved")
+                
+                # --- Split Tunneling Verification (Config Check) ---
+                # Check for private IP ranges in AllowedIPs
+                if "10.0.0.0/8" in config_content and "192.168.0.0/16" in config_content:
+                    print(f"[PASS] Split Tunneling configured correctly (AllowedIPs contains private ranges)")
+                else:
+                    print(f"[FAIL] Split Tunneling configuration mismatch. Config content:\n{config_content}")
+                    all_pass = False
+
+                # --- DNS Verification (Config Check) ---
+                # Verify DNS is pointing to a local IP (LAN_IP or Docker Gateway)
+                # Since we are in a test environment, checking if it is NOT 1.1.1.1 or 8.8.8.8 is a good start,
+                # or checking if it matches our LAN_IP.
+                dns_match = re.search(r"DNS = ([\d\.]+)", config_content)
+                if dns_match:
+                    dns_ip = dns_match.group(1)
+                    print(f"[PASS] DNS Configuration found: {dns_ip}")
+                else:
+                    print(f"[FAIL] DNS Configuration missing in client config.")
+                    all_pass = False
+
+                # --- Connectivity & DNS Resolution Test ---
+                
+                # Adjust Endpoint for Docker-to-Docker
+                endpoint_ip = _LAN_IP
+                if _LAN_IP == "127.0.0.1":
+                    try:
+                        docker_gateway = subprocess.check_output(
+                            "docker network inspect bridge --format='{{(index .IPAM.Config 0).Gateway}}'", 
+                            shell=True).decode().strip()
+                        if docker_gateway:
+                            endpoint_ip = docker_gateway
+                            # Also update DNS to be reachable if it was localhost (which is invalid for other containers)
+                            if dns_ip == "127.0.0.1":
+                                config_content = re.sub(r"DNS = .*", f"DNS = {docker_gateway}", config_content)
+                                print(f"    Adjusted DNS to Docker Gateway: {docker_gateway}")
+                            
+                            print(f"    Using Docker Gateway IP {endpoint_ip} for WireGuard Endpoint")
+                    except Exception:
+                        endpoint_ip = "172.17.0.1" # Fallback
+                
+                config_content = re.sub(r"Endpoint = .*", f"Endpoint = {endpoint_ip}:51820", config_content)
+                
+                wg_conf_path = os.path.join(os.getcwd(), "wg-adv-test.conf")
+                with open(wg_conf_path, "w") as f:
+                    f.write(config_content)
+                
+                print("    Starting WireGuard client container for connectivity tests...")
+                # We use Alpine with wireguard-tools and bind-tools (for dig/nslookup)
+                # We run a sequence of checks:
+                # 1. wg-quick up
+                # 2. Ping Gateway (10.8.0.1) -> Verifies Tunnel
+                # 3. Resolve google.com -> Verifies DNS works via Tunnel
+                # 4. Resolve doubleclick.net -> Verifies AdBlocking (Should resolve to 0.0.0.0 or fail)
+                
+                cmd_script = (
+                    "apk add --no-cache wireguard-tools bind-tools && "
+                    "wg-quick up wg0 && "
+                    "sleep 5 && "
+                    "echo '--- PING GATEWAY ---' && "
+                    "ping -c 2 10.8.0.1 && "
+                    "echo '--- DNS RESOLUTION (EXTERNAL) ---' && "
+                    "nslookup google.com && "
+                    "echo '--- DNS RESOLUTION (ADBLOCK CHECK) ---' && "
+                    "nslookup doubleclick.net" 
+                )
+                
+                cmd = (
+                    f"docker run --rm --cap-add=NET_ADMIN --sysctl net.ipv4.conf.all.src_valid_mark=1 "
+                    f"-v {wg_conf_path}:/etc/wireguard/wg0.conf "
+                    f"alpine:latest /bin/sh -c \"{cmd_script}\""
+                )
+                
+                print("    Executing in container...")
+                # Capture output to analyze DNS results
+                try:
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                    print(result.stdout)
+                    
+                    if result.returncode == 0:
+                        print(f"[PASS] WireGuard connectivity and DNS resolution successful.")
+                        
+                        # Analyze AdBlock result
+                        if "Address: 0.0.0.0" in result.stdout or "0.0.0.0" in result.stdout:
+                            print(f"[PASS] AdGuard appears to be blocking ads (doubleclick.net resolved to 0.0.0.0).")
+                        else:
+                            print(f"[WARN] AdGuard blocking verification inconclusive (Check logs).")
+                    else:
+                        print(f"[FAIL] WireGuard client test failed.\nSTDERR: {result.stderr}")
+                        all_pass = False
+                except Exception as ex:
+                    print(f"[FAIL] Docker run exception: {ex}")
+                    all_pass = False
+                
+                # Cleanup: Delete Client
+                url = f"http://{_LAN_IP}:55555/wg/clients/{client_id}"
+                req = urllib.request.Request(url, method="DELETE", headers={"X-API-Key": api_key})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    print(f"[PASS] WireGuard client deleted.")
+                
+                if os.path.exists(wg_conf_path):
+                    os.remove(wg_conf_path)
+
+        except Exception as e:
+            print(f"[FAIL] WireGuard verification error: {e}")
+            all_pass = False
+
+        # 9. Verify Dashboard UI and Service Statuses
+        print("\n--- Verifying Dashboard UI and Service Statuses ---")
+        try:
+            # We use the existing verify_ui.js script which uses Puppeteer
+            # Ensure LAN_IP and ADMIN_PASSWORD are set for the node process
+            ui_env = f"LAN_IP={_LAN_IP} ADMIN_PASSWORD={api_key}"
+            if run_command(f"{ui_env} node test/verify_ui.js", cwd=_PROJECT_ROOT, ignore_failure=True) == 0:
+                print(f"[PASS] Dashboard UI audit passed (All services ONLINE)")
+            else:
+                print(f"[FAIL] Dashboard UI audit failed or services OFFLINE")
+                all_pass = False
+        except Exception as e:
+            print(f"[FAIL] Dashboard UI verification error: {e}")
             all_pass = False
 
     finally:

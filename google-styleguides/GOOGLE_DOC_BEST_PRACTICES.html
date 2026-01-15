@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Documentation Best Practices | styleguide</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Documentation Best Practices" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Style guides for Google-originated open-source projects" />
+<meta property="og:description" content="Style guides for Google-originated open-source projects" />
+<link rel="canonical" href="https://google.github.io/styleguide/docguide/best_practices.html" />
+<meta property="og:url" content="https://google.github.io/styleguide/docguide/best_practices.html" />
+<meta property="og:site_name" content="styleguide" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Documentation Best Practices" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Style guides for Google-originated open-source projects","headline":"Documentation Best Practices","url":"https://google.github.io/styleguide/docguide/best_practices.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="./assets/css/style.css?v=c885dc260bf95fc8a720a03c90e2436a33d82119">
+    <link rel="shortcut icon" type="image/x-icon" href="./favicon.ico">
+
+  </head>
+  <body>
+    <div class="container-lg px-3 my-5 markdown-body">
+      
+      <h1><a href="https://google.github.io/styleguide/">styleguide</a></h1>
+      
+
+      <h1 id="documentation-best-practices">Documentation Best Practices</h1>
+
+<p>“Say what you mean, simply and directly.” -
+<a href="https://en.wikipedia.org/wiki/The_Elements_of_Programming_Style">Brian Kernighan</a></p>
+
+<p>Contents:</p>
+
+<ol>
+  <li><a href="#minimum-viable-documentation">Minimum Viable Documentation</a></li>
+  <li><a href="#update-docs-with-code">Update Docs with Code</a></li>
+  <li><a href="#delete-dead-documentation">Delete Dead Documentation</a></li>
+  <li><a href="#prefer-the-good-over-the-perfect">Prefer the Good Over the Perfect</a></li>
+  <li><a href="#documentation-is-the-story-of-your-code">Documentation is the Story of Your Code</a></li>
+  <li><a href="#duplication-is-evil">Duplication is Evil</a></li>
+</ol>
+
+<h2 id="minimum-viable-documentation">Minimum Viable Documentation</h2>
+
+<p>A small set of fresh and accurate docs is better than a large assembly of
+“documentation” in various states of disrepair.</p>
+
+<p>Write short and useful documents. Cut out everything unnecessary, including
+out-of-date, incorrect, or redundant information. Also make a habit of
+continually massaging and improving every doc to suit your changing needs.
+<strong>Docs work best when they are alive but frequently trimmed, like a bonsai
+tree</strong>.</p>
+
+<p>See also
+<a href="https://www.agilemodeling.com/essays/agileDocumentationBestPractices.htm">these Agile Documentation best practices</a>.</p>
+
+<h2 id="update-docs-with-code">Update Docs with Code</h2>
+
+<p><strong>Change your documentation in the same CL as the code change</strong>. This keeps your
+docs fresh, and is also a good place to explain to your reviewer what you’re
+doing.</p>
+
+<p>A good reviewer can at least insist that docstrings, header files, README.md
+files, and any other docs get updated alongside the CL.</p>
+
+<h2 id="delete-dead-documentation">Delete Dead Documentation</h2>
+
+<p>Dead docs are bad. They misinform, they slow down, they incite despair in
+engineers and laziness in team leads. They set a precedent for leaving behind
+messes in a code base. If your home is clean, most guests will be clean without
+being asked.</p>
+
+<p>Just like any big cleaning project, <strong>it’s easy to be overwhelmed</strong>. If your
+docs are in bad shape:</p>
+
+<ul>
+  <li>Take it slow, doc health is a gradual accumulation.</li>
+  <li>First delete what you’re certain is wrong, ignore what’s unclear.</li>
+  <li>Get your whole team involved. Devote time to quickly scan every doc and make
+a simple decision: Keep or delete?</li>
+  <li>Default to delete or leave behind if migrating. Stragglers can always be
+recovered.</li>
+  <li>Iterate.</li>
+</ul>
+
+<h2 id="prefer-the-good-over-the-perfect">Prefer the Good Over the Perfect</h2>
+
+<p>Documentation is an art. There is no perfect document, there are only proven
+methods and prudent guidelines. See <a href="./docguide/style.html">Better is better than best</a>.</p>
+
+<h2 id="documentation-is-the-story-of-your-code">Documentation is the Story of Your Code</h2>
+
+<p>Writing excellent code doesn’t end when your code compiles or even if your test
+coverage reaches 100%. It’s easy to write something a computer understands, it’s
+much harder to write something both a human and a computer understand. Your
+mission as a Code Health-conscious engineer is to <strong>write for humans first,
+computers second.</strong> Documentation is an important part of this skill.</p>
+
+<p>There’s a spectrum of engineering documentation that ranges from terse comments
+to detailed prose:</p>
+
+<ol>
+  <li>
+    <p><strong>Meaningful names</strong>: Good naming allows the code to convey information that
+would otherwise be relegated to comments or documentation. This includes
+nameable entities at all levels, from local variables to classes, files, and
+directories.</p>
+  </li>
+  <li>
+    <p><strong>Inline comments</strong>: The primary purpose of inline comments is to provide
+information that the code itself cannot contain, such as why the code is
+there.</p>
+  </li>
+  <li>
+    <p><strong>Method and class comments</strong>:</p>
+
+    <ul>
+      <li>
+        <p><strong>Method API documentation</strong>: The header / Javadoc / docstring comments
+that say what methods do and how to use them. This documentation is
+<strong>the contract of how your code must behave</strong>. The intended audience is
+future programmers who will use and modify your code.</p>
+
+        <p>It is often reasonable to say that any behavior documented here should
+have a test verifying it. This documentation details what arguments the
+method takes, what it returns, any “gotchas” or restrictions, and what
+exceptions it can throw or errors it can return. It does not usually
+explain why code behaves a particular way unless that’s relevant to a
+developer’s understanding of how to use the method. “Why” explanations
+are for inline comments. Think in practical terms when writing method
+documentation: “This is a hammer. You use it to pound nails.”</p>
+      </li>
+      <li>
+        <p><strong>Class / Module API documentation</strong>: The header / Javadoc / docstring
+comments for a class or a whole file. This documentation gives a brief
+overview of what the class / file does and often gives a few short
+examples of how you might use the class / file.</p>
+
+        <p>Examples are particularly relevant when there’s several distinct ways to
+use the class (some advanced, some simple). Always list the simplest use
+case first.</p>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <p><strong>README.md</strong>: A good README.md orients the new user to the directory and
+points to more detailed explanation and user guides:</p>
+
+    <ul>
+      <li>What is this directory intended to hold?</li>
+      <li>Which files should the developer look at first? Are some files an API?</li>
+      <li>Who maintains this directory and where I can learn more?</li>
+    </ul>
+
+    <p>See the <a href="./docguide/READMEs.html">README.md guidelines</a>.</p>
+  </li>
+  <li>
+    <p><strong>docs</strong>: The contents of a good docs directory explain how to:</p>
+
+    <ul>
+      <li>Get started using the relevant API, library, or tool.</li>
+      <li>Run its tests.</li>
+      <li>Debug its output.</li>
+      <li>Release the binary.</li>
+    </ul>
+  </li>
+  <li>
+    <p><strong>Design docs, PRDs</strong>: A good design doc or PRD discusses the proposed
+implementation at length for the purpose of collecting feedback on that
+design. However, once the code is implemented, design docs should serve as
+archives of these decisions, not as half-correct docs (they are often
+misused).</p>
+  </li>
+  <li>
+    <p><strong>Other external docs</strong>: Some teams maintain documentation in other
+locations, separate from the code, such as Google Sites, Drive, or wiki.
+If you do maintain documentation in
+other locations, you should clearly point to those locations from your
+project directory (for example, by adding an obvious link to the location
+from your project’s <code class="language-plaintext highlighter-rouge">README.md</code>).</p>
+  </li>
+</ol>
+
+<h2 id="duplication-is-evil">Duplication is Evil</h2>
+
+<p>Do not write your own guide to a common Google technology or process. Link to it
+instead. If the guide doesn’t exist or it’s badly out of date, submit your
+updates to the appropriate directory or create a package-level
+README.md. <strong>Take ownership and don’t be shy</strong>: Other teams will usually welcome
+your contributions.</p>
+
+
+      
+      <div class="footer border-top border-gray-light mt-5 pt-3 text-right text-gray">
+        This site is open source. <a href="https://github.com/google/styleguide/edit/gh-pages/docguide/best_practices.md">Improve this page</a>.
+      </div>
+      
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/anchor-js/4.1.0/anchor.min.js" integrity="sha256-lZaRhKri35AyJSypXXs4o6OPFTbTmUoltBbDCbdzegg=" crossorigin="anonymous"></script>
+    <script>anchors.add();</script>
+  </body>
+</html>
