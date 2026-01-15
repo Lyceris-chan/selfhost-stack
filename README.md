@@ -59,16 +59,79 @@ The ZimaOS Privacy Hub is a comprehensive, self-hosted privacy infrastructure de
 
 **Don't worry: this is easier than it looks!** The Privacy Hub guides you through everything.
 
- Just follow these steps, and you'll have your own private internet in about **2–5 minutes**.
+Just follow these steps, and you'll have your own private internet in about **2–5 minutes**.
+
+<details>
+<summary>🤔 <strong>Never done this before? Start here!</strong> (Click to expand)</summary>
+
+### What you're building
+
+Think of this as your personal "Google" but one that:
+- ✅ **Doesn't track you** - No browsing history sold to advertisers
+- ✅ **Blocks ads everywhere** - On your phone, laptop, smart TV, everything
+- ✅ **Speeds up the internet** - Removes tracking scripts and bloat
+- ✅ **Works anywhere** - Access your services from coffee shops, hotels, anywhere
+
+### What you need to know
+
+**Zero technical experience needed!** If you can:
+- Copy and paste text
+- Type a password
+- Press Enter
+
+...then you can do this! The installer asks simple questions and does all the hard work.
+
+### What's a "hub"?
+
+It's just a computer (could be an old laptop, a $50 Raspberry Pi, or a fancy server) that runs these privacy tools 24/7 for you. Think of it like your personal Netflix server, but for privacy.
+
+### What's a "VPN"?
+
+A Virtual Private Network is like a secret tunnel for your internet traffic. When you use YouTube through this hub, YouTube doesn't see your home address—it sees the VPN address shared by thousands of users. It's like using a P.O. Box instead of your home address.
+
+### Will this break my internet?
+
+**No!** Everything is optional:
+- ❌ Don't want to use the hub's DNS? Don't change your router settings.
+- ❌ Don't want to redirect YouTube? Don't install LibRedirect.
+- ❌ Something not working? Skip it and use the regular internet.
+
+Your normal internet access stays exactly as it was. This only adds privacy options.
+
+</details>
 
 ### Before you start (checklist)
 
-You'll need:
-- [ ] A modern 64-bit computer (ZimaBoard, Raspberry Pi 5, NUC, or any PC)
-- [ ] **ZimaOS**, **Ubuntu 22.04+**, or **Debian 12+**
-- [ ] **Docker** installed ([Get Docker](https://docs.docker.com/get-docker/))
-- [ ] A **ProtonVPN** account (free tier works!)
-- [ ] *(Optional)* A **deSEC** account for free SSL/domain
+<details>
+<summary>📋 <strong>What you'll need</strong> (Click to expand for explanations)</summary>
+
+#### 1. A computer to run it on
+- [ ] **Any of these work**: Old laptop, ZimaBoard, Raspberry Pi 5, NUC, or any 64-bit computer
+- [ ] **Why?** This will be your "hub" that runs 24/7 (or whenever you want privacy)
+- [ ] **Cost?** $0 if you have an old laptop, or $50-200 for a Raspberry Pi or mini PC
+
+#### 2. Operating system
+- [ ] **ZimaOS**, **Ubuntu 22.04+**, or **Debian 12+** installed
+- [ ] **Why?** These are free Linux systems that work great for servers
+- [ ] **Never used Linux?** No problem! ZimaOS has a point-and-click installer like Windows
+
+#### 3. Docker (the app runner)
+- [ ] **Docker** installed on your hub computer ([Get Docker](https://docs.docker.com/get-docker/))
+- [ ] **What's Docker?** It's like an app store for servers. Makes everything super easy.
+- [ ] **How to get it?** Follow the link above, or on Ubuntu/Debian just run: `curl -fsSL https://get.docker.com | sh`
+
+#### 4. ProtonVPN account
+- [ ] **A ProtonVPN account** - free tier works perfectly! ([Sign up](https://account.protonvpn.com/signup))
+- [ ] **Why ProtonVPN?** They're privacy-focused, based in Switzerland, and have a generous free tier
+- [ ] **Cost?** $0 for free tier (with speed limits) or $4-10/month for unlimited speed
+
+#### 5. (Optional but recommended) Domain for HTTPS
+- [ ] **A deSEC account** for free SSL/domain ([Sign up](https://desec.io))
+- [ ] **Why?** Gives you `https://my-hub.dedyn.io` instead of `http://192.168.1.100`
+- [ ] **Cost?** $0 - completely free forever
+- [ ] **Can I skip this?** Yes, but you won't get HTTPS or DNS-over-QUIC on mobile
+
+</details>
 
 ---
 
@@ -138,6 +201,22 @@ The script will ask you a few questions:
 1.  **Paste your WireGuard configuration** (from Step 1)
 2.  **Enter your deSEC domain and token** (from Step 2)
 3.  **Choose your password preferences** (auto-generate or set your own)
+4.  **Optional: GitHub credentials for Scribe** (see below)
+5.  **Optional: Odido integration** (for Dutch mobile users)
+
+> 📝 **About GitHub credentials (Optional)**: Scribe is a privacy-respecting Medium frontend that proxies GitHub gists. These credentials are **optional** but provide benefits:
+>
+> - **Without credentials**: GitHub allows 60 API requests/hour (sufficient for light usage)
+> - **With credentials**: Increased to 5,000 requests/hour (recommended for regular use)
+>
+> **How to get a token:**
+> 1. Visit [GitHub Settings → Tokens](https://github.com/settings/tokens)
+> 2. Click **"Generate new token (classic)"**
+> 3. Give it a name (e.g., "Privacy Hub - Scribe")
+> 4. Select **only** the `gist` permission (nothing else needed!)
+> 5. Click **"Generate token"** and copy it
+>
+> **You can also configure this after deployment** through the dashboard settings! The installer will ask for it, but you can skip and set it up later from the web interface at `http://<your-hub-ip>:8088`.
 
 That's it! Sit back and let it build.
 
@@ -168,25 +247,40 @@ Before running the installer, you can customize your deployment using these flag
 
 ### What happens next?
 
-1.  **🚀 Instant deployment**: The system pulls and starts your private apps.
-2.  **✅ Ready to use**: You get a link to your dashboard (e.g., `http://192.168.1.100:8088`).
-3.  **🔐 Credential export**: Your passwords are saved for safekeeping.
-4.  **🔀 Instant redirection**: A `libredirect_import.json` is created. Import this into the [LibRedirect](https://libredirect.github.io/) browser extension to automatically redirect YouTube and Reddit to your hub.
+The installer will:
+1.  **🔍 Check your system** - Makes sure Docker is installed and working
+2.  **📦 Download services** - Pulls privacy apps (Invidious, Redlib, AdGuard, etc.)
+3.  **🔐 Generate passwords** - Creates secure passwords and saves them
+4.  **🚀 Start everything** - Launches all services in the background
+5.  **✅ Give you a link** - Shows your dashboard URL (e.g., `http://192.168.1.100:8088`)
+
+**Total time**: 2-5 minutes depending on your internet speed.
+
+**What you'll get**:
+- 📊 **Dashboard** at `http://<your-ip>:8088` - Your control center
+- 🔐 **Password file** saved to `protonpass_import.csv` - Import into your password manager
+- 🔀 **Browser config** saved to `libredirect_import.json` - Import into LibRedirect extension
+- 📝 **All your settings** saved to `data/AppData/privacy-hub/.secrets` - For backups
+
+> 💡 **First-time tip**: Bookmark your dashboard URL immediately! You'll use it to access all your services.
 
 ---
 
-<details>
-<summary>🖥️ <strong>System requirements</strong> (Click to expand)</summary>
+---
 
-To ensure a smooth experience, your hub should meet the following minimum specifications:
+## 🖥️ System Requirements
 
-*   **Operating system**: 64-bit Linux (ZimaOS, Ubuntu 22.04+, or Debian 12+).
-*   **Processor**: x86_64 or ARM64 (ZimaBoard, Raspberry Pi 5, NUC, or any modern PC).
-*   **Memory**: 2GB RAM minimum (4GB+ highly recommended for optimal performance with Immich and SearXNG).
-*   **Storage**: 16GB+ available space on a fast SSD/NVMe (plus additional space for your personal data and media).
-*   **Network**: Stable internet connection. Public IP only required for remote access via WireGuard.
+To ensure a smooth experience, your hub should meet these minimum specifications:
 
-</details>
+| Component | Minimum | Recommended | Why |
+| :--- | :--- | :--- | :--- |
+| **Operating System** | 64-bit Linux (ZimaOS, Ubuntu 22.04+, Debian 12+) | Same | Required for Docker support |
+| **Processor** | x86_64 or ARM64 (2 cores) | 4+ cores | More cores = faster builds and smoother multi-service performance |
+| **Memory (RAM)** | 2GB | 4GB+ | Immich and SearXNG benefit greatly from extra RAM |
+| **Storage** | 16GB free on SSD/NVMe | 64GB+ on fast NVMe | Fast storage improves Docker build times and service responsiveness |
+| **Network** | Stable internet connection | Wired gigabit connection | Required for deployment and updates. **Public IP only needed for remote WireGuard access** |
+
+> 💡 **Can I use a Raspberry Pi?** Yes! The Pi 5 works great. Earlier models (Pi 4) work but may be slower during initial builds. Pi 3 and older are not recommended.
 
 ---
 
@@ -202,36 +296,206 @@ This stack features a hardened, recursive DNS engine built on **Unbound** and **
 *   **Unbound configuration**: Generated at `/etc/unbound/unbound.conf`
 
 <details>
-<summary>🛡️ <strong>Production Service Overrides and RFC Compliance</strong> (Click to expand)</summary>
+<summary>🛡️ <strong>Configuration Transparency: What We Change and Why</strong> (Click to expand)</summary>
 
-To achieve high-standard security and performance, this stack implements specific overrides for core infrastructure services. These choices are grounded in established Internet Engineering Task Force (IETF) standards.
+This section documents **every setting** we modify from defaults to ensure complete transparency. You own this system—you deserve to know exactly what it does.
 
-### Unbound (Recursive DNS)
-The Unbound configuration ([lib/services/config.sh:285](lib/services/config.sh#L285)) is hardened beyond default settings to ensure maximum privacy and protection against common DNS-based attacks:
+---
 
-*   **QNAME Minimization ([RFC 7816](https://datatracker.ietf.org/doc/html/rfc7816))**: `qname-minimisation: yes`. Prevents authoritative servers from seeing the full query, protecting user browsing patterns.
-*   **Aggressive NSEC Caching ([RFC 8198](https://datatracker.ietf.org/doc/html/rfc8198))**: `aggressive-nsec: yes`. Mitigates certain DoS vectors and reduces load on authoritative servers.
-*   **DNS 0x20 Entropy**: `use-caps-for-id: yes`. Randomizes query name case to protect against DNS cache poisoning.
-*   **Data Minimization ([RFC 4472](https://datatracker.ietf.org/doc/html/rfc4472))**: `minimal-responses: yes`. Reduces packet size and information leakage.
-*   **Round Robin Selection ([RFC 1794](https://datatracker.ietf.org/doc/html/rfc1794))**: `rrset-roundrobin: yes`. Distributes load and improves reliability.
-*   **Harden Glue ([RFC 1034](https://datatracker.ietf.org/doc/html/rfc1034))**: `harden-glue: yes`. Prevents cache poisoning by trusting only records within the authoritative zone.
-*   **Trust Anchor Management ([RFC 5011](https://datatracker.ietf.org/doc/html/rfc5011))**: `auto-trust-anchor-file`. Maintains DNSSEC integrity through automated root key updates.
-*   **Performance Tuning**: `prefetch: yes` and `prefetch-key: yes` are enabled to ensure low-latency resolution by refreshing popular records before they expire.
-*   **VPN DNS Isolation**: The **Gluetun** VPN container is explicitly configured to use **Quad9** (`DOT_PROVIDERS=quad9`) for its internal DNS-over-TLS resolution instead of the default Cloudflare, ensuring no traffic is routed to 1.1.1.1.
+### 🔧 Unbound (Recursive DNS Resolver)
 
-### AdGuard Home (Filtering & TLS)
-AdGuard Home acts as the primary gateway and policy engine ([lib/services/config.sh:309](lib/services/config.sh#L309)):
+**Where configured**: [`lib/services/config.sh:455-477`](lib/services/config.sh#L455)
 
-*   **Upstream Consolidation**: All queries are routed exclusively to the local Unbound instance (`172.x.0.250`) via a dedicated Docker network bridge.
-*   **Encrypted DNS Standard ([RFC 9250](https://datatracker.ietf.org/doc/html/rfc9250))**: Full support for **DNS-over-QUIC (DoQ)**, providing superior performance and privacy on mobile networks compared to traditional DoH/DoT.
-*   **Automated TLS Pipeline**: Integrates with `acme.sh` and deSEC to manage valid Let's Encrypt certificates, ensuring native compatibility with Android/iOS encrypted DNS.
-*   **Dutch-Curated Filtering**: Uses a specialized blocklist based on **Hagezi Pro++**, optimized for performance and privacy.
+Unbound is your personal DNS resolver. Instead of asking Google or Cloudflare "where is youtube.com?", Unbound asks the authoritative root servers directly. We harden it beyond default settings for maximum privacy and security.
 
-### SearXNG (Privacy Search)
-SearXNG is configured to ensure total query anonymity ([lib/services/config.sh:382](lib/services/config.sh#L382)):
+#### Network Settings
+```ini
+interface: 0.0.0.0              # Listen on all container interfaces
+port: 53                        # Standard DNS port
+access-control: 172.16.0.0/12 allow    # Allow Docker networks
+access-control: 192.168.0.0/16 allow   # Allow home networks
+access-control: 10.0.0.0/8 allow       # Allow private networks
+access-control: 0.0.0.0/0 refuse       # Deny everything else
+```
 
-*   **Image Proxy Enabled**: All images in search results are proxied through your hub. This prevents source websites from tracking your IP address when you view results.
-*   **VPN Routing**: SearXNG exits exclusively through the VPN tunnel, ensuring search engines only see the VPN shared IP.
+**Why**: Only your local devices can use this DNS resolver. Internet scanners get silently refused.
+
+#### Privacy & Security Hardening
+```ini
+qname-minimisation: yes         # RFC 7816 - Only send minimal query info
+aggressive-nsec: yes            # RFC 8198 - Faster DNSSEC validation
+use-caps-for-id: yes            # DNS 0x20 - Randomize case to prevent poisoning
+hide-identity: yes              # Don't reveal server identity
+hide-version: yes               # Don't reveal Unbound version
+minimal-responses: yes          # RFC 4472 - Send only necessary data
+```
+
+**Why**: 
+- `qname-minimisation`: When you look up `mail.google.com`, Unbound only asks the `.com` server about `google.com`, not the full query. This prevents DNS servers from building a profile of your browsing.
+- `use-caps-for-id`: Randomizes capitalization (e.g., `GoOgLe.CoM`) to make DNS spoofing attacks exponentially harder.
+- `hide-*`: Prevents fingerprinting your DNS resolver.
+
+#### DNSSEC Validation
+```ini
+auto-trust-anchor-file: "/var/unbound/root.key"  # RFC 5011
+harden-glue: yes                # RFC 1034 - Prevent cache poisoning
+harden-dnssec-stripped: yes     # Require DNSSEC if present
+harden-algo-downgrade: yes      # Prevent downgrade attacks
+harden-large-queries: yes       # Block potential DoS queries
+harden-short-bufsize: yes       # Require proper buffer sizes
+```
+
+**Why**: DNSSEC is like HTTPS for DNS—it proves the answer you got is authentic and hasn't been tampered with. These settings enforce it strictly.
+
+#### Performance Optimization
+```ini
+prefetch: yes                   # Refresh popular records before expiry
+rrset-roundrobin: yes           # RFC 1794 - Load balance between servers
+```
+
+**Why**: `prefetch` means frequently-accessed sites load faster because Unbound refreshes their DNS records before they expire.
+
+---
+
+### 🛡️ AdGuard Home (DNS Filtering & Encrypted DNS)
+
+**Where configured**: [`lib/services/config.sh:479-489`](lib/services/config.sh#L479)
+
+AdGuard Home sits in front of Unbound and adds ad-blocking, encrypted DNS support, and per-device filtering.
+
+#### Core Settings
+```yaml
+schema_version: 29              # AdGuard Home config version
+http:
+  address: 0.0.0.0:8083        # Web UI port (customizable)
+
+users:
+  - name: "adguard"             # Default username
+    password: "<bcrypt-hash>"   # Auto-generated secure password
+
+dns:
+  bind_hosts: ["0.0.0.0"]       # Listen on all interfaces
+  port: 53                      # Standard DNS port
+  dot_port: 853                 # DNS-over-TLS port
+  quic_port: 853                # DNS-over-QUIC port
+```
+
+**Why**: We bind to all interfaces so Docker containers and your LAN devices can reach it. The password is auto-generated and saved to your `.secrets` file.
+
+#### Upstream DNS Configuration
+```yaml
+upstream_dns: ["172.x.0.250"]   # Your local Unbound instance
+bootstrap_dns: ["172.x.0.250"]  # Used to resolve upstream addresses
+```
+
+**Why**: **Every DNS query** goes through your private Unbound resolver first. This means:
+- ✅ No data sent to Google (8.8.8.8), Cloudflare (1.1.1.1), or any third party
+- ✅ You query root DNS servers directly
+- ✅ Complete independence from DNS providers
+
+#### Encrypted DNS (DoT, DoH, DoQ)
+```yaml
+tls:
+  enabled: true
+  server_name: "<your-domain>.dedyn.io"
+  certificate_path: "/opt/adguardhome/conf/ssl.crt"
+  private_key_path: "/opt/adguardhome/conf/ssl.key"
+```
+
+**Why**: With a valid Let's Encrypt certificate, your phone and laptop can use your hub as a secure DNS resolver from anywhere using:
+- **DNS-over-TLS (DoT)**: Port 853
+- **DNS-over-HTTPS (DoH)**: `https://<your-domain>.dedyn.io/dns-query`
+- **DNS-over-QUIC (DoQ)**: Port 853 (faster on mobile networks)
+
+#### Filtering & Blocklists
+```yaml
+filters:
+  - enabled: true
+    url: "https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/main/hagezi-pro-plus.txt"
+    name: "Hagezi Pro++ (Dutch-Optimized)"
+```
+
+**Where managed**: Blocklists are auto-updated by AdGuard Home every 24 hours.
+
+**Why**: Blocks ads, trackers, malware domains, and telemetry at the network level. Based on Hagezi Pro++ with Dutch-specific optimizations.
+
+---
+
+### 🔍 SearXNG (Private Search Engine)
+
+**Where configured**: [`lib/services/config.sh:558-567`](lib/services/config.sh#L558)
+
+SearXNG aggregates results from multiple search engines without tracking you.
+
+#### Settings Applied
+```yaml
+use_default_settings: true      # Use SearXNG's sane defaults
+server:
+  secret_key: "<random-64-char>" # Session encryption key
+  base_url: "http://<your-ip>:8082/"
+  image_proxy: true             # Proxy all images through SearXNG
+search:
+  safe_search: 0                # No filtering (your choice)
+  autocomplete: "duckduckgo"    # Autocomplete provider
+```
+
+**Why**:
+- `image_proxy: true`: When you search for images, SearXNG fetches them from Google/Bing on your behalf. The source sites never see your IP address.
+- **VPN Routing**: SearXNG runs inside the VPN tunnel, so search engines see thousands of users sharing one IP, making individual tracking impossible.
+
+---
+
+### 📝 Scribe (Medium Frontend)
+
+**Where configured**: [`lib/services/config.sh:541-547`](lib/services/config.sh#L541)
+
+Scribe proxies Medium articles without tracking or paywalls.
+
+#### Settings Applied
+```env
+SECRET_KEY_BASE=<random-64-char>  # Session encryption
+GITHUB_USER=<your-username>       # Optional: For GitHub Gist API
+GITHUB_TOKEN=<your-pat-token>     # Optional: Increases rate limit
+PORT=8280
+APP_DOMAIN=<your-ip>:8280
+```
+
+**Why**:
+- **GitHub credentials are optional**: Without them, you get 60 Gist API requests/hour. With them, you get 5,000/hour.
+- **VPN Routing**: All requests to Medium go through the VPN tunnel, hiding your home IP.
+
+---
+
+### 🌐 Gluetun (VPN Gateway)
+
+**Where configured**: [`lib/services/compose.sh:149-180`](lib/services/compose.sh#L149)
+
+Gluetun creates the VPN tunnel that privacy services route through.
+
+#### Settings Applied
+```env
+VPN_SERVICE_PROVIDER=custom     # Using your ProtonVPN config
+VPN_TYPE=wireguard              # Modern, fast VPN protocol
+DOT_PROVIDERS=quad9             # Gluetun's DNS (not yours!)
+FIREWALL_VPN_INPUT_PORTS=8888   # Allow HTTP proxy for asset downloads
+HTTPPROXY=on                    # Enable HTTP proxy
+HTTPPROXY_LISTENING_ADDRESS=:8888
+```
+
+**Why**:
+- `DOT_PROVIDERS=quad9`: This is **only for Gluetun's internal needs** (e.g., resolving VPN server addresses). Your actual browsing DNS goes through Unbound/AdGuard.
+- `HTTPPROXY`: Used once during setup to download dashboard assets (fonts, icons) through the VPN so CDNs never see your home IP.
+
+---
+
+### 🔐 What We DON'T Change
+
+To maintain transparency, here's what we **don't** modify:
+
+- **Container base images**: We use official upstream images (e.g., `adguard/adguardhome:latest`)
+- **Service application logic**: No patched or forked source code (except local builds for hardware compatibility)
+- **Browser behavior**: No browser extensions or modifications
+- **Your files**: Your photos, documents, and media are never touched
 
 </details>
 
@@ -270,12 +534,22 @@ The system generates secure, unique credentials for all core infrastructure duri
 
 > 📁 **Where are they?**: All generated credentials are saved to `data/AppData/privacy-hub/.secrets` and exported to `data/AppData/privacy-hub/protonpass_import.csv` for easy importing into your password manager.
 
-### 🔀 LibRedirect integration
-To automatically redirect your browser from big-tech sites to your private Hub:
-1.  Install the **LibRedirect** extension ([Firefox](https://addons.mozilla.org/en-US/firefox/addon/libredirect/) / [Chrome](https://chromewebstore.google.com/detail/libredirect/pobhoodpcdojmedmielocclicpfbednh)).
-2.  Open the extension settings and go to **Backup/restore**.
-3.  Click **Import settings** and select the `libredirect_import.json` file found in your project root.
-4.  Your browser will now automatically use your local instances for YouTube, Reddit, Wikipedia, and more.
+### 🔀 LibRedirect Integration (Auto-Redirect to Your Hub)
+
+**What it does**: Automatically sends you to your private services instead of big-tech sites. For example, when you click a YouTube link, it opens in your Invidious instead!
+
+**How to set it up**:
+1.  **Install the extension**: [Firefox](https://addons.mozilla.org/en-US/firefox/addon/libredirect/) | [Chrome](https://chromewebstore.google.com/detail/libredirect/pobhoodpcdojmedmielocclicpfbednh)
+2.  **Open extension settings** → Click the LibRedirect icon → **Options**
+3.  **Import your config** → Go to **"Import/Export"** tab → Click **"Import"** → Select `libredirect_import.json` from your project folder
+4.  **Done!** Your browser now automatically redirects:
+    - YouTube → Invidious
+    - Reddit → Redlib  
+    - Wikipedia → Wikiless
+    - Medium → Scribe
+    - Imgur → Rimgo
+
+> 📝 **Can't find the file?** It's created in your project folder after deployment completes. Look for `libredirect_import.json` in the `selfhost-stack` directory.
 
 ### Included privacy services
 

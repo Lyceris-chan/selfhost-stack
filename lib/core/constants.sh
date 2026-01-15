@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Centralized constants and port definitions for the Privacy Hub stack.
 #
