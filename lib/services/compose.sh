@@ -240,7 +240,10 @@ EOF
       - "FIREWALL_OUTBOUND_SUBNETS=${DOCKER_SUBNET}"
       - "FIREWALL_VPN_INPUT_PORTS=10416,8080,8081,8085,8180,3000,3002,8280,8480,80,24153,8282,9000,2283"
       - "HTTPPROXY=on"
-      - "DOT_PROVIDERS=quad9"
+      - "DNS_UPSTREAM_RESOLVERS=quad9"
+      - "HEALTH_TARGET_ADDRESSES=github.com:443"
+      - "HEALTH_ICMP_TARGET_IPS=9.9.9.9"
+      - "PUBLICIP_API_BACKUPS=ifconfigco,ip2location"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/ || exit 1"]
       interval: 30s

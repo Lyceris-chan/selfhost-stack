@@ -555,14 +555,14 @@ Gluetun creates the VPN tunnel that privacy services route through.
 ```env
 VPN_SERVICE_PROVIDER=custom     # Using your ProtonVPN config
 VPN_TYPE=wireguard              # Modern, fast VPN protocol
-DOT_PROVIDERS=quad9             # Gluetun's DNS (not yours!)
+DNS_UPSTREAM_RESOLVERS=quad9    # Gluetun's DNS (not yours!)
 FIREWALL_VPN_INPUT_PORTS=8888   # Allow HTTP proxy for asset downloads
 HTTPPROXY=on                    # Enable HTTP proxy
 HTTPPROXY_LISTENING_ADDRESS=:8888
 ```
 
 **Why**:
-- `DOT_PROVIDERS=quad9`: This is **only for Gluetun's internal needs** (e.g., resolving VPN server addresses). Your actual browsing DNS goes through Unbound/AdGuard.
+- `DNS_UPSTREAM_RESOLVERS=quad9`: This is **only for Gluetun's internal needs** (e.g., resolving VPN server addresses). Your actual browsing DNS goes through Unbound/AdGuard.
 - `HTTPPROXY`: Used once during setup to download dashboard assets (fonts, icons) through the VPN so CDNs never see your home IP.
 
 ---
