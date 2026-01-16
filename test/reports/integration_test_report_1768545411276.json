@@ -1,0 +1,369 @@
+{
+  "summary": {
+    "total": 13,
+    "passed": 5,
+    "failed": 8,
+    "skipped": 0,
+    "duration": "34.95s",
+    "passRate": "38.5%"
+  },
+  "services": {
+    "dashboard": {
+      "name": "dashboard",
+      "container": "hub-dashboard",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://172.20.0.254:8088",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://172.20.0.254:8088"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 28
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "api": {
+      "name": "api",
+      "container": "hub-api",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 18,
+            "content": "[ERROR] Status check failed: Expecting value: line 1 column 1 (char 0)"
+          }
+        ],
+        "warnings": [],
+        "totalLines": 23
+      },
+      "overall": "skipped",
+      "consoleErrors": 0
+    },
+    "adguard": {
+      "name": "adguard",
+      "container": "hub-adguard",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://172.20.0.254:8083",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://172.20.0.254:8083"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 5,
+            "content": "2026/01/16 06:33:09.003852 [info] dhcpd: warning: creating dhcpv4 server err=\"dhcpv4: invalid IP is not an IPv4 address\""
+          },
+          {
+            "line": 9,
+            "content": "2026/01/16 06:33:09.058290 [info] warning: private rdns resolution failed; disabling err=\"preparing resolvers: no upstream specified\""
+          }
+        ],
+        "totalLines": 49
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "breezewiki": {
+      "name": "breezewiki",
+      "container": "hub-breezewiki",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://172.20.0.254:8380",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://172.20.0.254:8380"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 5
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "redlib": {
+      "name": "redlib",
+      "container": "hub-redlib",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1022,
+          "message": "Loaded successfully in 1022ms"
+        },
+        "subreddit": {
+          "success": false,
+          "message": "No posts found"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 1,
+            "content": " ERROR redlib::client > Got an invalid response from reddit expected value at line 1 column 1. Status code: 403 Forbidden"
+          },
+          {
+            "line": 4,
+            "content": "Please report this error with the above information."
+          }
+        ],
+        "warnings": [],
+        "totalLines": 8
+      },
+      "overall": "failed",
+      "consoleErrors": 1,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768545385509
+        }
+      ]
+    },
+    "scribe": {
+      "name": "scribe",
+      "container": "hub-scribe",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1016,
+          "message": "Loaded successfully in 1016ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 5
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "anonymousoverflow": {
+      "name": "anonymousoverflow",
+      "container": "hub-anonymousoverflow",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 690,
+          "message": "Loaded successfully in 690ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 1
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "rimgo": {
+      "name": "rimgo",
+      "container": "hub-rimgo",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 769,
+          "message": "Loaded successfully in 769ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 11
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "cobalt": {
+      "name": "cobalt",
+      "container": "hub-cobalt-web",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://172.20.0.254:9001",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://172.20.0.254:9001"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 20
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "memos": {
+      "name": "memos",
+      "container": "hub-memos",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://172.20.0.254:5230",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://172.20.0.254:5230"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 1,
+            "content": "2026/01/16 06:34:27 WARN failed to find migration history in pre-migrate error=\"SQL logic error: no such table: migration_history (1)\""
+          }
+        ],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "2026/01/16 06:34:27 WARN failed to find migration history in pre-migrate error=\"SQL logic error: no such table: migration_history (1)\""
+          }
+        ],
+        "totalLines": 25
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "portainer": {
+      "name": "portainer",
+      "container": "hub-portainer",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 635,
+          "message": "Loaded successfully in 635ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 14
+      },
+      "overall": "passed",
+      "consoleErrors": 1,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768545400813
+        }
+      ]
+    },
+    "wg-easy": {
+      "name": "wg-easy",
+      "container": "hub-wg-easy",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://172.20.0.254:51821",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://172.20.0.254:51821"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 13
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "odido-booster": {
+      "name": "odido-booster",
+      "container": "hub-odido-booster",
+      "tests": {
+        "load": {
+          "success": false,
+          "status": 404,
+          "loadTime": 757,
+          "message": "HTTP 404"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 17,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 22,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 23,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 24,
+            "content": "ERROR:odido.service:All renewal attempts failed - check Odido API credentials and network connectivity"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 2,
+            "content": "/app/app/main.py:43: DeprecationWarning: "
+          },
+          {
+            "line": 9,
+            "content": "/app/app/main.py:48: DeprecationWarning: "
+          }
+        ],
+        "totalLines": 29
+      },
+      "overall": "failed",
+      "consoleErrors": 2,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768545404676
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768545404695
+        }
+      ]
+    },
+    "immich": {
+      "name": "immich",
+      "container": "hub-immich-server",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1696,
+          "message": "Loaded successfully in 1696ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    }
+  },
+  "timestamp": "2026-01-16T06:36:51.276Z"
+}

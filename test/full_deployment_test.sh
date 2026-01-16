@@ -214,7 +214,9 @@ collect_container_logs() {
 run_integration_tests() {
     log "Running integration test suite..."
     
-    export TEST_BASE_URL="${TEST_BASE_URL:-http://$(docker inspect hub-gluetun --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null || echo '10.0.10.225')}"
+    # Use detected LAN_IP or default to localhost
+    local LAN_IP=$(hostname -I | awk '{print $1}')
+    export TEST_BASE_URL="${TEST_BASE_URL:-http://$LAN_IP}"
     export HEADLESS="${HEADLESS:-true}"
     
     log "Test configuration:"

@@ -1,0 +1,61 @@
+{
+  "summary": {
+    "total": 2,
+    "passed": 1,
+    "failed": 1,
+    "skipped": 0,
+    "duration": "31.10s",
+    "passRate": "50.0%"
+  },
+  "services": {
+    "adguard": {
+      "name": "adguard",
+      "container": "hub-adguard",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:8083",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:8083"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 5,
+            "content": "2026/01/16 06:50:28.759176 [info] dhcpd: warning: creating dhcpv4 server err=\"dhcpv4: invalid IP is not an IPv4 address\""
+          },
+          {
+            "line": 9,
+            "content": "2026/01/16 06:50:28.820889 [info] warning: private rdns resolution failed; disabling err=\"preparing resolvers: no upstream specified\""
+          }
+        ],
+        "totalLines": 49
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "wg-easy": {
+      "name": "wg-easy",
+      "container": "hub-wg-easy",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1485,
+          "message": "Loaded successfully in 1485ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 13
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    }
+  },
+  "timestamp": "2026-01-16T06:58:11.229Z"
+}

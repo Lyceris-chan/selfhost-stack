@@ -172,9 +172,10 @@ async function setupTestEnvironment() {
 async function isContainerRunning(containerName) {
   try {
     const { stdout } = await execAsync(
-        `docker ps --filter "name=${containerName}" --filter "status=running" --format "{{.Names}}"`
+        `docker ps --filter "name=^/${containerName}$" --filter "status=running" --format "{{.Names}}"`
     );
-    return stdout.trim() === containerName;
+    // Exact match check
+    return stdout.split('\n').some(name => name.trim() === containerName);
   } catch (error) {
     return false;
   }
@@ -558,11 +559,12 @@ async function testService(serviceName, serviceConfig) {
   
   try {
     const baseUrl = `${CONFIG.baseUrl}:${serviceConfig.port}`;
+    const healthUrl = `${baseUrl}${serviceConfig.healthEndpoint || '/'}`;
     
     // Test 1: Basic load
     if (serviceConfig.tests.includes('loads')) {
-      result.tests.load = await testPageLoad(page, baseUrl, serviceName);
-      console.log(`  ${result.tests.load.success ? '✅' : '❌'} Load: ${result.tests.load.message}`);
+      result.tests.load = await testPageLoad(page, healthUrl, serviceName);
+      console.log(`  ${result.tests.load.success ? '✅' : '❌'} Load (${healthUrl}): ${result.tests.load.message}`);
     }
     
     // Test 2: Service-specific tests

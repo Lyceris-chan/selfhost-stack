@@ -243,9 +243,10 @@ EOF
       - "DNS_UPSTREAM_RESOLVERS=quad9"
       - "HEALTH_TARGET_ADDRESSES=github.com:443"
       - "HEALTH_ICMP_TARGET_IPS=9.9.9.9"
+      - "RESTART_VPN_ON_HEALTHCHECK_FAILURE=${RESTART_VPN_ON_HEALTHCHECK_FAILURE:-yes}"
       - "PUBLICIP_API_BACKUPS=ifconfigco,ip2location"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9999/ || exit 1"]
+      test: ["CMD-SHELL", "${GLUETUN_HEALTHCHECK_COMMAND:-wget -qO- http://127.0.0.1:9999/ || exit 1}"]
       interval: 30s
       timeout: 10s
       retries: 5

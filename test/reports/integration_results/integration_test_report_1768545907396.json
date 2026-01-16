@@ -1,0 +1,400 @@
+{
+  "summary": {
+    "total": 16,
+    "passed": 1,
+    "failed": 15,
+    "skipped": 0,
+    "duration": "25.69s",
+    "passRate": "6.3%"
+  },
+  "services": {
+    "dashboard": {
+      "name": "dashboard",
+      "container": "hub-dashboard",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:8088",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:8088"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 28
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "api": {
+      "name": "api",
+      "container": "hub-api",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 17,
+            "content": "[ERROR] Status check failed: Expecting value: line 1 column 1 (char 0)"
+          }
+        ],
+        "warnings": [],
+        "totalLines": 22
+      },
+      "overall": "skipped",
+      "consoleErrors": 0
+    },
+    "adguard": {
+      "name": "adguard",
+      "container": "hub-adguard",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:8083",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:8083"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 5,
+            "content": "2026/01/16 06:41:49.951854 [info] dhcpd: warning: creating dhcpv4 server err=\"dhcpv4: invalid IP is not an IPv4 address\""
+          },
+          {
+            "line": 9,
+            "content": "2026/01/16 06:41:50.019117 [info] warning: private rdns resolution failed; disabling err=\"preparing resolvers: no upstream specified\""
+          }
+        ],
+        "totalLines": 49
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "invidious": {
+      "name": "invidious",
+      "container": "hub-invidious",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:3000",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:3000"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 8
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "breezewiki": {
+      "name": "breezewiki",
+      "container": "hub-breezewiki",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:8380",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:8380"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 5
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "redlib": {
+      "name": "redlib",
+      "container": "hub-redlib",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:8080",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:8080"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 1,
+            "content": " ERROR redlib::client > Got an invalid response from reddit expected value at line 1 column 1. Status code: 403 Forbidden"
+          },
+          {
+            "line": 4,
+            "content": "Please report this error with the above information."
+          }
+        ],
+        "warnings": [],
+        "totalLines": 8
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "scribe": {
+      "name": "scribe",
+      "container": "hub-scribe",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:8280",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:8280"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 3
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "anonymousoverflow": {
+      "name": "anonymousoverflow",
+      "container": "hub-anonymousoverflow",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:8480",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:8480"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 1
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "searxng": {
+      "name": "searxng",
+      "container": "hub-searxng",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:8082",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:8082"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 9,
+            "content": "2026-01-16 06:43:21,591 ERROR:searx.engines: loading engine ahmia failed: set engine to inactive!"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 11,
+            "content": "2026-01-16 06:43:21,972 WARNING:searx.botdetection.config: missing config file: /etc/searxng/limiter.toml"
+          }
+        ],
+        "totalLines": 13
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "rimgo": {
+      "name": "rimgo",
+      "container": "hub-rimgo",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:3002",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:3002"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 11
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "cobalt": {
+      "name": "cobalt",
+      "container": "hub-cobalt-web",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:9001",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:9001"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 20
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "memos": {
+      "name": "memos",
+      "container": "hub-memos",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:5230",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:5230"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 1,
+            "content": "2026/01/16 06:43:07 WARN failed to find migration history in pre-migrate error=\"SQL logic error: no such table: migration_history (1)\""
+          }
+        ],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "2026/01/16 06:43:07 WARN failed to find migration history in pre-migrate error=\"SQL logic error: no such table: migration_history (1)\""
+          }
+        ],
+        "totalLines": 25
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "portainer": {
+      "name": "portainer",
+      "container": "hub-portainer",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:9000",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:9000"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 14
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "wg-easy": {
+      "name": "wg-easy",
+      "container": "hub-wg-easy",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1015,
+          "message": "Loaded successfully in 1015ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 13
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "odido-booster": {
+      "name": "odido-booster",
+      "container": "hub-odido-booster",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:8085",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:8085"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 17,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 22,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 23,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 24,
+            "content": "ERROR:odido.service:All renewal attempts failed - check Odido API credentials and network connectivity"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 2,
+            "content": "/app/app/main.py:43: DeprecationWarning: "
+          },
+          {
+            "line": 9,
+            "content": "/app/app/main.py:48: DeprecationWarning: "
+          }
+        ],
+        "totalLines": 28
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "vert": {
+      "name": "vert",
+      "container": "hub-vert",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:5555",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:5555"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 23
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "immich": {
+      "name": "immich",
+      "container": "hub-immich-server",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://localhost:2283",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://localhost:2283"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    }
+  },
+  "timestamp": "2026-01-16T06:45:07.395Z"
+}
