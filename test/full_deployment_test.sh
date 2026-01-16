@@ -222,7 +222,7 @@ run_integration_tests() {
     log "  HEADLESS: $HEADLESS"
     
     cd test
-    node integration_test_suite.js > "$LOG_DIR/integration_tests.log" 2>&1
+    node test_integration.js > "$LOG_DIR/integration_tests.log" 2>&1
     TEST_EXIT=$?
     cd ..
     

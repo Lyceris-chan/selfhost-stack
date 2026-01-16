@@ -130,6 +130,26 @@ const SERVICES = {
     healthEndpoint: '/',
     tests: ['loads', 'auth'],
   },
+  
+  // Additional Services
+  'odido-booster': {
+    port: 8085,
+    container: 'hub-odido-booster',
+    healthEndpoint: '/docs',
+    tests: ['loads'],
+  },
+  vert: {
+    port: 5555,
+    container: 'hub-vert',
+    healthEndpoint: '/',
+    tests: ['loads'],
+  },
+  immich: {
+    port: 2283,
+    container: 'hub-immich-server',
+    healthEndpoint: '/api/server/ping',
+    tests: ['loads'],
+  },
 };
 
 /**

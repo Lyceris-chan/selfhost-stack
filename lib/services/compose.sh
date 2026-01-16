@@ -57,7 +57,7 @@ except Exception:
     networks:
       - frontend
       - mgmt
-    ports: ["${LAN_IP}:55555:55555"]
+    ports: ["${LAN_IP}:${PORT_API}:55555"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -140,7 +140,7 @@ EOF
  else
     cat >> "${COMPOSE_FILE}" <<EOF
     networks: [frontend]
-    ports: ["${LAN_IP}:8085:8085"]
+    ports: ["${LAN_IP}:${PORT_ODIDO}:8085"]
 EOF
  fi
 
