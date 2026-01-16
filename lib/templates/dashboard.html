@@ -185,7 +185,7 @@
 
     <section data-category="dns">
     <div class="section-label title-medium">DNS Configuration</div>
-    <div class="grid">
+    <div class="grid smart-grid">
       <div class="card">
         <h3 class="title-medium">Certificate status</h3>
         <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
@@ -302,15 +302,13 @@
             <li>Legacy Support: Standard Port 53 resolution for older hardware.</li>
           </ol>
           <div class="code-block sensitive" style="margin-top:12px;" onclick="copyToClipboard('$LAN_IP', this)">$LAN_IP</div>
-          <div style="margin-top: auto; padding-top: 16px;">
-            <div class="chip admin" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
-              <span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
-              <div style="display: flex; flex-direction: column; gap: 2px;">
-                <span style="font-weight: 600;">Self-Signed (Local)</span>
-                <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and full mobile support.</span>
+            <div class="warning-box" style="margin-top: 16px; display: flex; align-items: flex-start; gap: 12px; padding: 16px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border-radius: var(--md-sys-shape-corner-medium);">
+              <span class="material-symbols-rounded" style="color: inherit;">warning</span>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-weight: 600; font-size: 14px;">Self-Signed (Local)</span>
+                <span class="body-small" style="opacity: 0.9; line-height: 1.4;">Security warnings will appear. Configure deSEC for trusted SSL and full mobile support.</span>
               </div>
             </div>
-          </div>
         </div>
       </div>
     </div>
@@ -374,7 +372,7 @@
             </div>
           </div>
           <div id="odido-loading" class="chip admin" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium); border: none; margin-top: 8px;">
-            <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <div style="flex-shrink: 0; width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
             <div style="display: flex; flex-direction: column; gap: 2px;">
               <span style="font-weight: 600;">Synchronizing Data</span>
               <span class="body-medium" style="opacity: 0.8; white-space: normal;">Connecting to Odido API to retrieve latest bundle status...</span>
