@@ -78,7 +78,7 @@ main() {
 
   # 4. UI/UX Audit
   echo -e "\e[34m--- Step 4: UI/UX Audit ---\e[0m"
-  if node test/verify_ui.js; then
+  if node test/test_dashboard.js; then
     echo -e "\e[32m✅ UI/UX Audit Passed\e[0m"
   else
     echo -e "\e[31m❌ Step 4 (UI/UX) Failed\e[0m"

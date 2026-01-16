@@ -661,24 +661,28 @@ setup_secrets() {
    ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-$(generate_secret 24)}"
    PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-$(generate_secret 24)}"
   else
+   local step_num=1
+
    # 1. deSEC Domain & Certificate Setup
    echo "--- deSEC Domain & Certificate Setup ---"
    local input_domain=""
    while [[ -z "${DESEC_DOMAIN}" ]]; do
-    echo -n "1. deSEC Domain (e.g., myhome.dedyn.io): "
+    echo -n "${step_num}. deSEC Domain (e.g., myhome.dedyn.io): "
     read -r input_domain
     DESEC_DOMAIN="${input_domain:-$DESEC_DOMAIN}"
     if [[ -z "${DESEC_DOMAIN}" ]]; then
      echo "   ⚠️  A deSEC domain is REQUIRED for external access and VERTd HTTPS support."
     fi
    done
+   ((step_num++))
 
    local input_token=""
-   echo -n "2. deSEC API Token: "
+   echo -n "${step_num}. deSEC API Token: "
    read -rs input_token
    echo ""
    DESEC_TOKEN="${input_token:-$DESEC_TOKEN}"
    echo ""
+   ((step_num++))
 
    # 2. Password Preferences
    echo "--- MANUAL CREDENTIAL PROVISIONING ---"
@@ -693,68 +697,56 @@ setup_secrets() {
     PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-$(generate_secret 24)}"
     log_info "Credentials generated and will be displayed upon completion."
    else
-    echo -n "3. VPN Web UI Password (Protecting peer management): "
+    echo -n "${step_num}. VPN Web UI Password (Protecting peer management): "
     read -rs VPN_PASS_RAW
     echo ""
-    echo -n "4. AdGuard Home Password (Protecting DNS filters): "
+    ((step_num++))
+    echo -n "${step_num}. AdGuard Home Password (Protecting DNS filters): "
     read -rs AGH_PASS_RAW
     echo ""
-    echo -n "5. Management Dashboard Password (Primary control plane): "
+    ((step_num++))
+    echo -n "${step_num}. Management Dashboard Password (Primary control plane): "
     read -rs ADMIN_PASS_RAW
     echo ""
+    ((step_num++))
     if [[ "${FORCE_CLEAN}" == "false" ]] && [[ -d "${DATA_DIR}/portainer" ]]; then
      echo "   [!] NOTICE: Portainer already initialized. New passwords will not affect existing Portainer admin account."
     fi
-    echo -n "6. Portainer Password (Infrastructure orchestration): "
+    echo -n "${step_num}. Portainer Password (Infrastructure orchestration): "
     read -rs PORTAINER_PASS_RAW
     echo ""
+    ((step_num++))
    fi
 
-   echo "--- Scribe (Medium Frontend) GitHub Integration ---"
-   echo -n "7. GitHub Username: "
-   read -r SCRIBE_GH_USER
-   echo -n "8. GitHub Personal Access Token: "
-   read -rs SCRIBE_GH_TOKEN
    echo ""
+   echo "--- Scribe (Medium Frontend) GitHub Integration (Optional) ---"
+   echo "Note: GitHub credentials are optional but enable gist proxying."
+   echo -n "${step_num}. GitHub Username (or press Enter to skip): "
+   read -r SCRIBE_GH_USER
+   ((step_num++))
+   if [[ -n "${SCRIBE_GH_USER}" ]]; then
+    echo -n "${step_num}. GitHub Personal Access Token: "
+    read -rs SCRIBE_GH_TOKEN
+    echo ""
+    ((step_num++))
+   else
+    SCRIBE_GH_TOKEN=""
+   fi
 
    echo ""
    echo "--- Odido Bundle Booster (Optional) ---"
-   if ask_confirm "Do you want to set up Odido Bundle Booster integration?"; then
-    echo -n "Odido Access Token (OAuth Token): "
-    read -rs ODIDO_TOKEN
-    echo ""
-    if [[ -n "${ODIDO_TOKEN}" ]]; then
-     log_info "Fetching Odido User ID automatically..."
-     local proxy="http://172.${FOUND_OCTET:-20}.0.254:8888"
-     local odido_redirect_url
-     # Attempt via proxy first, then fall back to direct if proxy is unreachable (e.g., fresh install)
-     odido_redirect_url=$(curl --proxy "${proxy}" -sL --max-time 10 -o /dev/null -w '%{url_effective}' \
-      -H "Authorization: Bearer ${ODIDO_TOKEN}" \
-      -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
-      "https://capi.odido.nl/account/current" || \
-      curl -sL --max-time 10 -o /dev/null -w '%{url_effective}' \
-      -H "Authorization: Bearer ${ODIDO_TOKEN}" \
-      -H "User-Agent: T-Mobile 5.3.28 (Android 10; 10)" \
-      "https://capi.odido.nl/account/current" || echo "FAILED")
-
-     ODIDO_USER_ID=$(echo "${odido_redirect_url}" | grep -oiE 'capi\.odido\.nl/[0-9a-f]{12}' | sed 's|capi\.odido\.nl/||I' | head -1 || true)
-     if [[ -z "${ODIDO_USER_ID}" ]]; then
-      ODIDO_USER_ID=$(echo "${odido_redirect_url}" | sed -n 's|https://capi.odido.nl/\([^/]*\)/.*|\1|p')
-     fi
-
-     if [[ -n "${ODIDO_USER_ID}" ]] && [[ "${ODIDO_USER_ID}" != "account" ]]; then
-      log_info "Successfully retrieved Odido User ID: ${ODIDO_USER_ID}"
-     else
-      log_warn "Could not automatically retrieve User ID from Odido API"
-      echo -n "   Enter Odido User ID manually (or Enter to skip): "
-      read -r ODIDO_USER_ID
-     fi
-    fi
+   echo "Note: OAuth token must be obtained from the dashboard after deployment."
+   echo "      The dashboard provides a sign-in URL generator for secure authentication."
+   if ask_confirm "Do you want to enable Odido Bundle Booster?"; then
+    log_info "Odido Bundle Booster will be deployed. Configure credentials via dashboard after setup."
+    ODIDO_USER_ID=""
    else
     ODIDO_USER_ID=""
-    ODIDO_TOKEN=""
     SKIP_ODIDO=true
    fi
+   
+   # OAuth token will be obtained via dashboard after deployment
+   ODIDO_TOKEN=""
   fi
 
   log_info "Generating Secrets (Batch Processing)..."
@@ -809,6 +801,7 @@ ODIDO_USER_ID="${ODIDO_USER_ID}"
 ODIDO_API_KEY='${ODIDO_API_KEY}'
 HUB_API_KEY='${HUB_API_KEY}'
 UPDATE_STRATEGY="stable"
+ROLLBACK_BACKUP_ENABLED='true'
 SEARXNG_SECRET='${SEARXNG_SECRET}'
 IMMICH_DB_PASSWORD='${IMMICH_DB_PASSWORD}'
 INVIDIOUS_DB_PASSWORD='${INVIDIOUS_DB_PASSWORD}'

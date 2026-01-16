@@ -213,14 +213,22 @@
  gap: 8px;
  margin-bottom: 32px;
  overflow-x: auto;
- padding: 8px 0;
+ padding: 16px 24px;
  scrollbar-width: none;
  position: sticky;
  top: 0;
  z-index: 100;
- background: var(--md-sys-color-surface);
- transition: background-color 300ms ease;
- width: 100%;
+ background: var(--md-sys-color-surface-container);
+ backdrop-filter: blur(16px);
+ -webkit-backdrop-filter: blur(16px);
+ box-shadow: var(--md-sys-elevation-2);
+ border-bottom: 1px solid var(--md-sys-color-outline-variant);
+ border-radius: 0 0 var(--md-sys-shape-corner-large) var(--md-sys-shape-corner-large);
+ transition: all 300ms ease;
+ width: calc(100% + 48px);
+ margin-left: -24px;
+ margin-right: -24px;
+ justify-content: center;
  }
  .filter-bar::-webkit-scrollbar { display: none; }
         
@@ -228,15 +236,23 @@
  cursor: pointer;
  user-select: none;
  transition: all 200ms var(--md-sys-motion-easing-standard);
- flex: 1 1 auto;
- padding: 0 16px;
+ flex: 0 1 auto;
+ padding: 0 20px;
  justify-content: center;
  border-radius: var(--md-sys-shape-corner-full);
  border: 1px solid var(--md-sys-color-outline);
- background-color: transparent;
+ background-color: var(--md-sys-color-surface-container);
  color: var(--md-sys-color-on-surface-variant);
  white-space: nowrap;
- height: 32px;
+ height: 36px;
+ min-width: fit-content;
+ font-weight: 500;
+ }
+ .filter-chip:hover {
+ background-color: var(--md-sys-color-surface-container-high);
+ }
+ .filter-chip:hover {
+ background-color: var(--md-sys-color-surface-container-high);
  }
  .filter-chip.active {
  background: var(--md-sys-color-secondary-container) !important;
@@ -452,63 +468,65 @@
  margin-top: 8px;
  }
 /* MD3 Chip Grid Container
- * Responsive grid layout that adapts from 2x2 on mobile to 4x4 on large screens
- * Chips automatically fill available space to prevent gaps
+ * Responsive grid layout that adapts from 2x2 on mobile to full width on large screens
+ * Chips automatically fill available space to prevent gaps and wrapping
  * Reference: https://m3.material.io/components/chips
  * Following Material 3 spacing guidelines: 8dp grid system
  */
 .section-hint {
 margin: 0 0 24px 0;
-display: grid;
+display: flex;
+flex-wrap: wrap;
 gap: 8px;
-grid-auto-rows: minmax(48px, auto);
-grid-auto-flow: dense;
+align-items: center;
 }
 
-/* Responsive chip grid breakpoints - follows Material 3 breakpoints */
-/* Extra-large screens (1440px+): 4 columns for optimal readability */
-@media (min-width: 1440px) {
-  .section-hint {
-    grid-template-columns: repeat(4, 1fr);
-  }
+/* Ensure chips fill available space proportionally */
+.section-hint .category-badge {
+flex: 1 1 auto;
+min-width: fit-content;
+max-width: 100%;
+justify-content: center;
+text-align: center;
 }
 
-/* Large screens (1024px - 1439px): 4 columns */
-@media (min-width: 1024px) and (max-width: 1439px) {
-  .section-hint {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-/* Medium screens (840px - 1023px): 3 columns */
-@media (min-width: 840px) and (max-width: 1023px) {
-  .section-hint {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-/* Small screens (600px - 839px): 3 columns */
-@media (min-width: 600px) and (max-width: 839px) {
-  .section-hint {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-/* Extra-small screens (below 600px): 2 columns */
+/* Responsive behavior for smaller screens */
 @media (max-width: 599px) {
   .section-hint {
-    grid-template-columns: repeat(2, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .section-hint .category-badge {
+    flex: 0 1 calc(50% - 4px);
+    min-width: 0;
   }
 }
         
- /* Grid Layouts */
+ /* Grid Layouts - Material 3 Responsive Grid */
  .grid {
  display: grid;
- grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+ grid-template-columns: repeat(4, 1fr);
+ grid-auto-rows: minmax(48px, auto);
+ grid-auto-flow: dense;
  gap: 24px;
  margin-bottom: 32px;
  width: 100%;
- }        @media (max-width: 720px) {
+ }
+ 
+ @media (max-width: 1600px) {
+  .grid {
+  grid-template-columns: repeat(3, 1fr);
+  }
+ }
+
+ @media (max-width: 1200px) {
+  .grid {
+  grid-template-columns: repeat(2, 1fr);
+  }
+ }
+        
+ @media (max-width: 720px) {
  .grid {
  grid-template-columns: 1fr;
  }
@@ -615,6 +633,7 @@ grid-auto-flow: dense;
  gap: 8px; 
  margin-top: auto;
  width: 100%;
+ align-items: stretch;
  }
         
  /* MD3 Assist Chips - Compact, informative, non-scrollable
@@ -623,14 +642,14 @@ grid-auto-flow: dense;
   * Reference: https://m3.material.io/components/chips/specs
   */
  .chip {
- display: flex;
+ display: inline-flex;
  align-items: center;
  justify-content: center;
- gap: 8px; 
- min-height: 48px;
+ gap: 6px; 
+ min-height: 48px; /* Material 3 Standard */
  height: auto;
  padding: 8px 16px;
- border-radius: var(--md-sys-shape-corner-small);
+ border-radius: 8px;
  font-size: 14px;
  font-weight: 500;
  letter-spacing: 0.1px;
@@ -641,19 +660,30 @@ grid-auto-flow: dense;
  color: var(--md-sys-color-on-surface);
  position: relative;
  min-width: 0;
- max-width: 100%;
+ flex: 1 1 auto;
  overflow: hidden;
  box-sizing: border-box;
+ white-space: normal; /* Allow wrapping */
+ word-wrap: break-word;
+ text-align: center;
+ hyphens: auto;
  }
  
- /* Chips in grid containers fill their cell and wrap text */
- .section-hint .chip {
+ /* Chips in grid containers (section-hint) should be centered and wrap properly */
+ .section-hint {
+   display: flex;
+   flex-wrap: wrap;
+   gap: 8px;
+   justify-content: center;
+   align-items: center;
    width: 100%;
-   min-width: 0;
-   word-wrap: break-word;
-   white-space: normal;
-   text-align: center;
-   hyphens: auto;
+ }
+ 
+ .section-hint .chip, .section-hint .category-badge {
+    flex: 0 1 auto;
+    min-width: fit-content;
+    max-width: 100%;
+    margin: 0;
  }
  
  /* Icon sizing in chips - follows MD3 18px icon spec */
@@ -677,7 +707,6 @@ grid-auto-flow: dense;
    overflow: hidden;
    text-overflow: ellipsis;
    white-space: nowrap;
- }
  }
         
  .chip.vpn { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border: none; }
@@ -776,6 +805,9 @@ grid-auto-flow: dense;
  .switch-track {
  width: 52px;
  height: 32px;
+ }
+ .filter-chip:hover {
+ background-color: var(--md-sys-color-surface-container-high);
  background: var(--md-sys-color-surface-container-highest);
  border: 2px solid var(--md-sys-color-outline);
  border-radius: var(--md-sys-shape-corner-full);

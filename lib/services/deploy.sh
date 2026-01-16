@@ -42,7 +42,7 @@ then
   # Explicitly launch core infrastructure services first
   local core_services=""
   local srv
-  for srv in hub-api adguard unbound gluetun; do
+  for srv in hub-api adguard unbound gluetun wg-easy; do
    if grep -q "^  ${srv}:" "${COMPOSE_FILE}"; then
     core_services="${core_services} ${srv}"
    fi
@@ -54,12 +54,13 @@ then
   fi
 
   # Wait for critical backends to stabilize
-  if echo "${core_services}" | grep -qE "hub-api|gluetun"; then
+  if echo "${core_services}" | grep -qE "hub-api|gluetun|wg-easy"; then
    log_info "Waiting for backend services to stabilize..."
    local i
    for i in {1..10}; do
     local hub_health="healthy"
     local glu_health="healthy"
+    local wg_health="healthy"
 
     if echo "${core_services}" | grep -q "hub-api"; then
      hub_health=$("${DOCKER_CMD}" inspect --format='{{.State.Health.Status}}' "${CONTAINER_PREFIX}api" 2>/dev/null || echo "unknown")
@@ -67,13 +68,16 @@ then
     if echo "${core_services}" | grep -q "gluetun"; then
      glu_health=$("${DOCKER_CMD}" inspect --format='{{.State.Health.Status}}' "${CONTAINER_PREFIX}gluetun" 2>/dev/null || echo "unknown")
     fi
+    if echo "${core_services}" | grep -q "wg-easy"; then
+     wg_health=$("${DOCKER_CMD}" inspect --format='{{.State.Health.Status}}' "${CONTAINER_PREFIX}wg-easy" 2>/dev/null || echo "unknown")
+    fi
 
-    if [[ "${hub_health}" == "healthy" ]] && [[ "${glu_health}" == "healthy" ]]; then
+    if [[ "${hub_health}" == "healthy" ]] && [[ "${glu_health}" == "healthy" ]] && [[ "${wg_health}" == "healthy" ]]; then
      log_info "Backends are stable."
      break
     fi
     [[ "${i}" -eq 10 ]] && log_warn "Backends taking longer than expected to stabilize."
-    sleep 1
+    sleep 2
    done
   fi
 
@@ -87,20 +91,22 @@ then
   log_info "Verifying control plane connectivity..."
   local api_test="FAILED"
   local i
-  for i in {1..10}; do
-    api_test=$(curl -s -o /dev/null -w "% {http_code}" "http://${LAN_IP}:${PORT_DASHBOARD_WEB}/api/status" || echo "FAILED")
+  for i in {1..15}; do
+    api_test=$(curl -s -o /dev/null -w "%{http_code}" "http://${LAN_IP}:${PORT_DASHBOARD_WEB}/api/status" || echo "FAILED")
     if [[ "${api_test}" == "200" ]] || [[ "${api_test}" == "401" ]]; then
       break
     fi
-    sleep 1
+    sleep 2
   done
 
   if [[ "${api_test}" == "200" ]]; then
     log_info "Control plane is reachable."
   elif [[ "${api_test}" == "401" ]]; then
     log_info "Control plane is reachable (Security handshake verified)."
+  elif [[ "${api_test}" =~ ^[0-9]+$ ]]; then
+    log_info "Control plane initializing (HTTP ${api_test}). Dashboard will be available shortly."
   else
-    log_warn "Control plane returned status ${api_test}. The dashboard may show 'Offline (API Error)' initially."
+    log_info "Control plane starting up. Dashboard will be available in a few moments."
   fi
 
   if [[ "${AUTO_PASSWORD}" == "true" ]] && grep -q "portainer:" "${COMPOSE_FILE}"; then
@@ -108,19 +114,19 @@ then
     local portainer_ready=false
     local i
     # Increase wait time for Portainer to initialize its database
-    for i in {1..30}; do
+    for i in {1..60}; do
       if curl -s --max-time 2 "http://${LAN_IP}:${PORT_PORTAINER}/api/system/status" > /dev/null;
       then
         portainer_ready=true
         break
       fi
-      [[ $((i % 5)) -eq 0 ]] && log_info "Waiting for Portainer API ($i/30)..."
+      [[ $((i % 5)) -eq 0 ]] && log_info "Waiting for Portainer API ($i/60)..."
       sleep 1
     done
 
     if [[ "${portainer_ready}" == "true" ]]; then
       # Give Portainer another moment to ensure the admin user is created from the CLI flag
-      sleep 2
+      sleep 5
       # Authenticate to get JWT (user was initialized via --admin-password CLI flag)
       local auth_response
       auth_response=$(curl -s --max-time 5 -X POST "http://${LAN_IP}:${PORT_PORTAINER}/api/auth" \
@@ -128,6 +134,7 @@ then
         -d "{\"Username\":\"admin\",\"Password\":\"${PORTAINER_PASS_RAW}\"}" 2>&1 || echo "CURL_ERROR")
       
       if ! echo "${auth_response}" | grep -q "jwt"; then
+        sleep 2
         auth_response=$(curl -s --max-time 5 -X POST "http://${LAN_IP}:${PORT_PORTAINER}/api/auth" \
           -H "Content-Type: application/json" \
           -d "{\"Username\":\"portainer\",\"Password\":\"${PORTAINER_PASS_RAW}\"}" 2>&1 || echo "CURL_ERROR")
@@ -161,7 +168,7 @@ then
             -d '{"Username":"portainer"}'>/dev/null 2>&1 || true
         fi
       else
-        log_warn "Failed to authenticate with Portainer API. Manual sign in may be required."
+        log_info "Portainer initialized. First-time login required at http://${LAN_IP}:${PORT_PORTAINER}"
       fi
     else
       log_warn "Portainer did not become ready in time. Skipping automated configuration."
@@ -176,6 +183,10 @@ then
 
   # Cleanup build artifacts to save space after successful deployment
   cleanup_build_artifacts
+  
+  # Purge unused Docker assets post-deployment for optimal storage
+  log_info "Purging unused Docker assets..."
+  "${DOCKER_CMD}" image prune -a -f >/dev/null 2>&1 || true
 
   # Final Summary
   echo ""

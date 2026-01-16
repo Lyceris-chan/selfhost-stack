@@ -160,10 +160,12 @@
         <span class="material-symbols-rounded" style="font-size: 20px;">vpn_lock</span>
         <span class="label-large" style="font-weight: 600;">Outbound VPN Gateway (Gluetun)</span>
       </div>
-      <span class="chip category-badge" id="hint-vpn-status" data-tooltip="Gluetun Outbound VPN Tunnel Status">VPN: Checking...</span>
-      <span class="chip category-badge" id="hint-vpn-ip" data-tooltip="Current Public VPN IP"><span class="material-symbols-rounded" style="font-size:14px;">public</span> IP: --</span>
-      <span class="chip category-badge" id="hint-vpn-speed" data-tooltip="Real-time VPN Throughput"><span class="material-symbols-rounded" style="font-size:14px;">speed</span> --</span>
-      <span class="chip category-badge" id="hint-vpn-usage" data-tooltip="VPN Session / Total Data Usage"><span class="material-symbols-rounded" style="font-size:14px;">data_usage</span> --</span>
+      <div class="section-hint">
+        <span class="chip category-badge" id="hint-vpn-status" data-tooltip="Gluetun Outbound VPN Tunnel Status">VPN: Checking...</span>
+        <span class="chip category-badge" id="hint-vpn-ip" data-tooltip="Current Public VPN IP"><span class="material-symbols-rounded" style="font-size:14px;">public</span> IP: --</span>
+        <span class="chip category-badge" id="hint-vpn-speed" data-tooltip="Real-time VPN Throughput"><span class="material-symbols-rounded" style="font-size:14px;">speed</span> --</span>
+        <span class="chip category-badge" id="hint-vpn-usage" data-tooltip="VPN Session / Total Data Usage"><span class="material-symbols-rounded" style="font-size:14px;">data_usage</span> --</span>
+      </div>
     </div>
 
     <div class="section-hint card-outline" style="padding: 16px; border-radius: var(--md-sys-shape-corner-large);">
@@ -171,8 +173,10 @@
         <span class="material-symbols-rounded" style="font-size: 20px;">settings_input_antenna</span>
         <span class="label-large" style="font-weight: 600;">Inbound Access Gateway (WireGuard)</span>
       </div>
-      <span class="chip category-badge" id="hint-wge-clients" data-tooltip="WG-Easy Active/Total Clients"><span class="material-symbols-rounded" style="font-size:14px;">group</span> -- Clients</span>
-      <span class="chip category-badge" id="hint-wge-usage" data-tooltip="WG-Easy Inbound Data Usage (Session / Total)"><span class="material-symbols-rounded" style="font-size:14px;">move_up</span> --</span>
+      <div class="section-hint">
+        <span class="chip category-badge" id="hint-wge-clients" data-tooltip="WG-Easy Active/Total Clients"><span class="material-symbols-rounded" style="font-size:14px;">group</span> -- Clients</span>
+        <span class="chip category-badge" id="hint-wge-usage" data-tooltip="WG-Easy Inbound Data Usage (Session / Total)"><span class="material-symbols-rounded" style="font-size:14px;">move_up</span> --</span>
+      </div>
     </div>
     <div id="grid-system" class="grid">
       <!-- Dynamic Cards Injected Here -->

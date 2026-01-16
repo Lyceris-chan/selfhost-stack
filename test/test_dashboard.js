@@ -183,7 +183,7 @@ async function authenticateAdmin(page) {
  */
 async function logoutAdmin(page) {
   await page.click('#admin-lock-btn');
-  await page.waitForTimeout(1000);
+  await new Promise(r => setTimeout(r, 1000));
 }
 
 // ============================================================================
@@ -209,16 +209,16 @@ async function testDashboardLoad(page) {
 async function testServiceCards(page) {
   await runTest('Service cards render correctly', async () => {
     // Wait for services grid to be populated by JavaScript
-    await page.waitForTimeout(3000);
+    await new Promise(r => setTimeout(r, 3000));
     
     // Check for service grid container
-    const grid = await page.$('#services-grid, .services-grid, [class*="grid"]');
+    const grid = await page.$('#grid-apps, #grid-system, .grid');
     if (!grid) {
       throw new Error('Services grid container not found');
     }
     
     // Service cards are dynamically generated, check for service links or elements
-    const serviceElements = await page.$$('a[href*="://"], .service, [class*="service"]');
+    const serviceElements = await page.$$('.card');
     if (serviceElements.length === 0) {
       throw new Error('No service elements found');
     }
@@ -229,15 +229,15 @@ async function testServiceCards(page) {
 
 async function testFilterChips(page) {
   await runTest('Filter chips function correctly', async () => {
-    const filters = ['all', 'privacy', 'media', 'utilities'];
+    const filters = ['all', 'apps', 'system', 'dns'];
     
     for (const filter of filters) {
-      const chip = await page.$(`[data-filter="${filter}"]`);
+      const chip = await page.$(`.filter-chip[data-target="${filter}"]`);
       if (chip) {
         await chip.click();
-        await page.waitForTimeout(500);
+        await new Promise(r => setTimeout(r, 500));
         
-        const visibleCards = await page.$$eval('.service-card:not([style*="display: none"])', 
+        const visibleCards = await page.$$eval('.card:not([style*="display: none"])', 
           cards => cards.length);
         console.log(`   ${filter}: ${visibleCards} cards visible`);
       }
@@ -249,19 +249,19 @@ async function testFilterChips(page) {
 
 async function testThemeToggle(page) {
   await runTest('Theme toggle switches between light and dark', async () => {
-    const themeBtn = await page.$('#theme-toggle, button[onclick*="toggleTheme"]');
+    const themeBtn = await page.$('.theme-toggle');
     if (!themeBtn) {
       throw new Error('Theme toggle button not found');
     }
     
     await screenshot(page, 'theme_before_toggle');
     await themeBtn.click();
-    await page.waitForTimeout(500);
+    await new Promise(r => setTimeout(r, 500));
     await screenshot(page, 'theme_after_toggle');
     
     // Toggle back
     await themeBtn.click();
-    await page.waitForTimeout(500);
+    await new Promise(r => setTimeout(r, 500));
   });
 }
 
@@ -275,12 +275,12 @@ async function testPrivacyMode(page) {
     
     await screenshot(page, 'privacy_before');
     await privacyBtn.click();
-    await page.waitForTimeout(500);
+    await new Promise(r => setTimeout(r, 500));
     await screenshot(page, 'privacy_enabled');
     
     // Toggle back
     await privacyBtn.click();
-    await page.waitForTimeout(500);
+    await new Promise(r => setTimeout(r, 500));
   });
 }
 
@@ -293,7 +293,7 @@ async function testSearch(page) {
     }
     
     await searchInput.type('invidious');
-    await page.waitForTimeout(500);
+    await new Promise(r => setTimeout(r, 500));
     
     const visibleCards = await page.$$eval('.service-card:not([style*="display: none"])', 
       cards => cards.length);
@@ -304,7 +304,7 @@ async function testSearch(page) {
     // Clear search
     await searchInput.click({ clickCount: 3 });
     await page.keyboard.press('Backspace');
-    await page.waitForTimeout(500);
+    await new Promise(r => setTimeout(r, 500));
   });
 }
 
@@ -367,7 +367,7 @@ async function testAdminRelogin(page) {
 
 async function testServiceStatus(page) {
   await runTest('Service status updates correctly', async () => {
-    await page.waitForTimeout(3000); // Wait for status API calls
+    await new Promise(r => setTimeout(r, 3000)); // Wait for status API calls
     
     const statusElements = await page.$$('.status-indicator, [class*="status"]');
     console.log(`   Status indicators: ${statusElements.length}`);
@@ -379,7 +379,7 @@ async function testServiceStatus(page) {
 async function testCheckUpdates(page) {
   await runTest('Check updates functionality', async () => {
     // Wait for button to be fully rendered
-    await page.waitForTimeout(2000);
+    await new Promise(r => setTimeout(r, 2000));
     
     const updateBtn = await page.$('button[onclick*="checkUpdates"]');
     if (!updateBtn) {
@@ -399,7 +399,7 @@ async function testCheckUpdates(page) {
     
     await screenshot(page, 'before_update_check');
     await updateBtn.click();
-    await page.waitForTimeout(2000);
+    await new Promise(r => setTimeout(r, 2000));
     await screenshot(page, 'after_update_check');
   });
 }
@@ -495,7 +495,7 @@ async function testCertificateStatus(page) {
 
 async function testContainerStatus(page) {
   await runTest('Container status monitoring', async () => {
-    await page.waitForTimeout(3000); // Wait for container status updates
+    await new Promise(r => setTimeout(r, 3000)); // Wait for container status updates
     
     const containers = await page.$$('.container-status, [class*="container"]');
     console.log(`   Container status elements: ${containers.length}`);
@@ -531,7 +531,7 @@ async function testRestoreControls(page) {
 async function testSettingsPanel(page) {
   await runTest('Settings panel opens', async () => {
     // Settings might be in a menu or modal, check various selectors
-    await page.waitForTimeout(1000);
+    await new Promise(r => setTimeout(r, 1000));
     
     // Look for any settings-related button
     const settingsSelectors = [
@@ -563,14 +563,14 @@ async function testSettingsPanel(page) {
     }
     
     await settingsBtn.click();
-    await page.waitForTimeout(1000);
+    await new Promise(r => setTimeout(r, 1000));
     await screenshot(page, 'settings_panel');
     
     // Close settings
     const closeBtn = await page.$('.close, button[onclick*="close"]');
     if (closeBtn) {
       await closeBtn.click();
-      await page.waitForTimeout(500);
+      await new Promise(r => setTimeout(r, 500));
     }
   });
 }
@@ -606,7 +606,7 @@ async function testThemeConfiguration(page) {
 
 async function testLogViewer(page) {
   await runTest('Log viewer accessible', async () => {
-    await page.waitForTimeout(1000);
+    await new Promise(r => setTimeout(r, 1000));
     
     // Look for log viewer in various locations
     const logSelectors = [
@@ -639,7 +639,7 @@ async function testLogViewer(page) {
     }
     
     await logBtn.click();
-    await page.waitForTimeout(1000);
+    await new Promise(r => setTimeout(r, 1000));
     await screenshot(page, 'log_viewer');
     
     // Close logs
@@ -659,7 +659,7 @@ async function testLogFiltering(page) {
     }
     
     await logFilter.type('INFO');
-    await page.waitForTimeout(500);
+    await new Promise(r => setTimeout(r, 500));
     await screenshot(page, 'log_filtered');
   });
 }

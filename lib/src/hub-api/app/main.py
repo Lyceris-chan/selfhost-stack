@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
 from .core.security import get_api_key_or_query_token, get_current_user
-from .routers import auth, logs, odido, services, system, wireguard
+from .routers import auth, gluetun, logs, odido, services, system, wireguard
 from .services.background import (log_sync_thread, metrics_collector_thread,
                                   odido_retrieval_thread,
                                   update_metrics_activity)
@@ -53,6 +53,7 @@ app.include_router(auth.router)
 app.include_router(system.router)
 app.include_router(services.router)
 app.include_router(wireguard.router)
+app.include_router(gluetun.router)
 app.include_router(logs.router)
 app.include_router(odido.router)
 

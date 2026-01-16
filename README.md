@@ -640,7 +640,7 @@ This Privacy Hub includes 20+ self-hosted services designed to protect your priv
 
 - **Encryption**: All traffic between your device and home network is encrypted with state-of-the-art cryptography
 - **Secure Remote Access**: Access your DNS filtering, private frontends, and services securely from coffee shops, hotels, or anywhere
-- **Split Tunneling**: Only DNS queries and hub services route through the tunnel—your other traffic exits directly for maximum speed
+- **Split Tunneling**: Only DNS queries and hub services route through the tunnel--your other traffic exits directly for maximum speed
 - **No Exposure**: Your services remain invisible to the public internet; only devices with valid WireGuard keys can connect
 - **Privacy in Transit**: Even on untrusted networks, your DNS queries and service requests are protected from snooping
 
@@ -657,7 +657,7 @@ Services marked with 🔒 are routed through the VPN tunnel, hiding your home IP
 | :--- | :--- | :--- | :--- |
 | **[Invidious](https://github.com/iv-org/invidious)** | Privacy-respecting YouTube frontend | Watch YouTube without Google tracking, no ads, no "disable your ad blocker" nags, server-side video fetching prevents fingerprinting | [Source](https://github.com/iv-org/invidious) · [Image](https://quay.io/invidious/invidious) · No tracking |
 | **[Redlib](https://github.com/redlib-org/redlib)** | Privacy-friendly Reddit frontend (Libreddit fork) | Browse Reddit without tracking cookies, no "Open in App" nags, JavaScript-free, faster page loads | [Source](https://github.com/redlib-org/redlib) · [Image](https://quay.io/redlib/redlib) · No tracking |
-| **[SearXNG](https://github.com/searxng/searxng)** | Privacy-respecting metasearch engine | Search without profiling—aggregates results from multiple engines while hiding your identity | [Source](https://github.com/searxng/searxng) · [Image](https://hub.docker.com/r/searxng/searxng) · [Privacy](https://docs.searxng.org/own-instance.html) |
+| **[SearXNG](https://github.com/searxng/searxng)** | Privacy-respecting metasearch engine | Search without profiling--aggregates results from multiple engines while hiding your identity | [Source](https://github.com/searxng/searxng) · [Image](https://hub.docker.com/r/searxng/searxng) · [Privacy](https://docs.searxng.org/own-instance.html) |
 | **[Wikiless](https://codeberg.org/orenom/wikiless)** | Privacy-focused Wikipedia frontend | Read Wikipedia without tracking, faster loading, no telemetry | [Source](https://codeberg.org/orenom/wikiless) · Self-built · No tracking |
 | **[Scribe](https://git.sr.ht/~edwardloveall/scribe)** | Privacy-friendly Medium reader | Read Medium articles without paywalls, tracking, or JavaScript bloat | [Source](https://git.sr.ht/~edwardloveall/scribe) · Self-built · No tracking |
 | **[Rimgo](https://codeberg.org/rimgo/rimgo)** | Privacy-respecting Imgur frontend | View Imgur images without tracking cookies or ads | [Source](https://codeberg.org/rimgo/rimgo) · [Image](https://codeberg.org/rimgo/-/packages) · No tracking |
@@ -671,14 +671,14 @@ Services marked with 🔒 are routed through the VPN tunnel, hiding your home IP
 | **[Cobalt](https://github.com/imputnet/cobalt)** | Universal media downloader | Download videos from YouTube, TikTok, Twitter, and more without tracking or rate limits | [Source](https://github.com/imputnet/cobalt) · [Image](https://github.com/imputnet/cobalt/pkgs/container/cobalt) · No tracking |
 | **[Immich](https://github.com/immich-app/immich)** | Self-hosted photo & video backup (Google Photos alternative) | Keep your photos private with on-device ML tagging, no cloud surveillance, hardware-accelerated transcoding | [Source](https://github.com/immich-app/immich) · [Image](https://github.com/immich-app/immich/pkgs/container/immich-server) · [Privacy](https://immich.app/docs/overview/introduction) · Fully self-hosted |
 | **[Memos](https://github.com/usememos/memos)** | Privacy-first lightweight note-taking | Quick notes and journaling with full ownership of your data | [Source](https://github.com/usememos/memos) · [Image](https://github.com/usememos/memos/pkgs/container/memos) · Fully self-hosted |
-| **[VERT](https://github.com/vert-sh/vert)** | Open-source video transcoding | Convert and optimize videos locally with GPU acceleration—no cloud processing | [Source](https://github.com/vert-sh/vert) · [Image](https://github.com/vert-sh/vert/pkgs/container/vert) · Local processing only |
+| **[VERT](https://github.com/vert-sh/vert)** | Open-source video transcoding | Convert and optimize videos locally with GPU acceleration--no cloud processing | [Source](https://github.com/vert-sh/vert) · [Image](https://github.com/vert-sh/vert/pkgs/container/vert) · Local processing only |
 
 #### Core Infrastructure (Local Network 🏠)
 
 | Service | What It Does | Why Use It | Source & Privacy |
 | :--- | :--- | :--- | :--- |
 | **[AdGuard Home](https://github.com/AdguardTeam/AdGuardHome)** | Network-wide ad & tracker blocking DNS server | Block ads and trackers for every device on your network (phones, tablets, smart TVs) | [Source](https://github.com/AdguardTeam/AdGuardHome) · [Image](https://hub.docker.com/r/adguard/adguardhome) · [Privacy](https://adguard.com/en/privacy.html) |
-| **[Unbound](https://github.com/NLnetLabs/unbound)** | Recursive DNS resolver | Query DNS root servers directly—no Google (8.8.8.8) or Cloudflare logging your browsing history | [Source](https://github.com/NLnetLabs/unbound) · [Image](https://hub.docker.com/r/klutchell/unbound) · No external queries |
+| **[Unbound](https://github.com/NLnetLabs/unbound)** | Recursive DNS resolver | Query DNS root servers directly--no Google (8.8.8.8) or Cloudflare logging your browsing history | [Source](https://github.com/NLnetLabs/unbound) · [Image](https://hub.docker.com/r/klutchell/unbound) · No external queries |
 | **[WG-Easy](https://github.com/wg-easy/wg-easy)** | WireGuard VPN management interface | Easy WireGuard setup with QR codes for instant mobile connection | [Source](https://github.com/wg-easy/wg-easy) · [Image](https://github.com/wg-easy/wg-easy/pkgs/container/wg-easy) · Self-hosted VPN |
 | **[Gluetun](https://github.com/qdm12/gluetun)** | VPN client container | Routes privacy frontend traffic through commercial VPN providers (supports 40+ providers including Mullvad, ProtonVPN, NordVPN) | [Source](https://github.com/qdm12/gluetun) · [Image](https://hub.docker.com/r/qmcgaw/gluetun) · No data collection |
 | **[Portainer](https://github.com/portainer/portainer)** | Container management UI | Manage Docker containers through a web interface | [Source](https://github.com/portainer/portainer) · [Image](https://hub.docker.com/r/portainer/portainer-ce) · [Privacy](https://www.portainer.io/privacy-policy) |
@@ -690,17 +690,17 @@ Services marked with 🔒 are routed through the VPN tunnel, hiding your home IP
 
 | Service | What It Does | Why Use It | Source & Privacy |
 | :--- | :--- | :--- | :--- |
-| **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)** | Automated mobile data bundle management (Odido NL provider) | Automatically activates data bundles when approaching limits—specific to Odido mobile customers in the Netherlands | [Source](https://github.com/Lyceris-chan/odido-bundle-booster) · Self-built · No data collection |
+| **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)** | Automated mobile data bundle management (Odido NL provider) | Automatically activates data bundles when approaching limits--specific to Odido mobile customers in the Netherlands | [Source](https://github.com/Lyceris-chan/odido-bundle-booster) · Self-built · No data collection |
 
 ---
 
 **Key Privacy Notes:**
 
 - **🔒 VPN-Protected Services**: Route all external requests through your commercial VPN (Gluetun). Upstream providers (YouTube, Reddit, etc.) only see the VPN's IP address, not your home IP
-- **🏠 Local Services**: Run entirely on your network—no external communication except for updates and DNS blocklists
+- **🏠 Local Services**: Run entirely on your network--no external communication except for updates and DNS blocklists
 - **No Telemetry**: None of these services send usage data, analytics, or telemetry to third parties
 - **Full Source Availability**: Every service is open-source and auditable
-- **Data Ownership**: Your data stays on your hardware—you are not the product
+- **Data Ownership**: Your data stays on your hardware--you are not the product
 
 **Privacy Policy Repository Links:**
 - AdGuard Home: https://adguard.com/en/privacy.html

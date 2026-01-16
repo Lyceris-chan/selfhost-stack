@@ -582,10 +582,10 @@ def main():
         # 9. Verify Dashboard UI and Service Statuses
         print("\n--- Verifying Dashboard UI and Service Statuses ---")
         try:
-            # We use the existing verify_ui.js script which uses Puppeteer
+            # We use the existing test_dashboard.js script which uses Puppeteer
             # Ensure LAN_IP and ADMIN_PASSWORD are set for the node process
             ui_env = f"LAN_IP={_LAN_IP} ADMIN_PASSWORD={api_key}"
-            if run_command(f"{ui_env} node test/verify_ui.js", cwd=_PROJECT_ROOT, ignore_failure=True) == 0:
+            if run_command(f"{ui_env} node test/test_dashboard.js", cwd=_PROJECT_ROOT, ignore_failure=True) == 0:
                 print(f"[PASS] Dashboard UI audit passed (All services ONLINE)")
             else:
                 print(f"[FAIL] Dashboard UI audit failed or services OFFLINE")

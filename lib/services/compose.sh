@@ -58,6 +58,8 @@ except Exception:
       - frontend
       - mgmt
     ports: ["${LAN_IP}:55555:55555"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - "${WG_PROFILES_DIR}:/profiles"
       - "${ACTIVE_WG_CONF}:/active-wg.conf"
@@ -87,6 +89,7 @@ except Exception:
       - "APP_NAME=${APP_NAME}"
       - "UPDATE_STRATEGY=${UPDATE_STRATEGY}"
       - "LAN_IP=${LAN_IP}"
+      - "WG_HOST=${LAN_IP}"
       - "DESEC_DOMAIN=${DESEC_DOMAIN}"
       - "DOCKER_CONFIG=/root/.docker"
       - "DOCKER_HOST=tcp://docker-proxy:2375"
@@ -407,13 +410,16 @@ append_wg_easy() {
  if ! should_deploy "wg-easy"; then
   return 0
  fi
+ # WG_HASH needs special handling - bcrypt hashes contain $ which must be escaped
+ # Docker Compose requires $$ to represent a literal $ sign
+ local wg_hash_escaped="${WG_HASH_CLEAN//\$/\$\$}"
   cat >> "${COMPOSE_FILE}" <<EOF
   wg-easy:
     image: ghcr.io/wg-easy/wg-easy:latest
     container_name: ${CONTAINER_PREFIX}wg-easy
     network_mode: "host"
     environment:
-      - "PASSWORD_HASH=${WG_HASH_COMPOSE}"
+      - "PASSWORD_HASH=${wg_hash_escaped}"
       - "WG_DEFAULT_DNS=${LAN_IP}"
       - "WG_ALLOWED_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
       - "WG_HOST=${PUBLIC_IP}"
