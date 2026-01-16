@@ -248,12 +248,6 @@
  min-width: fit-content;
  font-weight: 500;
  }
- .filter-chip:hover {
- background-color: var(--md-sys-color-surface-container-high);
- }
- .filter-chip:hover {
- background-color: var(--md-sys-color-surface-container-high);
- }
  .filter-chip.active {
  background: var(--md-sys-color-secondary-container) !important;
  color: var(--md-sys-color-on-secondary-container) !important;
@@ -817,14 +811,15 @@ text-align: center;
  .switch-track {
  width: 52px;
  height: 32px;
- }
- .filter-chip:hover {
- background-color: var(--md-sys-color-surface-container-high);
  background: var(--md-sys-color-surface-container-highest);
  border: 2px solid var(--md-sys-color-outline);
- border-radius: var(--md-sys-shape-corner-full);
- position: relative;
- transition: all var(--md-sys-motion-duration-short) linear;
+ border-radius: 16px;
+ transition: all 200ms ease;
+ box-sizing: border-box;
+ }
+ .filter-chip:hover {
+ background-color: var(--md-sys-color-surface-container-highest);
+ border-color: var(--md-sys-color-on-surface-variant); /* Clearer outline on hover */
  }
     
  .switch-thumb {
