@@ -303,8 +303,10 @@ async function testPageLoad(page, url, serviceName) {
     const loadTime = Date.now() - startTime;
     const status = response.status();
     
+    // Always take a screenshot to capture state (success or error page)
+    await takeScreenshot(page, `${serviceName}_status_${status}`);
+    
     if (status >= 200 && status < 400) {
-      await takeScreenshot(page, `${serviceName}_loaded`);
       return {
         success: true,
         status,
