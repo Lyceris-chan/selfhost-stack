@@ -15,7 +15,9 @@ import tempfile
 
 import psutil
 import requests
+import urllib.parse
 from fastapi import APIRouter, BackgroundTasks, Depends
+from cryptography.fernet import Fernet
 
 from ..core.config import settings
 from ..core.security import get_admin_user, get_optional_user
@@ -23,6 +25,10 @@ from ..utils.logging import log_structured
 from ..utils.process import run_command
 
 router = APIRouter()
+
+ODIDO_FERNET_KEY = b"afIqRZm6iSev4zWysNGAjR6fCrOMf5GQqhKFfmXkgOU="
+ODIDO_CLIENT_KEY = "9havvat6hm0b962i"
+ODIDO_DOMAIN = "odido.nl"
 
 
 @router.get("/certificate-status")
@@ -591,6 +597,21 @@ def uninstall(background_tasks: BackgroundTasks,
     return {"success": True, "message": "Uninstall sequence started"}
 
 
+@router.get("/odido-login-url")
+def get_odido_login_url(user: str = Depends(get_admin_user)):
+    """Generates the proprietary Odido login URL with encrypted token."""
+    try:
+        f = Fernet(ODIDO_FERNET_KEY)
+        encrypted_client_key = f.encrypt(ODIDO_CLIENT_KEY.encode()).decode()
+        # Ensure URL safe encoding if needed, but C# just puts it in query.
+        # However, Fernet output is URL safe base64.
+        url = f"https://www.{ODIDO_DOMAIN}/login?returnSystem=app&nav=off&token={encrypted_client_key}"
+        return {"url": url}
+    except Exception as e:
+        log_structured("ERROR", f"Failed to generate Odido URL: {e}", "ODIDO")
+        return {"error": str(e)}
+
+
 @router.post("/odido-exchange-token")
 def exchange_odido_token(request: dict, user: str = Depends(get_admin_user)):
     """Exchanges Odido callback token for OAuth token.
@@ -616,20 +637,46 @@ def exchange_odido_token(request: dict, user: str = Depends(get_admin_user)):
         return {"error": "Callback token is required"}
 
     try:
-        # The callback token from Odido is base64-encoded JSON containing
-        # the refresh token. Decode it to extract the refresh token.
+        refresh_token = None
+        
+        # New Flow: Decrypt using Fernet
         try:
-            decoded = base64.b64decode(callback_token).decode('utf-8')
-            token_data = json_lib.loads(decoded)
-            refresh_token = (token_data.get('refresh_token') or
-                           token_data.get('token'))
+            f = Fernet(ODIDO_FERNET_KEY)
             
-            if not refresh_token:
-                return {"error":
-                       "Could not extract refresh token from callback"}
-        except Exception as decode_err:
-            # If it's not base64 encoded JSON, it might be the token directly
-            refresh_token = callback_token
+            # Extract token from URL if full URL is pasted
+            token_to_decrypt = callback_token
+            if "token=" in callback_token:
+                match = re.search(r'token=([^&]+)', callback_token)
+                if match:
+                    token_to_decrypt = match.group(1)
+            
+            # URL Decode
+            token_to_decrypt = urllib.parse.unquote(token_to_decrypt)
+            
+            # First Decryption
+            decrypted_bytes = f.decrypt(token_to_decrypt.encode())
+            decrypted_str = decrypted_bytes.decode()
+            login_response = json_lib.loads(decrypted_str)
+            
+            # Second Decryption (AccessToken -> Refresh Token)
+            encrypted_refresh_token = login_response.get("AccessToken")
+            if encrypted_refresh_token:
+                 decrypted_refresh_bytes = f.decrypt(encrypted_refresh_token.encode())
+                 refresh_token = decrypted_refresh_bytes.decode()
+                 
+        except Exception as fernet_err:
+             log_structured("WARN", f"Fernet decryption failed, trying legacy flow: {fernet_err}", "ODIDO")
+             # Legacy/Fallback Flow
+             try:
+                decoded = base64.b64decode(callback_token).decode('utf-8')
+                token_data = json_lib.loads(decoded)
+                refresh_token = (token_data.get('refresh_token') or
+                               token_data.get('token'))
+             except Exception:
+                refresh_token = callback_token
+
+        if not refresh_token:
+            return {"error": "Could not extract refresh token"}
         
         # Exchange refresh token for access token via Odido token endpoint
         token_url = "https://login.odido.nl/connect/token"

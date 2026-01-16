@@ -187,6 +187,7 @@ then
   # Purge unused Docker assets post-deployment for optimal storage
   log_info "Purging unused Docker assets..."
   "${DOCKER_CMD}" image prune -a -f >/dev/null 2>&1 || true
+  "${DOCKER_CMD}" builder prune -f >/dev/null 2>&1 || true
 
   # Final Summary
   echo ""

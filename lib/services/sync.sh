@@ -51,6 +51,8 @@ clone_repo() {
  log_info "Repository exists at ${target_dir}. Ensuring correct version (${version})..."
  if [[ -n "${version}" ]] && [[ "${version}" != "latest" ]]; then
  (cd "${target_dir}" && git fetch --all --tags && git checkout -f "${version}") || true
+ else
+ (cd "${target_dir}" && git pull) || true
  fi
  return 0
  fi

@@ -242,7 +242,7 @@ EOF
       - "HTTPPROXY=on"
       - "DOT_PROVIDERS=quad9"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9999/ || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
