@@ -4,12 +4,6 @@ This module provides session management, API key validation, and FastAPI
 dependencies for securing endpoints.
 """
 
-"""Security and authentication utilities for the Privacy Hub API.
-
-This module provides session management, API key validation, and FastAPI
-dependencies for securing endpoints.
-"""
-
 import json
 import os
 import secrets

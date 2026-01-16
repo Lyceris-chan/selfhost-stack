@@ -87,7 +87,7 @@ It's just a computer (could be an old laptop, a $50 Raspberry Pi, or a fancy ser
 
 ### What's a "VPN"?
 
-A Virtual Private Network is like a secret tunnel for your internet traffic. When you use YouTube through this hub, YouTube doesn't see your home address—it sees the VPN address shared by thousands of users. It's like using a P.O. Box instead of your home address.
+A Virtual Private Network is like a secret tunnel for your internet traffic. When you use YouTube through this hub, YouTube doesn't see your home address - it sees the VPN address shared by thousands of users. It's like using a P.O. Box instead of your home address.
 
 ### Will this break my internet?
 
@@ -202,7 +202,7 @@ The script will ask you a few questions:
 2.  **Enter your deSEC domain and token** (from Step 2)
 3.  **Choose your password preferences** (auto-generate or set your own)
 4.  **Optional: GitHub credentials for Scribe** (see below)
-5.  **Optional: Odido integration** (for Dutch mobile users)
+5.  **Optional: Odido Booster integration** (for Dutch mobile users - see below)
 
 > 📝 **About GitHub credentials (Optional)**: Scribe is a privacy-respecting Medium frontend that proxies GitHub gists. These credentials are **optional** but provide benefits:
 >
@@ -217,6 +217,29 @@ The script will ask you a few questions:
 > 5. Click **"Generate token"** and copy it
 >
 > **You can also configure this after deployment** through the dashboard settings! The installer will ask for it, but you can skip and set it up later from the web interface at `http://<your-hub-ip>:8088`.
+
+> 📱 **About Odido Booster (Optional - Dutch Mobile Users)**: Odido Booster automates mobile data bundle renewals for Odido/T-Mobile NL customers with **zero external tools required**:
+>
+> **How it works (all in the dashboard):**
+> 1. Click "Generate Sign-In URL" button in the Configuration section
+> 2. Click the generated URL to sign into your Odido account
+> 3. After signing in, copy the callback URL you're redirected to
+> 4. Paste the callback URL back into the dashboard
+> 5. Click "Save" - the system automatically:
+>    - Extracts and decrypts your OAuth token
+>    - Retrieves your Odido User ID via API
+>    - Configures monitoring for 24/7 bundle management
+>
+> **What you DON'T need to do:**
+> - ❌ Download external tools (Odido.Authenticator)
+> - ❌ Manually decrypt tokens
+> - ❌ Find your Odido User ID
+> - ❌ Configure API endpoints
+> - ❌ Remember to renew bundles
+>
+> The entire OAuth flow is **built into the dashboard**! Everything happens through secure API endpoints (`/odido-exchange-token` and `/odido-userid`).
+>
+> **You can configure this after deployment** through the dashboard at `http://<your-hub-ip>:8088` under the Configuration section.
 
 That's it! Sit back and let it build.
 
@@ -298,7 +321,7 @@ This stack features a hardened, recursive DNS engine built on **Unbound** and **
 <details>
 <summary>🛡️ <strong>Configuration Transparency: What We Change and Why</strong> (Click to expand)</summary>
 
-This section documents **every setting** we modify from defaults to ensure complete transparency. You own this system—you deserve to know exactly what it does.
+This section documents **every setting** we modify from defaults to ensure complete transparency. You own this system - you deserve to know exactly what it does.
 
 ---
 
@@ -345,7 +368,7 @@ harden-large-queries: yes       # Block potential DoS queries
 harden-short-bufsize: yes       # Require proper buffer sizes
 ```
 
-**Why**: DNSSEC is like HTTPS for DNS—it proves the answer you got is authentic and hasn't been tampered with. These settings enforce it strictly.
+**Why**: DNSSEC is like HTTPS for DNS - it proves the answer you got is authentic and hasn't been tampered with. These settings enforce it strictly.
 
 #### Performance Optimization
 ```ini
@@ -466,6 +489,62 @@ APP_DOMAIN=<your-ip>:8280
 
 ---
 
+### 📱 Odido Booster (Automated Mobile Data Management)
+
+**Where configured**: 
+- Dashboard UI: [`lib/templates/dashboard.html:380-420`](lib/templates/dashboard.html#L380)
+- Token Exchange: [`lib/src/hub-api/app/routers/system.py:552-622`](lib/src/hub-api/app/routers/system.py#L552)
+- User ID Extraction: [`lib/src/hub-api/app/routers/system.py:625-675`](lib/src/hub-api/app/routers/system.py#L625)
+- Background Service: [`lib/src/hub-api/app/services/background.py:64-122`](lib/src/hub-api/app/services/background.py#L64)
+
+Odido Booster automates mobile data bundle renewals for Odido/T-Mobile NL customers, eliminating manual intervention and external tools.
+
+#### Integrated OAuth Flow (No External Tools Needed!)
+The Privacy Hub **replicates the complete Odido.Authenticator workflow** directly in the dashboard:
+
+**How it works:**
+1. **Generate Sign-In URL**: Dashboard creates OAuth URL with proper parameters
+   ```javascript
+   https://www.odido.nl/login?client_id=OdidoMobileApp&redirect_uri=...
+   ```
+2. **User Signs In**: User clicks URL → Signs into Odido → Gets redirected to callback URL
+3. **Extract Token**: User pastes callback URL back into dashboard
+4. **Token Exchange** (`/odido-exchange-token`):
+   - Decodes base64-encoded callback token
+   - Extracts refresh token from JSON payload
+   - Exchanges refresh token for OAuth access token via `https://login.odido.nl/connect/token`
+5. **User ID Extraction** (`/odido-userid`):
+   - Makes authenticated request to `https://capi.odido.nl/account/current`
+   - Follows redirect to extract 12-char hex User ID from URL pattern: `capi.odido.nl/{userid}/account/current`
+6. **Save Configuration**: Both OAuth token and User ID saved to `.secrets`
+7. **Background Monitoring**: Service monitors data usage every hour
+
+**Why this approach:**
+- ✅ **No external tools**: Entire OAuth flow built into dashboard
+- ✅ **Zero manual configuration**: No need to find User ID or decrypt tokens
+- ✅ **Secure**: OAuth token never leaves your network
+- ✅ **Automatic**: Background service runs 24/7
+- ✅ **VPN-routed**: All API requests go through Gluetun tunnel by default
+- ✅ **Transparent**: All steps logged for full visibility
+
+#### Settings Applied
+```env
+ODIDO_TOKEN="<oauth-token>"              # From Odido.Authenticator
+ODIDO_USER_ID="<12-char-hex>"           # Auto-extracted via API
+ODIDO_BUNDLE_CODE="A0DAY01"             # Default: 1GB/day bundle
+ODIDO_ABSOLUTE_MIN_THRESHOLD_MB=100     # Trigger renewal at 100MB
+ODIDO_LEAD_TIME_MINUTES=30              # Renew 30min before expiry
+```
+
+**Where managed**: Configuration is done through the dashboard at `http://<your-ip>:8088`. All settings are stored in `data/AppData/privacy-hub/.secrets`.
+
+**Background Service**: 
+- Checks for missing User ID every hour
+- Automatically retries User ID extraction if token exists but User ID is missing
+- Logs all operations to the structured logging system
+
+---
+
 ### 🌐 Gluetun (VPN Gateway)
 
 **Where configured**: [`lib/services/compose.sh:149-180`](lib/services/compose.sh#L149)
@@ -551,40 +630,84 @@ The system generates secure, unique credentials for all core infrastructure duri
 
 > 📝 **Can't find the file?** It's created in your project folder after deployment completes. Look for `libredirect_import.json` in the `selfhost-stack` directory.
 
-### Included privacy services
+### Included Privacy Services
 
-Services marked with 🔒 VPN are routed through a secure tunnel. These services only access the internet via the VPN gateway and are not reachable from the public internet.
+This Privacy Hub includes 20+ self-hosted services designed to protect your privacy and digital independence. All services are open-source and run entirely on your hardware.
+
+#### 🔐 How WireGuard Protects Your Privacy
+
+**WireGuard creates a secure encrypted tunnel** that allows you to access your self-hosted services from anywhere in the world. When you're connected:
+
+- **Encryption**: All traffic between your device and home network is encrypted with state-of-the-art cryptography
+- **Secure Remote Access**: Access your DNS filtering, private frontends, and services securely from coffee shops, hotels, or anywhere
+- **Split Tunneling**: Only DNS queries and hub services route through the tunnel—your other traffic exits directly for maximum speed
+- **No Exposure**: Your services remain invisible to the public internet; only devices with valid WireGuard keys can connect
+- **Privacy in Transit**: Even on untrusted networks, your DNS queries and service requests are protected from snooping
+
+**Why this matters**: Without WireGuard, accessing your hub remotely would require exposing multiple ports to the internet, creating security risks. WireGuard provides a single, encrypted gateway that keeps everything else locked down.
 
 <details>
-<summary>📋 <strong>View full service catalog and routing</strong> (Click to expand)</summary>
+<summary>📋 <strong>Complete Service Catalog</strong> (Click to expand)</summary>
 
-| Service | Category | 🛡️ Routing | Source / Image |
+Services marked with 🔒 are routed through the VPN tunnel, hiding your home IP from upstream providers.
+
+#### Privacy Frontends (VPN-Protected 🔒)
+
+| Service | What It Does | Why Use It | Source & Privacy |
 | :--- | :--- | :--- | :--- |
-| **Invidious** | Frontend | **🔒 VPN** | [Source](https://github.com/iv-org/invidious) / [Image](https://quay.io/repository/invidious/invidious) |
-| **Companion** | Helper | **🔒 VPN** | [Source](https://github.com/iv-org/invidious-companion) / [Image](https://quay.io/repository/invidious/invidious-companion) |
-| **Redlib** | Frontend | **🔒 VPN** | [Source](https://github.com/redlib-org/redlib) / [Image](https://quay.io/repository/redlib/redlib) |
-| **SearXNG** | Frontend | **🔒 VPN** | [Source](https://github.com/searxng/searxng) / [Image](https://hub.docker.com/r/searxng/searxng) |
-| **Scribe** | Frontend | **🔒 VPN** | [Source](https://git.sr.ht/~edwardloveall/scribe) / *(local build)* |
-| **Rimgo** | Frontend | **🔒 VPN** | [Source](https://codeberg.org/rimgo/rimgo) / [Image](https://codeberg.org/rimgo/rimgo/packages) |
-| **Wikiless** | Frontend | **🔒 VPN** | [Source](https://github.com/Metastem/Wikiless) / *(local build)* |
-| **BreezeWiki** | Frontend | **🔒 VPN** | [Source](https://github.com/breezewiki/breezewiki) / [Image](https://quay.io/repository/pussthecatorg/breezewiki) |
-| **AnonOverflow** | Frontend | **🔒 VPN** | [Source](https://github.com/httpjamesm/anonymousoverflow) / [Image](https://github.com/httpjamesm/AnonymousOverflow/pkgs/container/anonymousoverflow) |
-| **Cobalt** | Utility | **🔒 VPN** | [Source](https://github.com/imputnet/cobalt) / [Image](https://github.com/imputnet/cobalt/pkgs/container/cobalt) |
-| **Memos** | Utility | **🔒 VPN** | [Source](https://github.com/usememos/memos) / [Image](https://github.com/usememos/memos/pkgs/container/memos) |
-| **Immich** | Utility | **🔒 VPN*** | [Source](https://github.com/immich-app/immich) / [Image](https://github.com/immich-app/immich/pkgs/container/immich-server) |
-| **VERT / VERTd** | Utility | **🏠 Local** | [Source](https://github.com/vert-sh/vert) / [Image](https://github.com/vert-sh/vert/pkgs/container/vert) |
-| **AdGuard Home*** | Core | **🏠 Local** | [Source](https://github.com/AdguardTeam/AdGuardHome) / [Image](https://hub.docker.com/r/adguard/adguardhome) |
-| **Unbound** | Core | **🏠 Local** | [Source](https://github.com/NLnetLabs/unbound) / [Image](https://hub.docker.com/r/klutchell/unbound) |
-| **WireGuard** | Core | **🏠 Local** | [Source](https://github.com/wg-easy/wg-easy) / [Image](https://github.com/wg-easy/wg-easy/pkgs/container/wg-easy) |
-| **Gluetun** | Core | **🌍 Exit** | [Source](https://github.com/qdm12/gluetun) / [Image](https://hub.docker.com/r/qmcgaw/gluetun) |
-| **Portainer** | Core | **🏠 Local** | [Source](https://github.com/portainer/portainer) / [Image](https://hub.docker.com/r/portainer/portainer-ce) |
-| **Watchtower** | Core | **🏠 Local** | [Source](https://github.com/containrrr/watchtower) / [Image](https://hub.docker.com/r/containrrr/watchtower) |
-| **Dashboard** | Core | **🏠 Local** | [local source](/lib/templates/assets) |
-| **Hub API** | Core | **🏠 Local** | [local source](/lib/src/hub-api) |
-| **Odido Booster** | Utility | **🏠 Local** | [Source](https://github.com/Lyceris-chan/odido-bundle-booster) / *(local build)* |
+| **[Invidious](https://github.com/iv-org/invidious)** | Privacy-respecting YouTube frontend | Watch YouTube without Google tracking, no ads, no "disable your ad blocker" nags, server-side video fetching prevents fingerprinting | [Source](https://github.com/iv-org/invidious) · [Image](https://quay.io/invidious/invidious) · No tracking |
+| **[Redlib](https://github.com/redlib-org/redlib)** | Privacy-friendly Reddit frontend (Libreddit fork) | Browse Reddit without tracking cookies, no "Open in App" nags, JavaScript-free, faster page loads | [Source](https://github.com/redlib-org/redlib) · [Image](https://quay.io/redlib/redlib) · No tracking |
+| **[SearXNG](https://github.com/searxng/searxng)** | Privacy-respecting metasearch engine | Search without profiling—aggregates results from multiple engines while hiding your identity | [Source](https://github.com/searxng/searxng) · [Image](https://hub.docker.com/r/searxng/searxng) · [Privacy](https://docs.searxng.org/own-instance.html) |
+| **[Wikiless](https://codeberg.org/orenom/wikiless)** | Privacy-focused Wikipedia frontend | Read Wikipedia without tracking, faster loading, no telemetry | [Source](https://codeberg.org/orenom/wikiless) · Self-built · No tracking |
+| **[Scribe](https://git.sr.ht/~edwardloveall/scribe)** | Privacy-friendly Medium reader | Read Medium articles without paywalls, tracking, or JavaScript bloat | [Source](https://git.sr.ht/~edwardloveall/scribe) · Self-built · No tracking |
+| **[Rimgo](https://codeberg.org/rimgo/rimgo)** | Privacy-respecting Imgur frontend | View Imgur images without tracking cookies or ads | [Source](https://codeberg.org/rimgo/rimgo) · [Image](https://codeberg.org/rimgo/-/packages) · No tracking |
+| **[BreezeWiki](https://github.com/breezewiki/breezewiki)** | Alternative Fandom wiki frontend | Read Fandom wikis without invasive ads, tracking, or slow JavaScript | [Source](https://github.com/breezewiki/breezewiki) · [Image](https://quay.io/pussthecatorg/breezewiki) · No tracking |
+| **[AnonymousOverflow](https://github.com/httpjamesm/AnonymousOverflow)** | Privacy-focused Stack Overflow viewer | View Stack Overflow content without tracking or user profiling | [Source](https://github.com/httpjamesm/AnonymousOverflow) · [Image](https://github.com/httpjamesm/AnonymousOverflow/pkgs/container/anonymousoverflow) · No tracking |
 
-*\*Immich uses the VPN only for specific machine learning model downloads and metadata fetching. Your photos stay local.
-\**AdGuard Home fetches DNS blocklists and updates via your home IP address.
+#### Productivity & Media Tools (VPN-Protected 🔒)
+
+| Service | What It Does | Why Use It | Source & Privacy |
+| :--- | :--- | :--- | :--- |
+| **[Cobalt](https://github.com/imputnet/cobalt)** | Universal media downloader | Download videos from YouTube, TikTok, Twitter, and more without tracking or rate limits | [Source](https://github.com/imputnet/cobalt) · [Image](https://github.com/imputnet/cobalt/pkgs/container/cobalt) · No tracking |
+| **[Immich](https://github.com/immich-app/immich)** | Self-hosted photo & video backup (Google Photos alternative) | Keep your photos private with on-device ML tagging, no cloud surveillance, hardware-accelerated transcoding | [Source](https://github.com/immich-app/immich) · [Image](https://github.com/immich-app/immich/pkgs/container/immich-server) · [Privacy](https://immich.app/docs/overview/introduction) · Fully self-hosted |
+| **[Memos](https://github.com/usememos/memos)** | Privacy-first lightweight note-taking | Quick notes and journaling with full ownership of your data | [Source](https://github.com/usememos/memos) · [Image](https://github.com/usememos/memos/pkgs/container/memos) · Fully self-hosted |
+| **[VERT](https://github.com/vert-sh/vert)** | Open-source video transcoding | Convert and optimize videos locally with GPU acceleration—no cloud processing | [Source](https://github.com/vert-sh/vert) · [Image](https://github.com/vert-sh/vert/pkgs/container/vert) · Local processing only |
+
+#### Core Infrastructure (Local Network 🏠)
+
+| Service | What It Does | Why Use It | Source & Privacy |
+| :--- | :--- | :--- | :--- |
+| **[AdGuard Home](https://github.com/AdguardTeam/AdGuardHome)** | Network-wide ad & tracker blocking DNS server | Block ads and trackers for every device on your network (phones, tablets, smart TVs) | [Source](https://github.com/AdguardTeam/AdGuardHome) · [Image](https://hub.docker.com/r/adguard/adguardhome) · [Privacy](https://adguard.com/en/privacy.html) |
+| **[Unbound](https://github.com/NLnetLabs/unbound)** | Recursive DNS resolver | Query DNS root servers directly—no Google (8.8.8.8) or Cloudflare logging your browsing history | [Source](https://github.com/NLnetLabs/unbound) · [Image](https://hub.docker.com/r/klutchell/unbound) · No external queries |
+| **[WG-Easy](https://github.com/wg-easy/wg-easy)** | WireGuard VPN management interface | Easy WireGuard setup with QR codes for instant mobile connection | [Source](https://github.com/wg-easy/wg-easy) · [Image](https://github.com/wg-easy/wg-easy/pkgs/container/wg-easy) · Self-hosted VPN |
+| **[Gluetun](https://github.com/qdm12/gluetun)** | VPN client container | Routes privacy frontend traffic through commercial VPN providers (supports 40+ providers including Mullvad, ProtonVPN, NordVPN) | [Source](https://github.com/qdm12/gluetun) · [Image](https://hub.docker.com/r/qmcgaw/gluetun) · No data collection |
+| **[Portainer](https://github.com/portainer/portainer)** | Container management UI | Manage Docker containers through a web interface | [Source](https://github.com/portainer/portainer) · [Image](https://hub.docker.com/r/portainer/portainer-ce) · [Privacy](https://www.portainer.io/privacy-policy) |
+| **[Watchtower](https://github.com/containrrr/watchtower)** | Automatic container updates | Keeps your services up-to-date with security patches automatically | [Source](https://github.com/containrrr/watchtower) · [Image](https://hub.docker.com/r/containrrr/watchtower) · No external communication except image pulls |
+| **Dashboard** | Unified control center | Material Design 3 dashboard for managing all services, monitoring system health, and viewing logs | Local build · No telemetry |
+| **Hub API** | Control plane orchestration | FastAPI backend providing service management, health monitoring, and WireGuard integration | Local build · No telemetry |
+
+#### Optional Services
+
+| Service | What It Does | Why Use It | Source & Privacy |
+| :--- | :--- | :--- | :--- |
+| **[Odido Booster](https://github.com/Lyceris-chan/odido-bundle-booster)** | Automated mobile data bundle management (Odido NL provider) | Automatically activates data bundles when approaching limits—specific to Odido mobile customers in the Netherlands | [Source](https://github.com/Lyceris-chan/odido-bundle-booster) · Self-built · No data collection |
+
+---
+
+**Key Privacy Notes:**
+
+- **🔒 VPN-Protected Services**: Route all external requests through your commercial VPN (Gluetun). Upstream providers (YouTube, Reddit, etc.) only see the VPN's IP address, not your home IP
+- **🏠 Local Services**: Run entirely on your network—no external communication except for updates and DNS blocklists
+- **No Telemetry**: None of these services send usage data, analytics, or telemetry to third parties
+- **Full Source Availability**: Every service is open-source and auditable
+- **Data Ownership**: Your data stays on your hardware—you are not the product
+
+**Privacy Policy Repository Links:**
+- AdGuard Home: https://adguard.com/en/privacy.html
+- Portainer: https://www.portainer.io/privacy-policy
+- SearXNG: https://docs.searxng.org/own-instance.html
+- Immich: https://immich.app/docs/overview/introduction
+- All other services: Self-hosted with no external data collection
 
 </details>
 

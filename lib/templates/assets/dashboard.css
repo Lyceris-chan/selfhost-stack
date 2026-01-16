@@ -451,13 +451,55 @@
  .section-label:first-of-type {
  margin-top: 8px;
  }
-        
- .section-hint {
- margin: 0 0 24px 0;
- display: flex;
- gap: 12px;
- flex-wrap: wrap;
- }
+/* MD3 Chip Grid Container
+ * Responsive grid layout that adapts from 2x2 on mobile to 4x4 on large screens
+ * Chips automatically fill available space to prevent gaps
+ * Reference: https://m3.material.io/components/chips
+ * Following Material 3 spacing guidelines: 8dp grid system
+ */
+.section-hint {
+margin: 0 0 24px 0;
+display: grid;
+gap: 8px;
+grid-auto-rows: minmax(48px, auto);
+grid-auto-flow: dense;
+}
+
+/* Responsive chip grid breakpoints - follows Material 3 breakpoints */
+/* Extra-large screens (1440px+): 4 columns for optimal readability */
+@media (min-width: 1440px) {
+  .section-hint {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Large screens (1024px - 1439px): 4 columns */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .section-hint {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Medium screens (840px - 1023px): 3 columns */
+@media (min-width: 840px) and (max-width: 1023px) {
+  .section-hint {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Small screens (600px - 839px): 3 columns */
+@media (min-width: 600px) and (max-width: 839px) {
+  .section-hint {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Extra-small screens (below 600px): 2 columns */
+@media (max-width: 599px) {
+  .section-hint {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
         
  /* Grid Layouts */
  .grid {
@@ -575,22 +617,67 @@
  width: 100%;
  }
         
+ /* MD3 Assist Chips - Compact, informative, non-scrollable
+  * Base size: 48px height for better touch targets (Material 3 spec)
+  * Chips in grids fill available space
+  * Reference: https://m3.material.io/components/chips/specs
+  */
  .chip {
- display: inline-flex;
+ display: flex;
  align-items: center;
  justify-content: center;
  gap: 8px; 
- height: 32px;
- padding: 0 16px;
+ min-height: 48px;
+ height: auto;
+ padding: 8px 16px;
  border-radius: var(--md-sys-shape-corner-small);
  font-size: 14px;
  font-weight: 500;
  letter-spacing: 0.1px;
+ line-height: 20px;
  transition: all var(--md-sys-motion-duration-short) linear;
  border: 1px solid var(--md-sys-color-outline);
  background: transparent;
  color: var(--md-sys-color-on-surface);
  position: relative;
+ min-width: 0;
+ max-width: 100%;
+ overflow: hidden;
+ box-sizing: border-box;
+ }
+ 
+ /* Chips in grid containers fill their cell and wrap text */
+ .section-hint .chip {
+   width: 100%;
+   min-width: 0;
+   word-wrap: break-word;
+   white-space: normal;
+   text-align: center;
+   hyphens: auto;
+ }
+ 
+ /* Icon sizing in chips - follows MD3 18px icon spec */
+ .chip .material-symbols-rounded {
+   font-size: 18px;
+   width: 18px;
+   height: 18px;
+   flex-shrink: 0;
+ }
+ 
+ /* Text in chips handles overflow gracefully */
+ .chip > span:not(.material-symbols-rounded) {
+   min-width: 0;
+   flex: 1;
+   overflow-wrap: break-word;
+ }
+ 
+ /* Chips NOT in grids should truncate with ellipsis */
+ .chip-box .chip > span:not(.material-symbols-rounded),
+ .filter-chip > span:not(.material-symbols-rounded) {
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+ }
  }
         
  .chip.vpn { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border: none; }

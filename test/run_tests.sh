@@ -86,6 +86,64 @@ main() {
   fi
   echo ""
 
+  # 5. Comprehensive Dashboard Interaction Tests
+  echo -e "\e[34m--- Step 5: Comprehensive Dashboard Tests ---\e[0m"
+  if [ -f test/test_dashboard_comprehensive.js ]; then
+    if node test/test_dashboard_comprehensive.js; then
+      echo -e "\e[32m✅ Dashboard Comprehensive Tests Passed\e[0m"
+    else
+      echo -e "\e[31m❌ Step 5 (Dashboard Tests) Failed\e[0m"
+      exit 1
+    fi
+  else
+    echo -e "\e[33m⚠️  Step 5 (Dashboard Tests) Skipped - test file not found\e[0m"
+  fi
+  echo ""
+
+  # 6. WireGuard Functionality Tests
+  echo -e "\e[34m--- Step 6: WireGuard Tests ---\e[0m"
+  if [ -f test/test_wireguard.js ]; then
+    if node test/test_wireguard.js; then
+      echo -e "\e[32m✅ WireGuard Tests Passed\e[0m"
+    else
+      echo -e "\e[31m❌ Step 6 (WireGuard Tests) Failed\e[0m"
+      exit 1
+    fi
+  else
+    echo -e "\e[33m⚠️  Step 6 (WireGuard Tests) Skipped - test file not found\e[0m"
+  fi
+  echo ""
+
+  # 7. Container Logs Check
+  echo -e "\e[34m--- Step 7: Container Logs Analysis ---\e[0m"
+  echo "Checking for errors in container logs..."
+  
+  CONTAINERS=$(docker ps --filter "name=hub-" --format "{{.Names}}" 2>/dev/null || echo "")
+  if [ -z "$CONTAINERS" ]; then
+    echo -e "\e[33m⚠️  No hub containers found - skipping log check\e[0m"
+  else
+    HAS_ERRORS=0
+    for container in $CONTAINERS; do
+      echo "  Checking $container..."
+      # Check for critical errors in last 100 lines
+      ERROR_COUNT=$(docker logs "$container" --tail 100 2>&1 | grep -iE "error|critical|fatal|exception" | grep -v "404" | wc -l || echo "0")
+      if [ "$ERROR_COUNT" -gt 0 ]; then
+        echo -e "    \e[33m⚠️  Found $ERROR_COUNT potential errors in $container\e[0m"
+        docker logs "$container" --tail 20 2>&1 | grep -iE "error|critical|fatal|exception" | grep -v "404" || true
+        HAS_ERRORS=1
+      else
+        echo -e "    \e[32m✓ No critical errors\e[0m"
+      fi
+    done
+    
+    if [ $HAS_ERRORS -eq 1 ]; then
+      echo -e "\e[33m⚠️  Some containers have errors - review logs above\e[0m"
+    else
+      echo -e "\e[32m✅ All container logs clean\e[0m"
+    fi
+  fi
+  echo ""
+
   echo "=========================================================="
   echo -e "\e[1;32m🎉 ALL VERIFICATIONS PASSED SUCCESSFULLY\e[0m"
   echo "=========================================================="

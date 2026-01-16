@@ -125,12 +125,12 @@ then
       local auth_response
       auth_response=$(curl -s --max-time 5 -X POST "http://${LAN_IP}:${PORT_PORTAINER}/api/auth" \
         -H "Content-Type: application/json" \
-        -d "{"Username":"admin","Password":"${PORTAINER_PASS_RAW}"}" 2>&1 || echo "CURL_ERROR")
+        -d "{\"Username\":\"admin\",\"Password\":\"${PORTAINER_PASS_RAW}\"}" 2>&1 || echo "CURL_ERROR")
       
       if ! echo "${auth_response}" | grep -q "jwt"; then
         auth_response=$(curl -s --max-time 5 -X POST "http://${LAN_IP}:${PORT_PORTAINER}/api/auth" \
           -H "Content-Type: application/json" \
-          -d "{"Username":"portainer","Password":"${PORTAINER_PASS_RAW}"}" 2>&1 || echo "CURL_ERROR")
+          -d "{\"Username\":\"portainer\",\"Password\":\"${PORTAINER_PASS_RAW}\"}" 2>&1 || echo "CURL_ERROR")
       fi
       
       if echo "${auth_response}" | grep -q "jwt"; then

@@ -1,5 +1,18 @@
 {
+  "name": "privacy-hub-tests",
+  "version": "1.0.0",
+  "description": "Comprehensive integration tests for Privacy Hub",
+  "scripts": {
+    "test": "node test_integration.js",
+    "test:integration": "node test_integration.js",
+    "test:dashboard": "node test_dashboard.js",
+    "test:wireguard": "node test_wireguard.js",
+    "test:all": "npm run test:integration && npm run test:dashboard && npm run test:wireguard"
+  },
   "dependencies": {
-    "puppeteer": "^24.34.0"
-  }
+    "puppeteer": "^21.0.0"
+  },
+  "devDependencies": {},
+  "author": "Privacy Hub Team",
+  "license": "MIT"
 }

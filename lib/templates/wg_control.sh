@@ -68,32 +68,42 @@ elif [ "$ACTION" = "status" ]; then
   PUBLIC_IP="--"
   DATA_FILE="/app/.data_usage"
   
-  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER_PREFIX}gluetun$"; then
+  # Check if gluetun container is running (not just exists)
+  if docker ps --filter "name=^${CONTAINER_PREFIX}gluetun$" --filter "status=running" --format '{{.Names}}' 2>/dev/null | grep -q "gluetun"; then
     # Check container health status
     HEALTH=$(docker inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}gluetun 2>/dev/null || echo "unknown")
     if [ "$HEALTH" = "healthy" ]; then
       GLUETUN_HEALTHY="true"
+      # If container is healthy, VPN is up (Docker health check verifies VPN connectivity)
+      GLUETUN_STATUS="up"
+    else
+      GLUETUN_HEALTHY="false"
+      # Container exists but not healthy - VPN may be down or starting
+      GLUETUN_STATUS="starting"
     fi
     
     # Use gluetun's HTTP control server API (port 8000) for status
     # API docs: https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/control-server.md
     
-    # Get VPN status from control server
-    VPN_STATUS_RESPONSE=$(docker exec ${CONTAINER_PREFIX}gluetun wget --user=gluetun --password="__ADMIN_PASS_RAW__" -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
-    if [ -n "$VPN_STATUS_RESPONSE" ]; then
-      # Extract status from {"status":"running"} or {"status":"stopped"}
-      VPN_RUNNING=$(echo "$VPN_STATUS_RESPONSE" | grep -o '"status":"running"' || echo "")
-      if [ -n "$VPN_RUNNING" ]; then
-        GLUETUN_STATUS="up"
-        HANDSHAKE_AGO="Connected"
+    # Get VPN status from control server (only if we already know it's healthy)
+    if [ "$GLUETUN_HEALTHY" = "true" ]; then
+      VPN_STATUS_RESPONSE=$(docker exec ${CONTAINER_PREFIX}gluetun wget --user=gluetun --password="__ADMIN_PASS_RAW__" -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
+      if [ -n "$VPN_STATUS_RESPONSE" ]; then
+        # Extract status from {"status":"running"} or {"status":"stopped"}
+        VPN_RUNNING=$(echo "$VPN_STATUS_RESPONSE" | grep -o '"status":"running"' || echo "")
+        if [ -n "$VPN_RUNNING" ]; then
+          HANDSHAKE_AGO="Connected"
+        else
+          # API says stopped but container is healthy? Unusual but respect API
+          GLUETUN_STATUS="starting"
+          HANDSHAKE_AGO="Connecting..."
+        fi
       else
-        GLUETUN_STATUS="down"
-        HANDSHAKE_AGO="Disconnected"
+        # API unavailable but container healthy - assume connected
+        HANDSHAKE_AGO="Connected (API unavailable)"
       fi
-    elif [ "$GLUETUN_HEALTHY" = "true" ]; then
-      # Fallback: if container is healthy, assume VPN is up
-      GLUETUN_STATUS="up"
-      HANDSHAKE_AGO="Connected (API unavailable)"
+    else
+      HANDSHAKE_AGO="Waiting for health check..."
     fi
     
     # Get public IP from control server

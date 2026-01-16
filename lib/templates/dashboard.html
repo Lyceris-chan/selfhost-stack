@@ -139,7 +139,7 @@
 
     <section data-category="apps">
     <div class="section-label">Applications</div>
-    <div class="section-hint" style="display: flex; gap: 8px; flex-wrap: wrap;">
+    <div class="section-hint">
       <span class="chip category-badge" data-tooltip="Services marked with 🔒 VPN are routed through a secure tunnel. These services only access the internet via the VPN gateway and are not reachable from the public internet."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
       <span class="chip category-badge" data-tooltip="Local services accessed directly through the internal network interface."><span class="material-symbols-rounded">lan</span> Direct Access</span>
       <span class="chip category-badge" data-tooltip="Manage advanced infrastructure and container telemetry with Portainer."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
@@ -151,7 +151,7 @@
 
     <section data-category="system">
     <div class="section-label title-medium">System Management</div>
-    <div class="section-hint body-medium" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+    <div class="section-hint body-medium" style="margin-bottom: 8px;">
       <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);"><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
     </div>
     
@@ -386,18 +386,30 @@
           <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
             The <strong>Dashboard API Key</strong> (HUB_API_KEY) is required to authorize sensitive actions like saving settings. You can find this in your <code>.secrets</code> file on the host.
           </p>
-          <input type="password" id="odido-oauth-token" class="text-field sensitive" placeholder="Odido OAuth Token" style="margin-bottom:12px;" autocomplete="current-password" data-tooltip="OAuth token for Odido API authentication.">
           <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant);">
-            Download and extract the latest <a href="https://github.com/GuusBackup/Odido.Authenticator/releases/latest" target="_blank" style="color: var(--md-sys-color-primary);">Odido.Authenticator</a>.
-            <br><br>
-            <strong>How to use:</strong><br>
-            1. Run <code>Odido.Authenticator.exe</code><br>
-            2. Go to the URL provided in the tool: <code class="sensitive">https://www.odido.nl/login?...</code><br>
-            3. Sign in to Odido<br>
-            4. Grab the result URL: <code class="sensitive">https://www.odido.nl/loginappresult?token=...</code><br>
-            5. Paste it into the tool and press enter<br>
-            6. It will show the Refresh token now (Decrypted the response)<br>
-            7. Press enter or Y to get an Authentication token from it (This will destroy the refresh token)
+            <strong>Step 1:</strong> Click the button below to generate your Odido sign-in URL, then click it to sign in:
+          </p>
+          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <button type="button" onclick="generateOdidoSignInUrl()" class="btn btn-tonal" style="flex: 1;">
+              <span class="material-symbols-rounded">link</span>
+              <span>Generate Sign-In URL</span>
+            </button>
+          </div>
+          <div id="odido-login-url-container" style="display: none; background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+            <div class="code-label" style="margin-bottom: 8px;">Click this URL to sign into Odido:</div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <a id="odido-login-url" href="#" target="_blank" class="code-block sensitive" style="flex: 1; cursor: pointer; text-decoration: none; word-break: break-all;">Generating...</a>
+              <button type="button" onclick="copyOdidoSignInUrl()" class="btn btn-icon" data-tooltip="Copy URL">
+                <span class="material-symbols-rounded">content_copy</span>
+              </button>
+            </div>
+          </div>
+          <p class="body-small" style="margin-bottom:8px; color: var(--md-sys-color-on-surface-variant);">
+            <strong>Step 2:</strong> After signing in, you'll be redirected to a page showing a token. Paste the complete callback URL here:
+          </p>
+          <input type="text" id="odido-callback-url" class="text-field sensitive" placeholder="https://www.odido.nl/loginappresult?token=..." style="margin-bottom:12px;" autocomplete="off" data-tooltip="Paste the full callback URL you receive after signing in to Odido.">
+          <p class="body-small" style="margin-bottom:16px; color: var(--md-sys-color-on-surface-variant); opacity: 0.7;">
+            The system will automatically extract and configure your OAuth credentials from this URL.
           </p>
           <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;" data-tooltip="The product code for your data bundle.">
           <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;" data-tooltip="Automatic renewal triggers when data falls below this level.">

@@ -40,8 +40,27 @@ detect_dockerfile() {
  return 1
 }
 
-# Core logging functions that output to terminal and persist JSON formatted logs for the dashboard.
-# Uses Python for secure JSON escaping to prevent injection.
+################################################################################
+# Logging Functions
+#
+# Core logging functions that output to terminal and persist JSON formatted
+# logs for dashboard consumption. Uses Python for secure JSON escaping to
+# prevent injection attacks.
+################################################################################
+
+################################################################################
+# log_to_file - Internal JSON log writer
+#
+# Writes structured JSON log entries to the deployment history log file.
+# This function is used internally by log_info, log_warn, and log_crit.
+#
+# Arguments:
+#   $1 - Log level (INFO, WARN, CRIT)
+#   $2 - Log message
+#
+# Example:
+#   log_to_file "INFO" "Service started successfully"
+################################################################################
 log_to_file() {
  local level="$1"
  local msg="$2"
@@ -162,7 +181,7 @@ PERSONAL_MODE=false
 REG_TOKEN=""
 REG_USER=""
 LAN_IP_OVERRIDE=""
-WG_CONF_B64=""
+WG_CONF_B64="${WG_CONF_B64:-}"
 
 usage() {
   echo "Usage: $0 [options]"

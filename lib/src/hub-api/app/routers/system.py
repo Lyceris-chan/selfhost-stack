@@ -14,6 +14,7 @@ from datetime import datetime
 import tempfile
 
 import psutil
+import requests
 from fastapi import APIRouter, BackgroundTasks, Depends
 
 from ..core.config import settings
@@ -28,13 +29,34 @@ router = APIRouter()
 def get_certificate_status():
     """Returns the status and details of the current SSL certificate.
 
+    This endpoint checks multiple certificate locations and provides detailed
+    information about SSL certificate installation and validity.
+
     Returns:
         A dictionary containing certificate details or error information.
     """
-    cert_path = "/etc/adguard/conf/ssl.crt"
-
-    if not os.path.exists(cert_path):
-        return {"error": "Certificate not found", "installed": False}
+    # Check multiple possible certificate locations
+    # Priority order: AdGuard conf, AdGuard certs, generic SSL location
+    cert_paths = [
+        "/etc/adguard/conf/ssl.crt",
+        "/etc/adguard/certs/tls.crt",
+        "/etc/adguard/conf/tls.crt",
+        "/etc/ssl/certs/hub.crt",
+        "/app/data/adguard/conf/ssl.crt",
+    ]
+    
+    cert_path = None
+    for path in cert_paths:
+        if os.path.exists(path):
+            cert_path = path
+            break
+    
+    if not cert_path:
+        return {
+            "error": "Certificate not found in any expected location",
+            "installed": False,
+            "checked_paths": cert_paths
+        }
 
     try:
         # Use openssl to parse cert info
@@ -45,43 +67,59 @@ def get_certificate_status():
                                 timeout=5,
                                 check=False)
         if result.returncode != 0:
-            return {"error": "Failed to parse certificate", "installed": False}
+            return {
+                "error": f"Failed to parse certificate at {cert_path}: {result.stderr}",
+                "installed": False
+            }
 
         output = result.stdout
 
-        # Extract fields
+        # Extract fields with improved regex patterns
         subject = ""
         issuer = ""
         not_after = ""
 
-        sub_match = re.search(r"Subject:.*CN\s*=\s*([^\s,/]+)", output)
+        # More flexible CN extraction
+        sub_match = re.search(r"Subject:.*?CN\s*=\s*([^\s,/\n]+)", output, re.IGNORECASE)
         if sub_match:
             subject = sub_match.group(1)
 
-        iss_match = re.search(r"Issuer:.*CN\s*=\s*([^\s,/]+)", output)
+        iss_match = re.search(r"Issuer:.*?CN\s*=\s*([^\s,/\n]+)", output, re.IGNORECASE)
         if iss_match:
             issuer = iss_match.group(1)
 
-        exp_match = re.search(r"Not After : (.*)", output)
+        exp_match = re.search(r"Not After\s*:\s*(.*?)(?:\n|$)", output)
         if exp_match:
             not_after = exp_match.group(1).strip()
 
         # Determine type
         cert_type = "Self-Signed"
-        trusted_issuers = ["Let's Encrypt", "R3", "R10", "R11"]
+        trusted_issuers = ["Let's Encrypt", "R3", "R10", "R11", "E1", "E2"]
         if any(ti in issuer for ti in trusted_issuers):
             cert_type = "Let's Encrypt (Trusted)"
         elif issuer and issuer != subject:
             cert_type = f"Issued by {issuer}"
+
+        log_structured(
+            "INFO",
+            f"Certificate check successful: {cert_type} for {subject}"
+        )
 
         return {
             "installed": True,
             "subject": subject,
             "issuer": issuer,
             "expires": not_after,
-            "type": cert_type
+            "type": cert_type,
+            "path": cert_path
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "error": "Certificate parsing timed out",
+            "installed": False
         }
     except Exception as err:
+        log_structured("ERROR", f"Certificate status check failed: {err}")
         return {"error": str(err), "installed": False}
 
 
@@ -161,7 +199,8 @@ def get_status(user: str = Depends(get_optional_user)):
             total_rx, total_tx = get_total_usage(settings.WGE_DATA_USAGE_FILE)
             current_rx = int(wgeasy_status.get('session_rx', 0))
             current_tx = int(wgeasy_status.get('session_tx', 0))
-            save_total_usage(settings.WGE_DATA_USAGE_FILE, total_rx + current_rx,
+            save_total_usage(settings.WGE_DATA_USAGE_FILE,
+                             total_rx + current_rx,
                              total_tx + current_tx)
             status_data['wgeasy']['total_rx'], status_data['wgeasy'][
                 'total_tx'] = get_total_usage(settings.WGE_DATA_USAGE_FILE)
@@ -282,9 +321,10 @@ def get_metrics(user: str = Depends(get_optional_user)):
     try:
         conn = sqlite3.connect(settings.DB_FILE)
         cursor = conn.cursor()
-        cursor.execute('''SELECT container, cpu_percent, mem_usage, mem_limit
-                     FROM metrics WHERE id IN (SELECT MAX(id) FROM metrics GROUP BY container)'''
-                       )
+        cursor.execute(
+            '''SELECT container, cpu_percent, mem_usage, mem_limit
+               FROM metrics WHERE id IN
+               (SELECT MAX(id) FROM metrics GROUP BY container)''')
         rows = cursor.fetchall()
         conn.close()
         container_metrics = {
@@ -444,7 +484,8 @@ def purge_images(user: str = Depends(get_admin_user)):
         if "Total reclaimed space:" in res.stdout:
             reclaimed = res.stdout.split(
                 "Total reclaimed space:")[1].strip().split('\n')[0]
-            reclaimed_msg = f"Successfully reclaimed {reclaimed} of storage space."
+            reclaimed_msg = (f"Successfully reclaimed {reclaimed} "
+                            f"of storage space.")
 
         run_command(['docker', 'builder', 'prune', '-f'], timeout=60)
         return {"success": True, "message": reclaimed_msg}
@@ -532,7 +573,8 @@ def trigger_restore(filename: str,
             check=False)
 
     background_tasks.add_task(_restore)
-    return {"success": True, "message": "Restore sequence started in background"}
+    return {"success": True,
+            "message": "Restore sequence started in background"}
 
 
 @router.post("/uninstall")
@@ -547,4 +589,134 @@ def uninstall(background_tasks: BackgroundTasks,
 
     background_tasks.add_task(_uninstall)
     return {"success": True, "message": "Uninstall sequence started"}
+
+
+@router.post("/odido-exchange-token")
+def exchange_odido_token(request: dict, user: str = Depends(get_admin_user)):
+    """Exchanges Odido callback token for OAuth token.
+
+    This endpoint processes the encrypted token received from the Odido sign-in
+    callback URL and exchanges it for a usable OAuth access token. This
+    replicates the functionality of the Odido.Authenticator tool directly in
+    the dashboard.
+
+    Args:
+        request: Dictionary containing 'callback_token' (the token parameter
+                 from the callback URL).
+        user: Authenticated admin user.
+
+    Returns:
+        Dictionary with 'oauth_token' or 'error'.
+    """
+    import base64
+    import json as json_lib
+    
+    callback_token = request.get("callback_token", "").strip()
+    if not callback_token:
+        return {"error": "Callback token is required"}
+
+    try:
+        # The callback token from Odido is base64-encoded JSON containing
+        # the refresh token. Decode it to extract the refresh token.
+        try:
+            decoded = base64.b64decode(callback_token).decode('utf-8')
+            token_data = json_lib.loads(decoded)
+            refresh_token = (token_data.get('refresh_token') or
+                           token_data.get('token'))
+            
+            if not refresh_token:
+                return {"error":
+                       "Could not extract refresh token from callback"}
+        except Exception as decode_err:
+            # If it's not base64 encoded JSON, it might be the token directly
+            refresh_token = callback_token
+        
+        # Exchange refresh token for access token via Odido token endpoint
+        token_url = "https://login.odido.nl/connect/token"
+        token_data = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": "OdidoMobileApp"
+        }
+        
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "T-Mobile 5.3.28 (Android 10; 10)"
+        }
+        
+        resp = requests.post(token_url, data=token_data, headers=headers,
+                            timeout=10)
+        
+        if resp.status_code != 200:
+            log_structured("ERROR",
+                         f"Odido token exchange failed: "
+                         f"{resp.status_code} - {resp.text}",
+                         "ODIDO")
+            return {"error": f"Token exchange failed: {resp.status_code}"}
+        
+        result = resp.json()
+        access_token = result.get('access_token')
+        
+        if not access_token:
+            return {"error": "No access token in response"}
+        
+        log_structured("SUCCESS",
+                      "Odido OAuth token exchanged successfully",
+                      "ODIDO")
+        return {"oauth_token": access_token}
+        
+    except Exception as err:
+        log_structured("ERROR", f"Odido token exchange error: {err}", "ODIDO")
+        return {"error": str(err)}
+
+
+@router.post("/odido-userid")
+def fetch_odido_userid(request: dict, user: str = Depends(get_admin_user)):
+    """Fetches Odido User ID from OAuth token via API redirect.
+
+    This endpoint automatically extracts the User ID by following the Odido
+    API redirect chain, eliminating manual token configuration. The
+    Odido.Authenticator tool generates the OAuth token, which this endpoint
+    then uses to automatically retrieve the User ID.
+
+    Args:
+        request: Dictionary containing 'oauth_token'.
+        user: Authenticated admin user.
+
+    Returns:
+        Dictionary with 'user_id' or 'error'.
+    """
+    oauth_token = request.get("oauth_token", "").strip()
+    if not oauth_token:
+        return {"error": "OAuth token is required"}
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {oauth_token}",
+            "User-Agent": "T-Mobile 5.3.28 (Android 10; 10)"
+        }
+        resp = requests.get("https://capi.odido.nl/account/current",
+                            headers=headers,
+                            allow_redirects=True,
+                            timeout=10)
+        final_url = resp.url
+
+        # Extract 12-char hex User ID from redirect URL
+        # Format: https://capi.odido.nl/{userid}/account/current
+        id_match = re.search(r'capi\.odido\.nl/([0-9a-f]{12})',
+                             final_url, re.IGNORECASE)
+        if id_match:
+            user_id = id_match.group(1)
+            log_structured("SUCCESS",
+                           f"Odido User ID retrieved via API: {user_id}",
+                           "ODIDO")
+            return {"user_id": user_id}
+        else:
+            log_structured("WARN",
+                           "Failed to extract User ID from Odido API redirect",
+                           "ODIDO")
+            return {"error": "Could not extract User ID from API response"}
+    except Exception as err:
+        log_structured("ERROR", f"Odido User ID fetch error: {err}", "ODIDO")
+        return {"error": str(err)}
 
