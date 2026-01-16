@@ -41,19 +41,19 @@ const testResults = {
 const SERVICES = {
   // Core Infrastructure
   dashboard: {
-    port: 8080,
+    port: 8088,
     container: 'hub-dashboard',
     healthEndpoint: '/',
     tests: ['loads', 'responsive', 'api-connection'],
   },
   api: {
-    port: 8085,
+    port: 55555,
     container: 'hub-api',
     healthEndpoint: '/health',
     tests: ['health', 'status', 'certificate-status'],
   },
   adguard: {
-    port: 3000,
+    port: 8083,
     container: 'hub-adguard',
     healthEndpoint: '/',
     tests: ['loads', 'dns-settings'],
@@ -67,7 +67,7 @@ const SERVICES = {
     tests: ['loads', 'search', 'video-playback'],
   },
   breezewiki: {
-    port: 10416,
+    port: 8380,
     container: 'hub-breezewiki',
     healthEndpoint: '/',
     tests: ['loads', 'wiki-lookup', 'search'],
@@ -79,31 +79,31 @@ const SERVICES = {
     tests: ['loads', 'subreddit-view'],
   },
   scribe: {
-    port: 8080,
+    port: 8280,
     container: 'hub-scribe',
     healthEndpoint: '/',
     tests: ['loads', 'article-view'],
   },
   anonymousoverflow: {
-    port: 8080,
+    port: 8480,
     container: 'hub-anonymousoverflow',
     healthEndpoint: '/',
     tests: ['loads', 'question-search'],
   },
   searxng: {
-    port: 8080,
+    port: 8082,
     container: 'hub-searxng',
     healthEndpoint: '/',
     tests: ['loads', 'search'],
   },
   rimgo: {
-    port: 8080,
+    port: 3002,
     container: 'hub-rimgo',
     healthEndpoint: '/',
     tests: ['loads'],
   },
   cobalt: {
-    port: 9000,
+    port: 9001,
     container: 'hub-cobalt-web',
     healthEndpoint: '/',
     tests: ['loads'],
