@@ -6,8 +6,8 @@ echo ""
 
 # Verify script structure
 echo "✓ Checking script components..."
-grep -q "setup_environment" zima.sh && echo "  ✓ Environment setup found" || echo "  ✗ Missing environment setup"
-grep -q "deploy_services" lib/services/deploy.sh && echo "  ✓ Service deployment found" || echo "  ✗ Missing service deployment"
+grep -q "setup_secrets\|setup_configs\|setup_static_assets" zima.sh && echo "  ✓ Environment setup found" || echo "  ✗ Missing environment setup"
+grep -q "deploy_stack" lib/services/deploy.sh && echo "  ✓ Service deployment found" || echo "  ✗ Missing service deployment"
 grep -q "generate_compose" lib/services/compose.sh && echo "  ✓ Compose generation found" || echo "  ✗ Missing compose generation"
 
 echo ""

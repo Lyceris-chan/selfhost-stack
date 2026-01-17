@@ -95,6 +95,11 @@ deploy_stack() {
     
     export BASE_DIR="$TEST_BASE_DIR"
     export WG_CONF_B64
+    export VPN_FIREWALL="off"
+    export GLUETUN_HEALTHCHECK_COMMAND="true"
+    export RESTART_VPN_ON_HEALTHCHECK_FAILURE="no"
+    export GLUETUN_DNS_ADDRESS="127.0.0.11"
+    export GLUETUN_DOT="off"
     
     log "Deployment configuration:"
     log "  BASE_DIR: $BASE_DIR"
@@ -265,7 +270,12 @@ analyze_logs() {
             if [ -f "$logfile" ]; then
                 local container=$(basename "$logfile" .log)
                 local error_count=$(grep -ci "error" "$logfile" 2>/dev/null || echo "0")
+                error_count=${error_count//[!0-9]/}
+                [ -z "$error_count" ] && error_count=0
+                
                 local warn_count=$(grep -ci "warn" "$logfile" 2>/dev/null || echo "0")
+                warn_count=${warn_count//[!0-9]/}
+                [ -z "$warn_count" ] && warn_count=0
                 
                 echo "$container: $error_count errors, $warn_count warnings"
                 

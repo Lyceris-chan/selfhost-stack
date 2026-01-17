@@ -233,9 +233,37 @@
  }
  .filter-bar::-webkit-scrollbar { display: none; }
 
- /* 9+1 Layout: In a 3-column grid, the 10th item (if last) spans all 3 columns */
- .grid:has(> :nth-child(10):last-child) > :nth-child(10) {
+ /* Dynamic Grid Layout Rules
+  * Cards auto-scale to fill remaining row space without hardcoding values.
+  * Pattern: 3-column default, 4-column when divisible by 4 (JS controlled).
+  * Last-item spanning: If last item would be alone in a new row, span full width.
+  */
+
+ /* 3-column grid: Last item spans if orphaned (1st in its row = 3n+1 position) */
+ .grid:not(.grid-4-cols):has(> :last-child:nth-child(3n + 1)) > :last-child {
   grid-column: 1 / -1;
+ }
+
+ /* 4-column grid: Last item spans if orphaned (1st in its row = 4n+1 position) */
+ .grid.grid-4-cols:has(> :last-child:nth-child(4n + 1)) > :last-child {
+  grid-column: 1 / -1;
+ }
+
+ /* Special case: 2 remaining items in 3-col grid - each takes 1.5 cols (span together) */
+ .grid:not(.grid-4-cols):has(> :last-child:nth-child(3n + 2)) > :nth-last-child(2),
+ .grid:not(.grid-4-cols):has(> :last-child:nth-child(3n + 2)) > :last-child {
+  grid-column: span 1;
+ }
+
+ /* Special case: 2 remaining items in 4-col grid - span 2 cols each */
+ .grid.grid-4-cols:has(> :last-child:nth-child(4n + 2)) > :nth-last-child(2),
+ .grid.grid-4-cols:has(> :last-child:nth-child(4n + 2)) > :last-child {
+  grid-column: span 2;
+ }
+
+ /* Special case: 3 remaining items in 4-col grid - first spans 2, others span 1 */
+ .grid.grid-4-cols:has(> :last-child:nth-child(4n + 3)) > :nth-last-child(3) {
+  grid-column: span 2;
  }
         
  .filter-chip {
@@ -517,10 +545,8 @@ text-align: center;
   grid-template-columns: repeat(4, 1fr);
  }
 
- /* Smart Grid: For static content (Big Cards), expand the last item if it wraps to a new row alone */
- .grid.smart-grid > :last-child:nth-child(3n + 1) {
-  grid-column: 1 / -1;
- }
+ /* Smart Grid: For static content sections, uses same orphan-spanning logic as dynamic grids */
+ /* Inherits from the main grid rules above - no additional rules needed */
 
  @media (max-width: 1600px) {
   .grid {

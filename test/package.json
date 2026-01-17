@@ -6,8 +6,9 @@
     "test": "node test_integration.js",
     "test:integration": "node test_integration.js",
     "test:dashboard": "node test_dashboard.js",
+    "test:comprehensive": "node test_dashboard_comprehensive.js",
     "test:wireguard": "node test_wireguard.js",
-    "test:all": "npm run test:integration && npm run test:dashboard && npm run test:wireguard"
+    "test:all": "npm run test:integration && npm run test:dashboard && npm run test:comprehensive && npm run test:wireguard"
   },
   "dependencies": {
     "puppeteer": "^21.0.0"
