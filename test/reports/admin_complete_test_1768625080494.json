@@ -1,0 +1,152 @@
+{
+  "timestamp": "2026-01-17T04:44:40.448Z",
+  "duration": "71.08s",
+  "summary": {
+    "total": 32,
+    "passed": 25,
+    "failed": 7,
+    "passRate": "78.1%"
+  },
+  "interactions": {
+    "Dashboard loads successfully": {
+      "status": "passed"
+    },
+    "Service cards render correctly": {
+      "status": "failed",
+      "error": "Services grid container not found"
+    },
+    "Filter chips function correctly": {
+      "status": "passed"
+    },
+    "Theme toggle switches between light and dark": {
+      "status": "failed",
+      "error": "Theme toggle button not found"
+    },
+    "Privacy mode toggles correctly": {
+      "status": "passed"
+    },
+    "Search functionality works": {
+      "status": "passed"
+    },
+    "Service links are accessible": {
+      "status": "passed"
+    },
+    "Service status updates correctly": {
+      "status": "passed"
+    },
+    "New UI elements verify (Warning Box, Smart Grid)": {
+      "status": "failed",
+      "error": "New .warning-box element not found (Self-signed warning)"
+    },
+    "Dynamic grid column logic (8 items -> 4 cols)": {
+      "status": "failed",
+      "error": "Cannot set properties of null (setting 'innerHTML')"
+    },
+    "Admin authentication successful": {
+      "status": "failed",
+      "error": "No element found for selector: #admin-lock-btn"
+    },
+    "Admin logout hides controls": {
+      "status": "failed",
+      "error": "No element found for selector: #admin-lock-btn"
+    },
+    "Admin can re-authenticate": {
+      "status": "failed",
+      "error": "No element found for selector: #admin-lock-btn"
+    },
+    "Check updates functionality": {
+      "status": "passed"
+    },
+    "Service update UI interaction": {
+      "status": "passed"
+    },
+    "Rollback UI elements present": {
+      "status": "passed"
+    },
+    "Migration tools accessible": {
+      "status": "passed"
+    },
+    "WireGuard management panel accessible": {
+      "status": "passed"
+    },
+    "WireGuard profiles display": {
+      "status": "passed"
+    },
+    "WireGuard profile switching UI": {
+      "status": "passed"
+    },
+    "System information displays": {
+      "status": "passed"
+    },
+    "Certificate status visible": {
+      "status": "passed"
+    },
+    "Container status monitoring": {
+      "status": "passed"
+    },
+    "Backup controls accessible": {
+      "status": "passed"
+    },
+    "Restore controls accessible": {
+      "status": "passed"
+    },
+    "Settings panel opens": {
+      "status": "passed"
+    },
+    "Update strategy configuration": {
+      "status": "passed"
+    },
+    "Theme configuration persists": {
+      "status": "passed"
+    },
+    "Log viewer accessible": {
+      "status": "passed"
+    },
+    "Log filtering functionality": {
+      "status": "passed"
+    },
+    "API endpoints respond correctly": {
+      "status": "passed"
+    },
+    "Admin API endpoints require authentication": {
+      "status": "passed"
+    }
+  },
+  "errors": [
+    {
+      "test": "Service cards render correctly",
+      "error": "Services grid container not found",
+      "stack": "Error: Services grid container not found\n    at /workspaces/selfhost-stack/test/test_dashboard.js:217:13\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async runTest (/workspaces/selfhost-stack/test/test_dashboard.js:113:5)\n    at async testServiceCards (/workspaces/selfhost-stack/test/test_dashboard.js:210:3)\n    at async main (/workspaces/selfhost-stack/test/test_dashboard.js:871:5)"
+    },
+    {
+      "test": "Theme toggle switches between light and dark",
+      "error": "Theme toggle button not found",
+      "stack": "Error: Theme toggle button not found\n    at /workspaces/selfhost-stack/test/test_dashboard.js:254:13\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async runTest (/workspaces/selfhost-stack/test/test_dashboard.js:113:5)\n    at async testThemeToggle (/workspaces/selfhost-stack/test/test_dashboard.js:251:3)\n    at async main (/workspaces/selfhost-stack/test/test_dashboard.js:873:5)"
+    },
+    {
+      "test": "New UI elements verify (Warning Box, Smart Grid)",
+      "error": "New .warning-box element not found (Self-signed warning)",
+      "stack": "Error: New .warning-box element not found (Self-signed warning)\n    at /workspaces/selfhost-stack/test/test_dashboard.js:386:13\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async runTest (/workspaces/selfhost-stack/test/test_dashboard.js:113:5)\n    at async testNewUIElements (/workspaces/selfhost-stack/test/test_dashboard.js:380:3)\n    at async main (/workspaces/selfhost-stack/test/test_dashboard.js:878:5)"
+    },
+    {
+      "test": "Dynamic grid column logic (8 items -> 4 cols)",
+      "error": "Cannot set properties of null (setting 'innerHTML')",
+      "stack": "TypeError: Cannot set properties of null (setting 'innerHTML')\n    at evaluate (evaluate at /workspaces/selfhost-stack/test/test_dashboard.js:402:16, <anonymous>:2:21)\n    at #evaluate (/workspaces/selfhost-stack/test/node_modules/puppeteer-core/lib/cjs/puppeteer/cdp/ExecutionContext.js:222:56)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async ExecutionContext.evaluate (/workspaces/selfhost-stack/test/node_modules/puppeteer-core/lib/cjs/puppeteer/cdp/ExecutionContext.js:117:16)\n    at async IsolatedWorld.evaluate (/workspaces/selfhost-stack/test/node_modules/puppeteer-core/lib/cjs/puppeteer/cdp/IsolatedWorld.js:124:16)\n    at async CdpFrame.evaluate (/workspaces/selfhost-stack/test/node_modules/puppeteer-core/lib/cjs/puppeteer/api/Frame.js:353:20)\n    at async CdpPage.evaluate (/workspaces/selfhost-stack/test/node_modules/puppeteer-core/lib/cjs/puppeteer/api/Page.js:841:20)\n    at async /workspaces/selfhost-stack/test/test_dashboard.js:402:5\n    at async runTest (/workspaces/selfhost-stack/test/test_dashboard.js:113:5)\n    at async testDynamicGridColumns (/workspaces/selfhost-stack/test/test_dashboard.js:400:3)"
+    },
+    {
+      "test": "Admin authentication successful",
+      "error": "No element found for selector: #admin-lock-btn",
+      "stack": "Error: No element found for selector: #admin-lock-btn\n    at assert (/workspaces/selfhost-stack/test/node_modules/puppeteer-core/lib/cjs/puppeteer/util/assert.js:18:15)\n    at CdpFrame.click (/workspaces/selfhost-stack/test/node_modules/puppeteer-core/lib/cjs/puppeteer/api/Frame.js:725:40)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async authenticateAdmin (/workspaces/selfhost-stack/test/test_dashboard.js:161:3)\n    at async /workspaces/selfhost-stack/test/test_dashboard.js:328:5\n    at async runTest (/workspaces/selfhost-stack/test/test_dashboard.js:113:5)\n    at async testAdminLogin (/workspaces/selfhost-stack/test/test_dashboard.js:327:3)\n    at async main (/workspaces/selfhost-stack/test/test_dashboard.js:886:5)"
+    },
+    {
+      "test": "Admin logout hides controls",
+      "error": "No element found for selector: #admin-lock-btn",
+      "stack": "Error: No element found for selector: #admin-lock-btn\n    at assert (/workspaces/selfhost-stack/test/node_modules/puppeteer-core/lib/cjs/puppeteer/util/assert.js:18:15)\n    at CdpFrame.click (/workspaces/selfhost-stack/test/node_modules/puppeteer-core/lib/cjs/puppeteer/api/Frame.js:725:40)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async logoutAdmin (/workspaces/selfhost-stack/test/test_dashboard.js:185:3)\n    at async /workspaces/selfhost-stack/test/test_dashboard.js:341:5\n    at async runTest (/workspaces/selfhost-stack/test/test_dashboard.js:113:5)\n    at async testAdminLogout (/workspaces/selfhost-stack/test/test_dashboard.js:339:3)\n    at async main (/workspaces/selfhost-stack/test/test_dashboard.js:887:5)"
+    },
+    {
+      "test": "Admin can re-authenticate",
+      "error": "No element found for selector: #admin-lock-btn",
+      "stack": "Error: No element found for selector: #admin-lock-btn\n    at assert (/workspaces/selfhost-stack/test/node_modules/puppeteer-core/lib/cjs/puppeteer/util/assert.js:18:15)\n    at CdpFrame.click (/workspaces/selfhost-stack/test/node_modules/puppeteer-core/lib/cjs/puppeteer/api/Frame.js:725:40)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async authenticateAdmin (/workspaces/selfhost-stack/test/test_dashboard.js:161:3)\n    at async /workspaces/selfhost-stack/test/test_dashboard.js:356:5\n    at async runTest (/workspaces/selfhost-stack/test/test_dashboard.js:113:5)\n    at async testAdminRelogin (/workspaces/selfhost-stack/test/test_dashboard.js:355:3)\n    at async main (/workspaces/selfhost-stack/test/test_dashboard.js:888:5)"
+    }
+  ]
+}

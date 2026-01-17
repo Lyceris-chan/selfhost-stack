@@ -1,0 +1,109 @@
+{
+  "timestamp": "2026-01-17T06:21:54.136Z",
+  "duration": "39.65s",
+  "summary": {
+    "total": 32,
+    "passed": 32,
+    "failed": 0,
+    "passRate": "100.0%"
+  },
+  "interactions": {
+    "Dashboard loads successfully": {
+      "status": "passed"
+    },
+    "Service cards render correctly": {
+      "status": "passed"
+    },
+    "Filter chips function correctly": {
+      "status": "passed"
+    },
+    "Theme toggle switches between light and dark": {
+      "status": "passed"
+    },
+    "Privacy mode toggles correctly": {
+      "status": "passed"
+    },
+    "Search functionality works": {
+      "status": "passed"
+    },
+    "Service links are accessible": {
+      "status": "passed"
+    },
+    "Service status updates correctly": {
+      "status": "passed"
+    },
+    "New UI elements verify (Warning Box, Smart Grid)": {
+      "status": "passed"
+    },
+    "Dynamic grid column logic (8 items -> 4 cols)": {
+      "status": "passed"
+    },
+    "Admin authentication successful": {
+      "status": "passed"
+    },
+    "Admin logout hides controls": {
+      "status": "passed"
+    },
+    "Admin can re-authenticate": {
+      "status": "passed"
+    },
+    "Check updates functionality": {
+      "status": "passed"
+    },
+    "Service update UI interaction": {
+      "status": "passed"
+    },
+    "Rollback UI elements present": {
+      "status": "passed"
+    },
+    "Migration tools accessible": {
+      "status": "passed"
+    },
+    "WireGuard management panel accessible": {
+      "status": "passed"
+    },
+    "WireGuard profiles display": {
+      "status": "passed"
+    },
+    "WireGuard profile switching UI": {
+      "status": "passed"
+    },
+    "System information displays": {
+      "status": "passed"
+    },
+    "Certificate status visible": {
+      "status": "passed"
+    },
+    "Container status monitoring": {
+      "status": "passed"
+    },
+    "Backup controls accessible": {
+      "status": "passed"
+    },
+    "Restore controls accessible": {
+      "status": "passed"
+    },
+    "Settings panel opens": {
+      "status": "passed"
+    },
+    "Update strategy configuration": {
+      "status": "passed"
+    },
+    "Theme configuration persists": {
+      "status": "passed"
+    },
+    "Log viewer accessible": {
+      "status": "passed"
+    },
+    "Log filtering functionality": {
+      "status": "passed"
+    },
+    "API endpoints respond correctly": {
+      "status": "passed"
+    },
+    "Admin API endpoints require authentication": {
+      "status": "passed"
+    }
+  },
+  "errors": []
+}

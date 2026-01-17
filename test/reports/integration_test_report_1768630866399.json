@@ -1,0 +1,1070 @@
+{
+  "summary": {
+    "total": 28,
+    "passed": 22,
+    "failed": 6,
+    "skipped": 0,
+    "duration": "168.95s",
+    "passRate": "78.6%"
+  },
+  "services": {
+    "dashboard": {
+      "name": "dashboard",
+      "container": "hub-dashboard",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1035,
+          "message": "Loaded successfully in 1035ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "passed",
+      "consoleErrors": 6,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768630697772
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768630697772
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768630697772
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768630697773
+        },
+        {
+          "type": "pageerror",
+          "text": "Unexpected end of input",
+          "stack": "SyntaxError: Unexpected end of input",
+          "timestamp": 1768630697838
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768630697839
+        }
+      ]
+    },
+    "api": {
+      "name": "api",
+      "container": "hub-api",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "skipped",
+      "consoleErrors": 0
+    },
+    "adguard": {
+      "name": "adguard",
+      "container": "hub-adguard",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1342,
+          "message": "Loaded successfully in 1342ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 5,
+            "content": "2026/01/17 06:09:03.652334 [info] dhcpd: warning: creating dhcpv4 server err=\"dhcpv4: invalid IP is not an IPv4 address\""
+          },
+          {
+            "line": 9,
+            "content": "2026/01/17 06:09:03.746068 [info] warning: private rdns resolution failed; disabling err=\"preparing resolvers: no upstream specified\""
+          }
+        ],
+        "totalLines": 49
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "invidious": {
+      "name": "invidious",
+      "container": "hub-invidious",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 2001,
+          "message": "Loaded successfully in 2001ms"
+        },
+        "videoPlayback": {
+          "success": false,
+          "message": "No video results found"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 3,
+            "content": "Unhandled exception in spawn: Hostname lookup for api.invidious.io failed: Try again (Socket::Addrinfo::Error)"
+          }
+        ],
+        "warnings": [],
+        "totalLines": 22
+      },
+      "overall": "failed",
+      "consoleErrors": 1,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1768630710269
+        }
+      ]
+    },
+    "breezewiki": {
+      "name": "breezewiki",
+      "container": "hub-breezewiki",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 2001,
+          "message": "Loaded successfully in 2001ms"
+        },
+        "wikiLookup": {
+          "success": false,
+          "error": "Navigation timeout of 60000 ms exceeded",
+          "message": "Test failed: Navigation timeout of 60000 ms exceeded"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 5
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "redlib": {
+      "name": "redlib",
+      "container": "hub-redlib",
+      "tests": {
+        "load": {
+          "success": false,
+          "error": "net::ERR_CONNECTION_REFUSED at http://10.0.0.72:8080/",
+          "message": "Failed to load: net::ERR_CONNECTION_REFUSED at http://10.0.0.72:8080/"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 1,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 2,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client (mobile + generic)"
+          },
+          {
+            "line": 3,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 4,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 5,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 6,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 7,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 8,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 9,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 10,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 11,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 12,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 13,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client (mobile + generic)"
+          },
+          {
+            "line": 14,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 15,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 16,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 17,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 18,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 19,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 20,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 21,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 22,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 23,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 24,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client (mobile + generic)"
+          },
+          {
+            "line": 25,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 26,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 27,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 28,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 29,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 30,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 31,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 32,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 33,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 34,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 35,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client (mobile + generic)"
+          },
+          {
+            "line": 36,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 37,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 38,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 39,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 40,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 41,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 42,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 43,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 44,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 45,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 46,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client (mobile + generic)"
+          },
+          {
+            "line": 47,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 48,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 49,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          },
+          {
+            "line": 50,
+            "content": " ERROR redlib::oauth > [⛔] Failed to create OAuth client: error trying to connect: dns error: failed to lookup address information: Try again. Retrying in 5 seconds..."
+          }
+        ],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "scribe": {
+      "name": "scribe",
+      "container": "hub-scribe",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 2001,
+          "message": "Loaded successfully in 2001ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 11
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "anonymousoverflow": {
+      "name": "anonymousoverflow",
+      "container": "hub-anonymousoverflow",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1070,
+          "message": "Loaded successfully in 1070ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 1
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "searxng": {
+      "name": "searxng",
+      "container": "hub-searxng",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 617,
+          "message": "Loaded successfully in 617ms"
+        },
+        "search": {
+          "success": false,
+          "message": "No search results"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 35,
+            "content": "httpx.ConnectError: [Errno -3] Temporary failure in name resolution"
+          },
+          {
+            "line": 36,
+            "content": "2026-01-17 06:14:15,517 ERROR:searx.searx.search.processor: Init method of engine radio browser failed due to an exception."
+          },
+          {
+            "line": 48,
+            "content": "socket.gaierror: [Errno -3] Temporary failure in name resolution"
+          },
+          {
+            "line": 49,
+            "content": "2026-01-17 06:14:15,567 ERROR:searx.search.processors: can't register engine processor: wikidata (init failed)"
+          },
+          {
+            "line": 50,
+            "content": "2026-01-17 06:14:15,571 ERROR:searx.search.processors: can't register engine processor: radio browser (init failed)"
+          }
+        ],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "failed",
+      "consoleErrors": 1,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Error fetching autocomplete results: JSHandle@error",
+          "timestamp": 1768630789450
+        }
+      ]
+    },
+    "rimgo": {
+      "name": "rimgo",
+      "container": "hub-rimgo",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 2036,
+          "message": "Loaded successfully in 2036ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 11
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "cobalt": {
+      "name": "cobalt",
+      "container": "hub-cobalt-web",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1133,
+          "message": "Loaded successfully in 1133ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 20
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "memos": {
+      "name": "memos",
+      "container": "hub-memos",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1696,
+          "message": "Loaded successfully in 1696ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 1,
+            "content": "2026/01/17 06:13:42 WARN failed to find migration history in pre-migrate error=\"SQL logic error: no such table: migration_history (1)\""
+          }
+        ],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "2026/01/17 06:13:42 WARN failed to find migration history in pre-migrate error=\"SQL logic error: no such table: migration_history (1)\""
+          }
+        ],
+        "totalLines": 25
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "portainer": {
+      "name": "portainer",
+      "container": "hub-portainer",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 2417,
+          "message": "Loaded successfully in 2417ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 14
+      },
+      "overall": "passed",
+      "consoleErrors": 3,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "The Content-Security-Policy directive name 'https://www.gstatic.com/recaptcha/' contains one or more invalid characters. Only ASCII alphanumeric characters or dashes '-' are allowed in directive names.",
+          "timestamp": 1768630800614
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768630802172
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "timestamp": 1768630802221
+        }
+      ]
+    },
+    "wg-easy": {
+      "name": "wg-easy",
+      "container": "hub-wg-easy",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1039,
+          "message": "Loaded successfully in 1039ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 13
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "odido-booster": {
+      "name": "odido-booster",
+      "container": "hub-odido-booster",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1407,
+          "message": "Loaded successfully in 1407ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 17,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 22,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 23,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 24,
+            "content": "ERROR:odido.service:All renewal attempts failed - check Odido API credentials and network connectivity"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 2,
+            "content": "/app/app/main.py:43: DeprecationWarning: "
+          },
+          {
+            "line": 9,
+            "content": "/app/app/main.py:48: DeprecationWarning: "
+          }
+        ],
+        "totalLines": 37
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "vert": {
+      "name": "vert",
+      "container": "hub-vert",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1924,
+          "message": "Loaded successfully in 1924ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 32
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "immich": {
+      "name": "immich",
+      "container": "hub-immich-server",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 2026,
+          "message": "Loaded successfully in 2026ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 22,
+            "content": "\u001b[33m[Nest] 7  - \u001b[39m01/17/2026, 6:14:50 AM \u001b[33m   WARN\u001b[39m \u001b[33m[Microservices:VersionService]\u001b[39m \u001b[33mUnable to run version check: Error: Failed to fetch GitHub release: TypeError: fetch failed"
+          },
+          {
+            "line": 23,
+            "content": "Error: Failed to fetch GitHub release: TypeError: fetch failed"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 22,
+            "content": "\u001b[33m[Nest] 7  - \u001b[39m01/17/2026, 6:14:50 AM \u001b[33m   WARN\u001b[39m \u001b[33m[Microservices:VersionService]\u001b[39m \u001b[33mUnable to run version check: Error: Failed to fetch GitHub release: TypeError: fetch failed"
+          }
+        ],
+        "totalLines": 51
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "wikiless": {
+      "name": "wikiless",
+      "container": "hub-wikiless",
+      "tests": {
+        "load": {
+          "success": false,
+          "status": 500,
+          "loadTime": 35187,
+          "message": "HTTP 500"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 3,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 5,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 8,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: ETIMEDOUT"
+          },
+          {
+            "line": 10,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: ETIMEDOUT"
+          },
+          {
+            "line": 11,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 13,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 15,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 17,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 19,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          }
+        ],
+        "warnings": [],
+        "totalLines": 21
+      },
+      "overall": "failed",
+      "consoleErrors": 1,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1768630849218
+        }
+      ]
+    },
+    "unbound": {
+      "name": "unbound",
+      "container": "hub-unbound",
+      "tests": {
+        "dns": {
+          "success": true,
+          "message": "DNS resolution successful"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "[1768630143] unbound[1:0] warning: so-sndbuf 4194304 was not granted. Got 425984. To fix: start with root permissions(linux) or sysctl bigger net.core.wmem_max(linux) or kern.ipc.maxsockbuf(bsd) value"
+          }
+        ],
+        "totalLines": 2
+      },
+      "overall": "passed"
+    },
+    "gluetun": {
+      "name": "gluetun",
+      "container": "hub-gluetun",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 36,
+            "content": "2026-01-17T06:20:47Z INFO [wireguard] Wireguard setup is complete. Note Wireguard is a silent protocol and it may or may not work, without giving any error message. Typically i/o timeout errors indica"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 14,
+            "content": "2026-01-17T06:20:47Z WARN [vpn] restarting VPN because it failed to pass the healthcheck: startup check: all check tries failed: parallel attempt 1/1 failed: dialing: dial tcp4: lookup github.com: i/o"
+          }
+        ],
+        "totalLines": 51
+      },
+      "overall": "passed"
+    },
+    "companion": {
+      "name": "companion",
+      "container": "hub-companion",
+      "tests": {
+        "load": {
+          "success": false,
+          "status": 404,
+          "loadTime": 2047,
+          "message": "HTTP 404"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 7,
+            "content": "Exception in cron handler regenerate youtube session TypeError: error sending request for url (https://www.youtube.com/youtubei/v1/att/get?prettyPrint=false&alt=json): client error (Connect): dns erro"
+          },
+          {
+            "line": 15,
+            "content": "  errorFromWorker: TypeError: error sending request for url (https://www.youtube.com/youtubei/v1/att/get?prettyPrint=false&alt=json): client error (Connect): dns error: failed to lookup address inform"
+          },
+          {
+            "line": 23,
+            "content": "[ERROR] Failed to initialize PO token: RetryError: Retrying exceeded the maxAttempts (5)."
+          },
+          {
+            "line": 26,
+            "content": "Caused by TypeError: error sending request for url (https://www.youtube.com/youtubei/v1/att/get?prettyPrint=false&alt=json): client error (Connect): dns error: failed to lookup address information: Te"
+          },
+          {
+            "line": 33,
+            "content": "  name: \"RetryError\""
+          },
+          {
+            "line": 36,
+            "content": "  errorFromWorker: TypeError: error sending request for url (https://www.youtube.com/youtubei/v1/att/get?prettyPrint=false&alt=json): client error (Connect): dns error: failed to lookup address inform"
+          },
+          {
+            "line": 43,
+            "content": "Exception in cron handler regenerate youtube session TypeError: error sending request for url (https://www.youtube.com/youtubei/v1/att/get?prettyPrint=false&alt=json): client error (Connect): dns erro"
+          }
+        ],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "failed",
+      "consoleErrors": 1,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768630854940
+        }
+      ]
+    },
+    "vertd": {
+      "name": "vertd",
+      "container": "hub-vertd",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 3,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] *******"
+          },
+          {
+            "line": 4,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] you're running vertd on a docker container, but no GPU was detected."
+          },
+          {
+            "line": 5,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] this usually is because you're running Docker under WSL or because"
+          },
+          {
+            "line": 6,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] you are not passing the GPU device correctly."
+          },
+          {
+            "line": 7,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] "
+          },
+          {
+            "line": 8,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] if this doesn't seem right, make sure to provide the following info when"
+          },
+          {
+            "line": 9,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] asking for help:"
+          },
+          {
+            "line": 10,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] - adapter name: llvmpipe (LLVM 20.1.2, 256 bits)"
+          },
+          {
+            "line": 11,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] - adapter vendor: 0x10005"
+          },
+          {
+            "line": 12,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] - backend: vulkan"
+          },
+          {
+            "line": 13,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] - device ID: 0"
+          },
+          {
+            "line": 14,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] - device type: Cpu"
+          },
+          {
+            "line": 15,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] - driver: llvmpipe"
+          },
+          {
+            "line": 16,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] - driver info: Mesa 25.0.7-0ubuntu0.24.04.2 (LLVM 20.1.2)"
+          },
+          {
+            "line": 17,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] "
+          },
+          {
+            "line": 18,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] vertd will fall back to CPU rendering to ensure conversions can still proceed."
+          },
+          {
+            "line": 19,
+            "content": "[2026-01-17T06:13:49Z WARN  vertd::converter::gpu] *******"
+          }
+        ],
+        "totalLines": 22
+      },
+      "overall": "passed"
+    },
+    "watchtower": {
+      "name": "watchtower",
+      "container": "hub-watchtower",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 6
+      },
+      "overall": "passed"
+    },
+    "invidious-db": {
+      "name": "invidious-db",
+      "container": "hub-invidious-db",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "passed"
+    },
+    "wikiless-redis": {
+      "name": "wikiless-redis",
+      "container": "hub-wikiless_redis",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "1:C 17 Jan 2026 06:13:41.283 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures w"
+          },
+          {
+            "line": 4,
+            "content": "1:C 17 Jan 2026 06:13:41.283 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf"
+          }
+        ],
+        "totalLines": 10
+      },
+      "overall": "passed"
+    },
+    "searxng-redis": {
+      "name": "searxng-redis",
+      "container": "hub-searxng-redis",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "1:C 17 Jan 2026 06:13:41.117 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures w"
+          }
+        ],
+        "totalLines": 10
+      },
+      "overall": "passed"
+    },
+    "immich-db": {
+      "name": "immich-db",
+      "container": "hub-immich-db",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 49,
+            "content": "2026-01-17 06:13:59.943 UTC [96] ERROR:  relation \"system_metadata\" does not exist at character 21"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 13,
+            "content": "initdb: warning: enabling \"trust\" authentication for local connections"
+          }
+        ],
+        "totalLines": 51
+      },
+      "overall": "passed"
+    },
+    "immich-redis": {
+      "name": "immich-redis",
+      "container": "hub-immich-redis",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "1:M 17 Jan 2026 06:13:41.271 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures w"
+          },
+          {
+            "line": 4,
+            "content": "1:M 17 Jan 2026 06:13:41.276 # Warning: no config file specified, using the default config. In order to specify a config file use valkey-server /path/to/valkey.conf"
+          }
+        ],
+        "totalLines": 15
+      },
+      "overall": "passed"
+    },
+    "immich-ml": {
+      "name": "immich-ml",
+      "container": "hub-immich-ml",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 11
+      },
+      "overall": "passed"
+    }
+  },
+  "timestamp": "2026-01-17T06:21:06.399Z"
+}
