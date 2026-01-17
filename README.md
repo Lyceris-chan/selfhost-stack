@@ -55,6 +55,29 @@ The ZimaOS Privacy Hub is a comprehensive, self-hosted privacy infrastructure de
 
 ---
 
+## 💻 Hardware & Capacity
+
+The Privacy Hub is designed to run efficiently on a wide range of hardware. Below is a reference configuration based on a real-world deployment, demonstrating the stack's efficiency.
+
+### Reference Configuration
+*   **CPU**: Intel Core i3-10105T (4 Cores / 8 Threads, 3.00GHz)
+*   **RAM**: 32 GB DDR4 (2666 MHz)
+*   **GPU**: Intel UHD Graphics 630 (integrated)
+*   **Storage**: NVMe SSD (recommended for Docker volumes)
+
+### Estimated Capacity
+With the specs above, this stack can comfortably support:
+*   **Heavy Use**: 5-10 concurrent users (active Immich usage, video transcoding, machine learning tasks).
+*   **Moderate Use**: 20-50+ concurrent users (browsing Invidious, Redlib, searching SearXNG).
+*   **Light Use**: 100+ concurrent users (DNS queries, text-based services).
+
+> 💡 **Resource Notes**:
+> *   **Immich** is the most resource-intensive service, utilizing CPU/GPU for machine learning (facial recognition) and video transcoding. 32GB RAM is excellent for this.
+> *   **Privacy Frontends** (Invidious, Redlib, etc.) are extremely lightweight.
+> *   **Intel Quick Sync (QSV)** on the UHD 630 is automatically detected and used for hardware transcoding, significantly reducing CPU load.
+
+---
+
 ## 🚀 Deployment
 
 **Don't worry: this is easier than it looks!** The Privacy Hub guides you through everything.
@@ -121,15 +144,21 @@ Your normal internet access stays exactly as it was. This only adds privacy opti
 - [ ] **How to get it?** Follow the link above, or on Ubuntu/Debian just run: `curl -fsSL https://get.docker.com | sh`
 
 #### 4. ProtonVPN account
-- [ ] **A ProtonVPN account** - free tier works perfectly! ([Sign up](https://account.protonvpn.com/signup))
-- [ ] **Why ProtonVPN?** They're privacy-focused, based in Switzerland, and have a generous free tier
-- [ ] **Cost?** $0 for free tier (with speed limits) or $4-10/month for unlimited speed
+- [ ] **A ProtonVPN account** - **Free Tier is sufficient!** ([Sign up](https://account.protonvpn.com/signup))
+- [ ] **Why ProtonVPN?** They're privacy-focused, based in Switzerland, and have a generous free tier.
+- [ ] **Why Free?** We only route specific privacy frontend traffic (Invidious, Redlib) through the VPN to anonymize requests. High-bandwidth activities (like gaming or direct downloads) bypass the VPN via split-tunneling, so the free tier's speed limits are negligible for this use case. Premium is not required but supports Proton's mission.
+- [ ] **Cost?** $0 for free tier.
 
-#### 5. (Optional but recommended) Domain for HTTPS
+#### 5. Domain for HTTPS (Required for Android/iOS DNS)
 - [ ] **A deSEC account** for free SSL/domain ([Sign up](https://desec.io))
-- [ ] **Why?** Gives you `https://my-hub.dedyn.io` instead of `http://192.168.1.100`
-- [ ] **Cost?** $0 - completely free forever
-- [ ] **Can I skip this?** Yes, but you won't get HTTPS or DNS-over-QUIC on mobile
+- [ ] **Why?** Gives you `https://my-hub.dedyn.io` instead of `http://192.168.1.100`.
+- [ ] **Cost?** $0 - completely free forever.
+- [ ] **Is this mandatory?**
+    - **YES** for **Android Private DNS**: Android strictly requires a hostname (DoT) and cannot use a raw IP address.
+    - **YES** for **iOS/macOS Encrypted DNS**: Apple configuration profiles require a hostname for TLS certificate validation.
+    - **YES** for **VERT**: Requires HTTPS for secure API communication.
+    - **YES** for **Privacy**: Encrypts your dashboard access and prevents browser warnings.
+    - *Note*: If a valid certificate is found, the dashboard and LibRedirect settings will automatically default to using secure HTTPS links.
 
 </details>
 
