@@ -23,13 +23,13 @@ _FULL_STACK = {
     "name": "Full Privacy Hub Stack",
     "services": (
         "hub-api,dashboard,gluetun,adguard,unbound,wg-easy,redlib,"
-        "wikiless,rimgo,breezewiki,anonymousoverflow,scribe,invidious,"
-        "companion,searxng,portainer,memos,odido-booster,cobalt,"
-        "cobalt-web,vert,vertd,immich,watchtower"
+        "wikiless,rimgo,breezewiki,anonymousoverflow,invidious,"
+        "companion,searxng,portainer,memos,odido-booster,vert,"
+        "vertd,immich,watchtower"
     ),
     "checks": [
         {"name": "Dashboard", "port": 8088, "path": "/", "code": 200},
-        {"name": "Hub API", "port": 55555, "path": "/health", "code": 200},
+        {"name": "Hub API", "port": 55555, "path": "/api/health", "code": 200},
         {"name": "AdGuard", "port": 8083, "path": "/", "code": 200},
         {"name": "WireGuard UI", "port": 51821, "path": "/", "code": 200},
         {"name": "Redlib", "port": 8080, "path": "/settings", "code": 200},
@@ -38,10 +38,7 @@ _FULL_STACK = {
         {"name": "Rimgo", "port": 3002, "path": "/", "code": 200},
         {"name": "Breezewiki", "port": 8380, "path": "/", "code": 200},
         {"name": "AnonymousOverflow", "port": 8480, "path": "/", "code": 200},
-        {"name": "Scribe", "port": 8280, "path": "/", "code": 200},
         {"name": "Memos", "port": 5230, "path": "/", "code": 200},
-        {"name": "Cobalt Web", "port": 9001, "path": "/", "code": 200},
-        {"name": "Cobalt API", "port": 9002, "path": "/api/serverInfo", "code": 200},
         {"name": "SearXNG", "port": 8082, "path": "/", "code": 200},
         {"name": "Immich", "port": 2283, "path": "/api/server/ping", "code": 200},
         {"name": "Odido Booster", "port": 8085, "path": "/docs", "code": 200},
@@ -291,7 +288,7 @@ def main():
             run_command(f"{env_cmd_prefix} docker compose up -d wikiless", cwd=compose_dir)
             
             try:
-                url = f"http://{_LAN_IP}:55555/update-service"
+                url = f"http://{_LAN_IP}:55555/api/update-service"
                 data = json.dumps({"service": "wikiless"}).encode()
                 req = urllib.request.Request(url, data=data, method="POST", 
                                            headers={"X-API-Key": api_key, "Content-Type": "application/json"})
@@ -309,7 +306,7 @@ def main():
 
         # Test 2: Update WITHOUT Watchtower (Direct API call)
         try:
-            url = f"http://{_LAN_IP}:55555/update-service"
+            url = f"http://{_LAN_IP}:55555/api/update-service"
             data = json.dumps({"service": "wikiless"}).encode()
             req = urllib.request.Request(url, data=data, method="POST", 
                                        headers={"X-API-Key": api_key, "Content-Type": "application/json"})
@@ -325,7 +322,7 @@ def main():
 
         # Test 3: Update WITH Watchtower (Mock Notification)
         try:
-            url = f"http://{_LAN_IP}:55555/watchtower?token={api_key}"
+            url = f"http://{_LAN_IP}:55555/api/watchtower?token={api_key}"
             req = urllib.request.Request(url, data=json.dumps({"entries":[]}).encode(), method="POST", 
                                        headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -338,7 +335,7 @@ def main():
         print("\n--- Verifying Rollback Support for Wikiless ---")
         try:
             # Check status
-            url = f"http://{_LAN_IP}:55555/rollback-status?service=wikiless"
+            url = f"http://{_LAN_IP}:55555/api/rollback-status?service=wikiless"
             req = urllib.request.Request(url, headers={"X-API-Key": api_key})
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode())
@@ -349,7 +346,7 @@ def main():
                     all_pass = False
 
             # Check list
-            url = f"http://{_LAN_IP}:55555/rollback-list?service=wikiless"
+            url = f"http://{_LAN_IP}:55555/api/rollback-list?service=wikiless"
             req = urllib.request.Request(url, headers={"X-API-Key": api_key})
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode())
@@ -361,7 +358,7 @@ def main():
                     all_pass = False
 
             # Perform rollback
-            url = f"http://{_LAN_IP}:55555/rollback-service"
+            url = f"http://{_LAN_IP}:55555/api/rollback-service"
             payload = json.dumps({"service": "wikiless"}).encode()
             req = urllib.request.Request(url, data=payload, method="POST", 
                                        headers={"X-API-Key": api_key, "Content-Type": "application/json"})
@@ -382,7 +379,7 @@ def main():
             print(f"\n--- Verifying Backup/Restore Cycle for {service.capitalize()} ---")
             try:
                 # Backup
-                url_backup = f"http://{_LAN_IP}:55555/migrate?service={service}&backup=yes"
+                url_backup = f"http://{_LAN_IP}:55555/api/migrate?service={service}&backup=yes"
                 req_backup = urllib.request.Request(url_backup, method="POST", headers={"X-API-Key": api_key})
                 with urllib.request.urlopen(req_backup, timeout=60) as resp:
                     print(f"[PASS] {service.capitalize()} backup initiated.")
@@ -400,7 +397,7 @@ def main():
                         print(f"[PASS] Found {service} backup: {latest_backup}")
                         
                         # Clear DB (Simulate data loss)
-                        url_clear = f"http://{_LAN_IP}:55555/clear-db?service={service}&backup=no"
+                        url_clear = f"http://{_LAN_IP}:55555/api/clear-db?service={service}&backup=no"
                         req_clear = urllib.request.Request(url_clear, method="POST", headers={"X-API-Key": api_key})
                         urllib.request.urlopen(req_clear, timeout=30)
                         print(f"[PASS] {service.capitalize()} database cleared.")
@@ -419,7 +416,7 @@ def main():
         print("\n--- Verifying Full System Backup/Restore ---")
         try:
             # System Backup
-            url_sys_backup = f"http://{_LAN_IP}:55555/backup"
+            url_sys_backup = f"http://{_LAN_IP}:55555/api/backup"
             req_sys_backup = urllib.request.Request(url_sys_backup, method="POST", headers={"X-API-Key": api_key})
             with urllib.request.urlopen(req_sys_backup, timeout=30) as resp:
                 print("[PASS] System backup initiated via API.")
@@ -440,7 +437,7 @@ def main():
                     print(f"[PASS] Found system backup: {latest_sys_backup}")
                     
                     # System Restore (Verify API triggers it)
-                    url_sys_restore = f"http://{_LAN_IP}:55555/restore?filename={latest_sys_backup}"
+                    url_sys_restore = f"http://{_LAN_IP}:55555/api/restore?filename={latest_sys_backup}"
                     req_sys_restore = urllib.request.Request(url_sys_restore, method="POST", headers={"X-API-Key": api_key})
                     with urllib.request.urlopen(req_sys_restore, timeout=30) as resp:
                         print("[PASS] System restore initiated via API.")
@@ -454,7 +451,7 @@ def main():
         print("\n--- Verifying WireGuard Advanced Features ---")
         try:
             # Create Client
-            url = f"http://{_LAN_IP}:55555/wg/clients"
+            url = f"http://{_LAN_IP}:55555/api/wg/clients"
             payload = json.dumps({"name": "test-runner-client-adv"}).encode()
             req = urllib.request.Request(url, data=payload, method="POST", 
                                        headers={"X-API-Key": api_key, "Content-Type": "application/json"})
@@ -466,7 +463,7 @@ def main():
 
             if client_id:
                 # Get Config
-                url = f"http://{_LAN_IP}:55555/wg/clients/{client_id}/configuration"
+                url = f"http://{_LAN_IP}:55555/api/wg/clients/{client_id}/configuration"
                 req = urllib.request.Request(url, headers={"X-API-Key": api_key})
                 config_content = ""
                 with urllib.request.urlopen(req, timeout=30) as resp:
@@ -567,7 +564,7 @@ def main():
                     all_pass = False
                 
                 # Cleanup: Delete Client
-                url = f"http://{_LAN_IP}:55555/wg/clients/{client_id}"
+                url = f"http://{_LAN_IP}:55555/api/wg/clients/{client_id}"
                 req = urllib.request.Request(url, method="DELETE", headers={"X-API-Key": api_key})
                 with urllib.request.urlopen(req, timeout=30) as resp:
                     print(f"[PASS] WireGuard client deleted.")

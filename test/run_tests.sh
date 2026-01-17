@@ -76,6 +76,34 @@ main() {
   fi
   echo ""
 
+  # 3a. Integration Tests
+  echo -e "\e[34m--- Step 3a: Integration Tests ---\e[0m"
+  if [ -f test/test_integration.js ]; then
+    if node test/test_integration.js; then
+      echo -e "\e[32m✅ Integration Tests Passed\e[0m"
+    else
+      echo -e "\e[31m❌ Step 3a (Integration Tests) Failed\e[0m"
+      exit 1
+    fi
+  else
+    echo -e "\e[33m⚠️  Step 3a (Integration Tests) Skipped - test file not found\e[0m"
+  fi
+  echo ""
+
+  # 3b. Functional Operations Tests
+  echo -e "\e[34m--- Step 3b: Functional Operations Tests ---\e[0m"
+  if [ -f test/test_functional_ops.js ]; then
+    if node test/test_functional_ops.js; then
+      echo -e "\e[32m✅ Functional Operations Tests Passed\e[0m"
+    else
+      echo -e "\e[31m❌ Step 3b (Functional Operations Tests) Failed\e[0m"
+      exit 1
+    fi
+  else
+    echo -e "\e[33m⚠️  Step 3b (Functional Operations Tests) Skipped - test file not found\e[0m"
+  fi
+  echo ""
+
   # 4. UI/UX Audit
   echo -e "\e[34m--- Step 4: UI/UX Audit ---\e[0m"
   if node test/test_dashboard.js; then
@@ -114,8 +142,22 @@ main() {
   fi
   echo ""
 
-  # 7. Container Logs Check
-  echo -e "\e[34m--- Step 7: Container Logs Analysis ---\e[0m"
+  # 7. Extended Interactions (Rimgo/Invidious)
+  echo -e "\e[34m--- Step 7: Extended Interactions Tests ---\e[0m"
+  if [ -f test/test_extended_interactions.js ]; then
+    if node test/test_extended_interactions.js; then
+      echo -e "\e[32m✅ Extended Interactions Tests Passed\e[0m"
+    else
+      echo -e "\e[31m❌ Step 7 (Extended Interactions) Failed\e[0m"
+      exit 1
+    fi
+  else
+    echo -e "\e[33m⚠️  Step 7 (Extended Interactions) Skipped - test file not found\e[0m"
+  fi
+  echo ""
+
+  # 8. Container Logs Check
+  echo -e "\e[34m--- Step 8: Container Logs Analysis ---\e[0m"
   echo "Checking for errors in container logs..."
   
   CONTAINERS=$(docker ps --filter "name=hub-" --format "{{.Names}}" 2>/dev/null || echo "")

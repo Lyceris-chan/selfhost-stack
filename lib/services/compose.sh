@@ -95,7 +95,7 @@ except Exception:
       - "DOCKER_HOST=tcp://docker-proxy:2375"
       - 'CORS_ORIGINS=${cors_json}'
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:55555/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:55555/api/health || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 5
@@ -243,7 +243,7 @@ EOF
       - "HTTPPROXY=on"
       - "DNS_ADDRESS=${GLUETUN_DNS_ADDRESS:-127.0.0.1}"
       - "DOT=${GLUETUN_DOT:-on}"
-      - "DNS_KEEP_NAMESERVERS=on"
+      - "DNS_KEEP_NAMESERVERS=off"
       - "DNS_UPSTREAM_RESOLVERS=quad9"
       - "HEALTH_TARGET_ADDRESSES=github.com:443"
       - "HEALTH_ICMP_TARGET_IPS=9.9.9.9"
@@ -565,20 +565,14 @@ append_invidious() {
   invidious:
     image: quay.io/invidious/invidious:latest
     container_name: ${CONTAINER_PREFIX}invidious
-EOF
-
-  cat >> "${COMPOSE_FILE}" <<EOF
     network_mode: "container:${CONTAINER_PREFIX}gluetun"
-EOF
-
-  cat >> "${COMPOSE_FILE}" <<EOF
     environment:
       INVIDIOUS_CONFIG: |
         db:
           dbname: invidious
           user: kemal
           password: ${INVIDIOUS_DB_PASS_COMPOSE}
-          host: ${CONTAINER_PREFIX}invidious-db
+          host: 172.${FOUND_OCTET}.0.240
           port: 5432
         check_tables: true
         invidious_companion:
@@ -607,7 +601,9 @@ EOF
     container_name: ${CONTAINER_PREFIX}invidious-db
     labels:
       - "casaos.skip=true"
-    networks: [frontend]
+    networks:
+      frontend:
+        ipv4_address: 172.${FOUND_OCTET}.0.240
     environment:
       - "POSTGRES_DB=invidious"
       - "POSTGRES_USER=kemal"
@@ -616,22 +612,16 @@ EOF
       - ${DATA_DIR}/postgres:/var/lib/postgresql/data
       - ${SRC_DIR}/invidious/config/sql:/config/sql:ro
       - ${SRC_DIR}/invidious/docker/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh:ro
-    healthcheck: {test: ["CMD-SHELL", "pg_isready -d invidious -U kemal"], interval: 10s, timeout: 5s, retries: 5}
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -d invidious -U kemal"], interval: 10s, timeout: 5s, retries: 15}
 
   companion:
     container_name: ${CONTAINER_PREFIX}companion
     image: quay.io/invidious/invidious-companion:latest
     labels:
       - "casaos.skip=true"
-EOF
-
-  cat >> "${COMPOSE_FILE}" <<EOF
     network_mode: "container:${CONTAINER_PREFIX}gluetun"
     depends_on:
       gluetun: {condition: service_healthy}
-EOF
-
-  cat >> "${COMPOSE_FILE}" <<EOF
     environment:
       - "SERVER_SECRET_KEY=${IV_COMPANION}"
       - "PORT=8282"
@@ -963,8 +953,8 @@ append_immich() {
  if ! should_deploy "immich"; then
   return 0
  fi
- local db_host="${CONTAINER_PREFIX}immich-db"
- local redis_host="${CONTAINER_PREFIX}immich-redis"
+ local db_host="172.${FOUND_OCTET}.0.241"
+ local redis_host="172.${FOUND_OCTET}.0.242"
  local ml_url="http://127.0.0.1:3003"
 
   cat >> "${COMPOSE_FILE}" <<EOF
@@ -1008,7 +998,9 @@ EOF
   immich-db:
     image: ${IMMICH_POSTGRES_IMAGE:-ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0}
     container_name: ${CONTAINER_PREFIX}immich-db
-    networks: [frontend]
+    networks:
+      frontend:
+        ipv4_address: 172.${FOUND_OCTET}.0.241
     environment:
       - "POSTGRES_USER=immich"
       - "POSTGRES_PASSWORD=${IMMICH_DB_PASS_COMPOSE}"
@@ -1021,7 +1013,7 @@ EOF
       test: ["CMD-SHELL", "pg_isready -d immich -U immich"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 15
     restart: always
     deploy:
       resources:
@@ -1030,12 +1022,14 @@ EOF
   immich-redis:
     image: ${IMMICH_VALKEY_IMAGE:-docker.io/valkey/valkey:9}
     container_name: ${CONTAINER_PREFIX}immich-redis
-    networks: [frontend]
+    networks:
+      frontend:
+        ipv4_address: 172.${FOUND_OCTET}.0.242
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 15
     restart: always
     deploy:
       resources:

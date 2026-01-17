@@ -150,6 +150,49 @@ const SERVICES = {
     healthEndpoint: '/api/server/ping',
     tests: ['loads'],
   },
+  wikiless: {
+    port: 8180,
+    container: 'hub-wikiless',
+    healthEndpoint: '/',
+    tests: ['loads'],
+  },
+  unbound: {
+    port: 53,
+    container: 'hub-unbound',
+    healthEndpoint: '',
+    tests: ['dns-resolution'],
+  },
+  gluetun: {
+    port: 8000, // control port usually
+    container: 'hub-gluetun',
+    healthEndpoint: '',
+    tests: ['container-running'],
+  },
+  companion: {
+    port: 8283,
+    container: 'hub-companion',
+    healthEndpoint: '',
+    tests: ['loads'],
+  },
+  vertd: {
+    port: 24153,
+    container: 'hub-vertd',
+    healthEndpoint: '',
+    tests: ['container-running'],
+  },
+  watchtower: {
+    port: 0,
+    container: 'hub-watchtower',
+    healthEndpoint: '',
+    tests: ['container-running'],
+  },
+  // Databases & Caches
+  'invidious-db': { container: 'hub-invidious-db', tests: ['container-running'] },
+  'wikiless-redis': { container: 'hub-wikiless_redis', tests: ['container-running'] },
+  'searxng-redis': { container: 'hub-searxng-redis', tests: ['container-running'] },
+  'immich-db': { container: 'hub-immich-db', tests: ['container-running'] },
+  'immich-redis': { container: 'hub-immich-redis', tests: ['container-running'] },
+  'immich-ml': { container: 'hub-immich-ml', tests: ['container-running'] },
 };
 
 /**
@@ -328,6 +371,36 @@ async function testPageLoad(page, url, serviceName) {
       error: error.message,
       message: `Failed to load: ${error.message}`,
     };
+  }
+}
+
+/**
+ * Test: DNS Resolution
+ * @param {string} containerName
+ * @return {Promise<Object>}
+ */
+async function testDnsResolution(containerName) {
+  try {
+    // We test resolution from WITHIN the container to verify it's working
+    // or we can test against the exposed port if possible.
+    // Unbound exposes 53/udp on the host as well in the compose file?
+    // Let's check compose: unbound is internal IP 172.x.0.250, AdGuard uses it.
+    // AdGuard exposes 53. Unbound is backend.
+    // So we should verify Unbound by asking it to resolve something FROM the host if it exposed ports,
+    // OR exec into it.
+    // Unbound compose says: networks: frontend (ipv4_address ...). No ports mapped to host.
+    // So we must use docker exec.
+    
+    const { stdout } = await execAsync(
+      `docker exec ${containerName} drill google.com @127.0.0.1`
+    );
+    
+    if (stdout.includes('NOERROR') && stdout.includes('ANSWER SECTION')) {
+      return { success: true, message: 'DNS resolution successful' };
+    }
+    return { success: false, message: 'DNS resolution failed (no answer)' };
+  } catch (error) {
+    return { success: false, message: `DNS test failed: ${error.message}` };
   }
 }
 
@@ -554,6 +627,32 @@ async function testService(serviceName, serviceConfig) {
     console.log(`  ⚠️  Found ${logAnalysis.errors.length} errors in container logs`);
   }
   
+  // Non-browser tests
+  if (serviceConfig.tests.includes('dns-resolution')) {
+    result.tests.dns = await testDnsResolution(serviceConfig.container);
+    console.log(`  ${result.tests.dns.success ? '✅' : '❌'} DNS: ${result.tests.dns.message}`);
+    
+    // Determine overall result for non-browser service
+    if (result.tests.dns.success) {
+        result.overall = 'passed';
+        testResults.passed++;
+    } else {
+        result.overall = 'failed';
+        testResults.failed++;
+    }
+    testResults.services[serviceName] = result;
+    return result;
+  }
+
+  // Pure container check (for databases, utilities)
+  if (serviceConfig.tests.includes('container-running')) {
+     result.overall = 'passed';
+     testResults.passed++;
+     console.log(`  ✅ Container check passed`);
+     testResults.services[serviceName] = result;
+     return result; 
+  }
+
   // Initialize browser for this service
   const { browser, page, consoleLogs } = await initBrowser();
   

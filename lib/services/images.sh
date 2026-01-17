@@ -47,25 +47,13 @@ resolve_service_tags() {
 #   0 on success, 1 on failure.
 #######################################
 pull_critical_images() {
- log_info "Pre-pulling core infrastructure images in parallel..."
- local pids=()
+ log_info "Pre-pulling core infrastructure images sequentially..."
  local img
  for img in ${CRITICAL_IMAGES}; do
- pull_with_retry "${img}" &
- pids+=($!)
+  if ! pull_with_retry "${img}"; then
+   log_crit "Failed to pull critical image ${img}. Aborting."
+   exit 1
+  fi
  done
-
- local success=true
- local pid
- for pid in "${pids[@]}"; do
- if ! wait "${pid}"; then
- success=false
- fi
- done
-
- if [[ "${success}" == "false" ]]; then
- log_crit "One or more critical images failed to pull. Aborting."
- exit 1
- fi
  log_info "All critical images pulled successfully."
 }

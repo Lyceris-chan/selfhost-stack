@@ -48,14 +48,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include Routers
-app.include_router(auth.router)
-app.include_router(system.router)
-app.include_router(services.router)
-app.include_router(wireguard.router)
-app.include_router(gluetun.router)
-app.include_router(logs.router)
-app.include_router(odido.router)
+# Include Routers with /api prefix to match Dashboard requests
+app.include_router(auth.router, prefix="/api")
+app.include_router(system.router, prefix="/api")
+app.include_router(services.router, prefix="/api")
+app.include_router(wireguard.router, prefix="/api")
+app.include_router(gluetun.router, prefix="/api")
+app.include_router(logs.router, prefix="/api")
+app.include_router(odido.router, prefix="/api")
 
 
 @app.post("/watchtower")

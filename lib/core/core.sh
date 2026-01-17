@@ -107,7 +107,7 @@ ask_confirm() {
 
 pull_with_retry() {
  local img="$1"
- if "${DOCKER_CMD}" pull "${img}" >/dev/null 2>&1; then
+ if "${DOCKER_CMD}" pull "${img}"; then
   log_info "Successfully pulled ${img}"
   return 0
  fi
@@ -160,6 +160,28 @@ generate_secret() {
 generate_hash() {
  local user="$1"
  local pass="$2"
+ 
+ # Method 1: Try host Python (if crypt/bcrypt supported)
+ if command -v "${PYTHON_CMD}" >/dev/null 2>&1; then
+  local py_hash
+  # Try to use crypt module with bcrypt salt
+  py_hash=$("${PYTHON_CMD}" -c "import crypt, random, string, sys; salt = '\$2b\$12\$' + ''.join(random.choices(string.ascii_letters + string.digits, k=22)); print(crypt.crypt(sys.argv[1], salt))" "${pass}" 2>/dev/null || true)
+  if [[ -n "${py_hash}" ]] && [[ "${py_hash}" == \$2b\$* ]]; then
+   echo "${py_hash}"
+   return 0
+  fi
+ fi
+
+ # Method 2: Try host OpenSSL (if it supports -5/-6, though not bcrypt, some services might accept it? 
+ # Actually, AdGuard/Portainer prefer bcrypt. Sticking to Docker if Python fails is safer for compatibility unless we have htpasswd.)
+ 
+ # Method 3: Try host htpasswd
+ if command -v htpasswd >/dev/null 2>&1; then
+  htpasswd -B -n -b "${user}" "${pass}" | cut -d: -f2
+  return 0
+ fi
+
+ # Method 4: Docker Fallback (Alpine)
  "${DOCKER_CMD}" run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "${user}" "${pass}" 2>/dev/null | cut -d: -f2 || echo "FAILED"
 }
 
@@ -178,8 +200,8 @@ DO_BACKUP=false
 RESTORE_FILE=""
 ENV_FILE=""
 PERSONAL_MODE=false
-REG_TOKEN=""
-REG_USER=""
+REG_TOKEN="${REG_TOKEN:-}"
+REG_USER="${REG_USER:-}"
 LAN_IP_OVERRIDE=""
 WG_CONF_B64="${WG_CONF_B64:-}"
 
@@ -356,11 +378,11 @@ UPDATE_STRATEGY="stable"
 export UPDATE_STRATEGY
 
 # Docker Auth Config
-DOCKER_AUTH_DIR="$BASE_DIR/.docker"
+DOCKER_AUTH_DIR="${PH_DOCKER_AUTH_DIR:-$BASE_DIR/.docker}"
 # Ensure clean state for auth only if it doesn't already have a config
-if [ ! -f "$DOCKER_AUTH_DIR/config.json" ]; then
-  $SUDO mkdir -p "$DOCKER_AUTH_DIR"
-  $SUDO chown -R "$(whoami)" "$DOCKER_AUTH_DIR"
+if [[ ! -d "${DOCKER_AUTH_DIR}" ]]; then
+  ${SUDO} mkdir -p "${DOCKER_AUTH_DIR}"
+  ${SUDO} chown -R "$(whoami)" "${DOCKER_AUTH_DIR}"
 fi
 
 # Detect Python interpreter
@@ -753,23 +775,17 @@ setup_secrets() {
   HUB_API_KEY=$(generate_secret 32)
   ODIDO_API_KEY="${HUB_API_KEY}"
 
-  local hash_output
-  hash_output=$("${DOCKER_CMD}" run --rm alpine:3.21 sh -c '
-   apk add --no-cache apache2-utils >/dev/null 2>&1
-   if [ $? -ne 0 ]; then echo "FAILED"; exit 1; fi
-   echo "WG_HASH:$(htpasswd -B -n -b "admin" "$1" | cut -d: -f2)"
-   echo "AG_HASH:$(htpasswd -B -n -b "$2" "$3" | cut -d: -f2)"
-   echo "PORT_HASH:$(htpasswd -B -C 10 -n -b "admin" "$4" | cut -d: -f2)"
-  ' -- "${VPN_PASS_RAW}" "${AGH_USER}" "${AGH_PASS_RAW}" "${PORTAINER_PASS_RAW}" 2>/dev/null || echo "FAILED")
-
-  if echo "${hash_output}" | grep -q "FAILED"; then
-   log_crit "Failed to generate password hashes. Check Docker status."
-   exit 1
-  fi
-
-  WG_HASH_CLEAN=$(echo "${hash_output}" | grep "^WG_HASH:" | cut -d: -f2)
-  AGH_PASS_HASH=$(echo "${hash_output}" | grep "^AG_HASH:" | cut -d: -f2)
-  PORTAINER_PASS_HASH=$(echo "${hash_output}" | grep "^PORT_HASH:" | cut -d: -f2)
+  if [[ -n "${WG_HASH_CLEAN:-}" ]] && [[ -n "${AGH_PASS_HASH:-}" ]] && [[ -n "${PORTAINER_PASS_HASH:-}" ]]; then
+    log_info "Using provided password hashes."
+  else
+      WG_HASH_CLEAN=$(generate_hash "admin" "${VPN_PASS_RAW}")
+      AGH_PASS_HASH=$(generate_hash "${AGH_USER}" "${AGH_PASS_RAW}")
+      PORTAINER_PASS_HASH=$(generate_hash "admin" "${PORTAINER_PASS_RAW}")
+    
+      if [[ -z "${WG_HASH_CLEAN}" ]] || [[ -z "${AGH_PASS_HASH}" ]] || [[ -z "${PORTAINER_PASS_HASH}" ]] || [[ "${WG_HASH_CLEAN}" == "FAILED" ]] || [[ "${AGH_PASS_HASH}" == "FAILED" ]] || [[ "${PORTAINER_PASS_HASH}" == "FAILED" ]]; then
+       log_crit "Failed to generate password hashes. Check Docker/Python status."
+       exit 1
+      fi  fi
 
   SCRIBE_SECRET=$(generate_secret 64)
   ANONYMOUS_SECRET=$(generate_secret 32)

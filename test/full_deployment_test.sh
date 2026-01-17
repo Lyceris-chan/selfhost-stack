@@ -95,12 +95,15 @@ deploy_stack() {
     
     export BASE_DIR="$TEST_BASE_DIR"
     export WG_CONF_B64
+    export VPN_SERVICE_PROVIDER="custom"
+    export VPN_TYPE="wireguard"
     export VPN_FIREWALL="off"
-    export GLUETUN_HEALTHCHECK_COMMAND="true"
     export RESTART_VPN_ON_HEALTHCHECK_FAILURE="no"
-    export GLUETUN_DNS_ADDRESS="127.0.0.11"
     export GLUETUN_DOT="off"
     
+    # Use host docker config to leverage existing login
+    export PH_DOCKER_AUTH_DIR="$HOME/.docker"
+
     log "Deployment configuration:"
     log "  BASE_DIR: $BASE_DIR"
     log "  WG_CONF_B64: ${#WG_CONF_B64} characters"
@@ -229,14 +232,30 @@ run_integration_tests() {
     log "  HEADLESS: $HEADLESS"
     
     cd test
+    
+    log "Running Integration Tests..."
     node test_integration.js > "$LOG_DIR/integration_tests.log" 2>&1
-    TEST_EXIT=$?
+    INTEGRATION_EXIT=$?
+    
+    log "Running Dashboard UI Tests..."
+    node test_dashboard.js > "$LOG_DIR/dashboard_tests.log" 2>&1
+    DASHBOARD_EXIT=$?
+
+    log "Running Functional Ops Tests..."
+    node test_functional_ops.js > "$LOG_DIR/functional_ops.log" 2>&1
+    OPS_EXIT=$?
+    
     cd ..
     
-    if [ $TEST_EXIT -eq 0 ]; then
-        log_success "Integration tests passed"
+    if [ $INTEGRATION_EXIT -eq 0 ] && [ $DASHBOARD_EXIT -eq 0 ] && [ $OPS_EXIT -eq 0 ]; then
+        log_success "All test suites passed"
+        TEST_EXIT=0
     else
-        log_error "Integration tests failed (exit code: $TEST_EXIT)"
+        log_error "Some test suites failed:"
+        [ $INTEGRATION_EXIT -ne 0 ] && log_error "  - Integration Tests: Failed"
+        [ $DASHBOARD_EXIT -ne 0 ] && log_error "  - Dashboard Tests: Failed"
+        [ $OPS_EXIT -ne 0 ] && log_error "  - Functional Ops Tests: Failed"
+        TEST_EXIT=1
     fi
     
     # Copy test reports
