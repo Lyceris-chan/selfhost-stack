@@ -14,8 +14,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """Application settings and environment configuration."""
-    CONTAINER_PREFIX: str = os.environ.get('CONTAINER_PREFIX', 'hub-')
-    APP_NAME: str = os.environ.get('APP_NAME', 'privacy-hub')
+
+    CONTAINER_PREFIX: str = os.environ.get("CONTAINER_PREFIX", "hub-")
+    APP_NAME: str = os.environ.get("APP_NAME", "privacy-hub")
     PORT: int = 55555
 
     # Paths
@@ -32,9 +33,9 @@ class Settings(BaseSettings):
     SECRETS_FILE: str = "/app/.secrets"
 
     # Network
-    LAN_IP: str = os.environ.get('LAN_IP', '127.0.0.1')
-    WG_HOST: str = os.environ.get('WG_HOST', '')
-    DESEC_DOMAIN: str = os.environ.get('DESEC_DOMAIN', '')
+    LAN_IP: str = os.environ.get("LAN_IP", "127.0.0.1")
+    WG_HOST: str = os.environ.get("WG_HOST", "")
+    DESEC_DOMAIN: str = os.environ.get("DESEC_DOMAIN", "")
     CORS_ORIGINS: List[str] = ["http://localhost", "http://127.0.0.1"]
 
     @field_validator("CORS_ORIGINS", mode="before")
@@ -61,12 +62,13 @@ class Settings(BaseSettings):
         return v
 
     # Auth
-    HUB_API_KEY: Optional[str] = os.environ.get('HUB_API_KEY')
-    ADMIN_PASS_RAW: Optional[str] = os.environ.get('ADMIN_PASS_RAW')
-    VPN_PASS_RAW: Optional[str] = os.environ.get('VPN_PASS_RAW')
+    HUB_API_KEY: Optional[str] = os.environ.get("HUB_API_KEY")
+    ADMIN_PASS_RAW: Optional[str] = os.environ.get("ADMIN_PASS_RAW")
+    VPN_PASS_RAW: Optional[str] = os.environ.get("VPN_PASS_RAW")
 
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding='utf-8', extra='ignore')
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
 
 settings = Settings()

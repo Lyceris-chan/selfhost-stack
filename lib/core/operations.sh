@@ -3,6 +3,15 @@ set -euo pipefail
 
 # Functions to clear out existing garbage for a clean start.
 
+################################################################################
+# check_docker_rate_limit - Verify if Docker Hub is throttling requests
+# Globals:
+#   DOCKER_AUTH_DIR, DOCKER_CMD
+# Returns:
+#   None
+# Outputs:
+#   Logs status to stdout/stderr
+################################################################################
 check_docker_rate_limit() {
   log_info "Checking if Docker Hub is going to throttle you..."
   # Export DOCKER_CONFIG globally
@@ -23,6 +32,15 @@ check_docker_rate_limit() {
   fi
 }
 
+################################################################################
+# check_cert_risk - Identify existing SSL certificates and offer preservation
+# Globals:
+#   BASE_DIR, CERT_PROTECT, CERT_RESTORE, CERT_BACKUP_DIR, AUTO_CONFIRM
+# Returns:
+#   0
+# Outputs:
+#   Writes certificate information to stdout
+################################################################################
 check_cert_risk() {
   CERT_PROTECT=false
   local ssl_crt="${BASE_DIR}/config/adguard/ssl.crt"
@@ -94,20 +112,31 @@ check_cert_risk() {
     fi
 
     case "${cert_response}" in
-      [yY][eE][sS]|[yY]) return 0 ;;
-      *)
-        CERT_RESTORE=true
-        CERT_PROTECT=true
-        mkdir -p "${CERT_BACKUP_DIR}"
-        [[ -f "${ssl_crt}" ]] && cp "${ssl_crt}" "${CERT_BACKUP_DIR}/"
-        [[ -f "${ssl_key}" ]] && cp "${ssl_key}" "${CERT_BACKUP_DIR}/"
-        log_info "Certificate will be preserved and restored after cleanup."
-        return 0 ;;
+    [yY][eE][sS] | [yY]) return 0 ;;
+    *)
+      CERT_RESTORE=true
+      CERT_PROTECT=true
+      mkdir -p "${CERT_BACKUP_DIR}"
+      [[ -f "${ssl_crt}" ]] && cp "${ssl_crt}" "${CERT_BACKUP_DIR}/"
+      [[ -f "${ssl_key}" ]] && cp "${ssl_key}" "${CERT_BACKUP_DIR}/"
+      log_info "Certificate will be preserved and restored after cleanup."
+      return 0
+      ;;
     esac
   fi
   return 0
 }
 
+################################################################################
+# clean_environment - Perform environmental cleanup and remove old containers
+# Globals:
+#   BASE_DIR, CLEAN_ONLY, SELECTED_SERVICES, ALL_CONTAINERS, DOCKER_CMD,
+#   CONTAINER_PREFIX, MEMOS_HOST_DIR, CERT_RESTORE, CERT_BACKUP_DIR
+# Returns:
+#   None
+# Outputs:
+#   Logs actions to stdout
+################################################################################
 clean_environment() {
   echo "=========================================================="
   echo "🛡️  ENVIRONMENT VALIDATION & CLEANUP"
@@ -174,12 +203,30 @@ clean_environment() {
   fi
 }
 
+################################################################################
+# cleanup_build_artifacts - Remove unused Docker images and build cache
+# Globals:
+#   DOCKER_CMD
+# Returns:
+#   None
+################################################################################
 cleanup_build_artifacts() {
   log_info "Cleaning up build artifacts to save space..."
   "${DOCKER_CMD}" image prune -f >/dev/null 2>&1 || true
   "${DOCKER_CMD}" builder prune -f >/dev/null 2>&1 || true
 }
 
+################################################################################
+# perform_backup - Create a compressed archive of system configurations
+# Arguments:
+#   $1 - Backup tag (default: manual)
+# Globals:
+#   BACKUP_DIR, BASE_DIR
+# Returns:
+#   None
+# Outputs:
+#   Creates a .tar.gz file in BACKUP_DIR
+################################################################################
 perform_backup() {
   local tag="${1:-manual}"
   local timestamp
@@ -204,6 +251,15 @@ perform_backup() {
   fi
 }
 
+################################################################################
+# perform_restore - Extract a system backup to the base directory
+# Arguments:
+#   $1 - Path to backup file
+# Globals:
+#   BASE_DIR, SUDO
+# Returns:
+#   None
+################################################################################
 perform_restore() {
   local backup_file="$1"
   if [[ ! -f "${backup_file}" ]]; then
@@ -212,10 +268,10 @@ perform_restore() {
   fi
 
   log_info "Restoring system from backup: ${backup_file}..."
-  
+
   # Ensure we are in a safe state (stop containers if any)
   # But for simplicity, we just extract.
-  
+
   if "${SUDO}" tar -xzf "${backup_file}" -C "${BASE_DIR}"; then
     log_info "Restore successful. All configurations and secrets have been replaced."
     "${SUDO}" chown -R "$(whoami)" "${BASE_DIR}"
@@ -227,11 +283,21 @@ perform_restore() {
   fi
 }
 
+################################################################################
+# setup_cron - Configure system cron jobs for maintenance tasks
+# Globals:
+#   MONITOR_SCRIPT, IP_LOG_FILE, CERT_MONITOR_SCRIPT, BASE_DIR, APP_NAME
+# Returns:
+#   None
+################################################################################
 setup_cron() {
   log_info "Configuring scheduled tasks..."
   local cron_jobs=""
   cron_jobs="*/5 * * * * ${MONITOR_SCRIPT} >> ${IP_LOG_FILE} 2>&1
 0 3 * * * ${CERT_MONITOR_SCRIPT} >> ${BASE_DIR}/cert-monitor.log 2>&1
 "
-  (crontab -l 2>/dev/null | grep -vE "wg-ip-monitor|cert-monitor|${APP_NAME}" || true; echo "${cron_jobs}") | crontab -
+  (
+    crontab -l 2>/dev/null | grep -vE "wg-ip-monitor|cert-monitor|${APP_NAME}" || true
+    echo "${cron_jobs}"
+  ) | crontab -
 }

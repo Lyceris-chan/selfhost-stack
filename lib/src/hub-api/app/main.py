@@ -14,11 +14,14 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
-from .core.security import get_api_key_or_query_token, get_current_user
+from .core.security import get_api_key_or_query_token
 from .routers import auth, gluetun, logs, odido, services, system, wireguard
-from .services.background import (log_sync_thread, metrics_collector_thread,
-                                  odido_retrieval_thread,
-                                  update_metrics_activity)
+from .services.background import (
+    log_sync_thread,
+    metrics_collector_thread,
+    odido_retrieval_thread,
+    update_metrics_activity,
+)
 from .utils.assets import ensure_assets
 from .utils.logging import init_db, log_structured
 
@@ -60,7 +63,8 @@ app.include_router(odido.router, prefix="/api")
 
 @app.post("/watchtower")
 async def watchtower_notification(
-        request: Request, user: str = Depends(get_api_key_or_query_token)):
+    request: Request, user: str = Depends(get_api_key_or_query_token)
+):
     """Receives and logs notifications from the Watchtower update service.
 
     Args:
@@ -72,8 +76,9 @@ async def watchtower_notification(
     """
     try:
         data = await request.json()
-        log_structured("INFO", f"Watchtower Notification: {json.dumps(data)}",
-                       "MAINTENANCE")
+        log_structured(
+            "INFO", f"Watchtower Notification: {json.dumps(data)}", "MAINTENANCE"
+        )
         return {"success": True}
     except Exception:
         # Fallback for non-JSON notifications
@@ -81,7 +86,8 @@ async def watchtower_notification(
         log_structured(
             "INFO",
             f"Watchtower Notification (Plain): {body.decode(errors='replace')}",
-            "MAINTENANCE")
+            "MAINTENANCE",
+        )
         return {"success": True}
 
 
@@ -108,6 +114,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=settings.PORT,
         log_level="info",
-        access_log=False
+        access_log=False,
     )
-

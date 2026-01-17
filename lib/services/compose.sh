@@ -3,7 +3,6 @@
 # Defines service configurations and appends them to the compose file.
 set -euo pipefail
 
-
 # Helper to check if a service should be deployed
 should_deploy() {
   local srv="$1"
@@ -46,7 +45,7 @@ except Exception:
     print('[\"http://localhost\"]')
 ")
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     hub-api:
         pull_policy: build
         build:
@@ -123,7 +122,7 @@ append_odido_booster() {
     vpn_mode=$(grep -o '"odido_use_vpn"[[:space:]]*:[[:space:]]*\(true\|false\)' "${CONFIG_DIR}/theme.json" 2>/dev/null | grep -o 'true\|false' || echo "true")
   fi
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     odido-booster:
         pull_policy: build
         build:
@@ -134,19 +133,19 @@ append_odido_booster() {
 EOF
 
   if [[ "${vpn_mode}" == "true" ]]; then
-        cat >> "${COMPOSE_FILE}" <<EOF
+    cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
         depends_on:
             gluetun: {condition: service_healthy}
 EOF
   else
-        cat >> "${COMPOSE_FILE}" <<EOF
+    cat >>"${COMPOSE_FILE}" <<EOF
         networks: [frontend]
         ports: ["${LAN_IP}:${PORT_ODIDO}:8085"]
 EOF
   fi
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         environment:
             - "API_KEY=${HUB_API_KEY_COMPOSE}"
             - "ODIDO_USER_ID=${ODIDO_USER_ID}"
@@ -170,7 +169,7 @@ append_memos() {
   if ! should_deploy "memos"; then
     return 0
   fi
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     memos:
         image: ghcr.io/usememos/memos:latest
         container_name: ${CONTAINER_PREFIX}memos
@@ -198,7 +197,7 @@ append_gluetun() {
     return 0
   fi
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     gluetun:
         image: qmcgaw/gluetun:latest
         container_name: ${CONTAINER_PREFIX}gluetun
@@ -215,7 +214,7 @@ append_gluetun() {
                 ipv4_address: 172.${FOUND_OCTET}.0.254
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         ports:
             - "${LAN_IP}:${PORT_REDLIB}:${PORT_INT_REDLIB}/tcp"
             - "${LAN_IP}:${PORT_WIKILESS}:${PORT_INT_WIKILESS}/tcp"
@@ -232,8 +231,7 @@ EOF
             - "${LAN_IP}:8085:8085/tcp"
 EOF
 
-
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         volumes:
             - "${ACTIVE_WG_CONF}:/gluetun/wireguard/wg0.conf:ro"
         environment:
@@ -281,7 +279,7 @@ EXPOSE ${PORT_DASHBOARD_WEB}
 CMD ["nginx", "-g", "daemon off;"]
 DASHEOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     dashboard:
         pull_policy: build
         build:
@@ -337,7 +335,7 @@ EXPOSE 9000 9443
 ENTRYPOINT ["/portainer"]
 PORTEOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     portainer:
         image: portainer/portainer-ce:latest
         container_name: ${CONTAINER_PREFIX}portainer
@@ -362,7 +360,7 @@ append_adguard() {
   if ! should_deploy "adguard"; then
     return 0
   fi
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     adguard:
         image: adguard/adguardhome:latest
         container_name: ${CONTAINER_PREFIX}adguard
@@ -394,7 +392,7 @@ append_unbound() {
   if ! should_deploy "unbound"; then
     return 0
   fi
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     unbound:
         image: klutchell/unbound:latest
         container_name: ${CONTAINER_PREFIX}unbound
@@ -423,7 +421,7 @@ append_wg_easy() {
   # WG_HASH needs special handling - bcrypt hashes contain $ which must be escaped
   # Docker Compose requires $$ to represent a literal $ sign
   local wg_hash_escaped="${WG_HASH_CLEAN//\$/\$\$}"
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     wg-easy:
         image: ghcr.io/wg-easy/wg-easy:latest
         container_name: ${CONTAINER_PREFIX}wg-easy
@@ -453,18 +451,18 @@ append_redlib() {
   if ! should_deploy "redlib"; then
     return 0
   fi
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     redlib:
         image: quay.io/redlib/redlib:latest
         container_name: ${CONTAINER_PREFIX}redlib
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
         depends_on: {gluetun: {condition: service_healthy} }
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         environment:
             - "REDLIB_PORT=8081"
             - "PORT=8081"
@@ -497,7 +495,7 @@ append_wikiless() {
   fi
   dockerfile=$(detect_dockerfile "${SRC_DIR}/wikiless" || echo "Dockerfile")
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     wikiless:
         pull_policy: build
         build:
@@ -507,11 +505,11 @@ append_wikiless() {
         container_name: ${CONTAINER_PREFIX}wikiless
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         environment:
             - "DOMAIN=${LAN_IP}:${PORT_WIKILESS}"
             - "NONSSL_PORT=${PORT_INT_WIKILESS}"
@@ -536,13 +534,13 @@ EOF
             - "casaos.skip=true"
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
         depends_on:
             gluetun: {condition: service_healthy}
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         volumes: ["${DATA_DIR}/redis:/data"]
         healthcheck:
             test: ["CMD", "redis-cli", "ping"]
@@ -563,7 +561,7 @@ append_invidious() {
     return 0
   fi
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     invidious:
         image: quay.io/invidious/invidious:latest
         container_name: ${CONTAINER_PREFIX}invidious
@@ -651,17 +649,17 @@ append_rimgo() {
   if ! should_deploy "rimgo"; then
     return 0
   fi
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     rimgo:
         image: codeberg.org/rimgo/rimgo:latest
         container_name: ${CONTAINER_PREFIX}rimgo
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         environment:
             - "IMGUR_CLIENT_ID=${RIMGO_IMGUR_CLIENT_ID:-546c25a59c58ad7}"
             - "ADDRESS=0.0.0.0"
@@ -687,17 +685,17 @@ append_breezewiki() {
     bw_origin=$(grep "^canonical_origin" "${CONFIG_DIR}/breezewiki/breezewiki.ini" | cut -d'=' -f2 | tr -d ' ' || echo "fandom.com")
   fi
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     breezewiki:
         image: quay.io/pussthecatorg/breezewiki:latest
         container_name: ${CONTAINER_PREFIX}breezewiki
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         environment:
             - "PORT=10416"
             - "bw_canonical_origin=${bw_origin}"
@@ -718,17 +716,17 @@ append_anonymousoverflow() {
   if ! should_deploy "anonymousoverflow"; then
     return 0
   fi
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     anonymousoverflow:
         image: ghcr.io/httpjamesm/anonymousoverflow:release
         container_name: ${CONTAINER_PREFIX}anonymousoverflow
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         env_file: ["${ENV_DIR}/anonymousoverflow.env"]
         environment:
             - "PORT=${PORT_INT_ANONYMOUS}"
@@ -749,7 +747,7 @@ append_scribe() {
     return 0
   fi
   dockerfile=$(detect_dockerfile "${SRC_DIR}/scribe" || echo "Dockerfile")
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     scribe:
         pull_policy: build
         build:
@@ -759,11 +757,11 @@ append_scribe() {
         container_name: ${CONTAINER_PREFIX}scribe
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         env_file: ["${ENV_DIR}/scribe.env"]
         healthcheck:
             test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8280/ || [ \$\$? -eq 8 ]"]
@@ -782,7 +780,7 @@ append_vert() {
   if ! should_deploy "vert"; then
     return 0
   fi
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     vertd:
         container_name: ${CONTAINER_PREFIX}vertd
         image: ghcr.io/vert-sh/vertd:latest
@@ -843,7 +841,7 @@ append_cobalt() {
   if ! should_deploy "cobalt"; then
     return 0
   fi
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     cobalt:
         image: ghcr.io/imputnet/cobalt:${COBALT_IMAGE_TAG:-latest}
         container_name: ${CONTAINER_PREFIX}cobalt
@@ -851,11 +849,11 @@ append_cobalt() {
         read_only: true
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         environment:
             - "API_URL=http://${LAN_IP}:${PORT_COBALT_API}"
             - "API_PORT=${PORT_INT_COBALT_API}"
@@ -873,7 +871,7 @@ append_cobalt_web() {
     return 0
   fi
   local dockerfile="web/Dockerfile"
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     cobalt-web:
         pull_policy: build
         build:
@@ -885,11 +883,11 @@ append_cobalt_web() {
         container_name: ${CONTAINER_PREFIX}cobalt-web
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         depends_on:
             gluetun: {condition: service_healthy}
             cobalt: {condition: service_started}
@@ -904,17 +902,17 @@ append_searxng() {
   if ! should_deploy "searxng"; then
     return 0
   fi
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     searxng:
         image: searxng/searxng:${SEARXNG_IMAGE_TAG:-latest}
         container_name: ${CONTAINER_PREFIX}searxng
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         volumes:
             - ${CONFIG_DIR}/searxng:/etc/searxng
             - ${DATA_DIR}/searxng-cache:/var/cache/searxng
@@ -959,18 +957,18 @@ append_immich() {
   local redis_host="172.${FOUND_OCTET}.0.242"
   local ml_url="http://127.0.0.1:3003"
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     immich-server:
         image: ghcr.io/immich-app/immich-server:${IMMICH_IMAGE_TAG:-release}
         container_name: ${CONTAINER_PREFIX}immich-server
 
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         volumes:
             - ${DATA_DIR}/immich:/data
             - /etc/localtime:/etc/localtime:ro
@@ -1042,11 +1040,11 @@ EOF
         container_name: ${CONTAINER_PREFIX}immich-ml
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
 
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
         depends_on:
             gluetun: {condition: service_healthy}
         volumes:
@@ -1062,7 +1060,7 @@ append_watchtower() {
   if ! should_deploy "watchtower"; then
     return 0
   fi
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
     watchtower:
         image: containrrr/watchtower:latest
         container_name: ${CONTAINER_PREFIX}watchtower
@@ -1105,7 +1103,7 @@ generate_compose() {
   mkdir -p "${BASE_DIR}" "${SRC_DIR}" "${ENV_DIR}" "${CONFIG_DIR}" "${DATA_DIR}"
 
   # Header
-    cat > "${COMPOSE_FILE}" <<EOF
+  cat >"${COMPOSE_FILE}" <<EOF
 name: ${APP_NAME}
 networks:
     frontend:
@@ -1177,7 +1175,7 @@ EOF
   append_watchtower
 
   # CasaOS Metadata
-    cat >> "${COMPOSE_FILE}" <<EOF
+  cat >>"${COMPOSE_FILE}" <<EOF
 x-casaos:
     architectures:
         - amd64

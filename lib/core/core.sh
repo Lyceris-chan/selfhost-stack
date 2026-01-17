@@ -7,6 +7,16 @@ set -euo pipefail
 # SCRIPT_DIR is exported from zima.sh
 source "${SCRIPT_DIR}/lib/core/constants.sh"
 
+################################################################################
+# detect_dockerfile - Locate the appropriate Dockerfile in a repository
+# Arguments:
+#   $1 - Repository directory path
+#   $2 - Preferred Dockerfile name (optional)
+# Returns:
+#   0 if a Dockerfile is found, 1 otherwise
+# Outputs:
+#   Prints the relative path to the found Dockerfile to stdout
+################################################################################
 detect_dockerfile() {
   local repo_dir="$1"
   local preferred="${2:-}"
@@ -56,12 +66,14 @@ detect_dockerfile() {
 # Writes structured JSON log entries to the deployment history log file.
 # This function is used internally by log_info, log_warn, and log_crit.
 #
+# Globals:
+#   HISTORY_LOG
+#   PYTHON_CMD
 # Arguments:
 #   $1 - Log level (INFO, WARN, CRIT)
 #   $2 - Log message
-#
-# Example:
-#   log_to_file "INFO" "Service started successfully"
+# Outputs:
+#   Appends a JSON line to the history log file
 ################################################################################
 log_to_file() {
   local level="$1"
@@ -70,28 +82,58 @@ log_to_file() {
   log_dir=$(dirname "${HISTORY_LOG}")
 
   if [[ -d "${log_dir}" ]]; then
-    "${PYTHON_CMD}" -c "import json, datetime, sys; print(json.dumps({'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'level': sys.argv[1], 'category': 'SYSTEM', 'source': 'orchestrator', 'message': sys.argv[2]}))" "${level}" "${msg}" >> "${HISTORY_LOG}" 2>/dev/null || true
+    "${PYTHON_CMD}" -c "import json, datetime, sys; print(json.dumps({'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'level': sys.argv[1], 'category': 'SYSTEM', 'source': 'orchestrator', 'message': sys.argv[2]}))" "${level}" "${msg}" >>"${HISTORY_LOG}" 2>/dev/null || true
   fi
 }
 
+################################################################################
+# log_info - Print and log an informational message
+# Arguments:
+#   $1 - Message to log
+# Outputs:
+#   Writes to stdout and the history log
+################################################################################
 log_info() {
   local msg="$1"
   echo -e "\e[34m  ➜ [INFO]\e[0m ${msg}"
   log_to_file "INFO" "${msg}"
 }
 
+################################################################################
+# log_warn - Print and log a warning message
+# Arguments:
+#   $1 - Message to log
+# Outputs:
+#   Writes to stdout and the history log
+################################################################################
 log_warn() {
   local msg="$1"
   echo -e "\e[33m  ⚠️ [WARN]\e[0m ${msg}"
   log_to_file "WARN" "${msg}"
 }
 
+################################################################################
+# log_crit - Print and log a critical error message
+# Arguments:
+#   $1 - Message to log
+# Outputs:
+#   Writes to stderr and the history log
+################################################################################
 log_crit() {
   local msg="$1"
   echo -e "\e[31m  ✖ [CRIT]\e[0m ${msg}"
   log_to_file "CRIT" "${msg}"
 }
 
+################################################################################
+# ask_confirm - Prompt the user for confirmation
+# Globals:
+#   AUTO_CONFIRM
+# Arguments:
+#   $1 - Prompt message
+# Returns:
+#   0 if confirmed, 1 otherwise
+################################################################################
 ask_confirm() {
   local prompt="$1"
   local response
@@ -102,11 +144,20 @@ ask_confirm() {
 
   read -r -p "${prompt} [y/N]: " response
   case "${response}" in
-    [yY][eE][sS]|[yY]) return 0 ;;
-    *) return 1 ;;
+  [yY][eE][sS] | [yY]) return 0 ;;
+  *) return 1 ;;
   esac
 }
 
+################################################################################
+# pull_with_retry - Attempt to pull a docker image
+# Globals:
+#   DOCKER_CMD
+# Arguments:
+#   $1 - Image name
+# Returns:
+#   0 if successful, 1 otherwise
+################################################################################
 pull_with_retry() {
   local img="$1"
   if "${DOCKER_CMD}" pull "${img}"; then
@@ -117,6 +168,15 @@ pull_with_retry() {
   return 1
 }
 
+################################################################################
+# authenticate_registries - Log in to Docker registries if credentials provided
+# Globals:
+#   REG_USER
+#   REG_TOKEN
+#   DOCKER_CMD
+# Returns:
+#   0 if successful or no credentials, 1 on failure
+################################################################################
 authenticate_registries() {
   if [[ -n "${REG_USER:-}" ]] && [[ -n "${REG_TOKEN:-}" ]]; then
     log_info "Authenticating with Docker Registry..."
@@ -132,6 +192,15 @@ authenticate_registries() {
   return 0
 }
 
+################################################################################
+# safe_replace - Perform a string replacement in a template file
+# Arguments:
+#   $1 - Template file path
+#   $2 - Output file path
+#   $@ - Pairs of placeholder and replacement value
+# Returns:
+#   0 if successful, 1 otherwise
+################################################################################
 safe_replace() {
   local template_file="$1"
   local output_file="$2"
@@ -151,18 +220,35 @@ safe_replace() {
     content="${content//"$placeholder"/"$value"}"
     shift 2
   done
-  printf "%s" "${content}" > "${output_file}"
+  printf "%s" "${content}" >"${output_file}"
 }
 
+################################################################################
+# generate_secret - Generate a random alphanumeric string
+# Arguments:
+#   $1 - Desired length (default: 32)
+# Outputs:
+#   Prints the generated secret to stdout
+################################################################################
 generate_secret() {
   local length="${1:-32}"
   head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c "${length}"
 }
 
+################################################################################
+# generate_hash - Generate a bcrypt hash for a password
+# Arguments:
+#   $1 - Username
+#   $2 - Password
+# Returns:
+#   0 if successful, 1 on failure
+# Outputs:
+#   Prints the generated hash to stdout
+################################################################################
 generate_hash() {
   local user="$1"
   local pass="$2"
-  
+
   # Method 1: Try host Python (if crypt/bcrypt supported)
   if command -v "${PYTHON_CMD}" >/dev/null 2>&1; then
     local py_hash
@@ -174,9 +260,9 @@ generate_hash() {
     fi
   fi
 
-  # Method 2: Try host OpenSSL (if it supports -5/-6, though not bcrypt, some services might accept it? 
+  # Method 2: Try host OpenSSL (if it supports -5/-6, though not bcrypt, some services might accept it?
   # Actually, AdGuard/Portainer prefer bcrypt. Sticking to Docker if Python fails is safer for compatibility unless we have htpasswd.)
-  
+
   # Method 3: Try host htpasswd
   if command -v htpasswd >/dev/null 2>&1; then
     htpasswd -B -n -b "${user}" "${pass}" | cut -d: -f2
@@ -207,46 +293,74 @@ REG_USER="${REG_USER:-}"
 LAN_IP_OVERRIDE=""
 WG_CONF_B64="${WG_CONF_B64:-}"
 
+################################################################################
+# usage - Display script usage information
+# Arguments:
+#   None
+# Outputs:
+#   Writes usage help to stdout
+################################################################################
 usage() {
-    echo "Usage: $0 [options]"
-    echo ""
-    echo "Options:"
-    echo "  -y          Auto-Confirm (Reserved for automated testing)"
-    echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
-    echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
-    echo "  -o          Skip Odido Bundle Booster deployment"
-    echo "  -c          Maintenance (recreates containers, preserves data)"
-    echo "  -b          Create a system backup"
-    echo "  -r <file>   Restore from a system backup file"
-    echo "  -E <file>   Load Environment Variables from file"
-    echo "  -G          Generate Only (stops before deployment)"
-    echo "  -h          Show this help message"
+  echo "Usage: $0 [options]"
+  echo ""
+  echo "Options:"
+  echo "  -y          Auto-Confirm (Reserved for automated testing)"
+  echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
+  echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
+  echo "  -o          Skip Odido Bundle Booster deployment"
+  echo "  -c          Maintenance (recreates containers, preserves data)"
+  echo "  -b          Create a system backup"
+  echo "  -r <file>   Restore from a system backup file"
+  echo "  -E <file>   Load Environment Variables from file"
+  echo "  -G          Generate Only (stops before deployment)"
+  echo "  -h          Show this help message"
 }
 
+################################################################################
+# parse_args - Parse command line arguments
+# Arguments:
+#   $@ - Command line arguments
+# Returns:
+#   None
+################################################################################
 parse_args() {
   local opt
   while getopts "cxpyas:j hE:Gob:r:" opt; do
-      case ${opt} in
-          c) RESET_ENV=true; FORCE_CLEAN=true ;;
-          x) CLEAN_EXIT=true; RESET_ENV=true; CLEAN_ONLY=true; FORCE_CLEAN=true ;;
-          p) AUTO_PASSWORD=true ;;
-          y) AUTO_CONFIRM=true; AUTO_PASSWORD=true ;;
-          a) ALLOW_PROTON_VPN=true ;;
-          s) SELECTED_SERVICES="${OPTARG}" ;;
-          o) SKIP_ODIDO=true ;;
-          j) PARALLEL_DEPLOY=true ;;
-          E) ENV_FILE="${OPTARG}" ;;
-          G) GENERATE_ONLY=true ;;
-          b) DO_BACKUP=true ;;
-          r) RESTORE_FILE="${OPTARG}" ;;
-          h) 
-              usage
-              exit 0
-              ;;
-          *) usage; exit 1 ;;
-      esac
+    case ${opt} in
+    c)
+      RESET_ENV=true
+      FORCE_CLEAN=true
+      ;;
+    x)
+      CLEAN_EXIT=true
+      RESET_ENV=true
+      CLEAN_ONLY=true
+      FORCE_CLEAN=true
+      ;;
+    p) AUTO_PASSWORD=true ;;
+    y)
+      AUTO_CONFIRM=true
+      AUTO_PASSWORD=true
+      ;;
+    a) ALLOW_PROTON_VPN=true ;;
+    s) SELECTED_SERVICES="${OPTARG}" ;;
+    o) SKIP_ODIDO=true ;;
+    j) PARALLEL_DEPLOY=true ;;
+    E) ENV_FILE="${OPTARG}" ;;
+    G) GENERATE_ONLY=true ;;
+    b) DO_BACKUP=true ;;
+    r) RESTORE_FILE="${OPTARG}" ;;
+    h)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      exit 1
+      ;;
+    esac
   done
-  shift $((OPTIND -1))
+  shift $((OPTIND - 1))
 }
 
 parse_args "$@"
@@ -255,24 +369,24 @@ SKIP_ODIDO="${SKIP_ODIDO:-false}"
 
 # Handle odido-booster exclusion logic
 if [ "$SKIP_ODIDO" = true ]; then
-    if [ -z "$SELECTED_SERVICES" ]; then
-        # Dynamically remove odido-booster from the full stack list
-        SELECTED_SERVICES=$(echo "$STACK_SERVICES" | sed 's/\bodido-booster\b//g' | sed 's/  */ /g' | sed 's/^ //;s/ $//' | tr ' ' ',')
-    else
-        # Remove odido-booster from the list if it's there
-        SELECTED_SERVICES=$(echo "$SELECTED_SERVICES" | sed 's/\bodido-booster\b//g' | sed 's/,,/,/g' | sed 's/^,//' | sed 's/,$//')
-    fi
+  if [ -z "$SELECTED_SERVICES" ]; then
+    # Dynamically remove odido-booster from the full stack list
+    SELECTED_SERVICES=$(echo "$STACK_SERVICES" | sed 's/\bodido-booster\b//g' | sed 's/  */ /g' | sed 's/^ //;s/ $//' | tr ' ' ',')
+  else
+    # Remove odido-booster from the list if it's there
+    SELECTED_SERVICES=$(echo "$SELECTED_SERVICES" | sed 's/\bodido-booster\b//g' | sed 's/,,/,/g' | sed 's/^,//' | sed 's/,$//')
+  fi
 fi
 
 # --- LOAD EXTERNAL ENV FILE ---
 if [ -n "$ENV_FILE" ]; then
-    if [ -f "$ENV_FILE" ]; then
-        # shellcheck disable=SC1090
-        source "$ENV_FILE"
-    else
-        echo "[CRIT] Environment file not found: $ENV_FILE"
-        exit 1
-    fi
+  if [ -f "$ENV_FILE" ]; then
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+  else
+    echo "[CRIT] Environment file not found: $ENV_FILE"
+    exit 1
+  fi
 fi
 
 # Suppress git advice/warnings for cleaner logs during automated clones
@@ -281,36 +395,36 @@ export GIT_CONFIG_PARAMETERS="'advice.detachedHead=false'"
 # Verify core dependencies before proceeding.
 REQUIRED_COMMANDS="docker curl git crontab iptables flock jq awk sed grep find tar ip"
 if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
-    echo "[CRIT] sudo is required for non-root users. Please install it."
-    exit 1
+  echo "[CRIT] sudo is required for non-root users. Please install it."
+  exit 1
 fi
 for cmd in $REQUIRED_COMMANDS; do
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo "[CRIT] '$cmd' is required but not installed. Please install it."
-        exit 1
-    fi
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "[CRIT] '$cmd' is required but not installed. Please install it."
+    exit 1
+  fi
 done
 
 # Detect if sudo is available
 if command -v sudo >/dev/null 2>&1; then
-    SUDO="sudo"
+  SUDO="sudo"
 else
-    SUDO=""
+  SUDO=""
 fi
 
 # Docker Compose Check (Plugin or Standalone)
 if $SUDO docker compose version >/dev/null 2>&1; then
-    DOCKER_COMPOSE_CMD="docker compose"
+  DOCKER_COMPOSE_CMD="docker compose"
 elif command -v docker-compose >/dev/null 2>&1; then
-    if $SUDO docker-compose version >/dev/null 2>&1; then
-        DOCKER_COMPOSE_CMD="docker-compose"
-    else
-        echo "[CRIT] Docker Compose is installed but not executable."
-        exit 1
-    fi
-else
-    echo "[CRIT] Docker Compose v2 is required. Please update your environment."
+  if $SUDO docker-compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE_CMD="docker-compose"
+  else
+    echo "[CRIT] Docker Compose is installed but not executable."
     exit 1
+  fi
+else
+  echo "[CRIT] Docker Compose v2 is required. Please update your environment."
+  exit 1
 fi
 
 APP_NAME="${APP_NAME:-privacy-hub}"
@@ -320,12 +434,12 @@ if [ -z "$APP_NAME" ]; then APP_NAME="privacy-hub"; fi
 # Use absolute path for BASE_DIR to ensure it stays in the project root's data folder
 # Detect PROJECT_ROOT dynamically if not already set
 if [ -z "${PROJECT_ROOT:-}" ]; then
-    # SCRIPT_DIR is exported from zima.sh
-    if [ -n "${SCRIPT_DIR:-}" ]; then
-        PROJECT_ROOT="$SCRIPT_DIR"
-    else
-        PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-    fi
+  # SCRIPT_DIR is exported from zima.sh
+  if [ -n "${SCRIPT_DIR:-}" ]; then
+    PROJECT_ROOT="$SCRIPT_DIR"
+  else
+    PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  fi
 fi
 BASE_DIR="$PROJECT_ROOT/data/AppData/$APP_NAME"
 $SUDO mkdir -p "$BASE_DIR"
@@ -357,19 +471,28 @@ readonly ACTIVE_WG_CONF="$BASE_DIR/active-wg.conf"
 readonly ACTIVE_PROFILE_NAME_FILE="$BASE_DIR/.active_profile_name"
 readonly DOTENV_FILE="$BASE_DIR/.env"
 
+################################################################################
+# init_directories - Create and set permissions for necessary directories
+# Globals:
+#   SRC_DIR, ENV_DIR, CONFIG_DIR, DATA_DIR, BACKUP_DIR, ASSETS_DIR,
+#   MEMOS_HOST_DIR, WG_PROFILES_DIR, DOTENV_FILE, ACTIVE_WG_CONF,
+#   HISTORY_LOG, ACTIVE_PROFILE_NAME_FILE, BASE_DIR
+# Returns:
+#   None
+################################################################################
 init_directories() {
-    log_info "Initializing project directories..."
-    $SUDO mkdir -p "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api" "$WG_PROFILES_DIR"
-    $SUDO chown "$(whoami)" "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$WG_PROFILES_DIR"
-    
-    # Initialize metadata files with correct ownership
-    [ ! -f "$DOTENV_FILE" ] && $SUDO touch "$DOTENV_FILE"
-    [ ! -f "$ACTIVE_WG_CONF" ] && $SUDO touch "$ACTIVE_WG_CONF"
-    
-    $SUDO chown "$(whoami)" "$DOTENV_FILE" "$ACTIVE_WG_CONF"
-    $SUDO chmod 600 "$DOTENV_FILE" "$ACTIVE_WG_CONF"
+  log_info "Initializing project directories..."
+  $SUDO mkdir -p "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api" "$WG_PROFILES_DIR"
+  $SUDO chown "$(whoami)" "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$WG_PROFILES_DIR"
 
-    $SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
+  # Initialize metadata files with correct ownership
+  [ ! -f "$DOTENV_FILE" ] && $SUDO touch "$DOTENV_FILE"
+  [ ! -f "$ACTIVE_WG_CONF" ] && $SUDO touch "$ACTIVE_WG_CONF"
+
+  $SUDO chown "$(whoami)" "$DOTENV_FILE" "$ACTIVE_WG_CONF"
+  $SUDO chmod 600 "$DOTENV_FILE" "$ACTIVE_WG_CONF"
+
+  $SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
 }
 
 # Container naming and persistence
@@ -383,21 +506,29 @@ export UPDATE_STRATEGY
 DOCKER_AUTH_DIR="${PH_DOCKER_AUTH_DIR:-$BASE_DIR/.docker}"
 # Ensure clean state for auth only if it doesn't already have a config
 if [[ ! -d "${DOCKER_AUTH_DIR}" ]]; then
-    ${SUDO} mkdir -p "${DOCKER_AUTH_DIR}"
-    ${SUDO} chown -R "$(whoami)" "${DOCKER_AUTH_DIR}"
+  ${SUDO} mkdir -p "${DOCKER_AUTH_DIR}"
+  ${SUDO} chown -R "$(whoami)" "${DOCKER_AUTH_DIR}"
 fi
 
 # Detect Python interpreter
 if command -v python3 >/dev/null 2>&1; then
-    PYTHON_CMD="python3"
+  PYTHON_CMD="python3"
 elif command -v python >/dev/null 2>&1; then
-    PYTHON_CMD="python"
+  PYTHON_CMD="python"
 else
-    echo "[CRIT] Python is required but not installed. Please install python3."
-    exit 1
+  echo "[CRIT] Python is required but not installed. Please install python3."
+  exit 1
 fi
 
-# Define consistent docker commands using functions to handle SUDO properly
+################################################################################
+# docker_cmd - Execute a docker command with proper SUDO and config
+# Globals:
+#   SUDO, DOCKER_AUTH_DIR
+# Arguments:
+#   $@ - Docker arguments
+# Returns:
+#   Exit status of the docker command
+################################################################################
 docker_cmd() {
   if [[ -n "${SUDO:-}" ]]; then
     ${SUDO} env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto docker "$@"
@@ -406,6 +537,15 @@ docker_cmd() {
   fi
 }
 
+################################################################################
+# docker_compose_cmd - Execute a docker compose command with proper SUDO and config
+# Globals:
+#   SUDO, DOCKER_AUTH_DIR, DOCKER_COMPOSE_CMD
+# Arguments:
+#   $@ - Docker compose arguments
+# Returns:
+#   Exit status of the docker compose command
+################################################################################
 docker_compose_cmd() {
   if [[ -n "${SUDO:-}" ]]; then
     ${SUDO} env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto ${DOCKER_COMPOSE_CMD} "$@"
@@ -419,7 +559,15 @@ docker_compose_cmd() {
 DOCKER_CMD="docker_cmd"
 DOCKER_COMPOSE_FINAL_CMD="docker_compose_cmd"
 
-# OpenSSL Helper with Docker Fallback
+################################################################################
+# ossl - Execute an openssl command with docker fallback if necessary
+# Globals:
+#   BASE_DIR
+# Arguments:
+#   $@ - OpenSSL arguments
+# Returns:
+#   Exit status of the openssl command
+################################################################################
 ossl() {
   if command -v openssl >/dev/null 2>&1; then
     openssl "$@"
@@ -480,13 +628,22 @@ readonly MIGRATE_SCRIPT="$BASE_DIR/migrate.sh"
 readonly PATCHES_SCRIPT="$BASE_DIR/patches.sh"
 
 # Ensure root-level data files are writable by the container user (UID 1000)
-    $SUDO touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
-    if [ ! -f "$ACTIVE_PROFILE_NAME_FILE" ]; then echo "Initial-Setup" | $SUDO tee "$ACTIVE_PROFILE_NAME_FILE" >/dev/null; fi
-    $SUDO chmod 666 "$HISTORY_LOG" 2>/dev/null || true
-    $SUDO chmod 644 "$ACTIVE_PROFILE_NAME_FILE" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
+$SUDO touch "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
+if [ ! -f "$ACTIVE_PROFILE_NAME_FILE" ]; then echo "Initial-Setup" | $SUDO tee "$ACTIVE_PROFILE_NAME_FILE" >/dev/null; fi
+$SUDO chmod 666 "$HISTORY_LOG" 2>/dev/null || true
+$SUDO chmod 644 "$ACTIVE_PROFILE_NAME_FILE" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage"
 $SUDO chown 1000:1000 "$HISTORY_LOG" "$ACTIVE_WG_CONF" "$BASE_DIR/.data_usage" "$BASE_DIR/.wge_data_usage" "$ACTIVE_PROFILE_NAME_FILE" 2>/dev/null || true
 $SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$ASSETS_DIR" 2>/dev/null || true
 
+################################################################################
+# allocate_subnet - Find an available 172.x.0.0/16 subnet for Docker isolation
+# Globals:
+#   DOCKER_CMD
+#   FOUND_OCTET
+#   DOCKER_SUBNET
+# Outputs:
+#   Sets DOCKER_SUBNET and FOUND_OCTET
+################################################################################
 allocate_subnet() {
   log_info "Allocating private virtual subnet for container isolation."
 
@@ -519,6 +676,14 @@ allocate_subnet() {
   log_info "Assigned Virtual Subnet: ${DOCKER_SUBNET}"
 }
 
+################################################################################
+# check_port_availability - Check if a port is currently in use on the host
+# Arguments:
+#   $1 - Port number
+#   $2 - Protocol (tcp or udp, default: tcp)
+# Returns:
+#   0 if available, 1 if in use
+################################################################################
 check_port_availability() {
   local port="$1"
   local proto="${2:-tcp}"
@@ -539,6 +704,15 @@ check_port_availability() {
   return 0
 }
 
+################################################################################
+# is_service_enabled - Check if a service is in the selection list
+# Globals:
+#   SELECTED_SERVICES
+# Arguments:
+#   $1 - Service identifier
+# Returns:
+#   0 if enabled or no selection active, 1 otherwise
+################################################################################
 is_service_enabled() {
   local srv="$1"
   if [[ -z "${SELECTED_SERVICES:-}" ]]; then
@@ -550,6 +724,13 @@ is_service_enabled() {
   return 1
 }
 
+################################################################################
+# safe_remove_network - Remove a docker network and disconnect containers
+# Globals:
+#   DOCKER_CMD
+# Arguments:
+#   $1 - Network name
+################################################################################
 safe_remove_network() {
   local net_name="$1"
   local containers
@@ -566,6 +747,15 @@ safe_remove_network() {
   fi
 }
 
+################################################################################
+# detect_network - Detect LAN and Public IP addresses
+# Globals:
+#   LAN_IP_OVERRIDE
+#   FOUND_OCTET
+#   PUBLIC_IP
+# Outputs:
+#   Sets LAN_IP and PUBLIC_IP
+################################################################################
 detect_network() {
   log_info "Identifying network environment..."
 
@@ -624,6 +814,13 @@ detect_network() {
   fi
 }
 
+################################################################################
+# validate_wg_config - Validate the active WireGuard configuration file
+# Globals:
+#   ACTIVE_WG_CONF
+# Returns:
+#   0 if valid, 1 otherwise
+################################################################################
 validate_wg_config() {
   if [[ ! -s "${ACTIVE_WG_CONF}" ]]; then return 1; fi
   if ! grep -q "PrivateKey" "${ACTIVE_WG_CONF}"; then return 1; fi
@@ -634,6 +831,15 @@ validate_wg_config() {
   return 0
 }
 
+################################################################################
+# extract_wg_profile_name - Extract profile name from WG config comments
+# Arguments:
+#   $1 - Path to WG config file
+# Returns:
+#   0 if found, 1 otherwise
+# Outputs:
+#   Prints the extracted name to stdout
+################################################################################
 extract_wg_profile_name() {
   local config_file="$1"
   local in_peer=0
@@ -641,23 +847,43 @@ extract_wg_profile_name() {
   local stripped
   while IFS= read -r line; do
     stripped=$(echo "${line}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    if echo "${stripped}" | grep -qi '^\[peer\]$'; then in_peer=1; continue; fi
+    if echo "${stripped}" | grep -qi '^\[peer\]$'; then
+      in_peer=1
+      continue
+    fi
     if [[ "${in_peer}" -eq 1 ]] && echo "${stripped}" | grep -q '^#'; then
       profile_name=$(echo "${stripped}" | sed 's/^#[[:space:]]*//')
-      if [[ -n "${profile_name}" ]]; then echo "${profile_name}"; return 0; fi
+      if [[ -n "${profile_name}" ]]; then
+        echo "${profile_name}"
+        return 0
+      fi
     fi
     if [[ "${in_peer}" -eq 1 ]] && echo "${stripped}" | grep -q '^\['; then break; fi
-  done < "${config_file}"
+  done <"${config_file}"
   while IFS= read -r line; do
     stripped=$(echo "${line}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     if echo "${stripped}" | grep -q '^#' && ! echo "${stripped}" | grep -q '='; then
       profile_name=$(echo "${stripped}" | sed 's/^#[[:space:]]*//')
-      if [[ -n "${profile_name}" ]]; then echo "${profile_name}"; return 0; fi
+      if [[ -n "${profile_name}" ]]; then
+        echo "${profile_name}"
+        return 0
+      fi
     fi
-  done < "${config_file}"
+  done <"${config_file}"
   return 1
 }
 
+################################################################################
+# setup_secrets - Prompt for or load system secrets and credentials
+# Globals:
+#   PORTAINER_PASS_HASH, AGH_PASS_HASH, WG_HASH_COMPOSE, ADMIN_PASS_RAW,
+#   VPN_PASS_RAW, PORTAINER_PASS_RAW, AGH_PASS_RAW, SEARXNG_SECRET,
+#   IMMICH_DB_PASSWORD, BASE_DIR, AUTO_CONFIRM, PERSONAL_MODE, AUTO_PASSWORD,
+#   DESEC_DOMAIN, DESEC_TOKEN, SCRIBE_GH_USER, SCRIBE_GH_TOKEN, HUB_API_KEY,
+#   ODIDO_API_KEY, WG_HASH_CLEAN, DATA_DIR, AGH_USER
+# Returns:
+#   None
+################################################################################
 setup_secrets() {
   export PORTAINER_PASS_HASH="${PORTAINER_PASS_HASH:-}"
   export AGH_PASS_HASH="${AGH_PASS_HASH:-}"
@@ -679,7 +905,7 @@ setup_secrets() {
       if [[ "${PERSONAL_MODE:-false}" == "true" ]]; then
         log_info "Personal Mode: Applying user-specific defaults."
       fi
-      
+
       VPN_PASS_RAW="${VPN_PASS_RAW:-$(generate_secret 24)}"
       AGH_PASS_RAW="${AGH_PASS_RAW:-$(generate_secret 24)}"
       ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-$(generate_secret 24)}"
@@ -712,7 +938,7 @@ setup_secrets() {
       echo "--- MANUAL CREDENTIAL PROVISIONING ---"
       echo "Security Note: Please use strong, unique passwords for each service."
       echo ""
-      
+
       if [[ "${AUTO_PASSWORD}" == "true" ]]; then
         log_info "Automated password generation initialized."
         VPN_PASS_RAW="${VPN_PASS_RAW:-$(generate_secret 24)}"
@@ -768,7 +994,7 @@ setup_secrets() {
         ODIDO_USER_ID=""
         SKIP_ODIDO=true
       fi
-      
+
       # OAuth token will be obtained via dashboard after deployment
       ODIDO_TOKEN=""
     fi
@@ -778,16 +1004,17 @@ setup_secrets() {
     ODIDO_API_KEY="${HUB_API_KEY}"
 
     if [[ -n "${WG_HASH_CLEAN:-}" ]] && [[ -n "${AGH_PASS_HASH:-}" ]] && [[ -n "${PORTAINER_PASS_HASH:-}" ]]; then
-        log_info "Using provided password hashes."
+      log_info "Using provided password hashes."
     else
-            WG_HASH_CLEAN=$(generate_hash "admin" "${VPN_PASS_RAW}")
-            AGH_PASS_HASH=$(generate_hash "${AGH_USER}" "${AGH_PASS_RAW}")
-            PORTAINER_PASS_HASH=$(generate_hash "admin" "${PORTAINER_PASS_RAW}")
-        
-            if [[ -z "${WG_HASH_CLEAN}" ]] || [[ -z "${AGH_PASS_HASH}" ]] || [[ -z "${PORTAINER_PASS_HASH}" ]] || [[ "${WG_HASH_CLEAN}" == "FAILED" ]] || [[ "${AGH_PASS_HASH}" == "FAILED" ]] || [[ "${PORTAINER_PASS_HASH}" == "FAILED" ]]; then
-              log_crit "Failed to generate password hashes. Check Docker/Python status."
-              exit 1
-            fi  fi
+      WG_HASH_CLEAN=$(generate_hash "admin" "${VPN_PASS_RAW}")
+      AGH_PASS_HASH=$(generate_hash "${AGH_USER}" "${AGH_PASS_RAW}")
+      PORTAINER_PASS_HASH=$(generate_hash "admin" "${PORTAINER_PASS_RAW}")
+
+      if [[ -z "${WG_HASH_CLEAN}" ]] || [[ -z "${AGH_PASS_HASH}" ]] || [[ -z "${PORTAINER_PASS_HASH}" ]] || [[ "${WG_HASH_CLEAN}" == "FAILED" ]] || [[ "${AGH_PASS_HASH}" == "FAILED" ]] || [[ "${PORTAINER_PASS_HASH}" == "FAILED" ]]; then
+        log_crit "Failed to generate password hashes. Check Docker/Python status."
+        exit 1
+      fi
+    fi
 
     SCRIBE_SECRET=$(generate_secret 64)
     ANONYMOUS_SECRET=$(generate_secret 32)
@@ -804,7 +1031,7 @@ setup_secrets() {
       ${SUDO} rm -rf "${BASE_DIR}/.secrets"
     fi
 
-        cat > "${BASE_DIR}/.secrets" <<EOF
+    cat >"${BASE_DIR}/.secrets" <<EOF
 VPN_PASS_RAW="${VPN_PASS_RAW}"
 AGH_PASS_RAW="${AGH_PASS_RAW}"
 ADMIN_PASS_RAW="${ADMIN_PASS_RAW}"
@@ -839,7 +1066,7 @@ EOF
     # Logic to ensure all secrets are present
     if [[ -z "${HUB_API_KEY:-}" ]]; then
       HUB_API_KEY=$(generate_secret 32)
-      echo "HUB_API_KEY='${HUB_API_KEY}'" >> "${BASE_DIR}/.secrets"
+      echo "HUB_API_KEY='${HUB_API_KEY}'" >>"${BASE_DIR}/.secrets"
       updated_secrets=true
     fi
     if [[ "${updated_secrets}" == "true" ]]; then
@@ -856,11 +1083,25 @@ EOF
   export AGH_USER
 }
 
+################################################################################
+# generate_protonpass_export - Create a CSV for password manager import
+# Globals:
+#   BASE_DIR
+#   LAN_IP
+#   PORT_DASHBOARD_WEB
+#   ADMIN_PASS_RAW
+#   PORT_ADGUARD_WEB
+#   AGH_PASS_RAW
+#   PORT_WG_WEB
+#   VPN_PASS_RAW
+#   PORT_PORTAINER
+#   PORTAINER_PASS_RAW
+################################################################################
 generate_protonpass_export() {
   log_info "Generating Proton Pass import file (CSV)..."
   local export_file="${BASE_DIR}/protonpass_import.csv"
 
-    cat > "${export_file}" <<EOF
+  cat >"${export_file}" <<EOF
 Name,URL,Username,Password,Note
 Privacy Hub Admin,http://${LAN_IP}:${PORT_DASHBOARD_WEB},admin,${ADMIN_PASS_RAW},Primary management portal.
 AdGuard Home,http://${LAN_IP}:${PORT_ADGUARD_WEB},adguard,${AGH_PASS_RAW},DNS filtration.

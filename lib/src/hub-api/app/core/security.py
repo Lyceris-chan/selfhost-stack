@@ -30,13 +30,12 @@ def load_sessions():
     global valid_sessions
     try:
         if os.path.exists(settings.SESSIONS_FILE):
-            with open(settings.SESSIONS_FILE, 'r', encoding='utf-8') as f:
+            with open(settings.SESSIONS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 now = time.time()
                 with session_lock:
                     valid_sessions = {
-                        t: expiry
-                        for t, expiry in data.items() if expiry > now
+                        t: expiry for t, expiry in data.items() if expiry > now
                     }
     except Exception as err:
         log_structured("ERROR", f"Session Load Error: {err}", "SECURITY")
@@ -49,9 +48,10 @@ def save_sessions():
         with session_lock:
             # Use os.open with O_WRONLY | O_CREAT | O_TRUNC and mode 0o600
             # to ensure the file is created with restricted permissions from the start.
-            fd = os.open(settings.SESSIONS_FILE,
-                         os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, 'w') as f:
+            fd = os.open(
+                settings.SESSIONS_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600
+            )
+            with os.fdopen(fd, "w") as f:
                 json.dump(valid_sessions, f)
     except Exception as err:
         log_structured("ERROR", f"Session Save Error: {err}", "SECURITY")
@@ -63,9 +63,7 @@ def cleanup_sessions_thread():
         if session_state["cleanup_enabled"]:
             now = time.time()
             with session_lock:
-                expired = [
-                    t for t, expiry in valid_sessions.items() if now > expiry
-                ]
+                expired = [t for t, expiry in valid_sessions.items() if now > expiry]
                 if expired:
                     for t in expired:
                         del valid_sessions[t]
@@ -79,10 +77,12 @@ load_sessions()
 threading.Thread(target=cleanup_sessions_thread, daemon=True).start()
 
 
-async def get_current_user(request: Request,
-                           api_key: str = Security(api_key_header),
-                           session_token: str = Security(session_token_header),
-                           token_query: str = Query(None, alias="token")):
+async def get_current_user(
+    request: Request,
+    api_key: str = Security(api_key_header),
+    session_token: str = Security(session_token_header),
+    token_query: str = Query(None, alias="token"),
+):
     """Authenticates the user via session token or API key.
 
     Args:
@@ -102,8 +102,10 @@ async def get_current_user(request: Request,
     if actual_session_token:
         with session_lock:
             if actual_session_token in valid_sessions:
-                if not session_state["cleanup_enabled"] or time.time(
-                ) < valid_sessions[actual_session_token]:
+                if (
+                    not session_state["cleanup_enabled"]
+                    or time.time() < valid_sessions[actual_session_token]
+                ):
                     # Refresh session (slide window)
                     valid_sessions[actual_session_token] = time.time() + 1800
                     return "admin"
@@ -114,19 +116,25 @@ async def get_current_user(request: Request,
                 log_structured(
                     "WARN",
                     f"Invalid session token attempted: {actual_session_token[:8]}...",
-                    "AUTH")
+                    "AUTH",
+                )
 
     # 2. Check API Key (Header) - API Key Privileges
-    if settings.HUB_API_KEY and api_key and secrets.compare_digest(
-            api_key, settings.HUB_API_KEY):
+    if (
+        settings.HUB_API_KEY
+        and api_key
+        and secrets.compare_digest(api_key, settings.HUB_API_KEY)
+    ):
         return "api_key"
 
     raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-async def get_optional_user(request: Request,
-                            api_key: str = Security(api_key_header),
-                            session_token: str = Security(session_token_header)):
+async def get_optional_user(
+    request: Request,
+    api_key: str = Security(api_key_header),
+    session_token: str = Security(session_token_header),
+):
     """Dependency that returns 'guest' if no valid auth is found."""
     try:
         return await get_current_user(request, api_key, session_token, token_query=None)
@@ -134,13 +142,17 @@ async def get_optional_user(request: Request,
         return "guest"
 
 
-async def get_api_key_or_query_token(api_key: str = Security(api_key_header),
-                                     query_token: str = Query(None,
-                                                              alias="token")):
+async def get_api_key_or_query_token(
+    api_key: str = Security(api_key_header),
+    query_token: str = Query(None, alias="token"),
+):
     """Specific dependency for routes that support query tokens."""
     token = api_key or query_token
-    if settings.HUB_API_KEY and token and secrets.compare_digest(
-            token, settings.HUB_API_KEY):
+    if (
+        settings.HUB_API_KEY
+        and token
+        and secrets.compare_digest(token, settings.HUB_API_KEY)
+    ):
         return "api_key"
     raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -149,8 +161,7 @@ async def get_admin_user(user: str = Depends(get_current_user)):
     """Enforces admin or API Key access for sensitive management routes."""
     if user == "admin" or user == "api_key":
         return user
-    raise HTTPException(status_code=403,
-                        detail="Forbidden: Admin session required")
+    raise HTTPException(status_code=403, detail="Forbidden: Admin session required")
 
 
 def create_session(timeout_seconds=1800):

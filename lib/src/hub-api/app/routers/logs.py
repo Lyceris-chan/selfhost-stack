@@ -20,9 +20,9 @@ router = APIRouter()
 
 
 @router.get("/logs")
-def get_logs(level: str = None,
-             category: str = None,
-             user: str = Depends(get_current_user)):
+def get_logs(
+    level: str = None, category: str = None, user: str = Depends(get_current_user)
+):
     """Retrieves the last 100 log entries from the database with filtering.
 
     Args:
@@ -58,12 +58,10 @@ def get_logs(level: str = None,
         rows = cursor.fetchall()
         conn.close()
 
-        log_entries = [{
-            "timestamp": r[0],
-            "level": r[1],
-            "category": r[2],
-            "message": r[3]
-        } for r in rows]
+        log_entries = [
+            {"timestamp": r[0], "level": r[1], "category": r[2], "message": r[3]}
+            for r in rows
+        ]
         log_entries.reverse()
         return {"logs": log_entries}
     except Exception as e:
@@ -71,8 +69,7 @@ def get_logs(level: str = None,
 
 
 @router.get("/events")
-async def events_stream(request: Request,
-                        user: str = Depends(get_current_user)):
+async def events_stream(request: Request, user: str = Depends(get_current_user)):
     """Provides a real-time Server-Sent Events (SSE) stream of system logs.
 
     Args:
@@ -96,7 +93,7 @@ async def events_stream(request: Request,
             return
 
         try:
-            with open(settings.LOG_FILE, 'r') as f:
+            with open(settings.LOG_FILE, "r") as f:
                 f.seek(0, 2)  # Tail
                 yield ": keepalive\n\n"
 

@@ -11,11 +11,13 @@ from typing import List, Optional
 from .logging import log_structured
 
 
-def run_command(cmd: List[str],
-                timeout: int = 30,
-                cwd: Optional[str] = None,
-                check: bool = False,
-                capture_output: bool = True):
+def run_command(
+    cmd: List[str],
+    timeout: int = 30,
+    cwd: Optional[str] = None,
+    check: bool = False,
+    capture_output: bool = True,
+):
     """Executes a shell command safely using subprocess.run.
 
     Args:
@@ -43,7 +45,8 @@ def run_command(cmd: List[str],
             text=True,
             timeout=timeout,
             cwd=cwd,
-            check=check)
+            check=check,
+        )
         return res
     except subprocess.CalledProcessError as err:
         log_structured("ERROR", f"Command failed: {cmd} - {err.stderr}", "SYSTEM")
@@ -52,8 +55,9 @@ def run_command(cmd: List[str],
         log_structured("ERROR", f"Command timed out: {cmd}", "SYSTEM")
         raise err
     except Exception as err:
-        log_structured("ERROR",
-                       f"Command execution error: {cmd} - {str(err)}", "SYSTEM")
+        log_structured(
+            "ERROR", f"Command execution error: {cmd} - {str(err)}", "SYSTEM"
+        )
         raise err
 
 
@@ -68,5 +72,5 @@ def sanitize_service_name(name: str) -> Optional[str]:
     """
     if not name or not isinstance(name, str):
         return None
-    sanitized = "".join([c for c in name if c.isalnum() or c in ('-', '_')])
+    sanitized = "".join([c for c in name if c.isalnum() or c in ("-", "_")])
     return sanitized if sanitized else None

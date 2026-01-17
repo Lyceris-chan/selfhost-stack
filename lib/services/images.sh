@@ -3,7 +3,6 @@
 # Handles image tag resolution and pre-pulling of critical images.
 set -euo pipefail
 
-
 #######################################
 # Resolves dynamic image tags for services from environment or defaults.
 # Globals:
@@ -22,18 +21,18 @@ resolve_service_tags() {
   local srv
 
   for srv in ${STACK_SERVICES}; do
-  srv_upper=$(echo "${srv//-/_}" | tr '[:lower:]' '[:upper:]')
-  var_name="${srv_upper}_IMAGE_TAG"
-  default_var_name="${srv_upper}_DEFAULT_TAG"
+    srv_upper=$(echo "${srv//-/_}" | tr '[:lower:]' '[:upper:]')
+    var_name="${srv_upper}_IMAGE_TAG"
+    default_var_name="${srv_upper}_DEFAULT_TAG"
 
-  # Use specific default tag if defined, otherwise 'latest'
-  val="${!default_var_name:-latest}"
+    # Use specific default tag if defined, otherwise 'latest'
+    val="${!default_var_name:-latest}"
 
-  if [[ -f "${DOTENV_FILE}" ]] && "${SUDO}" grep -q "^${var_name}=" "${DOTENV_FILE}"; then
-  val=$("${SUDO}" grep "^${var_name}=" "${DOTENV_FILE}" | cut -d'=' -f2)
-  fi
+    if [[ -f "${DOTENV_FILE}" ]] && "${SUDO}" grep -q "^${var_name}=" "${DOTENV_FILE}"; then
+      val=$("${SUDO}" grep "^${var_name}=" "${DOTENV_FILE}" | cut -d'=' -f2)
+    fi
 
-  export "${var_name}=${val}"
+    export "${var_name}=${val}"
   done
 }
 

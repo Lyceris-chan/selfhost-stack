@@ -88,15 +88,15 @@ main() {
     if [[ -n "${WG_CONF_B64:-}" ]]; then
       log_info "System detected WireGuard configuration in environment. Decoding..."
       echo "${WG_CONF_B64}" | base64 -d | ${SUDO} tee "${ACTIVE_WG_CONF}" >/dev/null
-      
+
       if [[ ! -s "${ACTIVE_WG_CONF}" ]]; then
         log_crit "Failed to decode WireGuard config from environment variables. File is empty."
         exit 1
       fi
 
       if ! grep -q "Endpoint" "${ACTIVE_WG_CONF}" || ! grep -q "PublicKey" "${ACTIVE_WG_CONF}"; then
-          log_crit "Decoded WireGuard config is missing required fields (Endpoint/PublicKey)."
-          exit 1
+        log_crit "Decoded WireGuard config is missing required fields (Endpoint/PublicKey)."
+        exit 1
       fi
     elif [[ "${AUTO_CONFIRM}" == "true" ]]; then
       log_crit "Auto-confirm active but no WireGuard configuration provided via environment."
@@ -114,8 +114,8 @@ main() {
     "${PYTHON_CMD}" "${SCRIPT_DIR}/lib/utils/format_wg.py" "${ACTIVE_WG_CONF}"
 
     if [[ ! -s "${ACTIVE_WG_CONF}" ]]; then
-        log_crit "WireGuard config is empty after formatting. Check format_wg.py."
-        exit 1
+      log_crit "WireGuard config is empty after formatting. Check format_wg.py."
+      exit 1
     fi
 
     if ! validate_wg_config; then
@@ -129,9 +129,9 @@ main() {
 
   # Background Operations (Now that user interaction is complete)
   log_info "Interactions complete. Starting background infrastructure preparation..."
-  
+
   setup_static_assets
-  
+
   log_info "Pre-pulling core infrastructure images sequentially..."
   resolve_service_tags
   pull_critical_images
@@ -176,5 +176,3 @@ main() {
 }
 
 main "$@"
-
-

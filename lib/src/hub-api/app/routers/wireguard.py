@@ -28,9 +28,7 @@ async def get_wgeasy_session():
     try:
         url = f"http://{wg_host}:51821/api/session"
         async with httpx.AsyncClient() as client:
-            resp = await client.post(url,
-                                     json={"password": password},
-                                     timeout=5.0)
+            resp = await client.post(url, json={"password": password}, timeout=5.0)
             if resp.status_code in (200, 204):
                 return resp.cookies
     except Exception as err:
@@ -64,12 +62,12 @@ async def get_clients(user: str = Depends(get_admin_user)):
 
 class CreateClientRequest(BaseModel):
     """Schema for creating a new WireGuard client."""
+
     name: str
 
 
 @router.post("/wg/clients")
-async def create_client(req: CreateClientRequest,
-                        user: str = Depends(get_admin_user)):
+async def create_client(req: CreateClientRequest, user: str = Depends(get_admin_user)):
     """Creates a new WireGuard client configuration.
 
     Args:
@@ -119,8 +117,7 @@ async def delete_client(client_id: str, user: str = Depends(get_admin_user)):
 
 
 @router.get("/wg/clients/{client_id}/configuration")
-async def get_client_config(client_id: str,
-                            user: str = Depends(get_admin_user)):
+async def get_client_config(client_id: str, user: str = Depends(get_admin_user)):
     """Downloads the WireGuard .conf file for a specific client.
 
     Args:
@@ -154,9 +151,9 @@ def list_profiles(user: str = Depends(get_admin_user)):
     """
     try:
         files = [
-            f.replace('.conf', '')
+            f.replace(".conf", "")
             for f in os.listdir(settings.PROFILES_DIR)
-            if f.endswith('.conf')
+            if f.endswith(".conf")
         ]
         return {"profiles": files}
     except Exception:

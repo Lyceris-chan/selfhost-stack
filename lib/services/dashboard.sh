@@ -21,12 +21,12 @@ generate_dashboard() {
   local js_file="${SCRIPT_DIR}/lib/templates/assets/dashboard.js"
 
   if [[ ! -f "${template}" ]]; then
-  log_crit "Dashboard template not found at ${template}"
-  return 1
+    log_crit "Dashboard template not found at ${template}"
+    return 1
   fi
 
   # Initialize dashboard file from template
-  cat "${template}" > "${DASHBOARD_FILE}"
+  cat "${template}" >"${DASHBOARD_FILE}"
 
   # Inject CSS (Replace placeholder with file content)
   sed -i "/{{HUB_CSS}}/{

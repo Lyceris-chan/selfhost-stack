@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-
 generate_scripts() {
   local vertd_devices=""
   local gpu_label="GPU Accelerated"
@@ -31,7 +30,7 @@ generate_scripts() {
   fi
 
   # 3. Certificate Monitor Script
-    cat > "${CERT_MONITOR_SCRIPT}" <<EOF
+  cat >"${CERT_MONITOR_SCRIPT}" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 # Auto-generated certificate monitor
@@ -95,11 +94,11 @@ EOF
     echo "{}" | "${SUDO}" tee "${CONFIG_DIR}/theme.json" >/dev/null
   fi
   "${SUDO}" chmod 644 "${CONFIG_DIR}/theme.json"
-  
+
   readonly SERVICES_JSON="${CONFIG_DIR}/services.json"
   readonly CUSTOM_SERVICES_JSON="${PROJECT_ROOT}/custom_services.json"
 
-    "${SUDO}" tee "${SERVICES_JSON}" >/dev/null <<EOF
+  "${SUDO}" tee "${SERVICES_JSON}" >/dev/null <<EOF
 {
     "services": {
         "anonymousoverflow": {
@@ -260,7 +259,7 @@ EOF
 
   if [[ -f "${CUSTOM_SERVICES_JSON}" ]]; then
     log_info "Integrating custom services from custom_services.json..."
-    if tmp_merged=$(mktemp) && jq -s '.[0].services * .[1].services | {services: .}' "${SERVICES_JSON}" "${CUSTOM_SERVICES_JSON}" > "${tmp_merged}"; then
+    if tmp_merged=$(mktemp) && jq -s '.[0].services * .[1].services | {services: .}' "${SERVICES_JSON}" "${CUSTOM_SERVICES_JSON}" >"${tmp_merged}"; then
       mv "${tmp_merged}" "${SERVICES_JSON}"
       log_info "Custom services successfully integrated."
     else
@@ -351,30 +350,33 @@ download_remote_assets() {
     if [[ -s "${f_path}" ]]; then
       local origin="https://fontlay.com"
       local base_name="${css_f%.css}"
-      
+
       # Find all url() references
       grep -o "url([^)]*)" "${f_path}" | sed -E 's/url\(["'\'']?([^"'\'')]+)["'\'']?\)/\1/' | sort | uniq | while read -r f_url; do
         [[ -z "${f_url}" ]] && continue
         local ext="ttf"
         if [[ "${f_url}" == *.woff2* ]]; then ext="woff2"; elif [[ "${f_url}" == *.woff* ]]; then ext="woff"; fi
-        
+
         # Create a unique filename for the font
         local f_hash
         f_hash=$(echo "${f_url}" | md5sum | cut -c1-8)
         local f_filename="${base_name}_${f_hash}.${ext}"
         local f_dest="${ASSETS_DIR}/${f_filename}"
         local f_fetch_url="${f_url}"
-        
-        if [[ "${f_url}" == //* ]]; then f_fetch_url="https:${f_url}"
-        elif [[ "${f_url}" == /* ]]; then f_fetch_url="${origin}${f_url}"
-        elif [[ "${f_url}" != http* ]]; then f_fetch_url="${origin}/${f_url}"
+
+        if [[ "${f_url}" == //* ]]; then
+          f_fetch_url="https:${f_url}"
+        elif [[ "${f_url}" == /* ]]; then
+          f_fetch_url="${origin}${f_url}"
+        elif [[ "${f_url}" != http* ]]; then
+          f_fetch_url="${origin}/${f_url}"
         fi
 
         if [[ ! -f "${f_dest}" ]]; then
           log_info "  -> Downloading font asset: ${f_filename}"
           download_asset "${f_dest}" "${f_fetch_url}" || true
         fi
-        
+
         # Replace remote URL with local filename in CSS
         if [[ -f "${f_dest}" ]]; then
           sed -i "s|${f_url}|${f_filename}|g" "${f_path}"
@@ -403,7 +405,7 @@ setup_configs() {
 
   if [[ -n "${DESEC_DOMAIN}" ]] && [[ -n "${DESEC_TOKEN}" ]]; then
     log_info "Configuring deSEC Dynamic DNS and Certificates..."
-    
+
     # Ensure directory exists with correct permissions for the current user
     "${SUDO}" mkdir -p "${AGH_CONF_DIR}"
     "${SUDO}" chown "$(whoami)" "${AGH_CONF_DIR}"
@@ -411,10 +413,10 @@ setup_configs() {
     local proxy="http://172.${found_octet_val}.0.254:8888"
     curl --proxy "${proxy}" -s --max-time 5 -X PATCH "https://desec.io/api/v1/domains/${DESEC_DOMAIN}/rrsets/" \
       -H "Authorization: Token ${DESEC_TOKEN}" -H "Content-Type: application/json" \
-      -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}]" > /dev/null 2>&1 || \
-    curl -s --max-time 5 -X PATCH "https://desec.io/api/v1/domains/${DESEC_DOMAIN}/rrsets/" \
-      -H "Authorization: Token ${DESEC_TOKEN}" -H "Content-Type: application/json" \
-      -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}]" > /dev/null 2>&1 || log_warn "deSEC API failed"
+      -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}]" >/dev/null 2>&1 ||
+      curl -s --max-time 5 -X PATCH "https://desec.io/api/v1/domains/${DESEC_DOMAIN}/rrsets/" \
+        -H "Authorization: Token ${DESEC_TOKEN}" -H "Content-Type: application/json" \
+        -d "[{\"subname\": \"\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}, {\"subname\": \"*\", \"ttl\": 3600, \"type\": \"A\", \"records\": [\"${PUBLIC_IP}\"]}]" >/dev/null 2>&1 || log_warn "deSEC API failed"
 
     # Check if we already have a valid, unexpired certificate for this domain
     local cert_valid=false
@@ -433,7 +435,7 @@ setup_configs() {
       log_info "Issuing SSL certificate via acme.sh (deSEC DNS challenge)..."
       "${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/acme" -e "DESEC_Token=${DESEC_TOKEN}" -e "DESEC_DOMAIN=${DESEC_DOMAIN}" \
         neilpang/acme.sh:latest --issue --dns dns_desec --dnssleep 15 -d "${DESEC_DOMAIN}" -d "*.${DESEC_DOMAIN}" \
-        --keylength ec-256 --server letsencrypt --home /acme --config-home /acme --cert-home /acme/certs > /dev/null 2>&1 || log_warn "acme.sh issuance failed. Falling back to self-signed."
+        --keylength ec-256 --server letsencrypt --home /acme --config-home /acme --cert-home /acme/certs >/dev/null 2>&1 || log_warn "acme.sh issuance failed. Falling back to self-signed."
 
       if [[ -f "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]]; then
         cp "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "${AGH_CONF_DIR}/ssl.crt"
@@ -477,7 +479,7 @@ server:
   harden-short-bufsize: yes
 UNBOUNDEOF
 
-    cat <<EOF | "${SUDO}" tee "${AGH_YAML}" >/dev/null
+  cat <<EOF | "${SUDO}" tee "${AGH_YAML}" >/dev/null
 schema_version: 29
 http: {address: 0.0.0.0:${PORT_ADGUARD_WEB}}
 users: [{name: "${AGH_USER}", password: "${AGH_PASS_HASH}"}]
@@ -505,7 +507,7 @@ EOF
     nginx_redirect="if (\$http_host = '${DESEC_DOMAIN}') { return 301 https://\$host:8443\$request_uri; }"
   fi
 
-    cat <<EOF | "${SUDO}" tee "${NGINX_CONF}" >/dev/null
+  cat <<EOF | "${SUDO}" tee "${NGINX_CONF}" >/dev/null
 error_log /dev/stderr info;
 access_log /dev/stdout;
 set_real_ip_from 172.${found_octet_val}.0.0/16;
@@ -539,7 +541,7 @@ EOF
   generate_libredirect_export
 
   "${SUDO}" mkdir -p "${ENV_DIR}"
-    cat <<EOF | "${SUDO}" tee "${ENV_DIR}/scribe.env" >/dev/null
+  cat <<EOF | "${SUDO}" tee "${ENV_DIR}/scribe.env" >/dev/null
 SECRET_KEY_BASE=${SCRIBE_SECRET}
 GITHUB_USER=${SCRIBE_GH_USER}
 GITHUB_TOKEN=${SCRIBE_GH_TOKEN}
@@ -547,7 +549,7 @@ PORT=8280
 APP_DOMAIN=${LAN_IP}:8280
 EOF
 
-    cat <<EOF | "${SUDO}" tee "${ENV_DIR}/anonymousoverflow.env" >/dev/null
+  cat <<EOF | "${SUDO}" tee "${ENV_DIR}/anonymousoverflow.env" >/dev/null
 APP_SECRET=${ANONYMOUS_SECRET}
 JWT_SIGNING_SECRET=${ANONYMOUS_SECRET}
 PORT=8480
@@ -556,7 +558,7 @@ EOF
   "${SUDO}" chmod 600 "${ENV_DIR}/scribe.env" "${ENV_DIR}/anonymousoverflow.env"
 
   "${SUDO}" mkdir -p "${CONFIG_DIR}/searxng"
-    cat <<EOF | "${SUDO}" tee "${CONFIG_DIR}/searxng/settings.yml" >/dev/null
+  cat <<EOF | "${SUDO}" tee "${CONFIG_DIR}/searxng/settings.yml" >/dev/null
 use_default_settings: true
 server:
     secret_key: "${SEARXNG_SECRET}"
@@ -587,5 +589,5 @@ generate_libredirect_export() {
     --arg red "https://redlib.${host}${port}" \
     --arg wiki "https://wikiless.${host}${port}" \
     '.invidious = [$inv] | .redlib = [$red] | .wikiless = [$wiki] | .youtube.enabled = true | .reddit.enabled = true | .wikipedia.enabled = true' \
-    "${template_file}" > "${export_file}"
+    "${template_file}" >"${export_file}"
 }

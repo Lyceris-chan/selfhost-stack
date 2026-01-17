@@ -16,9 +16,7 @@ ODIDO_URL = f"http://{settings.CONTAINER_PREFIX}odido-booster:8085"
 
 
 @router.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
-async def proxy_odido(path: str,
-                      request: Request,
-                      user: str = Depends(get_admin_user)):
+async def proxy_odido(path: str, request: Request, user: str = Depends(get_admin_user)):
     """Proxies requests to the internal Odido Booster service.
 
     Injects the HUB_API_KEY into the request headers for authentication with
@@ -40,10 +38,7 @@ async def proxy_odido(path: str,
     # Forward body for POST/PUT
     body = await request.body()
 
-    headers = {
-        "X-API-Key": settings.HUB_API_KEY,
-        "Content-Type": "application/json"
-    }
+    headers = {"X-API-Key": settings.HUB_API_KEY, "Content-Type": "application/json"}
 
     async with httpx.AsyncClient() as client:
         try:
@@ -53,11 +48,12 @@ async def proxy_odido(path: str,
                 params=params,
                 content=body,
                 headers=headers,
-                timeout=30.0)
+                timeout=30.0,
+            )
             return Response(
                 content=resp.content,
                 status_code=resp.status_code,
-                headers=dict(resp.headers))
+                headers=dict(resp.headers),
+            )
         except Exception as err:
-            raise HTTPException(
-                status_code=502, detail=f"Odido Proxy Error: {err}")
+            raise HTTPException(status_code=502, detail=f"Odido Proxy Error: {err}")
