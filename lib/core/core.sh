@@ -18,38 +18,38 @@ source "${SCRIPT_DIR}/lib/core/constants.sh"
 #   Prints the relative path to the found Dockerfile to stdout
 ################################################################################
 detect_dockerfile() {
-  local repo_dir="$1"
-  local preferred="${2:-}"
-  local found=""
+	local repo_dir="$1"
+	local preferred="${2:-}"
+	local found=""
 
-  if [[ -n "${preferred}" ]] && [[ -f "${repo_dir}/${preferred}" ]]; then
-    echo "${preferred}"
-    return 0
-  fi
+	if [[ -n "${preferred}" ]] && [[ -f "${repo_dir}/${preferred}" ]]; then
+		echo "${preferred}"
+		return 0
+	fi
 
-  if [[ -f "${repo_dir}/Dockerfile.alpine" ]]; then
-    echo "Dockerfile.alpine"
-    return 0
-  fi
+	if [[ -f "${repo_dir}/Dockerfile.alpine" ]]; then
+		echo "Dockerfile.alpine"
+		return 0
+	fi
 
-  if [[ -f "${repo_dir}/Dockerfile" ]]; then
-    echo "Dockerfile"
-    return 0
-  fi
+	if [[ -f "${repo_dir}/Dockerfile" ]]; then
+		echo "Dockerfile"
+		return 0
+	fi
 
-  if [[ -f "${repo_dir}/docker/Dockerfile" ]]; then
-    echo "docker/Dockerfile"
-    return 0
-  fi
+	if [[ -f "${repo_dir}/docker/Dockerfile" ]]; then
+		echo "docker/Dockerfile"
+		return 0
+	fi
 
-  # Search deeper
-  found=$(find "${repo_dir}" -maxdepth 3 -type f -name 'Dockerfile*' -not -path '*/.*' 2>/dev/null | head -n 1 || true)
-  if [[ -n "${found}" ]]; then
-    echo "${found#"$repo_dir/"}"
-    return 0
-  fi
+	# Search deeper
+	found=$(find "${repo_dir}" -maxdepth 3 -type f -name 'Dockerfile*' -not -path '*/.*' 2>/dev/null | head -n 1 || true)
+	if [[ -n "${found}" ]]; then
+		echo "${found#"$repo_dir/"}"
+		return 0
+	fi
 
-  return 1
+	return 1
 }
 
 ################################################################################
@@ -76,14 +76,14 @@ detect_dockerfile() {
 #   Appends a JSON line to the history log file
 ################################################################################
 log_to_file() {
-  local level="$1"
-  local msg="$2"
-  local log_dir
-  log_dir=$(dirname "${HISTORY_LOG}")
+	local level="$1"
+	local msg="$2"
+	local log_dir
+	log_dir=$(dirname "${HISTORY_LOG}")
 
-  if [[ -d "${log_dir}" ]]; then
-    "${PYTHON_CMD}" -c "import json, datetime, sys; print(json.dumps({'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'level': sys.argv[1], 'category': 'SYSTEM', 'source': 'orchestrator', 'message': sys.argv[2]}))" "${level}" "${msg}" >>"${HISTORY_LOG}" 2>/dev/null || true
-  fi
+	if [[ -d "${log_dir}" ]]; then
+		"${PYTHON_CMD}" -c "import json, datetime, sys; print(json.dumps({'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'level': sys.argv[1], 'category': 'SYSTEM', 'source': 'orchestrator', 'message': sys.argv[2]}))" "${level}" "${msg}" >>"${HISTORY_LOG}" 2>/dev/null || true
+	fi
 }
 
 ################################################################################
@@ -94,9 +94,9 @@ log_to_file() {
 #   Writes to stdout and the history log
 ################################################################################
 log_info() {
-  local msg="$1"
-  echo -e "\e[34m  ➜ [INFO]\e[0m ${msg}"
-  log_to_file "INFO" "${msg}"
+	local msg="$1"
+	echo -e "\e[34m  ➜ [INFO]\e[0m ${msg}"
+	log_to_file "INFO" "${msg}"
 }
 
 ################################################################################
@@ -107,9 +107,9 @@ log_info() {
 #   Writes to stdout and the history log
 ################################################################################
 log_warn() {
-  local msg="$1"
-  echo -e "\e[33m  ⚠️ [WARN]\e[0m ${msg}"
-  log_to_file "WARN" "${msg}"
+	local msg="$1"
+	echo -e "\e[33m  ⚠️ [WARN]\e[0m ${msg}"
+	log_to_file "WARN" "${msg}"
 }
 
 ################################################################################
@@ -120,9 +120,9 @@ log_warn() {
 #   Writes to stderr and the history log
 ################################################################################
 log_crit() {
-  local msg="$1"
-  echo -e "\e[31m  ✖ [CRIT]\e[0m ${msg}"
-  log_to_file "CRIT" "${msg}"
+	local msg="$1"
+	echo -e "\e[31m  ✖ [CRIT]\e[0m ${msg}"
+	log_to_file "CRIT" "${msg}"
 }
 
 ################################################################################
@@ -135,18 +135,18 @@ log_crit() {
 #   0 if confirmed, 1 otherwise
 ################################################################################
 ask_confirm() {
-  local prompt="$1"
-  local response
+	local prompt="$1"
+	local response
 
-  if [[ "${AUTO_CONFIRM}" == "true" ]]; then
-    return 0
-  fi
+	if [[ "${AUTO_CONFIRM}" == "true" ]]; then
+		return 0
+	fi
 
-  read -r -p "${prompt} [y/N]: " response
-  case "${response}" in
-  [yY][eE][sS] | [yY]) return 0 ;;
-  *) return 1 ;;
-  esac
+	read -r -p "${prompt} [y/N]: " response
+	case "${response}" in
+	[yY][eE][sS] | [yY]) return 0 ;;
+	*) return 1 ;;
+	esac
 }
 
 ################################################################################
@@ -159,13 +159,13 @@ ask_confirm() {
 #   0 if successful, 1 otherwise
 ################################################################################
 pull_with_retry() {
-  local img="$1"
-  if "${DOCKER_CMD}" pull "${img}"; then
-    log_info "Successfully pulled ${img}"
-    return 0
-  fi
-  log_crit "Failed to pull critical image ${img}."
-  return 1
+	local img="$1"
+	if "${DOCKER_CMD}" pull "${img}"; then
+		log_info "Successfully pulled ${img}"
+		return 0
+	fi
+	log_crit "Failed to pull critical image ${img}."
+	return 1
 }
 
 ################################################################################
@@ -178,18 +178,18 @@ pull_with_retry() {
 #   0 if successful or no credentials, 1 on failure
 ################################################################################
 authenticate_registries() {
-  if [[ -n "${REG_USER:-}" ]] && [[ -n "${REG_TOKEN:-}" ]]; then
-    log_info "Authenticating with Docker Registry..."
-    # Use printf to avoid issues with special characters in token
-    if printf "%s" "${REG_TOKEN}" | ${DOCKER_CMD} login -u "${REG_USER}" --password-stdin >/dev/null 2>&1; then
-      log_info "Registry authentication successful."
-      return 0
-    else
-      log_warn "Registry authentication failed. Continuing as anonymous."
-      return 1
-    fi
-  fi
-  return 0
+	if [[ -n "${REG_USER:-}" ]] && [[ -n "${REG_TOKEN:-}" ]]; then
+		log_info "Authenticating with Docker Registry..."
+		# Use printf to avoid issues with special characters in token
+		if printf "%s" "${REG_TOKEN}" | ${DOCKER_CMD} login -u "${REG_USER}" --password-stdin >/dev/null 2>&1; then
+			log_info "Registry authentication successful."
+			return 0
+		else
+			log_warn "Registry authentication failed. Continuing as anonymous."
+			return 1
+		fi
+	fi
+	return 0
 }
 
 ################################################################################
@@ -202,25 +202,25 @@ authenticate_registries() {
 #   0 if successful, 1 otherwise
 ################################################################################
 safe_replace() {
-  local template_file="$1"
-  local output_file="$2"
-  shift 2
+	local template_file="$1"
+	local output_file="$2"
+	shift 2
 
-  if [[ ! -f "${template_file}" ]]; then
-    log_warn "Template file not found: ${template_file}"
-    return 1
-  fi
+	if [[ ! -f "${template_file}" ]]; then
+		log_warn "Template file not found: ${template_file}"
+		return 1
+	fi
 
-  local content
-  content=$(cat "${template_file}")
-  while [[ $# -gt 0 ]]; do
-    local placeholder="$1"
-    local value="$2"
-    # Use bash parameter expansion for global replacement
-    content="${content//"$placeholder"/"$value"}"
-    shift 2
-  done
-  printf "%s" "${content}" >"${output_file}"
+	local content
+	content=$(cat "${template_file}")
+	while [[ $# -gt 0 ]]; do
+		local placeholder="$1"
+		local value="$2"
+		# Use bash parameter expansion for global replacement
+		content="${content//"$placeholder"/"$value"}"
+		shift 2
+	done
+	printf "%s" "${content}" >"${output_file}"
 }
 
 ################################################################################
@@ -231,8 +231,8 @@ safe_replace() {
 #   Prints the generated secret to stdout
 ################################################################################
 generate_secret() {
-  local length="${1:-32}"
-  head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c "${length}"
+	local length="${1:-32}"
+	head -c 64 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c "${length}"
 }
 
 ################################################################################
@@ -246,31 +246,31 @@ generate_secret() {
 #   Prints the generated hash to stdout
 ################################################################################
 generate_hash() {
-  local user="$1"
-  local pass="$2"
+	local user="$1"
+	local pass="$2"
 
-  # Method 1: Try host Python (if crypt/bcrypt supported)
-  if command -v "${PYTHON_CMD}" >/dev/null 2>&1; then
-    local py_hash
-    # Try to use crypt module with bcrypt salt
-    py_hash=$("${PYTHON_CMD}" -c "import crypt, random, string, sys; salt = '\$2b\$12\$' + ''.join(random.choices(string.ascii_letters + string.digits, k=22)); print(crypt.crypt(sys.argv[1], salt))" "${pass}" 2>/dev/null || true)
-    if [[ -n "${py_hash}" ]] && [[ "${py_hash}" == \$2b\$* ]]; then
-      echo "${py_hash}"
-      return 0
-    fi
-  fi
+	# Method 1: Try host Python (if crypt/bcrypt supported)
+	if command -v "${PYTHON_CMD}" >/dev/null 2>&1; then
+		local py_hash
+		# Try to use crypt module with bcrypt salt
+		py_hash=$("${PYTHON_CMD}" -c "import crypt, random, string, sys; salt = '\$2b\$12\$' + ''.join(random.choices(string.ascii_letters + string.digits, k=22)); print(crypt.crypt(sys.argv[1], salt))" "${pass}" 2>/dev/null || true)
+		if [[ -n "${py_hash}" ]] && [[ "${py_hash}" == \$2b\$* ]]; then
+			echo "${py_hash}"
+			return 0
+		fi
+	fi
 
-  # Method 2: Try host OpenSSL (if it supports -5/-6, though not bcrypt, some services might accept it?
-  # Actually, AdGuard/Portainer prefer bcrypt. Sticking to Docker if Python fails is safer for compatibility unless we have htpasswd.)
+	# Method 2: Try host OpenSSL (if it supports -5/-6, though not bcrypt, some services might accept it?
+	# Actually, AdGuard/Portainer prefer bcrypt. Sticking to Docker if Python fails is safer for compatibility unless we have htpasswd.)
 
-  # Method 3: Try host htpasswd
-  if command -v htpasswd >/dev/null 2>&1; then
-    htpasswd -B -n -b "${user}" "${pass}" | cut -d: -f2
-    return 0
-  fi
+	# Method 3: Try host htpasswd
+	if command -v htpasswd >/dev/null 2>&1; then
+		htpasswd -B -n -b "${user}" "${pass}" | cut -d: -f2
+		return 0
+	fi
 
-  # Method 4: Docker Fallback (Alpine)
-  "${DOCKER_CMD}" run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "${user}" "${pass}" 2>/dev/null | cut -d: -f2 || echo "FAILED"
+	# Method 4: Docker Fallback (Alpine)
+	"${DOCKER_CMD}" run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "${user}" "${pass}" 2>/dev/null | cut -d: -f2 || echo "FAILED"
 }
 
 # Initialize globals
@@ -301,19 +301,19 @@ WG_CONF_B64="${WG_CONF_B64:-}"
 #   Writes usage help to stdout
 ################################################################################
 usage() {
-  echo "Usage: $0 [options]"
-  echo ""
-  echo "Options:"
-  echo "  -y          Auto-Confirm (Reserved for automated testing)"
-  echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
-  echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
-  echo "  -o          Skip Odido Bundle Booster deployment"
-  echo "  -c          Maintenance (recreates containers, preserves data)"
-  echo "  -b          Create a system backup"
-  echo "  -r <file>   Restore from a system backup file"
-  echo "  -E <file>   Load Environment Variables from file"
-  echo "  -G          Generate Only (stops before deployment)"
-  echo "  -h          Show this help message"
+	echo "Usage: $0 [options]"
+	echo ""
+	echo "Options:"
+	echo "  -y          Auto-Confirm (Reserved for automated testing)"
+	echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
+	echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
+	echo "  -o          Skip Odido Bundle Booster deployment"
+	echo "  -c          Maintenance (recreates containers, preserves data)"
+	echo "  -b          Create a system backup"
+	echo "  -r <file>   Restore from a system backup file"
+	echo "  -E <file>   Load Environment Variables from file"
+	echo "  -G          Generate Only (stops before deployment)"
+	echo "  -h          Show this help message"
 }
 
 ################################################################################
@@ -324,43 +324,43 @@ usage() {
 #   None
 ################################################################################
 parse_args() {
-  local opt
-  while getopts "cxpyas:j hE:Gob:r:" opt; do
-    case ${opt} in
-    c)
-      RESET_ENV=true
-      FORCE_CLEAN=true
-      ;;
-    x)
-      CLEAN_EXIT=true
-      RESET_ENV=true
-      CLEAN_ONLY=true
-      FORCE_CLEAN=true
-      ;;
-    p) AUTO_PASSWORD=true ;;
-    y)
-      AUTO_CONFIRM=true
-      AUTO_PASSWORD=true
-      ;;
-    a) ALLOW_PROTON_VPN=true ;;
-    s) SELECTED_SERVICES="${OPTARG}" ;;
-    o) SKIP_ODIDO=true ;;
-    j) PARALLEL_DEPLOY=true ;;
-    E) ENV_FILE="${OPTARG}" ;;
-    G) GENERATE_ONLY=true ;;
-    b) DO_BACKUP=true ;;
-    r) RESTORE_FILE="${OPTARG}" ;;
-    h)
-      usage
-      exit 0
-      ;;
-    *)
-      usage
-      exit 1
-      ;;
-    esac
-  done
-  shift $((OPTIND - 1))
+	local opt
+	while getopts "cxpyas:j hE:Gob:r:" opt; do
+		case ${opt} in
+		c)
+			RESET_ENV=true
+			FORCE_CLEAN=true
+			;;
+		x)
+			CLEAN_EXIT=true
+			RESET_ENV=true
+			CLEAN_ONLY=true
+			FORCE_CLEAN=true
+			;;
+		p) AUTO_PASSWORD=true ;;
+		y)
+			AUTO_CONFIRM=true
+			AUTO_PASSWORD=true
+			;;
+		a) ALLOW_PROTON_VPN=true ;;
+		s) SELECTED_SERVICES="${OPTARG}" ;;
+		o) SKIP_ODIDO=true ;;
+		j) PARALLEL_DEPLOY=true ;;
+		E) ENV_FILE="${OPTARG}" ;;
+		G) GENERATE_ONLY=true ;;
+		b) DO_BACKUP=true ;;
+		r) RESTORE_FILE="${OPTARG}" ;;
+		h)
+			usage
+			exit 0
+			;;
+		*)
+			usage
+			exit 1
+			;;
+		esac
+	done
+	shift $((OPTIND - 1))
 }
 
 parse_args "$@"
@@ -369,24 +369,24 @@ SKIP_ODIDO="${SKIP_ODIDO:-false}"
 
 # Handle odido-booster exclusion logic
 if [ "$SKIP_ODIDO" = true ]; then
-  if [ -z "$SELECTED_SERVICES" ]; then
-    # Dynamically remove odido-booster from the full stack list
-    SELECTED_SERVICES=$(echo "$STACK_SERVICES" | sed 's/\bodido-booster\b//g' | sed 's/  */ /g' | sed 's/^ //;s/ $//' | tr ' ' ',')
-  else
-    # Remove odido-booster from the list if it's there
-    SELECTED_SERVICES=$(echo "$SELECTED_SERVICES" | sed 's/\bodido-booster\b//g' | sed 's/,,/,/g' | sed 's/^,//' | sed 's/,$//')
-  fi
+	if [ -z "$SELECTED_SERVICES" ]; then
+		# Dynamically remove odido-booster from the full stack list
+		SELECTED_SERVICES=$(echo "$STACK_SERVICES" | sed 's/\bodido-booster\b//g' | sed 's/  */ /g' | sed 's/^ //;s/ $//' | tr ' ' ',')
+	else
+		# Remove odido-booster from the list if it's there
+		SELECTED_SERVICES=$(echo "$SELECTED_SERVICES" | sed 's/\bodido-booster\b//g' | sed 's/,,/,/g' | sed 's/^,//' | sed 's/,$//')
+	fi
 fi
 
 # --- LOAD EXTERNAL ENV FILE ---
 if [ -n "$ENV_FILE" ]; then
-  if [ -f "$ENV_FILE" ]; then
-    # shellcheck disable=SC1090
-    source "$ENV_FILE"
-  else
-    echo "[CRIT] Environment file not found: $ENV_FILE"
-    exit 1
-  fi
+	if [ -f "$ENV_FILE" ]; then
+		# shellcheck disable=SC1090
+		source "$ENV_FILE"
+	else
+		echo "[CRIT] Environment file not found: $ENV_FILE"
+		exit 1
+	fi
 fi
 
 # Suppress git advice/warnings for cleaner logs during automated clones
@@ -395,36 +395,36 @@ export GIT_CONFIG_PARAMETERS="'advice.detachedHead=false'"
 # Verify core dependencies before proceeding.
 REQUIRED_COMMANDS="docker curl git crontab iptables flock jq awk sed grep find tar ip"
 if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
-  echo "[CRIT] sudo is required for non-root users. Please install it."
-  exit 1
+	echo "[CRIT] sudo is required for non-root users. Please install it."
+	exit 1
 fi
 for cmd in $REQUIRED_COMMANDS; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "[CRIT] '$cmd' is required but not installed. Please install it."
-    exit 1
-  fi
+	if ! command -v "$cmd" >/dev/null 2>&1; then
+		echo "[CRIT] '$cmd' is required but not installed. Please install it."
+		exit 1
+	fi
 done
 
 # Detect if sudo is available
 if command -v sudo >/dev/null 2>&1; then
-  SUDO="sudo"
+	SUDO="sudo"
 else
-  SUDO=""
+	SUDO=""
 fi
 
 # Docker Compose Check (Plugin or Standalone)
 if $SUDO docker compose version >/dev/null 2>&1; then
-  DOCKER_COMPOSE_CMD="docker compose"
+	DOCKER_COMPOSE_CMD="docker compose"
 elif command -v docker-compose >/dev/null 2>&1; then
-  if $SUDO docker-compose version >/dev/null 2>&1; then
-    DOCKER_COMPOSE_CMD="docker-compose"
-  else
-    echo "[CRIT] Docker Compose is installed but not executable."
-    exit 1
-  fi
+	if $SUDO docker-compose version >/dev/null 2>&1; then
+		DOCKER_COMPOSE_CMD="docker-compose"
+	else
+		echo "[CRIT] Docker Compose is installed but not executable."
+		exit 1
+	fi
 else
-  echo "[CRIT] Docker Compose v2 is required. Please update your environment."
-  exit 1
+	echo "[CRIT] Docker Compose v2 is required. Please update your environment."
+	exit 1
 fi
 
 APP_NAME="${APP_NAME:-privacy-hub}"
@@ -434,12 +434,12 @@ if [ -z "$APP_NAME" ]; then APP_NAME="privacy-hub"; fi
 # Use absolute path for BASE_DIR to ensure it stays in the project root's data folder
 # Detect PROJECT_ROOT dynamically if not already set
 if [ -z "${PROJECT_ROOT:-}" ]; then
-  # SCRIPT_DIR is exported from zima.sh
-  if [ -n "${SCRIPT_DIR:-}" ]; then
-    PROJECT_ROOT="$SCRIPT_DIR"
-  else
-    PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-  fi
+	# SCRIPT_DIR is exported from zima.sh
+	if [ -n "${SCRIPT_DIR:-}" ]; then
+		PROJECT_ROOT="$SCRIPT_DIR"
+	else
+		PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+	fi
 fi
 BASE_DIR="$PROJECT_ROOT/data/AppData/$APP_NAME"
 $SUDO mkdir -p "$BASE_DIR"
@@ -481,18 +481,18 @@ readonly DOTENV_FILE="$BASE_DIR/.env"
 #   None
 ################################################################################
 init_directories() {
-  log_info "Initializing project directories..."
-  $SUDO mkdir -p "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api" "$WG_PROFILES_DIR"
-  $SUDO chown "$(whoami)" "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$WG_PROFILES_DIR"
+	log_info "Initializing project directories..."
+	$SUDO mkdir -p "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api" "$WG_PROFILES_DIR"
+	$SUDO chown "$(whoami)" "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$WG_PROFILES_DIR"
 
-  # Initialize metadata files with correct ownership
-  [ ! -f "$DOTENV_FILE" ] && $SUDO touch "$DOTENV_FILE"
-  [ ! -f "$ACTIVE_WG_CONF" ] && $SUDO touch "$ACTIVE_WG_CONF"
+	# Initialize metadata files with correct ownership
+	[ ! -f "$DOTENV_FILE" ] && $SUDO touch "$DOTENV_FILE"
+	[ ! -f "$ACTIVE_WG_CONF" ] && $SUDO touch "$ACTIVE_WG_CONF"
 
-  $SUDO chown "$(whoami)" "$DOTENV_FILE" "$ACTIVE_WG_CONF"
-  $SUDO chmod 600 "$DOTENV_FILE" "$ACTIVE_WG_CONF"
+	$SUDO chown "$(whoami)" "$DOTENV_FILE" "$ACTIVE_WG_CONF"
+	$SUDO chmod 600 "$DOTENV_FILE" "$ACTIVE_WG_CONF"
 
-  $SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
+	$SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
 }
 
 # Container naming and persistence
@@ -506,18 +506,18 @@ export UPDATE_STRATEGY
 DOCKER_AUTH_DIR="${PH_DOCKER_AUTH_DIR:-$BASE_DIR/.docker}"
 # Ensure clean state for auth only if it doesn't already have a config
 if [[ ! -d "${DOCKER_AUTH_DIR}" ]]; then
-  ${SUDO} mkdir -p "${DOCKER_AUTH_DIR}"
-  ${SUDO} chown -R "$(whoami)" "${DOCKER_AUTH_DIR}"
+	${SUDO} mkdir -p "${DOCKER_AUTH_DIR}"
+	${SUDO} chown -R "$(whoami)" "${DOCKER_AUTH_DIR}"
 fi
 
 # Detect Python interpreter
 if command -v python3 >/dev/null 2>&1; then
-  PYTHON_CMD="python3"
+	PYTHON_CMD="python3"
 elif command -v python >/dev/null 2>&1; then
-  PYTHON_CMD="python"
+	PYTHON_CMD="python"
 else
-  echo "[CRIT] Python is required but not installed. Please install python3."
-  exit 1
+	echo "[CRIT] Python is required but not installed. Please install python3."
+	exit 1
 fi
 
 ################################################################################
@@ -530,11 +530,11 @@ fi
 #   Exit status of the docker command
 ################################################################################
 docker_cmd() {
-  if [[ -n "${SUDO:-}" ]]; then
-    ${SUDO} env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto docker "$@"
-  else
-    env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto docker "$@"
-  fi
+	if [[ -n "${SUDO:-}" ]]; then
+		${SUDO} env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto docker "$@"
+	else
+		env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto docker "$@"
+	fi
 }
 
 ################################################################################
@@ -547,11 +547,11 @@ docker_cmd() {
 #   Exit status of the docker compose command
 ################################################################################
 docker_compose_cmd() {
-  if [[ -n "${SUDO:-}" ]]; then
-    ${SUDO} env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto ${DOCKER_COMPOSE_CMD} "$@"
-  else
-    env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto ${DOCKER_COMPOSE_CMD} "$@"
-  fi
+	if [[ -n "${SUDO:-}" ]]; then
+		${SUDO} env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto ${DOCKER_COMPOSE_CMD} "$@"
+	else
+		env DOCKER_CONFIG="${DOCKER_AUTH_DIR}" GOTOOLCHAIN=auto ${DOCKER_COMPOSE_CMD} "$@"
+	fi
 }
 
 # Replace variables with function calls in existing code (conceptually, but here we just redefine the variables to call the functions if needed, or better, update the scripts to call the functions)
@@ -569,14 +569,14 @@ DOCKER_COMPOSE_FINAL_CMD="docker_compose_cmd"
 #   Exit status of the openssl command
 ################################################################################
 ossl() {
-  if command -v openssl >/dev/null 2>&1; then
-    openssl "$@"
-  else
-    # Fallback to docker using acme.sh image which contains openssl
-    # We use -v to mount the current directory so relative paths might work if they are under BASE_DIR
-    # But for more reliability, callers should use absolute paths if possible or we can mount BASE_DIR
-    "${DOCKER_CMD}" run --rm --entrypoint openssl -v "${BASE_DIR}:${BASE_DIR}:ro" -w "$(pwd)" neilpang/acme.sh:latest "$@"
-  fi
+	if command -v openssl >/dev/null 2>&1; then
+		openssl "$@"
+	else
+		# Fallback to docker using acme.sh image which contains openssl
+		# We use -v to mount the current directory so relative paths might work if they are under BASE_DIR
+		# But for more reliability, callers should use absolute paths if possible or we can mount BASE_DIR
+		"${DOCKER_CMD}" run --rm --entrypoint openssl -v "${BASE_DIR}:${BASE_DIR}:ro" -w "$(pwd)" neilpang/acme.sh:latest "$@"
+	fi
 }
 
 # Initialize deSEC variables to prevent unbound variable errors
@@ -645,35 +645,35 @@ $SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$ASSETS_DIR" 2>/dev/null
 #   Sets DOCKER_SUBNET and FOUND_OCTET
 ################################################################################
 allocate_subnet() {
-  log_info "Allocating private virtual subnet for container isolation."
+	log_info "Allocating private virtual subnet for container isolation."
 
-  local found_subnet=""
-  local found_octet=""
-  local test_subnet
-  local test_net_name
-  local i
+	local found_subnet=""
+	local found_octet=""
+	local test_subnet
+	local test_net_name
+	local i
 
-  for i in {20..30}; do
-    test_subnet="172.${i}.0.0/16"
-    test_net_name="probe_net_${i}"
-    if "${DOCKER_CMD}" network create --subnet="${test_subnet}" "${test_net_name}" >/dev/null 2>&1; then
-      "${DOCKER_CMD}" network rm "${test_net_name}" >/dev/null 2>&1
-      found_subnet="${test_subnet}"
-      found_octet="${i}"
-      break
-    fi
-  done
+	for i in {20..30}; do
+		test_subnet="172.${i}.0.0/16"
+		test_net_name="probe_net_${i}"
+		if "${DOCKER_CMD}" network create --subnet="${test_subnet}" "${test_net_name}" >/dev/null 2>&1; then
+			"${DOCKER_CMD}" network rm "${test_net_name}" >/dev/null 2>&1
+			found_subnet="${test_subnet}"
+			found_octet="${i}"
+			break
+		fi
+	done
 
-  if [[ -z "${found_subnet}" ]]; then
-    log_crit "Fatal: No available subnets identified. Please verify host network configuration."
-    exit 1
-  fi
+	if [[ -z "${found_subnet}" ]]; then
+		log_crit "Fatal: No available subnets identified. Please verify host network configuration."
+		exit 1
+	fi
 
-  DOCKER_SUBNET="${found_subnet}"
-  export DOCKER_SUBNET
-  FOUND_OCTET="${found_octet}"
-  export FOUND_OCTET
-  log_info "Assigned Virtual Subnet: ${DOCKER_SUBNET}"
+	DOCKER_SUBNET="${found_subnet}"
+	export DOCKER_SUBNET
+	FOUND_OCTET="${found_octet}"
+	export FOUND_OCTET
+	log_info "Assigned Virtual Subnet: ${DOCKER_SUBNET}"
 }
 
 ################################################################################
@@ -685,23 +685,23 @@ allocate_subnet() {
 #   0 if available, 1 if in use
 ################################################################################
 check_port_availability() {
-  local port="$1"
-  local proto="${2:-tcp}"
+	local port="$1"
+	local proto="${2:-tcp}"
 
-  if command -v ss >/dev/null 2>&1; then
-    if "${SUDO}" ss -Hl"${proto:0:1}"n sport = :"${port}" | grep -q "${port}"; then
-      return 1
-    fi
-  elif command -v netstat >/dev/null 2>&1; then
-    if "${SUDO}" netstat -l"${proto:0:1}"n | grep -q ":${port} "; then
-      return 1
-    fi
-  elif command -v lsof >/dev/null 2>&1; then
-    if "${SUDO}" lsof -i "${proto}:${port}" -s "${proto}:LISTEN" >/dev/null 2>&1; then
-      return 1
-    fi
-  fi
-  return 0
+	if command -v ss >/dev/null 2>&1; then
+		if "${SUDO}" ss -Hl"${proto:0:1}"n sport = :"${port}" | grep -q "${port}"; then
+			return 1
+		fi
+	elif command -v netstat >/dev/null 2>&1; then
+		if "${SUDO}" netstat -l"${proto:0:1}"n | grep -q ":${port} "; then
+			return 1
+		fi
+	elif command -v lsof >/dev/null 2>&1; then
+		if "${SUDO}" lsof -i "${proto}:${port}" -s "${proto}:LISTEN" >/dev/null 2>&1; then
+			return 1
+		fi
+	fi
+	return 0
 }
 
 ################################################################################
@@ -714,14 +714,14 @@ check_port_availability() {
 #   0 if enabled or no selection active, 1 otherwise
 ################################################################################
 is_service_enabled() {
-  local srv="$1"
-  if [[ -z "${SELECTED_SERVICES:-}" ]]; then
-    return 0
-  fi
-  if echo "${SELECTED_SERVICES}" | grep -qE "(^|,)$srv(,|$)"; then
-    return 0
-  fi
-  return 1
+	local srv="$1"
+	if [[ -z "${SELECTED_SERVICES:-}" ]]; then
+		return 0
+	fi
+	if echo "${SELECTED_SERVICES}" | grep -qE "(^|,)$srv(,|$)"; then
+		return 0
+	fi
+	return 1
 }
 
 ################################################################################
@@ -732,19 +732,19 @@ is_service_enabled() {
 #   $1 - Network name
 ################################################################################
 safe_remove_network() {
-  local net_name="$1"
-  local containers
-  if "${DOCKER_CMD}" network inspect "${net_name}" >/dev/null 2>&1; then
-    # Check if any containers are using it
-    containers=$("${DOCKER_CMD}" network inspect "${net_name}" --format '{{range .Containers}}{{.Name}} {{end}}')
-    if [[ -n "${containers}" ]]; then
-      for c in ${containers}; do
-        log_info "  Disconnecting container ${c} from network ${net_name}..."
-        "${DOCKER_CMD}" network disconnect -f "${net_name}" "${c}" 2>/dev/null || true
-      done
-    fi
-    "${DOCKER_CMD}" network rm "${net_name}" 2>/dev/null || true
-  fi
+	local net_name="$1"
+	local containers
+	if "${DOCKER_CMD}" network inspect "${net_name}" >/dev/null 2>&1; then
+		# Check if any containers are using it
+		containers=$("${DOCKER_CMD}" network inspect "${net_name}" --format '{{range .Containers}}{{.Name}} {{end}}')
+		if [[ -n "${containers}" ]]; then
+			for c in ${containers}; do
+				log_info "  Disconnecting container ${c} from network ${net_name}..."
+				"${DOCKER_CMD}" network disconnect -f "${net_name}" "${c}" 2>/dev/null || true
+			done
+		fi
+		"${DOCKER_CMD}" network rm "${net_name}" 2>/dev/null || true
+	fi
 }
 
 ################################################################################
@@ -757,61 +757,61 @@ safe_remove_network() {
 #   Sets LAN_IP and PUBLIC_IP
 ################################################################################
 detect_network() {
-  log_info "Identifying network environment..."
+	log_info "Identifying network environment..."
 
-  # 1. LAN IP Detection
-  if [[ -n "${LAN_IP_OVERRIDE}" ]]; then
-    LAN_IP="${LAN_IP_OVERRIDE}"
-    log_info "Using LAN IP Override: ${LAN_IP}"
-  elif [[ -z "${LAN_IP:-}" ]]; then
-    # Try to find primary interface IP
-    # 1. Try ip route with a neutral destination (routing table lookup only)
-    # Using 10.255.255.255 as a destination to see which interface/source IP would be used
-    LAN_IP=$(ip route get 10.255.255.255 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -n1)
+	# 1. LAN IP Detection
+	if [[ -n "${LAN_IP_OVERRIDE}" ]]; then
+		LAN_IP="${LAN_IP_OVERRIDE}"
+		log_info "Using LAN IP Override: ${LAN_IP}"
+	elif [[ -z "${LAN_IP:-}" ]]; then
+		# Try to find primary interface IP
+		# 1. Try ip route with a neutral destination (routing table lookup only)
+		# Using 10.255.255.255 as a destination to see which interface/source IP would be used
+		LAN_IP=$(ip route get 10.255.255.255 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -n1)
 
-    # 2. Fallback: Try to find interface with default route
-    if [[ -z "${LAN_IP}" ]]; then
-      local default_iface
-      default_iface=$(ip route show default 2>/dev/null | awk '/default/ {print $5}' | head -n1)
-      if [[ -n "${default_iface}" ]]; then
-        LAN_IP=$(ip -4 addr show "${default_iface}" scope global | grep 'inet ' | awk '{print $2}' | cut -d/ -f1 | head -n1)
-      fi
-    fi
+		# 2. Fallback: Try to find interface with default route
+		if [[ -z "${LAN_IP}" ]]; then
+			local default_iface
+			default_iface=$(ip route show default 2>/dev/null | awk '/default/ {print $5}' | head -n1)
+			if [[ -n "${default_iface}" ]]; then
+				LAN_IP=$(ip -4 addr show "${default_iface}" scope global | grep 'inet ' | awk '{print $2}' | cut -d/ -f1 | head -n1)
+			fi
+		fi
 
-    # 3. Fallback: hostname -I (if available)
-    if [[ -z "${LAN_IP}" ]]; then
-      LAN_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-    fi
+		# 3. Fallback: hostname -I (if available)
+		if [[ -z "${LAN_IP}" ]]; then
+			LAN_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+		fi
 
-    # 4. Last resort: Any global IPv4 address
-    if [[ -z "${LAN_IP}" ]]; then
-      LAN_IP=$(ip -4 addr show scope global | grep 'inet ' | awk '{print $2}' | cut -d/ -f1 | head -n1)
-    fi
+		# 4. Last resort: Any global IPv4 address
+		if [[ -z "${LAN_IP}" ]]; then
+			LAN_IP=$(ip -4 addr show scope global | grep 'inet ' | awk '{print $2}' | cut -d/ -f1 | head -n1)
+		fi
 
-    if [[ -z "${LAN_IP}" ]]; then
-      log_crit "Failed to detect LAN IP. Please use LAN_IP_OVERRIDE."
-      exit 1
-    fi
-    log_info "Detected LAN IP: ${LAN_IP}"
-  else
-    log_info "Using existing LAN IP: ${LAN_IP}"
-  fi
-  export LAN_IP
+		if [[ -z "${LAN_IP}" ]]; then
+			log_crit "Failed to detect LAN IP. Please use LAN_IP_OVERRIDE."
+			exit 1
+		fi
+		log_info "Detected LAN IP: ${LAN_IP}"
+	else
+		log_info "Using existing LAN IP: ${LAN_IP}"
+	fi
+	export LAN_IP
 
-  # 2. Public IP Detection
-  if [[ -n "${PUBLIC_IP:-}" ]] && [[ "${PUBLIC_IP}" != "FAILED" ]]; then
-    log_info "Using existing Public IP: ${PUBLIC_IP}"
-  else
-    log_info "Detecting public IP address (for VPN endpoint)..."
-    # Use a privacy-conscious IP check service as requested, via proxy if possible
-    local proxy="http://172.${FOUND_OCTET}.0.254:8888"
-    PUBLIC_IP=$(curl --proxy "${proxy}" -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 http://ip-api.com/line?fields=query || echo "FAILED")
-    if [[ "${PUBLIC_IP}" == "FAILED" ]]; then
-      log_warn "Failed to detect public IP. VPN may not be reachable from external networks."
-      PUBLIC_IP="${LAN_IP}"
-    fi
-    log_info "Public IP: ${PUBLIC_IP}"
-  fi
+	# 2. Public IP Detection
+	if [[ -n "${PUBLIC_IP:-}" ]] && [[ "${PUBLIC_IP}" != "FAILED" ]]; then
+		log_info "Using existing Public IP: ${PUBLIC_IP}"
+	else
+		log_info "Detecting public IP address (for VPN endpoint)..."
+		# Use a privacy-conscious IP check service as requested, via proxy if possible
+		local proxy="http://172.${FOUND_OCTET}.0.254:8888"
+		PUBLIC_IP=$(curl --proxy "${proxy}" -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 https://api.ipify.org || curl -s --max-time 10 http://ip-api.com/line?fields=query || echo "FAILED")
+		if [[ "${PUBLIC_IP}" == "FAILED" ]]; then
+			log_warn "Failed to detect public IP. VPN may not be reachable from external networks."
+			PUBLIC_IP="${LAN_IP}"
+		fi
+		log_info "Public IP: ${PUBLIC_IP}"
+	fi
 }
 
 ################################################################################
@@ -822,13 +822,13 @@ detect_network() {
 #   0 if valid, 1 otherwise
 ################################################################################
 validate_wg_config() {
-  if [[ ! -s "${ACTIVE_WG_CONF}" ]]; then return 1; fi
-  if ! grep -q "PrivateKey" "${ACTIVE_WG_CONF}"; then return 1; fi
-  local pk_val
-  pk_val=$(grep "PrivateKey" "${ACTIVE_WG_CONF}" | cut -d'=' -f2- | tr -d '[:space:]')
-  if [[ -z "${pk_val}" ]]; then return 1; fi
-  if [[ "${#pk_val}" -lt 40 ]]; then return 1; fi
-  return 0
+	if [[ ! -s "${ACTIVE_WG_CONF}" ]]; then return 1; fi
+	if ! grep -q "PrivateKey" "${ACTIVE_WG_CONF}"; then return 1; fi
+	local pk_val
+	pk_val=$(grep "PrivateKey" "${ACTIVE_WG_CONF}" | cut -d'=' -f2- | tr -d '[:space:]')
+	if [[ -z "${pk_val}" ]]; then return 1; fi
+	if [[ "${#pk_val}" -lt 40 ]]; then return 1; fi
+	return 0
 }
 
 ################################################################################
@@ -841,36 +841,36 @@ validate_wg_config() {
 #   Prints the extracted name to stdout
 ################################################################################
 extract_wg_profile_name() {
-  local config_file="$1"
-  local in_peer=0
-  local profile_name=""
-  local stripped
-  while IFS= read -r line; do
-    stripped=$(echo "${line}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    if echo "${stripped}" | grep -qi '^\[peer\]$'; then
-      in_peer=1
-      continue
-    fi
-    if [[ "${in_peer}" -eq 1 ]] && echo "${stripped}" | grep -q '^#'; then
-      profile_name=$(echo "${stripped}" | sed 's/^#[[:space:]]*//')
-      if [[ -n "${profile_name}" ]]; then
-        echo "${profile_name}"
-        return 0
-      fi
-    fi
-    if [[ "${in_peer}" -eq 1 ]] && echo "${stripped}" | grep -q '^\['; then break; fi
-  done <"${config_file}"
-  while IFS= read -r line; do
-    stripped=$(echo "${line}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    if echo "${stripped}" | grep -q '^#' && ! echo "${stripped}" | grep -q '='; then
-      profile_name=$(echo "${stripped}" | sed 's/^#[[:space:]]*//')
-      if [[ -n "${profile_name}" ]]; then
-        echo "${profile_name}"
-        return 0
-      fi
-    fi
-  done <"${config_file}"
-  return 1
+	local config_file="$1"
+	local in_peer=0
+	local profile_name=""
+	local stripped
+	while IFS= read -r line; do
+		stripped=$(echo "${line}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+		if echo "${stripped}" | grep -qi '^\[peer\]$'; then
+			in_peer=1
+			continue
+		fi
+		if [[ "${in_peer}" -eq 1 ]] && echo "${stripped}" | grep -q '^#'; then
+			profile_name=$(echo "${stripped}" | sed 's/^#[[:space:]]*//')
+			if [[ -n "${profile_name}" ]]; then
+				echo "${profile_name}"
+				return 0
+			fi
+		fi
+		if [[ "${in_peer}" -eq 1 ]] && echo "${stripped}" | grep -q '^\['; then break; fi
+	done <"${config_file}"
+	while IFS= read -r line; do
+		stripped=$(echo "${line}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+		if echo "${stripped}" | grep -q '^#' && ! echo "${stripped}" | grep -q '='; then
+			profile_name=$(echo "${stripped}" | sed 's/^#[[:space:]]*//')
+			if [[ -n "${profile_name}" ]]; then
+				echo "${profile_name}"
+				return 0
+			fi
+		fi
+	done <"${config_file}"
+	return 1
 }
 
 ################################################################################
@@ -885,153 +885,153 @@ extract_wg_profile_name() {
 #   None
 ################################################################################
 setup_secrets() {
-  export PORTAINER_PASS_HASH="${PORTAINER_PASS_HASH:-}"
-  export AGH_PASS_HASH="${AGH_PASS_HASH:-}"
-  export WG_HASH_COMPOSE="${WG_HASH_COMPOSE:-}"
-  export ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-}"
-  export VPN_PASS_RAW="${VPN_PASS_RAW:-}"
-  export PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-}"
-  export AGH_PASS_RAW="${AGH_PASS_RAW:-}"
-  export SEARXNG_SECRET="${SEARXNG_SECRET:-}"
-  export IMMICH_DB_PASSWORD="${IMMICH_DB_PASSWORD:-}"
+	export PORTAINER_PASS_HASH="${PORTAINER_PASS_HASH:-}"
+	export AGH_PASS_HASH="${AGH_PASS_HASH:-}"
+	export WG_HASH_COMPOSE="${WG_HASH_COMPOSE:-}"
+	export ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-}"
+	export VPN_PASS_RAW="${VPN_PASS_RAW:-}"
+	export PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-}"
+	export AGH_PASS_RAW="${AGH_PASS_RAW:-}"
+	export SEARXNG_SECRET="${SEARXNG_SECRET:-}"
+	export IMMICH_DB_PASSWORD="${IMMICH_DB_PASSWORD:-}"
 
-  if [[ ! -f "${BASE_DIR}/.secrets" ]]; then
-    echo "========================================"
-    echo " CREDENTIAL CONFIGURATION"
-    echo "========================================"
+	if [[ ! -f "${BASE_DIR}/.secrets" ]]; then
+		echo "========================================"
+		echo " CREDENTIAL CONFIGURATION"
+		echo "========================================"
 
-    if [[ "${AUTO_CONFIRM}" == "true" ]]; then
-      log_info "Auto-confirm enabled: Skipping interactive deSEC/GitHub/Odido setup."
-      if [[ "${PERSONAL_MODE:-false}" == "true" ]]; then
-        log_info "Personal Mode: Applying user-specific defaults."
-      fi
+		if [[ "${AUTO_CONFIRM}" == "true" ]]; then
+			log_info "Auto-confirm enabled: Skipping interactive deSEC/GitHub/Odido setup."
+			if [[ "${PERSONAL_MODE:-false}" == "true" ]]; then
+				log_info "Personal Mode: Applying user-specific defaults."
+			fi
 
-      VPN_PASS_RAW="${VPN_PASS_RAW:-$(generate_secret 24)}"
-      AGH_PASS_RAW="${AGH_PASS_RAW:-$(generate_secret 24)}"
-      ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-$(generate_secret 24)}"
-      PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-$(generate_secret 24)}"
-    else
-      local step_num=1
+			VPN_PASS_RAW="${VPN_PASS_RAW:-$(generate_secret 24)}"
+			AGH_PASS_RAW="${AGH_PASS_RAW:-$(generate_secret 24)}"
+			ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-$(generate_secret 24)}"
+			PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-$(generate_secret 24)}"
+		else
+			local step_num=1
 
-      # 1. deSEC Domain & Certificate Setup
-      echo "--- deSEC Domain & Certificate Setup ---"
-      local input_domain=""
-      while [[ -z "${DESEC_DOMAIN}" ]]; do
-        echo -n "${step_num}. deSEC Domain (e.g., myhome.dedyn.io): "
-        read -r input_domain
-        DESEC_DOMAIN="${input_domain:-$DESEC_DOMAIN}"
-        if [[ -z "${DESEC_DOMAIN}" ]]; then
-          echo "   ⚠️  A deSEC domain is REQUIRED for external access and VERTd HTTPS support."
-        fi
-      done
-      ((step_num++))
+			# 1. deSEC Domain & Certificate Setup
+			echo "--- deSEC Domain & Certificate Setup ---"
+			local input_domain=""
+			while [[ -z "${DESEC_DOMAIN}" ]]; do
+				echo -n "${step_num}. deSEC Domain (e.g., myhome.dedyn.io): "
+				read -r input_domain
+				DESEC_DOMAIN="${input_domain:-$DESEC_DOMAIN}"
+				if [[ -z "${DESEC_DOMAIN}" ]]; then
+					echo "   ⚠️  A deSEC domain is REQUIRED for external access and VERTd HTTPS support."
+				fi
+			done
+			((step_num++))
 
-      local input_token=""
-      echo -n "${step_num}. deSEC API Token: "
-      read -rs input_token
-      echo ""
-      DESEC_TOKEN="${input_token:-$DESEC_TOKEN}"
-      echo ""
-      ((step_num++))
+			local input_token=""
+			echo -n "${step_num}. deSEC API Token: "
+			read -rs input_token
+			echo ""
+			DESEC_TOKEN="${input_token:-$DESEC_TOKEN}"
+			echo ""
+			((step_num++))
 
-      # 2. Password Preferences
-      echo "--- MANUAL CREDENTIAL PROVISIONING ---"
-      echo "Security Note: Please use strong, unique passwords for each service."
-      echo ""
+			# 2. Password Preferences
+			echo "--- MANUAL CREDENTIAL PROVISIONING ---"
+			echo "Security Note: Please use strong, unique passwords for each service."
+			echo ""
 
-      if [[ "${AUTO_PASSWORD}" == "true" ]]; then
-        log_info "Automated password generation initialized."
-        VPN_PASS_RAW="${VPN_PASS_RAW:-$(generate_secret 24)}"
-        AGH_PASS_RAW="${AGH_PASS_RAW:-$(generate_secret 24)}"
-        ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-$(generate_secret 24)}"
-        PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-$(generate_secret 24)}"
-        log_info "Credentials generated and will be displayed upon completion."
-      else
-        echo -n "${step_num}. VPN Web UI Password (Protecting peer management): "
-        read -rs VPN_PASS_RAW
-        echo ""
-        ((step_num++))
-        echo -n "${step_num}. AdGuard Home Password (Protecting DNS filters): "
-        read -rs AGH_PASS_RAW
-        echo ""
-        ((step_num++))
-        echo -n "${step_num}. Management Dashboard Password (Primary control plane): "
-        read -rs ADMIN_PASS_RAW
-        echo ""
-        ((step_num++))
-        if [[ "${FORCE_CLEAN}" == "false" ]] && [[ -d "${DATA_DIR}/portainer" ]]; then
-          echo "   [!] NOTICE: Portainer already initialized. New passwords will not affect existing Portainer admin account."
-        fi
-        echo -n "${step_num}. Portainer Password (Infrastructure orchestration): "
-        read -rs PORTAINER_PASS_RAW
-        echo ""
-        ((step_num++))
-      fi
+			if [[ "${AUTO_PASSWORD}" == "true" ]]; then
+				log_info "Automated password generation initialized."
+				VPN_PASS_RAW="${VPN_PASS_RAW:-$(generate_secret 24)}"
+				AGH_PASS_RAW="${AGH_PASS_RAW:-$(generate_secret 24)}"
+				ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-$(generate_secret 24)}"
+				PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-$(generate_secret 24)}"
+				log_info "Credentials generated and will be displayed upon completion."
+			else
+				echo -n "${step_num}. VPN Web UI Password (Protecting peer management): "
+				read -rs VPN_PASS_RAW
+				echo ""
+				((step_num++))
+				echo -n "${step_num}. AdGuard Home Password (Protecting DNS filters): "
+				read -rs AGH_PASS_RAW
+				echo ""
+				((step_num++))
+				echo -n "${step_num}. Management Dashboard Password (Primary control plane): "
+				read -rs ADMIN_PASS_RAW
+				echo ""
+				((step_num++))
+				if [[ "${FORCE_CLEAN}" == "false" ]] && [[ -d "${DATA_DIR}/portainer" ]]; then
+					echo "   [!] NOTICE: Portainer already initialized. New passwords will not affect existing Portainer admin account."
+				fi
+				echo -n "${step_num}. Portainer Password (Infrastructure orchestration): "
+				read -rs PORTAINER_PASS_RAW
+				echo ""
+				((step_num++))
+			fi
 
-      echo ""
-      echo "--- Scribe (Medium Frontend) GitHub Integration (Optional) ---"
-      echo "Note: GitHub credentials are optional but enable gist proxying."
-      echo -n "${step_num}. GitHub Username (or press Enter to skip): "
-      read -r SCRIBE_GH_USER
-      ((step_num++))
-      if [[ -n "${SCRIBE_GH_USER}" ]]; then
-        echo -n "${step_num}. GitHub Personal Access Token: "
-        read -rs SCRIBE_GH_TOKEN
-        echo ""
-        ((step_num++))
-      else
-        SCRIBE_GH_TOKEN=""
-      fi
+			echo ""
+			echo "--- Scribe (Medium Frontend) GitHub Integration (Optional) ---"
+			echo "Note: GitHub credentials are optional but enable gist proxying."
+			echo -n "${step_num}. GitHub Username (or press Enter to skip): "
+			read -r SCRIBE_GH_USER
+			((step_num++))
+			if [[ -n "${SCRIBE_GH_USER}" ]]; then
+				echo -n "${step_num}. GitHub Personal Access Token: "
+				read -rs SCRIBE_GH_TOKEN
+				echo ""
+				((step_num++))
+			else
+				SCRIBE_GH_TOKEN=""
+			fi
 
-      echo ""
-      echo "--- Odido Bundle Booster (Optional) ---"
-      echo "Note: OAuth token must be obtained from the dashboard after deployment."
-      echo "      The dashboard provides a sign-in URL generator for secure authentication."
-      if ask_confirm "Do you want to enable Odido Bundle Booster?"; then
-        log_info "Odido Bundle Booster will be deployed. Configure credentials via dashboard after setup."
-        ODIDO_USER_ID=""
-      else
-        ODIDO_USER_ID=""
-        SKIP_ODIDO=true
-      fi
+			echo ""
+			echo "--- Odido Bundle Booster (Optional) ---"
+			echo "Note: OAuth token must be obtained from the dashboard after deployment."
+			echo "      The dashboard provides a sign-in URL generator for secure authentication."
+			if ask_confirm "Do you want to enable Odido Bundle Booster?"; then
+				log_info "Odido Bundle Booster will be deployed. Configure credentials via dashboard after setup."
+				ODIDO_USER_ID=""
+			else
+				ODIDO_USER_ID=""
+				SKIP_ODIDO=true
+			fi
 
-      # OAuth token will be obtained via dashboard after deployment
-      ODIDO_TOKEN=""
-    fi
+			# OAuth token will be obtained via dashboard after deployment
+			ODIDO_TOKEN=""
+		fi
 
-    log_info "Generating Secrets (Batch Processing)..."
-    HUB_API_KEY=$(generate_secret 32)
-    ODIDO_API_KEY="${HUB_API_KEY}"
+		log_info "Generating Secrets (Batch Processing)..."
+		HUB_API_KEY=$(generate_secret 32)
+		ODIDO_API_KEY="${HUB_API_KEY}"
 
-    if [[ -n "${WG_HASH_CLEAN:-}" ]] && [[ -n "${AGH_PASS_HASH:-}" ]] && [[ -n "${PORTAINER_PASS_HASH:-}" ]]; then
-      log_info "Using provided password hashes."
-    else
-      WG_HASH_CLEAN=$(generate_hash "admin" "${VPN_PASS_RAW}")
-      AGH_PASS_HASH=$(generate_hash "${AGH_USER}" "${AGH_PASS_RAW}")
-      PORTAINER_PASS_HASH=$(generate_hash "admin" "${PORTAINER_PASS_RAW}")
+		if [[ -n "${WG_HASH_CLEAN:-}" ]] && [[ -n "${AGH_PASS_HASH:-}" ]] && [[ -n "${PORTAINER_PASS_HASH:-}" ]]; then
+			log_info "Using provided password hashes."
+		else
+			WG_HASH_CLEAN=$(generate_hash "admin" "${VPN_PASS_RAW}")
+			AGH_PASS_HASH=$(generate_hash "${AGH_USER}" "${AGH_PASS_RAW}")
+			PORTAINER_PASS_HASH=$(generate_hash "admin" "${PORTAINER_PASS_RAW}")
 
-      if [[ -z "${WG_HASH_CLEAN}" ]] || [[ -z "${AGH_PASS_HASH}" ]] || [[ -z "${PORTAINER_PASS_HASH}" ]] || [[ "${WG_HASH_CLEAN}" == "FAILED" ]] || [[ "${AGH_PASS_HASH}" == "FAILED" ]] || [[ "${PORTAINER_PASS_HASH}" == "FAILED" ]]; then
-        log_crit "Failed to generate password hashes. Check Docker/Python status."
-        exit 1
-      fi
-    fi
+			if [[ -z "${WG_HASH_CLEAN}" ]] || [[ -z "${AGH_PASS_HASH}" ]] || [[ -z "${PORTAINER_PASS_HASH}" ]] || [[ "${WG_HASH_CLEAN}" == "FAILED" ]] || [[ "${AGH_PASS_HASH}" == "FAILED" ]] || [[ "${PORTAINER_PASS_HASH}" == "FAILED" ]]; then
+				log_crit "Failed to generate password hashes. Check Docker/Python status."
+				exit 1
+			fi
+		fi
 
-    SCRIBE_SECRET=$(generate_secret 64)
-    ANONYMOUS_SECRET=$(generate_secret 32)
-    IV_HMAC=$(generate_secret 16)
-    IV_COMPANION=$(generate_secret 16)
-    SEARXNG_SECRET=$(generate_secret 32)
-    IMMICH_DB_PASSWORD=$(generate_secret 32)
-    IMMICH_ADMIN_PASS_RAW=$(generate_secret 24)
-    INVIDIOUS_DB_PASSWORD=$(generate_secret 32)
+		SCRIBE_SECRET=$(generate_secret 64)
+		ANONYMOUS_SECRET=$(generate_secret 32)
+		IV_HMAC=$(generate_secret 16)
+		IV_COMPANION=$(generate_secret 16)
+		SEARXNG_SECRET=$(generate_secret 32)
+		IMMICH_DB_PASSWORD=$(generate_secret 32)
+		IMMICH_ADMIN_PASS_RAW=$(generate_secret 24)
+		INVIDIOUS_DB_PASSWORD=$(generate_secret 32)
 
-    # Robustness: Remove .secrets if it accidentally became a directory (Docker auto-mount issue)
-    if [[ -d "${BASE_DIR}/.secrets" ]]; then
-      log_warn ".secrets found as a directory. Removing..."
-      ${SUDO} rm -rf "${BASE_DIR}/.secrets"
-    fi
+		# Robustness: Remove .secrets if it accidentally became a directory (Docker auto-mount issue)
+		if [[ -d "${BASE_DIR}/.secrets" ]]; then
+			log_warn ".secrets found as a directory. Removing..."
+			${SUDO} rm -rf "${BASE_DIR}/.secrets"
+		fi
 
-    cat >"${BASE_DIR}/.secrets" <<EOF
+		cat >"${BASE_DIR}/.secrets" <<EOF
 VPN_PASS_RAW="${VPN_PASS_RAW}"
 AGH_PASS_RAW="${AGH_PASS_RAW}"
 ADMIN_PASS_RAW="${ADMIN_PASS_RAW}"
@@ -1058,29 +1058,29 @@ ANONYMOUS_SECRET='${ANONYMOUS_SECRET}'
 IV_HMAC='${IV_HMAC}'
 IV_COMPANION='${IV_COMPANION}'
 EOF
-    "${SUDO}" chmod 600 "${BASE_DIR}/.secrets"
-    "${SUDO}" chown 1000:1000 "${BASE_DIR}/.secrets"
-  else
-    source "${BASE_DIR}/.secrets"
-    local updated_secrets=false
-    # Logic to ensure all secrets are present
-    if [[ -z "${HUB_API_KEY:-}" ]]; then
-      HUB_API_KEY=$(generate_secret 32)
-      echo "HUB_API_KEY='${HUB_API_KEY}'" >>"${BASE_DIR}/.secrets"
-      updated_secrets=true
-    fi
-    if [[ "${updated_secrets}" == "true" ]]; then
-      "${SUDO}" chmod 600 "${BASE_DIR}/.secrets"
-    fi
-  fi
+		"${SUDO}" chmod 600 "${BASE_DIR}/.secrets"
+		"${SUDO}" chown 1000:1000 "${BASE_DIR}/.secrets"
+	else
+		source "${BASE_DIR}/.secrets"
+		local updated_secrets=false
+		# Logic to ensure all secrets are present
+		if [[ -z "${HUB_API_KEY:-}" ]]; then
+			HUB_API_KEY=$(generate_secret 32)
+			echo "HUB_API_KEY='${HUB_API_KEY}'" >>"${BASE_DIR}/.secrets"
+			updated_secrets=true
+		fi
+		if [[ "${updated_secrets}" == "true" ]]; then
+			"${SUDO}" chmod 600 "${BASE_DIR}/.secrets"
+		fi
+	fi
 
-  export VPN_PASS_RAW AGH_PASS_RAW ADMIN_PASS_RAW PORTAINER_PASS_RAW ALLOW_PROTON_VPN
-  export DESEC_DOMAIN DESEC_TOKEN SCRIBE_GH_USER SCRIBE_GH_TOKEN
-  export ODIDO_TOKEN ODIDO_USER_ID ODIDO_API_KEY HUB_API_KEY
-  export WG_HASH_CLEAN AGH_PASS_HASH PORTAINER_PASS_HASH
-  export SCRIBE_SECRET ANONYMOUS_SECRET IV_HMAC IV_COMPANION
-  export SEARXNG_SECRET IMMICH_DB_PASSWORD INVIDIOUS_DB_PASSWORD
-  export AGH_USER
+	export VPN_PASS_RAW AGH_PASS_RAW ADMIN_PASS_RAW PORTAINER_PASS_RAW ALLOW_PROTON_VPN
+	export DESEC_DOMAIN DESEC_TOKEN SCRIBE_GH_USER SCRIBE_GH_TOKEN
+	export ODIDO_TOKEN ODIDO_USER_ID ODIDO_API_KEY HUB_API_KEY
+	export WG_HASH_CLEAN AGH_PASS_HASH PORTAINER_PASS_HASH
+	export SCRIBE_SECRET ANONYMOUS_SECRET IV_HMAC IV_COMPANION
+	export SEARXNG_SECRET IMMICH_DB_PASSWORD INVIDIOUS_DB_PASSWORD
+	export AGH_USER
 }
 
 ################################################################################
@@ -1098,16 +1098,16 @@ EOF
 #   PORTAINER_PASS_RAW
 ################################################################################
 generate_protonpass_export() {
-  log_info "Generating Proton Pass import file (CSV)..."
-  local export_file="${BASE_DIR}/protonpass_import.csv"
+	log_info "Generating Proton Pass import file (CSV)..."
+	local export_file="${BASE_DIR}/protonpass_import.csv"
 
-  cat >"${export_file}" <<EOF
+	cat >"${export_file}" <<EOF
 Name,URL,Username,Password,Note
 Privacy Hub Admin,http://${LAN_IP}:${PORT_DASHBOARD_WEB},admin,${ADMIN_PASS_RAW},Primary management portal.
 AdGuard Home,http://${LAN_IP}:${PORT_ADGUARD_WEB},adguard,${AGH_PASS_RAW},DNS filtration.
 WireGuard VPN UI,http://${LAN_IP}:${PORT_WG_WEB},admin,${VPN_PASS_RAW},WireGuard management.
 Portainer UI,http://${LAN_IP}:${PORT_PORTAINER},admin,${PORTAINER_PASS_RAW},Container management.
 EOF
-  chmod 600 "${export_file}"
-  log_info "Credential export file created: ${export_file}"
+	chmod 600 "${export_file}"
+	log_info "Credential export file created: ${export_file}"
 }

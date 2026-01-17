@@ -13,23 +13,23 @@ set -euo pipefail
 #   Logs status to stdout/stderr
 ################################################################################
 check_docker_rate_limit() {
-  log_info "Checking if Docker Hub is going to throttle you..."
-  # Export DOCKER_CONFIG globally
-  export DOCKER_CONFIG="${DOCKER_AUTH_DIR}"
+	log_info "Checking if Docker Hub is going to throttle you..."
+	# Export DOCKER_CONFIG globally
+	export DOCKER_CONFIG="${DOCKER_AUTH_DIR}"
 
-  local output
-  if ! output=$("${DOCKER_CMD}" pull hello-world 2>&1); then
-    if echo "${output}" | grep -iaE "toomanyrequests|rate.*limit|pull.*limit|reached.*limit" >/dev/null; then
-      log_crit "Docker Hub Rate Limit Reached! They want you to log in."
-      if ! authenticate_registries; then
-        exit 1
-      fi
-    else
-      log_warn "Docker pull check failed. We'll proceed, but don't be surprised if image pulls fail later."
-    fi
-  else
-    log_info "Docker Hub connection is fine."
-  fi
+	local output
+	if ! output=$("${DOCKER_CMD}" pull hello-world 2>&1); then
+		if echo "${output}" | grep -iaE "toomanyrequests|rate.*limit|pull.*limit|reached.*limit" >/dev/null; then
+			log_crit "Docker Hub Rate Limit Reached! They want you to log in."
+			if ! authenticate_registries; then
+				exit 1
+			fi
+		else
+			log_warn "Docker pull check failed. We'll proceed, but don't be surprised if image pulls fail later."
+		fi
+	else
+		log_info "Docker Hub connection is fine."
+	fi
 }
 
 ################################################################################
@@ -42,89 +42,89 @@ check_docker_rate_limit() {
 #   Writes certificate information to stdout
 ################################################################################
 check_cert_risk() {
-  CERT_PROTECT=false
-  local ssl_crt="${BASE_DIR}/config/adguard/ssl.crt"
-  local ssl_key="${BASE_DIR}/config/adguard/ssl.key"
+	CERT_PROTECT=false
+	local ssl_crt="${BASE_DIR}/config/adguard/ssl.crt"
+	local ssl_key="${BASE_DIR}/config/adguard/ssl.key"
 
-  if [[ -f "${ssl_crt}" ]]; then
-    echo "----------------------------------------------------------"
-    echo "   🔍 EXISTING SSL CERTIFICATE DETECTED"
-    echo "----------------------------------------------------------"
+	if [[ -f "${ssl_crt}" ]]; then
+		echo "----------------------------------------------------------"
+		echo "   🔍 EXISTING SSL CERTIFICATE DETECTED"
+		echo "----------------------------------------------------------"
 
-    # Try to load existing domain configuration
-    local existing_domain=""
-    if [[ -f "${BASE_DIR}/.secrets" ]]; then
-      existing_domain=$(grep "DESEC_DOMAIN=" "${BASE_DIR}/.secrets" | cut -d'=' -f2 | tr -d '"' | tr -d "'")
-    fi
+		# Try to load existing domain configuration
+		local existing_domain=""
+		if [[ -f "${BASE_DIR}/.secrets" ]]; then
+			existing_domain=$(grep "DESEC_DOMAIN=" "${BASE_DIR}/.secrets" | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+		fi
 
-    # Extract Certificate Details
-    local cert_cn
-    local cert_issuer_cn
-    cert_cn=$(ossl x509 -noout -subject -nameopt RFC2253 -in "${ssl_crt}" 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
-    cert_issuer_cn=$(ossl x509 -noout -issuer -nameopt RFC2253 -in "${ssl_crt}" 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
-    [[ -z "${cert_issuer_cn}" ]] && cert_issuer_cn=$(ossl x509 -noout -issuer -in "${ssl_crt}" 2>/dev/null | sed 's/issuer=//')
+		# Extract Certificate Details
+		local cert_cn
+		local cert_issuer_cn
+		cert_cn=$(ossl x509 -noout -subject -nameopt RFC2253 -in "${ssl_crt}" 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
+		cert_issuer_cn=$(ossl x509 -noout -issuer -nameopt RFC2253 -in "${ssl_crt}" 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
+		[[ -z "${cert_issuer_cn}" ]] && cert_issuer_cn=$(ossl x509 -noout -issuer -in "${ssl_crt}" 2>/dev/null | sed 's/issuer=//')
 
-    local cert_dates
-    local cert_not_after
-    local cert_serial
-    local cert_fingerprint
-    cert_dates=$(ossl x509 -noout -dates -in "${ssl_crt}" 2>/dev/null)
-    cert_not_after=$(echo "${cert_dates}" | grep "notAfter=" | cut -d= -f2)
-    cert_serial=$(ossl x509 -noout -serial -in "${ssl_crt}" 2>/dev/null | cut -d= -f2)
-    cert_fingerprint=$(ossl x509 -noout -fingerprint -sha256 -in "${ssl_crt}" 2>/dev/null | cut -d= -f2)
+		local cert_dates
+		local cert_not_after
+		local cert_serial
+		local cert_fingerprint
+		cert_dates=$(ossl x509 -noout -dates -in "${ssl_crt}" 2>/dev/null)
+		cert_not_after=$(echo "${cert_dates}" | grep "notAfter=" | cut -d= -f2)
+		cert_serial=$(ossl x509 -noout -serial -in "${ssl_crt}" 2>/dev/null | cut -d= -f2)
+		cert_fingerprint=$(ossl x509 -noout -fingerprint -sha256 -in "${ssl_crt}" 2>/dev/null | cut -d= -f2)
 
-    local cert_validity
-    if ossl x509 -checkend 0 -noout -in "${ssl_crt}" >/dev/null 2>&1; then
-      cert_validity="✅ Valid (Active)"
-    else
-      cert_validity="❌ EXPIRED"
-    fi
+		local cert_validity
+		if ossl x509 -checkend 0 -noout -in "${ssl_crt}" >/dev/null 2>&1; then
+			cert_validity="✅ Valid (Active)"
+		else
+			cert_validity="❌ EXPIRED"
+		fi
 
-    echo "   • Common Name: ${cert_cn}"
-    echo "   • Issuer:      ${cert_issuer_cn}"
-    echo "   • Expires:     ${cert_not_after}"
-    echo "   • Status:      ${cert_validity}"
+		echo "   • Common Name: ${cert_cn}"
+		echo "   • Issuer:      ${cert_issuer_cn}"
+		echo "   • Expires:     ${cert_not_after}"
+		echo "   • Status:      ${cert_validity}"
 
-    if [[ -n "${existing_domain}" ]]; then
-      echo "   • Setup Domain: ${existing_domain}"
-      if echo "${cert_cn}" | grep -q "${existing_domain}"; then
-        echo "   ✅ Certificate MATCHES the configured domain."
-      else
-        echo "   ⚠️  Certificate DOES NOT MATCH the configured domain (${existing_domain})."
-      fi
-    fi
+		if [[ -n "${existing_domain}" ]]; then
+			echo "   • Setup Domain: ${existing_domain}"
+			if echo "${cert_cn}" | grep -q "${existing_domain}"; then
+				echo "   ✅ Certificate MATCHES the configured domain."
+			else
+				echo "   ⚠️  Certificate DOES NOT MATCH the configured domain (${existing_domain})."
+			fi
+		fi
 
-    local is_acme=false
-    if echo "${cert_issuer_cn}" | grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL"; then
-      is_acme=true
-      log_warn "This appears to be a valid ACME-signed certificate."
-    fi
+		local is_acme=false
+		if echo "${cert_issuer_cn}" | grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL"; then
+			is_acme=true
+			log_warn "This appears to be a valid ACME-signed certificate."
+		fi
 
-    local cert_response="n"
-    if [[ "${AUTO_CONFIRM}" == "true" ]]; then
-      if [[ "${is_acme}" == "true" ]]; then
-        cert_response="n"
-      else
-        return 0
-      fi
-    else
-      read -r -p "   Do you want to DELETE this certificate? (Default: No) [y/N]: " cert_response
-    fi
+		local cert_response="n"
+		if [[ "${AUTO_CONFIRM}" == "true" ]]; then
+			if [[ "${is_acme}" == "true" ]]; then
+				cert_response="n"
+			else
+				return 0
+			fi
+		else
+			read -r -p "   Do you want to DELETE this certificate? (Default: No) [y/N]: " cert_response
+		fi
 
-    case "${cert_response}" in
-    [yY][eE][sS] | [yY]) return 0 ;;
-    *)
-      CERT_RESTORE=true
-      CERT_PROTECT=true
-      mkdir -p "${CERT_BACKUP_DIR}"
-      [[ -f "${ssl_crt}" ]] && cp "${ssl_crt}" "${CERT_BACKUP_DIR}/"
-      [[ -f "${ssl_key}" ]] && cp "${ssl_key}" "${CERT_BACKUP_DIR}/"
-      log_info "Certificate will be preserved and restored after cleanup."
-      return 0
-      ;;
-    esac
-  fi
-  return 0
+		case "${cert_response}" in
+		[yY][eE][sS] | [yY]) return 0 ;;
+		*)
+			CERT_RESTORE=true
+			CERT_PROTECT=true
+			mkdir -p "${CERT_BACKUP_DIR}"
+			[[ -f "${ssl_crt}" ]] && cp "${ssl_crt}" "${CERT_BACKUP_DIR}/"
+			[[ -f "${ssl_key}" ]] && cp "${ssl_key}" "${CERT_BACKUP_DIR}/"
+			log_info "Certificate will be preserved and restored after cleanup."
+			return 0
+			;;
+		esac
+	fi
+	return 0
 }
 
 ################################################################################
@@ -138,69 +138,69 @@ check_cert_risk() {
 #   Logs actions to stdout
 ################################################################################
 clean_environment() {
-  echo "=========================================================="
-  echo "🛡️  ENVIRONMENT VALIDATION & CLEANUP"
-  echo "=========================================================="
+	echo "=========================================================="
+	echo "🛡️  ENVIRONMENT VALIDATION & CLEANUP"
+	echo "=========================================================="
 
-  if [[ -z "${BASE_DIR}" ]] || [[ "${BASE_DIR}" == "/" ]]; then
-    log_crit "Critical Error: BASE_DIR is set to a protected path or empty. Aborting."
-    exit 1
-  fi
+	if [[ -z "${BASE_DIR}" ]] || [[ "${BASE_DIR}" == "/" ]]; then
+		log_crit "Critical Error: BASE_DIR is set to a protected path or empty. Aborting."
+		exit 1
+	fi
 
-  if [[ "${CLEAN_ONLY}" == "false" ]]; then
-    check_docker_rate_limit
-  fi
+	if [[ "${CLEAN_ONLY}" == "false" ]]; then
+		check_docker_rate_limit
+	fi
 
-  local clean_list
-  if [[ -n "${SELECTED_SERVICES}" ]]; then
-    local actual_targets=""
-    local srv
-    for srv in ${SELECTED_SERVICES//,/ }; do
-      actual_targets="${actual_targets} ${srv}"
-      [[ "${srv}" == "wikiless" ]] && actual_targets="${actual_targets} wikiless_redis"
-      [[ "${srv}" == "invidious" ]] && actual_targets="${actual_targets} invidious-db companion"
-    done
-    clean_list="${actual_targets}"
-  else
-    clean_list="${ALL_CONTAINERS}"
-  fi
+	local clean_list
+	if [[ -n "${SELECTED_SERVICES}" ]]; then
+		local actual_targets=""
+		local srv
+		for srv in ${SELECTED_SERVICES//,/ }; do
+			actual_targets="${actual_targets} ${srv}"
+			[[ "${srv}" == "wikiless" ]] && actual_targets="${actual_targets} wikiless_redis"
+			[[ "${srv}" == "invidious" ]] && actual_targets="${actual_targets} invidious-db companion"
+		done
+		clean_list="${actual_targets}"
+	else
+		clean_list="${ALL_CONTAINERS}"
+	fi
 
-  local found_containers=""
-  local c
-  for c in ${clean_list}; do
-    if "${DOCKER_CMD}" ps -a --format '{{.Names}}' | grep -qE "^(${CONTAINER_PREFIX}${c}|${c})$"; then
-      local name
-      name=$("${DOCKER_CMD}" ps -a --format '{{.Names}}' | grep -E "^(${CONTAINER_PREFIX}${c}|${c})$" | head -n 1)
-      found_containers="${found_containers} ${name}"
-    fi
-  done
+	local found_containers=""
+	local c
+	for c in ${clean_list}; do
+		if "${DOCKER_CMD}" ps -a --format '{{.Names}}' | grep -qE "^(${CONTAINER_PREFIX}${c}|${c})$"; then
+			local name
+			name=$("${DOCKER_CMD}" ps -a --format '{{.Names}}' | grep -E "^(${CONTAINER_PREFIX}${c}|${c})$" | head -n 1)
+			found_containers="${found_containers} ${name}"
+		fi
+	done
 
-  if [[ -n "${found_containers}" ]]; then
-    if ask_confirm "Existing containers detected (${found_containers}). Remove them?"; then
-      "${DOCKER_CMD}" rm -f ${found_containers} 2>/dev/null || true
-      log_info "Previous containers removed."
-    fi
-  fi
+	if [[ -n "${found_containers}" ]]; then
+		if ask_confirm "Existing containers detected (${found_containers}). Remove them?"; then
+			"${DOCKER_CMD}" rm -f ${found_containers} 2>/dev/null || true
+			log_info "Previous containers removed."
+		fi
+	fi
 
-  if [[ -d "${BASE_DIR}" ]]; then
-    if ask_confirm "Wipe ALL application data? This action is irreversible."; then
-      check_cert_risk
-      log_info "Clearing data..."
-      "${SUDO}" rm -rf "${BASE_DIR}" 2>/dev/null || true
-      [[ -d "${MEMOS_HOST_DIR}" ]] && "${SUDO}" rm -rf "${MEMOS_HOST_DIR}" 2>/dev/null || true
-      log_info "Data cleared."
+	if [[ -d "${BASE_DIR}" ]]; then
+		if ask_confirm "Wipe ALL application data? This action is irreversible."; then
+			check_cert_risk
+			log_info "Clearing data..."
+			"${SUDO}" rm -rf "${BASE_DIR}" 2>/dev/null || true
+			[[ -d "${MEMOS_HOST_DIR}" ]] && "${SUDO}" rm -rf "${MEMOS_HOST_DIR}" 2>/dev/null || true
+			log_info "Data cleared."
 
-      if [[ "${CERT_RESTORE}" == "true" ]]; then
-        log_info "Restoring preserved SSL certificate..."
-        mkdir -p "${BASE_DIR}/config/adguard"
-        [[ -f "${CERT_BACKUP_DIR}/ssl.crt" ]] && cp "${CERT_BACKUP_DIR}/ssl.crt" "${BASE_DIR}/config/adguard/"
-        [[ -f "${CERT_BACKUP_DIR}/ssl.key" ]] && cp "${CERT_BACKUP_DIR}/ssl.key" "${BASE_DIR}/config/adguard/"
-        rm -rf "${CERT_BACKUP_DIR}"
-        CERT_RESTORE=false
-        log_info "SSL certificate restored."
-      fi
-    fi
-  fi
+			if [[ "${CERT_RESTORE}" == "true" ]]; then
+				log_info "Restoring preserved SSL certificate..."
+				mkdir -p "${BASE_DIR}/config/adguard"
+				[[ -f "${CERT_BACKUP_DIR}/ssl.crt" ]] && cp "${CERT_BACKUP_DIR}/ssl.crt" "${BASE_DIR}/config/adguard/"
+				[[ -f "${CERT_BACKUP_DIR}/ssl.key" ]] && cp "${CERT_BACKUP_DIR}/ssl.key" "${BASE_DIR}/config/adguard/"
+				rm -rf "${CERT_BACKUP_DIR}"
+				CERT_RESTORE=false
+				log_info "SSL certificate restored."
+			fi
+		fi
+	fi
 }
 
 ################################################################################
@@ -211,9 +211,9 @@ clean_environment() {
 #   None
 ################################################################################
 cleanup_build_artifacts() {
-  log_info "Cleaning up build artifacts to save space..."
-  "${DOCKER_CMD}" image prune -f >/dev/null 2>&1 || true
-  "${DOCKER_CMD}" builder prune -f >/dev/null 2>&1 || true
+	log_info "Cleaning up build artifacts to save space..."
+	"${DOCKER_CMD}" image prune -f >/dev/null 2>&1 || true
+	"${DOCKER_CMD}" builder prune -f >/dev/null 2>&1 || true
 }
 
 ################################################################################
@@ -228,27 +228,27 @@ cleanup_build_artifacts() {
 #   Creates a .tar.gz file in BACKUP_DIR
 ################################################################################
 perform_backup() {
-  local tag="${1:-manual}"
-  local timestamp
-  timestamp=$(date +%Y%m%d_%H%M%S)
-  local backup_name="backup_${tag}_${timestamp}.tar.gz"
+	local tag="${1:-manual}"
+	local timestamp
+	timestamp=$(date +%Y%m%d_%H%M%S)
+	local backup_name="backup_${tag}_${timestamp}.tar.gz"
 
-  mkdir -p "${BACKUP_DIR}"
-  log_info "Creating system backup: ${backup_name}..."
+	mkdir -p "${BACKUP_DIR}"
+	log_info "Creating system backup: ${backup_name}..."
 
-  local targets=""
-  local t
-  for t in .secrets config env; do
-    [[ -e "${BASE_DIR}/${t}" ]] && targets="${targets} ${t}"
-  done
+	local targets=""
+	local t
+	for t in .secrets config env; do
+		[[ -e "${BASE_DIR}/${t}" ]] && targets="${targets} ${t}"
+	done
 
-  if [[ -n "${targets}" ]]; then
-    if tar -czf "${BACKUP_DIR}/${backup_name}" -C "${BASE_DIR}" ${targets} 2>/dev/null; then
-      log_info "Backup created at ${BACKUP_DIR}/${backup_name}"
-    else
-      log_warn "Backup partially failed."
-    fi
-  fi
+	if [[ -n "${targets}" ]]; then
+		if tar -czf "${BACKUP_DIR}/${backup_name}" -C "${BASE_DIR}" ${targets} 2>/dev/null; then
+			log_info "Backup created at ${BACKUP_DIR}/${backup_name}"
+		else
+			log_warn "Backup partially failed."
+		fi
+	fi
 }
 
 ################################################################################
@@ -261,26 +261,26 @@ perform_backup() {
 #   None
 ################################################################################
 perform_restore() {
-  local backup_file="$1"
-  if [[ ! -f "${backup_file}" ]]; then
-    log_crit "Backup file not found: ${backup_file}"
-    exit 1
-  fi
+	local backup_file="$1"
+	if [[ ! -f "${backup_file}" ]]; then
+		log_crit "Backup file not found: ${backup_file}"
+		exit 1
+	fi
 
-  log_info "Restoring system from backup: ${backup_file}..."
+	log_info "Restoring system from backup: ${backup_file}..."
 
-  # Ensure we are in a safe state (stop containers if any)
-  # But for simplicity, we just extract.
+	# Ensure we are in a safe state (stop containers if any)
+	# But for simplicity, we just extract.
 
-  if "${SUDO}" tar -xzf "${backup_file}" -C "${BASE_DIR}"; then
-    log_info "Restore successful. All configurations and secrets have been replaced."
-    "${SUDO}" chown -R "$(whoami)" "${BASE_DIR}"
-    # Ensure secrets have restricted permissions
-    [[ -f "${BASE_DIR}/.secrets" ]] && "${SUDO}" chmod 600 "${BASE_DIR}/.secrets"
-  else
-    log_crit "Restore failed."
-    exit 1
-  fi
+	if "${SUDO}" tar -xzf "${backup_file}" -C "${BASE_DIR}"; then
+		log_info "Restore successful. All configurations and secrets have been replaced."
+		"${SUDO}" chown -R "$(whoami)" "${BASE_DIR}"
+		# Ensure secrets have restricted permissions
+		[[ -f "${BASE_DIR}/.secrets" ]] && "${SUDO}" chmod 600 "${BASE_DIR}/.secrets"
+	else
+		log_crit "Restore failed."
+		exit 1
+	fi
 }
 
 ################################################################################
@@ -291,13 +291,13 @@ perform_restore() {
 #   None
 ################################################################################
 setup_cron() {
-  log_info "Configuring scheduled tasks..."
-  local cron_jobs=""
-  cron_jobs="*/5 * * * * ${MONITOR_SCRIPT} >> ${IP_LOG_FILE} 2>&1
+	log_info "Configuring scheduled tasks..."
+	local cron_jobs=""
+	cron_jobs="*/5 * * * * ${MONITOR_SCRIPT} >> ${IP_LOG_FILE} 2>&1
 0 3 * * * ${CERT_MONITOR_SCRIPT} >> ${BASE_DIR}/cert-monitor.log 2>&1
 "
-  (
-    crontab -l 2>/dev/null | grep -vE "wg-ip-monitor|cert-monitor|${APP_NAME}" || true
-    echo "${cron_jobs}"
-  ) | crontab -
+	(
+		crontab -l 2>/dev/null | grep -vE "wg-ip-monitor|cert-monitor|${APP_NAME}" || true
+		echo "${cron_jobs}"
+	) | crontab -
 }

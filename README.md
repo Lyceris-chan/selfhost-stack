@@ -12,7 +12,6 @@ eliminate tracking with isolated frontends, and manage everything from a unified
 
 ## 📖 Table of Contents
 
-
 - [Key Features](#-key-features)
 - [Deployment](#-deployment)
   - [Before You Start](#before-you-start-checklist)

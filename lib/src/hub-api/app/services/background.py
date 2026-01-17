@@ -4,12 +4,6 @@ This module contains worker threads for collecting system metrics,
 retrieving external provider configuration, and synchronizing logs.
 """
 
-"""Background worker services for the Privacy Hub API.
-
-This module contains worker threads for collecting system metrics,
-retrieving external provider configuration, and synchronizing logs.
-"""
-
 import os
 import re
 import sqlite3
@@ -76,8 +70,8 @@ def odido_retrieval_thread():
                 content = f.read()
 
             # Check if we have token but missing or default user_id
-            token_match = re.search(r'ODIDO_TOKEN="([^"]+)"', content)
-            userid_match = re.search(r'ODIDO_USER_ID="([^"]*)"', content)
+            token_match = re.search(r'ODIDO_TOKEN="([^"+])"', content)
+            userid_match = re.search(r'ODIDO_USER_ID="([^"*])"', content)
 
             if token_match and (not userid_match or not userid_match.group(1)):
                 token = token_match.group(1)

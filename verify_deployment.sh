@@ -18,12 +18,12 @@ test -f lib/templates/wg_control.sh && echo "  ✓ WireGuard control script exis
 echo ""
 echo "✓ Syntax validation..."
 for script in lib/core/*.sh lib/services/*.sh; do
-  if bash -n "$script" 2>/dev/null; then
-    echo "  ✓ $(basename $script)"
-  else
-    echo "  ✗ $(basename $script) has syntax errors"
-    bash -n "$script"
-  fi
+	if bash -n "$script" 2>/dev/null; then
+		echo "  ✓ $(basename $script)"
+	else
+		echo "  ✗ $(basename $script) has syntax errors"
+		bash -n "$script"
+	fi
 done
 
 echo ""
