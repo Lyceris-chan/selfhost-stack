@@ -114,40 +114,36 @@ main() {
   fi
   echo ""
 
-  # 5. Comprehensive Dashboard Interaction Tests (Merged into Step 4)
-  # Step 4 now runs the comprehensive suite via test_dashboard.js
-
-
-  # 6. WireGuard Functionality Tests
-  echo -e "\e[34m--- Step 6: WireGuard Tests ---\e[0m"
+  # 5. WireGuard Functionality Tests
+  echo -e "\e[34m--- Step 5: WireGuard Tests ---\e[0m"
   if [ -f test/test_wireguard.js ]; then
     if node test/test_wireguard.js; then
       echo -e "\e[32m✅ WireGuard Tests Passed\e[0m"
     else
-      echo -e "\e[31m❌ Step 6 (WireGuard Tests) Failed\e[0m"
+      echo -e "\e[31m❌ Step 5 (WireGuard Tests) Failed\e[0m"
       exit 1
     fi
   else
-    echo -e "\e[33m⚠️  Step 6 (WireGuard Tests) Skipped - test file not found\e[0m"
+    echo -e "\e[33m⚠️  Step 5 (WireGuard Tests) Skipped - test file not found\e[0m"
   fi
   echo ""
 
-  # 7. Extended Interactions (Rimgo/Invidious)
-  echo -e "\e[34m--- Step 7: Extended Interactions Tests ---\e[0m"
+  # 6. Extended Interactions (Rimgo/Invidious)
+  echo -e "\e[34m--- Step 6: Extended Interactions Tests ---\e[0m"
   if [ -f test/test_extended_interactions.js ]; then
     if node test/test_extended_interactions.js; then
       echo -e "\e[32m✅ Extended Interactions Tests Passed\e[0m"
     else
-      echo -e "\e[31m❌ Step 7 (Extended Interactions) Failed\e[0m"
+      echo -e "\e[31m❌ Step 6 (Extended Interactions) Failed\e[0m"
       exit 1
     fi
   else
-    echo -e "\e[33m⚠️  Step 7 (Extended Interactions) Skipped - test file not found\e[0m"
+    echo -e "\e[33m⚠️  Step 6 (Extended Interactions) Skipped - test file not found\e[0m"
   fi
   echo ""
 
-  # 8. Container Logs Check
-  echo -e "\e[34m--- Step 8: Container Logs Analysis ---\e[0m"
+  # 7. Container Logs Check
+  echo -e "\e[34m--- Step 7: Container Logs Analysis ---\e[0m"
   echo "Checking for errors in container logs..."
   
   CONTAINERS=$(docker ps --filter "name=hub-" --format "{{.Names}}" 2>/dev/null || echo "")
