@@ -69,6 +69,8 @@ sources/
 
 # Test Artifacts
 test/screenshots/
+test/reports/
+test/logs/
 test/test_data/
 test/test_config.env
 test/VERIFICATION_REPORT.md
