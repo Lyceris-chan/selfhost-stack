@@ -6,6 +6,20 @@ This guide details the process for integrating a new service into the Privacy Hu
 
 The core logic for defining services resides in `lib/services/compose.sh`. This script contains functions that conditionally append Docker Compose service definitions to the final configuration file.
 
+## Source-Built Base Images
+
+To ensure security and compatibility, services built from source (rather than pulled from a registry) use optimized base images defined within this repository.
+
+| Service | Base Image Location | Description |
+| :--- | :--- | :--- |
+| **Hub API** | [`lib/src/hub-api/Dockerfile`](../lib/src/hub-api/Dockerfile) | `python:3.11-alpine` with build tools. |
+| **Dashboard** | [`lib/src/dashboard/Dockerfile`](../lib/src/dashboard/Dockerfile) | `nginx:alpine` with hardened permissions. |
+| **Scribe** | `lib/services/compose.sh` (Inline) | Multi-stage build using `node:16-alpine`, `crystal:1.11.2-alpine`, and `alpine:latest`. |
+| **Cobalt (Web)** | `lib/services/compose.sh` (Inline) | Multi-stage build using `node:24-alpine` and `nginx:alpine`. |
+| **Portainer** | `lib/services/compose.sh` (Inline) | `alpine:3.20` repackaged with Portainer binary. |
+
+When adding a source-built service, prefer using **Alpine Linux** base images (`alpine:latest`, `python:3.11-alpine`, `node:lts-alpine`) to minimize footprint and attack surface.
+
 ## Step-by-Step Implementation
 
 ### 1. Define the Service Function
