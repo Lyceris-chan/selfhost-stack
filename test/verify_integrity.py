@@ -60,7 +60,9 @@ class IntegrityChecker:
         self.log_fail(f"File not found: {path}")
         return False
 
-    def check_pattern(self, path: str, pattern: str, description: str, literal: bool = False) -> bool:
+    def check_pattern(
+        self, path: str, pattern: str, description: str, literal: bool = False
+    ) -> bool:
         """Checks if a pattern exists in a file.
 
         Args:
@@ -74,9 +76,9 @@ class IntegrityChecker:
         """
         if not self.check_file_exists(path):
             return False
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, "r", encoding="utf-8") as f:
             content = f.read()
-        
+
         found = False
         if literal:
             if pattern in content:
@@ -84,7 +86,7 @@ class IntegrityChecker:
         else:
             if re.search(pattern, content, re.MULTILINE):
                 found = True
-        
+
         if found:
             self.log_pass(description)
             return True
@@ -105,11 +107,13 @@ class IntegrityChecker:
         """
         if not self.check_file_exists(path):
             return False
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, "r", encoding="utf-8") as f:
             content = f.read()
-        
+
         if re.search(pattern, content, re.MULTILINE):
-            self.log_fail(f"{description} (Pattern FOUND but should be absent: {pattern})")
+            self.log_fail(
+                f"{description} (Pattern FOUND but should be absent: {pattern})"
+            )
             return False
         else:
             self.log_pass(description)
@@ -118,20 +122,41 @@ class IntegrityChecker:
     def verify_backend_logic(self):
         """Verifies backend logic and permissions."""
         print("\n--- Verifying Backend Logic & Permissions ---")
-        self.check_pattern("lib/core/core.sh", r'SELECTED_SERVICES=\$\(echo "\$STACK_SERVICES" \| sed', "Dynamic Odido-booster exclusion logic")
-        self.check_pattern("lib/core/core.sh", r'\$SUDO chown 1000:1000 "\$HISTORY_LOG"', "Correct log file ownership (1000:1000)")
+        self.check_pattern(
+            "lib/core/core.sh",
+            r'SELECTED_SERVICES=\$\(echo "\$STACK_SERVICES" \| sed',
+            "Dynamic Odido-booster exclusion logic",
+        )
+        self.check_pattern(
+            "lib/core/core.sh",
+            r'\$SUDO chown 1000:1000 "\$HISTORY_LOG"',
+            "Correct log file ownership (1000:1000)",
+        )
 
     def verify_ui_standards(self):
         """Verifies M3 UI standards and layout."""
         print("\n--- Verifying M3 UI Standards & Layout ---")
         css = "lib/templates/assets/dashboard.css"
         html = "lib/templates/dashboard.html"
-        
-        self.check_pattern(css, r'\.section-label\s*\{[^}]*margin:\s*48px 0 16px 0', "Section labels follow 8dp grid")
-        self.check_pattern(css, r'\.flex-column\s*\{[^}]*flex-direction:\s*column', "Flex-column helper uses correct property")
-        
+
+        self.check_pattern(
+            css,
+            r"\.section-label\s*\{[^}]*margin:\s*48px 0 16px 0",
+            "Section labels follow 8dp grid",
+        )
+        self.check_pattern(
+            css,
+            r"\.flex-column\s*\{[^}]*flex-direction:\s*column",
+            "Flex-column helper uses correct property",
+        )
+
         vpn_desc = "Services marked with 🔒 VPN are routed through a secure tunnel. These services only access the internet via the VPN gateway and are not reachable from the public internet."
-        self.check_pattern(html, vpn_desc, "VPN mandated description present in dashboard.html", literal=True)
+        self.check_pattern(
+            html,
+            vpn_desc,
+            "VPN mandated description present in dashboard.html",
+            literal=True,
+        )
 
     def verify_style_guide(self):
         """Verifies adherence to style guides and terminology standards."""
@@ -141,46 +166,59 @@ class IntegrityChecker:
 
         # Terminologies
         self.check_pattern(html, r"Admin Sign in", "Uses 'sign-in' instead of 'login'")
-        self.check_no_pattern(html, r"[^/]Login",
-                             "No 'Login' found in dashboard template (excluding URLs)")
+        self.check_no_pattern(
+            html,
+            r"[^/]Login",
+            "No 'Login' found in dashboard template (excluding URLs)",
+        )
         self.check_no_pattern(readme, r"Login", "No 'Login' found in README.md")
 
         # No Em Dashes (Restricted to project code/docs, ignoring third-party data)
         for root, _, files in os.walk("."):
             # Ignore external data and node_modules
-            if any(x in root for x in ["node_modules", ".git", "data/AppData",
-                                       "test/test_data", "google-styleguides", "google-styleguides-toon"]):
+            if any(
+                x in root
+                for x in [
+                    "node_modules",
+                    ".git",
+                    "data/AppData",
+                    "test/test_data",
+                    "google-styleguides",
+                    "google-styleguides-toon",
+                ]
+            ):
                 continue
             for file in files:
                 if file.endswith((".md", ".html", ".sh", ".py", ".js")):
                     if file == "styles.md":
                         continue
                     path = os.path.join(root, file)
-                    self.check_no_pattern(path, "\u2014",
-                                         f"No em dashes in {path}")
+                    self.check_no_pattern(path, "\u2014", f"No em dashes in {path}")
 
         # No Nonsensical Markers
-        self.check_no_pattern("zima.sh", r"SECTION \d:",
-                             "No SECTION markers in zima.sh")
-        self.check_no_pattern("lib/core/core.sh", r"SECTION \d:",
-                             "No SECTION markers in core.sh")
+        self.check_no_pattern(
+            "zima.sh", r"SECTION \d:", "No SECTION markers in zima.sh"
+        )
+        self.check_no_pattern(
+            "lib/core/core.sh", r"SECTION \d:", "No SECTION markers in core.sh"
+        )
 
     def run(self):
         """Runs all verification checks."""
         print("==================================================")
         print("🛡️  ZIMAOS PRIVACY HUB: INTEGRITY AUDIT")
         print("==================================================")
-        
+
         self.verify_backend_logic()
         self.verify_ui_standards()
         self.verify_style_guide()
-        
+
         print("\n==================================================")
-        print(f"AUDIT COMPLETE")
+        print("AUDIT COMPLETE")
         print(f"  ✅ Passed:   {self.passed}")
         print(f"  ❌ Failed:   {self.failed}")
         print("==================================================")
-        
+
         if self.failed > 0:
             sys.exit(1)
 

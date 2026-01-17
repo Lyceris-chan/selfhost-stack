@@ -11,14 +11,14 @@ import socket
 import subprocess
 import sys
 import time
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 
 # Constants
 _DOCKER_CMD = "docker"
 _CONTAINER_PREFIX_FILTER = "hub-"
 _CRITICAL_LOG_KEYWORDS = ["panic", "fatal", "traceback"]
 # Some errors are expected or transient; we can ignore them if needed.
-_IGNORED_LOG_KEYWORDS = ["database", "does not exist"] 
+_IGNORED_LOG_KEYWORDS = ["database", "does not exist"]
 
 
 def _run_command(cmd: str) -> Tuple[str, str, int]:
@@ -32,11 +32,7 @@ def _run_command(cmd: str) -> Tuple[str, str, int]:
     """
     try:
         result = subprocess.run(
-            cmd,
-            shell=True,
-            capture_output=True,
-            text=True,
-            check=False
+            cmd, shell=True, capture_output=True, text=True, check=False
         )
         return result.stdout.strip(), result.stderr.strip(), result.returncode
     except Exception as e:
@@ -56,8 +52,8 @@ def _get_containers(filter_prefix: str) -> List[str]:
     stdout, _, _ = _run_command(cmd)
     if not stdout:
         return []
-    
-    return [c for c in stdout.split('\n') if filter_prefix in c]
+
+    return [c for c in stdout.split("\n") if filter_prefix in c]
 
 
 def _check_port_reachable(ip: str, port: int, timeout: int = 2) -> bool:
@@ -109,9 +105,9 @@ def _audit_logs(container_name: str, tail_lines: int = 100) -> List[str]:
     """
     cmd = f"{_DOCKER_CMD} logs --tail {tail_lines} {container_name}"
     stdout, _, _ = _run_command(cmd)
-    
+
     errors = []
-    lines = stdout.split('\n')
+    lines = stdout.split("\n")
     for line in lines:
         lower_line = line.lower()
         if any(kw in lower_line for kw in _CRITICAL_LOG_KEYWORDS):
@@ -119,11 +115,15 @@ def _audit_logs(container_name: str, tail_lines: int = 100) -> List[str]:
                 errors.append(line.strip())
     return errors
 
+
 def main():
     """Main entry point for verification."""
     parser = argparse.ArgumentParser(description="Verify container health and logs.")
-    parser.add_argument("--prefix", default=_CONTAINER_PREFIX_FILTER,
-                        help="Container name prefix to filter.")
+    parser.add_argument(
+        "--prefix",
+        default=_CONTAINER_PREFIX_FILTER,
+        help="Container name prefix to filter.",
+    )
     args = parser.parse_args()
 
     print("==================================================")
@@ -134,23 +134,23 @@ def main():
     # Most services depend on gluetun, so we must wait for it first.
     print("Waiting for hub-gluetun to be healthy...")
     gluetun_healthy = False
-    for i in range(24): # 2 minutes max
+    for i in range(24):  # 2 minutes max
         state = _inspect_container("hub-gluetun")
         health = state.get("Health", {}).get("Status", "unknown")
         if health == "healthy":
-            print(f"  \033[32m[PASS]\033[0m hub-gluetun is healthy.")
+            print("  \033[32m[PASS]\033[0m hub-gluetun is healthy.")
             gluetun_healthy = True
             break
         elif health == "unhealthy":
-             # Fail fast if explicitly unhealthy
-             print(f"  \033[31m[FAIL]\033[0m hub-gluetun reports unhealthy.")
-             break
+            # Fail fast if explicitly unhealthy
+            print("  \033[31m[FAIL]\033[0m hub-gluetun reports unhealthy.")
+            break
         time.sleep(5)
-    
+
     if not gluetun_healthy:
-        print(f"\033[31m[FAIL]\033[0m hub-gluetun timed out or failed health check.")
+        print("\033[31m[FAIL]\033[0m hub-gluetun timed out or failed health check.")
         # Proceed anyway to show logs, but mark as failure
-        failed_count = 1 
+        failed_count = 1
     else:
         failed_count = 0
 
@@ -178,8 +178,8 @@ def main():
         if health_status != "n/a":
             status_msg += f", Health: {health_status.upper()}"
 
-        is_running = (status == "running")
-        is_healthy = (health_status == "healthy" or health_status == "n/a")
+        is_running = status == "running"
+        is_healthy = health_status == "healthy" or health_status == "n/a"
 
         if is_running and is_healthy:
             print(f"  \033[32m[PASS]\033[0m State: {status_msg}")
@@ -189,8 +189,7 @@ def main():
             failed_count += 1
             # Dump logs for failed container
             print("  --- Last 10 log lines for context ---")
-            log_stdout, _, _ = _run_command(
-                f"{_DOCKER_CMD} logs --tail 10 {container}")
+            log_stdout, _, _ = _run_command(f"{_DOCKER_CMD} logs --tail 10 {container}")
             if log_stdout:
                 print(log_stdout)
             print("  -------------------------------------")
@@ -199,7 +198,9 @@ def main():
         # 2. Log Audit
         log_errors = _audit_logs(container)
         if log_errors:
-            print(f"  \033[31m[FAIL]\033[0m Logs: Found {len(log_errors)} critical errors")
+            print(
+                f"  \033[31m[FAIL]\033[0m Logs: Found {len(log_errors)} critical errors"
+            )
             for err in log_errors[:3]:  # Show first 3
                 print(f"    - {err}")
             if len(log_errors) > 3:
@@ -209,15 +210,16 @@ def main():
             print("  \033[32m[PASS]\033[0m Logs: Clean")
 
     print("\n==================================================")
-    print(f"AUDIT SUMMARY")
+    print("AUDIT SUMMARY")
     print(f"  ✅ Passed Checks: {passed_count}")
     print(f"  ❌ Failed Checks: {failed_count}")
     print("==================================================")
 
     if failed_count > 0:
         sys.exit(1)
-    
+
     sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

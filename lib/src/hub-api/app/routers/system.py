@@ -546,16 +546,19 @@ def list_backups(user: str = Depends(get_admin_user)):
 
 @router.post("/backup")
 def trigger_backup(
-    background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)
+	background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)
 ):
-    """Triggers a background system backup task."""
+	"""Triggers a background system backup task."""
 
-    def _backup():
-        log_structured("INFO", "System backup initiated", "MAINTENANCE")
-        subprocess.run(["bash", "/app/zima.sh", "-b"], cwd="/app", check=False)
+	def _backup():
+		log_structured("INFO", "System backup initiated", "MAINTENANCE")
+		env = os.environ.copy()
+		env["PROJECT_ROOT"] = "/app"
+		env["BASE_DIR"] = "/app"
+		subprocess.run(["bash", "/app/zima.sh", "-b"], env=env, cwd="/app", check=False)
 
-    background_tasks.add_task(_backup)
-    return {"success": True, "message": "Backup sequence started in background"}
+	background_tasks.add_task(_backup)
+	return {"success": True, "message": "Backup sequence started in background"}
 
 
 @router.post("/restore")

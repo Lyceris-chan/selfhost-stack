@@ -507,8 +507,9 @@ DOCKER_AUTH_DIR="${PH_DOCKER_AUTH_DIR:-$BASE_DIR/.docker}"
 # Ensure clean state for auth only if it doesn't already have a config
 if [[ ! -d "${DOCKER_AUTH_DIR}" ]]; then
 	${SUDO} mkdir -p "${DOCKER_AUTH_DIR}"
-	${SUDO} chown -R "$(whoami)" "${DOCKER_AUTH_DIR}"
 fi
+# Always ensure ownership of the auth directory and its contents
+${SUDO} chown -R "$(whoami)" "${DOCKER_AUTH_DIR}"
 
 # Detect Python interpreter
 if command -v python3 >/dev/null 2>&1; then

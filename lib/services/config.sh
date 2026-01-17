@@ -403,12 +403,36 @@ setup_configs() {
 	fi
 	"${SUDO}" chmod 644 "${ACTIVE_PROFILE_NAME_FILE}" "${HISTORY_LOG}" "${BASE_DIR}/.data_usage" "${BASE_DIR}/.wge_data_usage"
 
-	if [[ -n "${DESEC_DOMAIN}" ]] && [[ -n "${DESEC_TOKEN}" ]]; then
-		log_info "Configuring deSEC Dynamic DNS and Certificates..."
+	# Ensure configuration directories exist
+	"${SUDO}" mkdir -p "${AGH_CONF_DIR}" "${CONFIG_DIR}/unbound" "${CONFIG_DIR}/nginx" "${DATA_DIR}/hub-api"
+	"${SUDO}" chown -R "$(whoami)" "${AGH_CONF_DIR}"
+	"${SUDO}" chown -R 1000:1000 "${DATA_DIR}/hub-api"
 
-		# Ensure directory exists with correct permissions for the current user
-		"${SUDO}" mkdir -p "${AGH_CONF_DIR}"
-		"${SUDO}" chown "$(whoami)" "${AGH_CONF_DIR}"
+	cat >"${AGH_YAML}" <<EOF
+schema_version: 29
+http: {address: 0.0.0.0:${PORT_ADGUARD_WEB}}
+users: [{name: "${AGH_USER}", password: "${AGH_PASS_HASH}"}]
+dns:
+  bind_hosts: ["0.0.0.0"]
+  port: 53
+  dot_port: 853
+  quic_port: 853
+  upstream_dns: ["${unbound_static_ip}"]
+  bootstrap_dns: ["${unbound_static_ip}"]
+filters:
+  - enabled: true
+    url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/main/blocklist.txt
+    name: Sleepy Blocklist
+    id: 1
+filters_update_interval: 6
+tls:
+  enabled: true
+  server_name: "${dns_server_name}"
+  certificate_path: /opt/adguardhome/conf/ssl.crt
+  private_key_path: /opt/adguardhome/conf/ssl.key
+EOF
+
+	if [[ -n "${DESEC_DOMAIN}" ]] && [[ -n "${DESEC_TOKEN}" ]]; then
 
 		local proxy="http://172.${found_octet_val}.0.254:8888"
 		curl --proxy "${proxy}" -s --max-time 5 -X PATCH "https://desec.io/api/v1/domains/${DESEC_DOMAIN}/rrsets/" \
@@ -455,119 +479,95 @@ setup_configs() {
 	"${SUDO}" mkdir -p "$(dirname "${UNBOUND_CONF}")" "$(dirname "${NGINX_CONF}")" "${DATA_DIR}/hub-api"
 	"${SUDO}" chown -R 1000:1000 "${DATA_DIR}/hub-api"
 
-	cat <<UNBOUNDEOF | "${SUDO}" tee "${UNBOUND_CONF}" >/dev/null
-server:
-  interface: 0.0.0.0
-  port: 53
-  access-control: 0.0.0.0/0 refuse
-  access-control: 172.16.0.0/12 allow
-  access-control: 192.168.0.0/16 allow
-  access-control: 10.0.0.0/8 allow
-  auto-trust-anchor-file: "/var/unbound/root.key"
-  qname-minimisation: yes          # RFC 7816
-  aggressive-nsec: yes             # RFC 8198
-  use-caps-for-id: yes             # DNS 0x20
-  hide-identity: yes
-  hide-version: yes
-  prefetch: yes
-  rrset-roundrobin: yes            # RFC 1794
-  minimal-responses: yes           # RFC 4472
-  harden-glue: yes                 # RFC 1034
-  harden-dnssec-stripped: yes
-  harden-algo-downgrade: yes
-  harden-large-queries: yes
-  harden-short-bufsize: yes
-UNBOUNDEOF
-
-	cat <<EOF | "${SUDO}" tee "${AGH_YAML}" >/dev/null
-schema_version: 29
-http: {address: 0.0.0.0:${PORT_ADGUARD_WEB}}
-users: [{name: "${AGH_USER}", password: "${AGH_PASS_HASH}"}]
-dns:
-    bind_hosts: ["0.0.0.0"]
-    port: 53
-    dot_port: 853
-    quic_port: 853
-    upstream_dns: ["${unbound_static_ip}"]
-    bootstrap_dns: ["${unbound_static_ip}"]
-filters:
-    - enabled: true
-        url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/main/blocklist.txt
-        name: Sleepy Blocklist
-        id: 1
-filters_update_interval: 6
-tls:
-    enabled: true
-    server_name: "${dns_server_name}"
-    certificate_path: /opt/adguardhome/conf/ssl.crt
-    private_key_path: /opt/adguardhome/conf/ssl.key
-EOF
+	cat <<-UNBOUNDEOF | "${SUDO}" tee "${UNBOUND_CONF}" >/dev/null
+		server:
+		  interface: 0.0.0.0
+		  port: 53
+		  access-control: 0.0.0.0/0 refuse
+		  access-control: 172.16.0.0/12 allow
+		  access-control: 192.168.0.0/16 allow
+		  access-control: 10.0.0.0/8 allow
+		  auto-trust-anchor-file: "/var/unbound/root.key"
+		  qname-minimisation: yes          # RFC 7816
+		  aggressive-nsec: yes             # RFC 8198
+		  use-caps-for-id: yes             # DNS 0x20
+		  hide-identity: yes
+		  hide-version: yes
+		  prefetch: yes
+		  rrset-roundrobin: yes            # RFC 1794
+		  minimal-responses: yes           # RFC 4472
+		  harden-glue: yes                 # RFC 1034
+		  harden-dnssec-stripped: yes
+		  harden-algo-downgrade: yes
+		  harden-large-queries: yes
+		  harden-short-bufsize: yes
+	UNBOUNDEOF
 
 	if [[ -n "${DESEC_DOMAIN}" ]]; then
 		nginx_redirect="if (\$http_host = '${DESEC_DOMAIN}') { return 301 https://\$host:8443\$request_uri; }"
 	fi
 
-	cat <<EOF | "${SUDO}" tee "${NGINX_CONF}" >/dev/null
-error_log /dev/stderr info;
-access_log /dev/stdout;
-set_real_ip_from 172.${found_octet_val}.0.0/16;
-real_ip_header X-Forwarded-For;
-real_ip_recursive on;
-map \$http_host \$backend {
-        hostnames;
-        default "";
-        adguard.${DESEC_DOMAIN}    http://${CONTAINER_PREFIX}adguard:8083;
-}
-server {
-        listen ${PORT_DASHBOARD_WEB};
-        listen 8443 ssl;
-        ssl_certificate /etc/adguard/conf/ssl.crt;
-        ssl_certificate_key /etc/adguard/conf/ssl.key;
-        location / {
-                ${nginx_redirect}
-                proxy_set_header Host \$host;
-                if (\$backend != "") { proxy_pass \$backend; break; }
-                root /usr/share/nginx/html;
-                index index.html;
-        }
-        location /api/ {
-                proxy_pass http://hub-api:55555/;
-                proxy_read_timeout 300s;
-                proxy_connect_timeout 75s;
-        }
-}
-EOF
+	cat <<-EOF | "${SUDO}" tee "${NGINX_CONF}" >/dev/null
+		error_log /dev/stderr info;
+		access_log /dev/stdout;
+		set_real_ip_from 172.${found_octet_val}.0.0/16;
+		real_ip_header X-Forwarded-For;
+		real_ip_recursive on;
+		map \$http_host \$backend {
+		        hostnames;
+		        default "";
+		        adguard.${DESEC_DOMAIN}    http://${CONTAINER_PREFIX}adguard:8083;
+		}
+		server {
+		        listen ${PORT_DASHBOARD_WEB};
+		        listen 8443 ssl;
+		        ssl_certificate /etc/adguard/conf/ssl.crt;
+		        ssl_certificate_key /etc/adguard/conf/ssl.key;
+		        location / {
+		                ${nginx_redirect}
+		                proxy_set_header Host \$host;
+		                if (\$backend != "") { proxy_pass \$backend; break; }
+		                root /usr/share/nginx/html;
+		                index index.html;
+		        }
+		        location /api/ {
+		                proxy_pass http://hub-api:55555/;
+		                proxy_read_timeout 300s;
+		                proxy_connect_timeout 75s;
+		        }
+		}
+	EOF
 
 	generate_libredirect_export
 
 	"${SUDO}" mkdir -p "${ENV_DIR}"
-	cat <<EOF | "${SUDO}" tee "${ENV_DIR}/scribe.env" >/dev/null
-SECRET_KEY_BASE=${SCRIBE_SECRET}
-GITHUB_USER=${SCRIBE_GH_USER}
-GITHUB_TOKEN=${SCRIBE_GH_TOKEN}
-PORT=8280
-APP_DOMAIN=${LAN_IP}:8280
-EOF
+	cat <<-EOF | "${SUDO}" tee "${ENV_DIR}/scribe.env" >/dev/null
+		SECRET_KEY_BASE=${SCRIBE_SECRET}
+		GITHUB_USER=${SCRIBE_GH_USER}
+		GITHUB_TOKEN=${SCRIBE_GH_TOKEN}
+		PORT=8280
+		APP_DOMAIN=${LAN_IP}:8280
+	EOF
 
-	cat <<EOF | "${SUDO}" tee "${ENV_DIR}/anonymousoverflow.env" >/dev/null
-APP_SECRET=${ANONYMOUS_SECRET}
-JWT_SIGNING_SECRET=${ANONYMOUS_SECRET}
-PORT=8480
-APP_URL=http://${LAN_IP}:8480
-EOF
+	cat <<-EOF | "${SUDO}" tee "${ENV_DIR}/anonymousoverflow.env" >/dev/null
+		APP_SECRET=${ANONYMOUS_SECRET}
+		JWT_SIGNING_SECRET=${ANONYMOUS_SECRET}
+		PORT=8480
+		APP_URL=http://${LAN_IP}:8480
+	EOF
 	"${SUDO}" chmod 600 "${ENV_DIR}/scribe.env" "${ENV_DIR}/anonymousoverflow.env"
 
 	"${SUDO}" mkdir -p "${CONFIG_DIR}/searxng"
-	cat <<EOF | "${SUDO}" tee "${CONFIG_DIR}/searxng/settings.yml" >/dev/null
-use_default_settings: true
-server:
-    secret_key: "${SEARXNG_SECRET}"
-    base_url: "http://${LAN_IP}:8082/"
-    image_proxy: true
-search:
-    safe_search: 0
-    autocomplete: "duckduckgo"
-EOF
+	cat <<-EOF | "${SUDO}" tee "${CONFIG_DIR}/searxng/settings.yml" >/dev/null
+		use_default_settings: true
+		server:
+		    secret_key: "${SEARXNG_SECRET}"
+		    base_url: "http://${LAN_IP}:8082/"
+		    image_proxy: true
+		search:
+		    safe_search: 0
+		    autocomplete: "duckduckgo"
+	EOF
 	"${SUDO}" chmod 644 "${CONFIG_DIR}/searxng/settings.yml"
 }
 

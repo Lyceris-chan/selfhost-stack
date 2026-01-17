@@ -82,12 +82,15 @@ except Exception:
             - "${CONFIG_DIR}/theme.json:/app/theme.json"
             - "${CONFIG_DIR}/services.json:/app/services.json"
             - "${DATA_DIR}/hub-api:/app/data"
+            - "${BACKUP_DIR}:/app/backups"
         environment:
             - "HUB_API_KEY=${HUB_API_KEY_COMPOSE}"
             - "ADMIN_PASS_RAW=${ADMIN_PASS_COMPOSE}"
             - "VPN_PASS_RAW=${VPN_PASS_COMPOSE}"
             - "CONTAINER_PREFIX=${CONTAINER_PREFIX}"
             - "APP_NAME=${APP_NAME}"
+            - "BASE_DIR=/app"
+            - "PROJECT_ROOT=/app"
             - "UPDATE_STRATEGY=${UPDATE_STRATEGY}"
             - "LAN_IP=${LAN_IP}"
             - "WG_HOST=${LAN_IP}"
@@ -266,18 +269,18 @@ append_dashboard() {
 		return 0
 	fi
 	"${SUDO}" mkdir -p "${SRC_DIR}/dashboard"
-	cat <<DASHEOF | "${SUDO}" tee "${SRC_DIR}/dashboard/Dockerfile" >/dev/null
-FROM nginx:alpine
-RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run/nginx /var/lib/nginx /usr/share/nginx/html && \
-    chown -R 1000:1000 /var/cache/nginx /var/log/nginx /var/run/nginx /var/lib/nginx /usr/share/nginx/html && \
-    chmod -R 755 /usr/share/nginx/html && \
-    sed -i 's/^user/#user/' /etc/nginx/nginx.conf && \
-    sed -i 's|pid .*|pid /tmp/nginx.pid;|g' /etc/nginx/nginx.conf
-USER 1000
-COPY . /usr/share/nginx/html
-EXPOSE ${PORT_DASHBOARD_WEB}
-CMD ["nginx", "-g", "daemon off;"]
-DASHEOF
+	cat <<-DASHEOF | "${SUDO}" tee "${SRC_DIR}/dashboard/Dockerfile" >/dev/null
+		FROM nginx:alpine
+		RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run/nginx /var/lib/nginx /usr/share/nginx/html && \
+		    chown -R 1000:1000 /var/cache/nginx /var/log/nginx /var/run/nginx /var/lib/nginx /usr/share/nginx/html && \
+		    chmod -R 755 /usr/share/nginx/html && \
+		    sed -i 's/^user/#user/' /etc/nginx/nginx.conf && \
+		    sed -i 's|pid .*|pid /tmp/nginx.pid;|g' /etc/nginx/nginx.conf
+		USER 1000
+		COPY . /usr/share/nginx/html
+		EXPOSE ${PORT_DASHBOARD_WEB}
+		CMD ["nginx", "-g", "daemon off;"]
+	DASHEOF
 
 	cat >>"${COMPOSE_FILE}" <<EOF
     dashboard:
@@ -325,15 +328,15 @@ append_portainer() {
 		return 0
 	fi
 	"${SUDO}" mkdir -p "${SRC_DIR}/portainer"
-	cat <<PORTEOF | "${SUDO}" tee "${SRC_DIR}/portainer/Dockerfile" >/dev/null
-FROM alpine:3.20
-COPY --from=portainer/portainer-ce:latest /portainer /portainer
-COPY --from=portainer/portainer-ce:latest /public /public
-COPY --from=portainer/portainer-ce:latest /mustache-templates /mustache-templates
-WORKDIR /
-EXPOSE 9000 9443
-ENTRYPOINT ["/portainer"]
-PORTEOF
+	cat <<-PORTEOF | "${SUDO}" tee "${SRC_DIR}/portainer/Dockerfile" >/dev/null
+		FROM alpine:3.20
+		COPY --from=portainer/portainer-ce:latest /portainer /portainer
+		COPY --from=portainer/portainer-ce:latest /public /public
+		COPY --from=portainer/portainer-ce:latest /mustache-templates /mustache-templates
+		WORKDIR /
+		EXPOSE 9000 9443
+		ENTRYPOINT ["/portainer"]
+	PORTEOF
 
 	cat >>"${COMPOSE_FILE}" <<EOF
     portainer:
