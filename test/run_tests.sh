@@ -114,19 +114,9 @@ main() {
   fi
   echo ""
 
-  # 5. Comprehensive Dashboard Interaction Tests
-  echo -e "\e[34m--- Step 5: Comprehensive Dashboard Tests ---\e[0m"
-  if [ -f test/test_dashboard_comprehensive.js ]; then
-    if node test/test_dashboard_comprehensive.js; then
-      echo -e "\e[32m✅ Dashboard Comprehensive Tests Passed\e[0m"
-    else
-      echo -e "\e[31m❌ Step 5 (Dashboard Tests) Failed\e[0m"
-      exit 1
-    fi
-  else
-    echo -e "\e[33m⚠️  Step 5 (Dashboard Tests) Skipped - test file not found\e[0m"
-  fi
-  echo ""
+  # 5. Comprehensive Dashboard Interaction Tests (Merged into Step 4)
+  # Step 4 now runs the comprehensive suite via test_dashboard.js
+
 
   # 6. WireGuard Functionality Tests
   echo -e "\e[34m--- Step 6: WireGuard Tests ---\e[0m"
