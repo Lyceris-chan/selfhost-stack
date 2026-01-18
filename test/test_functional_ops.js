@@ -17,6 +17,7 @@ const CONFIG = {
 
 // Helper to read secrets
 function getAdminPassword() {
+  if (process.env.ADMIN_PASSWORD) return process.env.ADMIN_PASSWORD;
   try {
     if (!fs.existsSync(CONFIG.secretsPath)) {
       console.warn(`⚠️ Secrets file not found at ${CONFIG.secretsPath}. Using default 'changeme' or env var.`);

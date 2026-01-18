@@ -270,16 +270,19 @@
  cursor: pointer;
  user-select: none;
  flex: 0 1 auto;
- padding: 0 20px;
+ padding: 0 16px;
  justify-content: center;
- border-radius: var(--md-sys-shape-corner-full);
+ border-radius: 8px; /* M3 small shape */
  border: 1px solid var(--md-sys-color-outline);
  background-color: var(--md-sys-color-surface-container);
  color: var(--md-sys-color-on-surface-variant);
  white-space: nowrap;
- height: 36px;
+ height: 32px;
+ min-height: 32px !important; /* Override global chip min-height */
  min-width: fit-content;
  font-weight: 500;
+ font-size: 14px;
+ line-height: 20px;
  }
  .filter-chip.active {
  background: var(--md-sys-color-secondary-container) !important;

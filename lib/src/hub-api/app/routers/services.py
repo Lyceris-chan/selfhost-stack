@@ -235,6 +235,161 @@ def trigger_check_updates(
     return {"success": True, "message": "Source update check initiated"}
 
 
+def perform_service_update(service: str):
+    """Executes the update logic for a single service (Synchronous)."""
+    try:
+        catalog = load_services()
+        strategy = get_update_strategy()
+        svc_meta = catalog.get(service, {})
+        allowed = svc_meta.get("allowed_strategies", [])
+        if allowed and strategy not in allowed:
+            strategy = allowed[0]
+
+        log_structured(
+            "INFO",
+            f"[Update Engine] Starting update for {service} (Strategy: {strategy})...",
+            "MAINTENANCE",
+        )
+
+        # 0. Rollback Preparation
+        rollback_enabled = (
+            os.environ.get("ROLLBACK_BACKUP_ENABLED", "false") == "true"
+        )
+        repo_path = f"/app/sources/{service}"
+        prev_hash = None
+        prev_image = None
+
+        # Capture Git state
+        if os.path.exists(os.path.join(repo_path, ".git")):
+            try:
+                res = subprocess.run(
+                    ["git", "rev-parse", "HEAD"],
+                    cwd=repo_path,
+                    capture_output=True,
+                    text=True,
+                )
+                if res.returncode == 0:
+                    prev_hash = res.stdout.strip()
+            except Exception:
+                pass
+
+        # Capture Image state
+        try:
+            c_name = f"{settings.CONTAINER_PREFIX}{service}"
+            res = subprocess.run(
+                ["docker", "inspect", "--format", "{{.Image}}", c_name],
+                capture_output=True,
+                text=True,
+            )
+            if res.returncode == 0:
+                prev_image = res.stdout.strip()
+        except Exception:
+            pass
+
+        if rollback_enabled and (prev_hash or prev_image):
+            try:
+                state_file = f"/app/data/rollback_{service}.json"
+                history = []
+                if os.path.exists(state_file):
+                    try:
+                        with open(state_file, "r") as f:
+                            old_state = json.load(f)
+                            history = old_state.get("history", [])
+                    except Exception:
+                        pass
+
+                new_entry = {"timestamp": datetime.now().isoformat()}
+                if prev_hash:
+                    new_entry["hash"] = prev_hash
+                if prev_image:
+                    new_entry["image"] = prev_image
+
+                history.insert(0, new_entry)
+                history = history[:5]
+
+                with open(state_file, "w") as f:
+                    json.dump(
+                        {"hash": prev_hash or prev_image, "history": history}, f
+                    )
+
+                desc = prev_hash[:8] if prev_hash else prev_image[7:15]
+                log_structured(
+                    "INFO",
+                    f"[Rollback Engine] Saved previous state for {service}: {desc}",
+                    "MAINTENANCE",
+                )
+            except Exception as err:
+                log_structured(
+                    "ERROR",
+                    f"[Rollback Engine] Failed to save state: {err}",
+                    "MAINTENANCE",
+                )
+
+        # 1. Backup
+        run_command(["/usr/local/bin/migrate.sh", service, "backup"], timeout=120)
+
+        # 2. Source Update
+        repo_path = f"/app/sources/{service}"
+        if os.path.exists(repo_path) and os.path.isdir(
+            os.path.join(repo_path, ".git")
+        ):
+            run_command(
+                ["git", "fetch", "--all", "--tags", "--prune"],
+                cwd=repo_path,
+                timeout=60,
+            )
+
+            # Logic for branch/tag selection
+            res_db = run_command(
+                ["git", "symbolic-ref", "refs/remotes/origin/HEAD"], cwd=repo_path
+            )
+            default_branch = res_db.stdout.strip().replace(
+                "refs/remotes/origin/", ""
+            )
+            if not default_branch:
+                default_branch = "master"  # Fallback
+
+            # Simply checkout default branch for now to guarantee functionality
+            run_command(["git", "checkout", "-f", default_branch], cwd=repo_path)
+            run_command(
+                ["git", "reset", "--hard", f"origin/{default_branch}"],
+                cwd=repo_path,
+            )
+            run_command(["git", "pull"], cwd=repo_path)
+
+            if os.path.exists("/app/patches.sh"):
+                run_command(["/app/patches.sh", service])
+
+        # 3. Rebuild
+        run_command(
+            ["docker", "compose", "-f", "/app/docker-compose.yml", "pull", service],
+            timeout=300,
+        )
+        run_command(
+            [
+                "docker",
+                "compose",
+                "-f",
+                "/app/docker-compose.yml",
+                "up",
+                "-d",
+                "--build",
+                service,
+            ],
+            timeout=600,
+        )
+
+        log_structured(
+            "INFO", f"[Update Engine] {service} update completed.", "MAINTENANCE"
+        )
+    except Exception as err:
+        log_structured(
+            "ERROR",
+            f"[Update Engine] {service} update failed: {err}",
+            "MAINTENANCE",
+        )
+
+
 @router.post("/update-service")
 def update_single_service(
     req: ServiceUpdate,
@@ -256,157 +411,7 @@ def update_single_service(
         raise HTTPException(status_code=400, detail="Invalid service name")
 
     def _run_update():
-        try:
-            catalog = load_services()
-            strategy = get_update_strategy()
-            svc_meta = catalog.get(service, {})
-            allowed = svc_meta.get("allowed_strategies", [])
-            if allowed and strategy not in allowed:
-                strategy = allowed[0]
-
-            log_structured(
-                "INFO",
-                f"[Update Engine] Starting update for {service} (Strategy: {strategy})...",
-                "MAINTENANCE",
-            )
-
-            # 0. Rollback Preparation
-            rollback_enabled = (
-                os.environ.get("ROLLBACK_BACKUP_ENABLED", "false") == "true"
-            )
-            repo_path = f"/app/sources/{service}"
-            prev_hash = None
-            prev_image = None
-
-            # Capture Git state
-            if os.path.exists(os.path.join(repo_path, ".git")):
-                try:
-                    res = subprocess.run(
-                        ["git", "rev-parse", "HEAD"],
-                        cwd=repo_path,
-                        capture_output=True,
-                        text=True,
-                    )
-                    if res.returncode == 0:
-                        prev_hash = res.stdout.strip()
-                except Exception:
-                    pass
-
-            # Capture Image state
-            try:
-                c_name = f"{settings.CONTAINER_PREFIX}{service}"
-                res = subprocess.run(
-                    ["docker", "inspect", "--format", "{{.Image}}", c_name],
-                    capture_output=True,
-                    text=True,
-                )
-                if res.returncode == 0:
-                    prev_image = res.stdout.strip()
-            except Exception:
-                pass
-
-            if rollback_enabled and (prev_hash or prev_image):
-                try:
-                    state_file = f"/app/data/rollback_{service}.json"
-                    history = []
-                    if os.path.exists(state_file):
-                        try:
-                            with open(state_file, "r") as f:
-                                old_state = json.load(f)
-                                history = old_state.get("history", [])
-                        except Exception:
-                            pass
-
-                    new_entry = {"timestamp": datetime.now().isoformat()}
-                    if prev_hash:
-                        new_entry["hash"] = prev_hash
-                    if prev_image:
-                        new_entry["image"] = prev_image
-
-                    history.insert(0, new_entry)
-                    history = history[:5]
-
-                    with open(state_file, "w") as f:
-                        json.dump(
-                            {"hash": prev_hash or prev_image, "history": history}, f
-                        )
-
-                    desc = prev_hash[:8] if prev_hash else prev_image[7:15]
-                    log_structured(
-                        "INFO",
-                        f"[Rollback Engine] Saved previous state for {service}: {desc}",
-                        "MAINTENANCE",
-                    )
-                except Exception as err:
-                    log_structured(
-                        "ERROR",
-                        f"[Rollback Engine] Failed to save state: {err}",
-                        "MAINTENANCE",
-                    )
-
-            # 1. Backup
-            run_command(["/usr/local/bin/migrate.sh", service, "backup"], timeout=120)
-
-            # 2. Source Update
-            repo_path = f"/app/sources/{service}"
-            if os.path.exists(repo_path) and os.path.isdir(
-                os.path.join(repo_path, ".git")
-            ):
-                run_command(
-                    ["git", "fetch", "--all", "--tags", "--prune"],
-                    cwd=repo_path,
-                    timeout=60,
-                )
-
-                # Logic for branch/tag selection
-                res_db = run_command(
-                    ["git", "symbolic-ref", "refs/remotes/origin/HEAD"], cwd=repo_path
-                )
-                default_branch = res_db.stdout.strip().replace(
-                    "refs/remotes/origin/", ""
-                )
-                if not default_branch:
-                    default_branch = "master"  # Fallback
-
-                # Simply checkout default branch for now to guarantee functionality
-                run_command(["git", "checkout", "-f", default_branch], cwd=repo_path)
-                run_command(
-                    ["git", "reset", "--hard", f"origin/{default_branch}"],
-                    cwd=repo_path,
-                )
-                run_command(["git", "pull"], cwd=repo_path)
-
-                if os.path.exists("/app/patches.sh"):
-                    run_command(["/app/patches.sh", service])
-
-            # 3. Rebuild
-            run_command(
-                ["docker", "compose", "-f", "/app/docker-compose.yml", "pull", service],
-                timeout=300,
-            )
-            run_command(
-                [
-                    "docker",
-                    "compose",
-                    "-f",
-                    "/app/docker-compose.yml",
-                    "up",
-                    "-d",
-                    "--build",
-                    service,
-                ],
-                timeout=600,
-            )
-
-            log_structured(
-                "INFO", f"[Update Engine] {service} update completed.", "MAINTENANCE"
-            )
-        except Exception as err:
-            log_structured(
-                "ERROR",
-                f"[Update Engine] {service} update failed: {err}",
-                "MAINTENANCE",
-            )
+        perform_service_update(service)
 
     background_tasks.add_task(_run_update)
     return {"success": True, "message": f"Update for {service} started in background"}
@@ -582,6 +587,7 @@ def batch_update_services(
             log_structured(
                 "INFO", f"[Update Engine] Processing {svc}...", "MAINTENANCE"
             )
+            perform_service_update(svc)
 
     background_tasks.add_task(_run_batch)
     return {"success": True, "message": "Batch update started"}

@@ -1071,6 +1071,8 @@ append_watchtower() {
             - /var/run/docker.sock:/var/run/docker.sock
         networks:
             - mgmt
+        depends_on:
+            hub-api: {condition: service_healthy}
         environment:
             - "WATCHTOWER_CLEANUP=true"
             - "WATCHTOWER_POLL_INTERVAL=3600"
