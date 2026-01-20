@@ -1,0 +1,727 @@
+{
+  "summary": {
+    "total": 26,
+    "passed": 25,
+    "failed": 1,
+    "skipped": 0,
+    "duration": "122.74s",
+    "passRate": "96.2%"
+  },
+  "services": {
+    "dashboard": {
+      "name": "dashboard",
+      "container": "hub-dashboard",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 791,
+          "message": "Loaded successfully in 791ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 24
+      },
+      "overall": "passed",
+      "consoleErrors": 1,
+      "consoleLogs": [
+        {
+          "type": "pageerror",
+          "text": "Unexpected end of input",
+          "stack": "SyntaxError: Unexpected end of input",
+          "timestamp": 1768768339391
+        }
+      ]
+    },
+    "api": {
+      "name": "api",
+      "container": "hub-api",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 10
+      },
+      "overall": "skipped",
+      "consoleErrors": 0
+    },
+    "adguard": {
+      "name": "adguard",
+      "container": "hub-adguard",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 2366,
+          "message": "Loaded successfully in 2366ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 5,
+            "content": "2026/01/18 20:30:53.117255 [info] dhcpd: warning: creating dhcpv4 server err=\"dhcpv4: invalid IP is not an IPv4 address\""
+          },
+          {
+            "line": 9,
+            "content": "2026/01/18 20:30:53.456075 [info] warning: private rdns resolution failed; disabling err=\"preparing resolvers: no upstream specified\""
+          }
+        ],
+        "totalLines": 49
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "breezewiki": {
+      "name": "breezewiki",
+      "container": "hub-breezewiki",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 562,
+          "message": "Loaded successfully in 562ms"
+        },
+        "wikiLookup": {
+          "success": false,
+          "error": "Navigation timeout of 60000 ms exceeded",
+          "message": "Test failed: Navigation timeout of 60000 ms exceeded"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 5
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "redlib": {
+      "name": "redlib",
+      "container": "hub-redlib",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1509,
+          "message": "Loaded successfully in 1509ms"
+        },
+        "subreddit": {
+          "success": true,
+          "message": "Subreddit loaded"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 1,
+            "content": " ERROR redlib::client > Got an invalid response from reddit expected value at line 1 column 1. Status code: 403 Forbidden"
+          },
+          {
+            "line": 4,
+            "content": "Please report this error with the above information."
+          }
+        ],
+        "warnings": [],
+        "totalLines": 8
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "scribe": {
+      "name": "scribe",
+      "container": "hub-scribe",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 821,
+          "message": "Loaded successfully in 821ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 5
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "anonymousoverflow": {
+      "name": "anonymousoverflow",
+      "container": "hub-anonymousoverflow",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 826,
+          "message": "Loaded successfully in 826ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 1
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "searxng": {
+      "name": "searxng",
+      "container": "hub-searxng",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 619,
+          "message": "Loaded successfully in 619ms"
+        },
+        "search": {
+          "success": true,
+          "message": "Search results found"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 9,
+            "content": "2026-01-18 20:31:18,271 ERROR:searx.engines: loading engine ahmia failed: set engine to inactive!"
+          },
+          {
+            "line": 10,
+            "content": "2026-01-18 20:31:18,605 ERROR:searx.engines: loading engine torch failed: set engine to inactive!"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 11,
+            "content": "2026-01-18 20:31:18,757 WARNING:searx.botdetection.config: missing config file: /etc/searxng/limiter.toml"
+          }
+        ],
+        "totalLines": 13
+      },
+      "overall": "passed",
+      "consoleErrors": 1,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768768423665
+        }
+      ]
+    },
+    "rimgo": {
+      "name": "rimgo",
+      "container": "hub-rimgo",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 820,
+          "message": "Loaded successfully in 820ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 11
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "cobalt": {
+      "name": "cobalt",
+      "container": "hub-cobalt-web",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 826,
+          "message": "Loaded successfully in 826ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 20
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "memos": {
+      "name": "memos",
+      "container": "hub-memos",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1204,
+          "message": "Loaded successfully in 1204ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 1,
+            "content": "2026/01/18 20:30:52 WARN failed to find migration history in pre-migrate error=\"SQL logic error: no such table: migration_history (1)\""
+          }
+        ],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "2026/01/18 20:30:52 WARN failed to find migration history in pre-migrate error=\"SQL logic error: no such table: migration_history (1)\""
+          }
+        ],
+        "totalLines": 25
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "portainer": {
+      "name": "portainer",
+      "container": "hub-portainer",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1604,
+          "message": "Loaded successfully in 1604ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 14
+      },
+      "overall": "passed",
+      "consoleErrors": 3,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "The Content-Security-Policy directive name 'https://www.gstatic.com/recaptcha/' contains one or more invalid characters. Only ASCII alphanumeric characters or dashes '-' are allowed in directive names.",
+          "timestamp": 1768768433426
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1768768434436
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "timestamp": 1768768434446
+        }
+      ]
+    },
+    "wg-easy": {
+      "name": "wg-easy",
+      "container": "hub-wg-easy",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 728,
+          "message": "Loaded successfully in 728ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 13
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "odido-booster": {
+      "name": "odido-booster",
+      "container": "hub-odido-booster",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1353,
+          "message": "Loaded successfully in 1353ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 17,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 22,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 23,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 24,
+            "content": "ERROR:odido.service:All renewal attempts failed - check Odido API credentials and network connectivity"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 2,
+            "content": "/app/app/main.py:43: DeprecationWarning: "
+          },
+          {
+            "line": 9,
+            "content": "/app/app/main.py:48: DeprecationWarning: "
+          }
+        ],
+        "totalLines": 30
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "vert": {
+      "name": "vert",
+      "container": "hub-vert",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1858,
+          "message": "Loaded successfully in 1858ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 26
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "immich": {
+      "name": "immich",
+      "container": "hub-immich-server",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 820,
+          "message": "Loaded successfully in 820ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "wikiless": {
+      "name": "wikiless",
+      "container": "hub-wikiless",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1121,
+          "message": "Loaded successfully in 1121ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 9
+      },
+      "overall": "passed",
+      "consoleErrors": 3,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Refused to apply style from 'http://10.0.0.42:8180/w/load.php?lang=en&modules=ext.tmh.player.styles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cskins.vector.styles.legacy%7Cwikibase.client.init&only=styles&skin=vector' because its MIME type ('text/plain') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+          "timestamp": 1768768447574
+        },
+        {
+          "type": "error",
+          "text": "Refused to apply style from 'http://10.0.0.42:8180/w/load.php?lang=en&modules=site.styles&only=styles&skin=vector' because its MIME type ('text/plain') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+          "timestamp": 1768768447583
+        },
+        {
+          "type": "error",
+          "text": "Refused to apply style from 'http://10.0.0.42:8180/w/load.php?lang=en&modules=ext.tmh.player.styles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cskins.vector.styles.legacy%7Cwikibase.client.init&only=styles&skin=vector' because its MIME type ('text/plain') is not a supported stylesheet MIME type, and strict MIME checking is enabled.",
+          "timestamp": 1768768447606
+        }
+      ]
+    },
+    "unbound": {
+      "name": "unbound",
+      "container": "hub-unbound",
+      "tests": {
+        "dns": {
+          "success": true,
+          "message": "DNS resolution successful"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "[1768768252] unbound[1:0] warning: so-sndbuf 4194304 was not granted. Got 425984. To fix: start with root permissions(linux) or sysctl bigger net.core.wmem_max(linux) or kern.ipc.maxsockbuf(bsd) value"
+          }
+        ],
+        "totalLines": 2
+      },
+      "overall": "passed"
+    },
+    "gluetun": {
+      "name": "gluetun",
+      "container": "hub-gluetun",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 30,
+            "content": "2026-01-18T20:30:54Z INFO [wireguard] Wireguard setup is complete. Note Wireguard is a silent protocol and it may or may not work, without giving any error message. Typically i/o timeout errors indica"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 47,
+            "content": "2026-01-18T20:31:21Z WARN [http server] route GET /v1/vpn/status is unprotected by default, please set up authentication following the documentation at https://github.com/qdm12/gluetun-wiki/blob/main/"
+          },
+          {
+            "line": 49,
+            "content": "2026-01-18T20:31:22Z WARN [http server] route GET /v1/publicip/ip is unprotected by default, please set up authentication following the documentation at https://github.com/qdm12/gluetun-wiki/blob/main"
+          }
+        ],
+        "totalLines": 51
+      },
+      "overall": "passed"
+    },
+    "vertd": {
+      "name": "vertd",
+      "container": "hub-vertd",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 3,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] *******"
+          },
+          {
+            "line": 4,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] you're running vertd on a docker container, but no GPU was detected."
+          },
+          {
+            "line": 5,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] this usually is because you're running Docker under WSL or because"
+          },
+          {
+            "line": 6,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] you are not passing the GPU device correctly."
+          },
+          {
+            "line": 7,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] "
+          },
+          {
+            "line": 8,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] if this doesn't seem right, make sure to provide the following info when"
+          },
+          {
+            "line": 9,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] asking for help:"
+          },
+          {
+            "line": 10,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] - adapter name: llvmpipe (LLVM 20.1.2, 256 bits)"
+          },
+          {
+            "line": 11,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] - adapter vendor: 0x10005"
+          },
+          {
+            "line": 12,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] - backend: vulkan"
+          },
+          {
+            "line": 13,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] - device ID: 0"
+          },
+          {
+            "line": 14,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] - device type: Cpu"
+          },
+          {
+            "line": 15,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] - driver: llvmpipe"
+          },
+          {
+            "line": 16,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] - driver info: Mesa 25.0.7-0ubuntu0.24.04.2 (LLVM 20.1.2)"
+          },
+          {
+            "line": 17,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] "
+          },
+          {
+            "line": 18,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] vertd will fall back to CPU rendering to ensure conversions can still proceed."
+          },
+          {
+            "line": 19,
+            "content": "[2026-01-18T20:30:57Z WARN  vertd::converter::gpu] *******"
+          }
+        ],
+        "totalLines": 22
+      },
+      "overall": "passed"
+    },
+    "watchtower": {
+      "name": "watchtower",
+      "container": "hub-watchtower",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 6,
+            "content": "time=\"2026-01-18T20:30:53Z\" level=error msg=\"Failed to send shoutrrr notification\" error=\"an error occurred while sending notification to generic webhook: Post \\\"http://hub-api:55555/watchtower?token="
+          }
+        ],
+        "warnings": [],
+        "totalLines": 7
+      },
+      "overall": "passed"
+    },
+    "invidious-db": {
+      "name": "invidious-db",
+      "container": "hub-invidious-db",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "passed"
+    },
+    "wikiless-redis": {
+      "name": "wikiless-redis",
+      "container": "hub-wikiless_redis",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "1:C 18 Jan 2026 20:30:58.764 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures w"
+          },
+          {
+            "line": 4,
+            "content": "1:C 18 Jan 2026 20:30:58.764 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf"
+          }
+        ],
+        "totalLines": 10
+      },
+      "overall": "passed"
+    },
+    "searxng-redis": {
+      "name": "searxng-redis",
+      "container": "hub-searxng-redis",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "1:C 18 Jan 2026 20:30:52.038 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures w"
+          }
+        ],
+        "totalLines": 10
+      },
+      "overall": "passed"
+    },
+    "immich-db": {
+      "name": "immich-db",
+      "container": "hub-immich-db",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 49,
+            "content": "2026-01-18 20:31:22.917 UTC [105] ERROR:  relation \"system_metadata\" does not exist at character 21"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 6,
+            "content": "initdb: warning: enabling \"trust\" authentication for local connections"
+          }
+        ],
+        "totalLines": 51
+      },
+      "overall": "passed"
+    },
+    "immich-redis": {
+      "name": "immich-redis",
+      "container": "hub-immich-redis",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "1:M 18 Jan 2026 20:30:52.974 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures w"
+          },
+          {
+            "line": 4,
+            "content": "1:M 18 Jan 2026 20:30:52.975 # Warning: no config file specified, using the default config. In order to specify a config file use valkey-server /path/to/valkey.conf"
+          }
+        ],
+        "totalLines": 10
+      },
+      "overall": "passed"
+    },
+    "immich-ml": {
+      "name": "immich-ml",
+      "container": "hub-immich-ml",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 11
+      },
+      "overall": "passed"
+    }
+  },
+  "timestamp": "2026-01-18T20:34:21.579Z"
+}

@@ -6,7 +6,6 @@ The ZimaOS Privacy Hub is a comprehensive, self-hosted privacy infrastructure
 designed for digital independence. Route your traffic through secure VPNs,
 eliminate tracking with isolated frontends, and manage everything from a unified **Material Design 3** dashboard.
 
-[TOC]
 
 ---
 

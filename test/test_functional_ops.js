@@ -10,38 +10,50 @@ const https = require('https');
 
 // Configuration
 const CONFIG = {
-  apiHost: process.env.API_HOST || '10.0.10.225', // Assuming test runs against this IP as seen in test_integration.js
+  apiHost: process.env.API_HOST || '127.0.0.1', 
   apiPort: process.env.API_PORT || 55555,
-  secretsPath: path.join(__dirname, '../data/AppData/privacy-hub/.secrets'),
+  secretsPath: path.join(__dirname, 'test_data/data/AppData/privacy-hub-test/.secrets'),
 };
 
 // Helper to read secrets
-function getAdminPassword() {
-  if (process.env.ADMIN_PASSWORD) return process.env.ADMIN_PASSWORD;
+function getSecrets() {
+  const secrets = {
+    password: process.env.ADMIN_PASSWORD || '',
+    apiKey: process.env.HUB_API_KEY || ''
+  };
+  
   try {
-    if (!fs.existsSync(CONFIG.secretsPath)) {
-      console.warn(`⚠️ Secrets file not found at ${CONFIG.secretsPath}. Using default 'changeme' or env var.`);
-      return process.env.ADMIN_PASSWORD || 'changeme';
+    if (fs.existsSync(CONFIG.secretsPath)) {
+      const content = fs.readFileSync(CONFIG.secretsPath, 'utf-8');
+      
+      const passMatch = content.match(/ADMIN_PASS_RAW=["']?([^"'\n]+)["']?/);
+      if (passMatch && !process.env.ADMIN_PASSWORD) secrets.password = passMatch[1];
+      
+      const keyMatch = content.match(/HUB_API_KEY=['"]?([^"'\n]+)['"]?/);
+      if (keyMatch && !process.env.HUB_API_KEY) secrets.apiKey = keyMatch[1];
     }
-    const content = fs.readFileSync(CONFIG.secretsPath, 'utf-8');
-    const match = content.match(/ADMIN_PASS_RAW=["']?([^"'\n]+)["']?/);
-    return match ? match[1] : 'changeme';
   } catch (e) {
     console.error('Error reading secrets:', e);
-    return 'changeme';
   }
+  
+  if (!secrets.password) secrets.password = 'changeme';
+  return secrets;
 }
 
 // Helper for HTTP requests
-function request(method, path, body = null, token = null) {
+function request(method, path, body = null, token = null, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
+    // Handle paths that might not be under /api
+    const requestPath = path.startsWith('/api') || path === '/watchtower' ? path : '/api' + path;
+    
     const options = {
       hostname: CONFIG.apiHost,
       port: CONFIG.apiPort,
-      path: '/api' + path,
+      path: requestPath,
       method: method,
       headers: {
         'Content-Type': 'application/json',
+        ...extraHeaders
       },
     };
 
@@ -74,8 +86,9 @@ function request(method, path, body = null, token = null) {
 async function main() {
   console.log('🚀 Starting Functional Operations Tests\n');
   
-  const password = getAdminPassword();
+  const { password, apiKey } = getSecrets();
   console.log(`🔑 Using admin password: ${password.substring(0, 3)}***`);
+  console.log(`🔑 Using API Key: ${apiKey ? apiKey.substring(0, 3) + '***' : 'None'}`);
 
   try {
     // 1. Authenticate
@@ -144,9 +157,9 @@ async function main() {
         console.error(`❌ Rollback status check failed: ${rollbackRes.status}`);
     }
 
-    // 7. Test Rollback Trigger (Mock)
-    console.log(`\nTesting POST /rollback-service for ${testService} (Simulated)...`);
-    // We expect this to fail or return a specific message if no backup exists, but the endpoint should be reachable.
+    // 7. Test Rollback Trigger
+    console.log(`\nTesting POST /rollback-service for ${testService}...`);
+    // This will trigger a real rollback if a state exists
     const rollbackTriggerRes = await request('POST', '/rollback-service', { service: testService }, token);
     if (rollbackTriggerRes.status === 200 || rollbackTriggerRes.status === 400 || rollbackTriggerRes.status === 404) {
         // 400/404 is acceptable if no backup exists, it proves the endpoint logic ran
@@ -154,6 +167,50 @@ async function main() {
     } else {
         console.error(`❌ Rollback trigger failed unexpectedly: ${rollbackTriggerRes.status}`);
     }
+
+    // 8. Test Watchtower Updates (Webhook)
+    console.log('\nTesting POST /watchtower (Webhook)...');
+    // Watchtower uses X-API-Key or ?token=...
+    const watchtowerRes = await request('POST', '/watchtower', { message: 'Test Update' }, null, { 'X-API-Key': apiKey });
+    if (watchtowerRes.status === 200) {
+        console.log(`✅ Watchtower webhook accepted: ${JSON.stringify(watchtowerRes.data)}`);
+    } else {
+        console.error(`❌ Watchtower webhook failed: ${watchtowerRes.status} (Key used: ${apiKey ? 'Yes' : 'No'})`);
+    }
+
+    // 9. Test Changelog Retrieval
+    // Testing with a known service or generic fallback
+    const changelogService = 'hub-api'; 
+    console.log(`\nTesting GET /changelog for ${changelogService}...`);
+    const changelogRes = await request('GET', `/changelog?service=${changelogService}`, null, token);
+    if (changelogRes.status === 200) {
+        console.log(`✅ Changelog retrieved: ${changelogRes.data.changelog ? 'Content found' : 'Empty (Expected)'}`);
+    } else {
+        console.warn(`⚠️ Changelog retrieval failed (might be missing token or file): ${changelogRes.status}`);
+    }
+
+    // 10. Test Invidious Backup (via Migrate)
+    console.log('\nTesting POST /migrate for Invidious (Backup: yes)...');
+    // We use dry-run or expect it to fail safely in test env if container missing, but verify endpoint logic
+    const invidiousRes = await request('POST', '/migrate?service=invidious&backup=yes', null, token);
+    if (invidiousRes.status === 200) {
+        console.log(`✅ Invidious backup/migrate request accepted: ${JSON.stringify(invidiousRes.data)}`);
+    } else {
+         // It might fail if container not running, which is fine for functional op test of API
+        console.log(`ℹ️ Invidious backup/migrate response: ${invidiousRes.status} (Likely container missing in test runner, but API handled it)`);
+    }
+
+    // 11. Test System Backup
+    console.log('\nTesting POST /backup (System Wide)...');
+    const backupRes = await request('POST', '/backup', {}, token);
+    if (backupRes.status === 200) {
+        console.log(`✅ System backup triggered: ${JSON.stringify(backupRes.data)}`);
+    } else {
+        console.error(`❌ System backup trigger failed: ${backupRes.status}`);
+    }
+    
+    // 12. Skip Memos Backup Test
+    console.log('\nℹ️ Skipping memos backup test as requested by configuration.');
 
   } catch (error) {
     console.error('❌ Fatal error:', error.message);

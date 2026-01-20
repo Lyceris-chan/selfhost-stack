@@ -58,7 +58,7 @@ except Exception:
         networks:
             - frontend
             - mgmt
-        ports: ["${LAN_IP}:${PORT_API}:55555"]
+        ports: ["${PORT_API}:55555"]
         extra_hosts:
             - "host.docker.internal:host-gateway"
         volumes:
@@ -70,6 +70,7 @@ except Exception:
             - "${CERT_MONITOR_SCRIPT}:/usr/local/bin/cert-monitor.sh"
             - "${MIGRATE_SCRIPT}:/usr/local/bin/migrate.sh"
             - "$(realpath "$0"):/app/zima.sh:ro"
+            - "${SCRIPT_DIR}/lib:/app/lib:ro"
             - "${COMPOSE_FILE}:/app/docker-compose.yml:ro"
             - "${HISTORY_LOG}:/app/deployment.log"
             - "${SECRETS_FILE}:/app/.secrets"
@@ -92,6 +93,7 @@ except Exception:
             - "BASE_DIR=/app"
             - "PROJECT_ROOT=/app"
             - "UPDATE_STRATEGY=${UPDATE_STRATEGY}"
+            - "ROLLBACK_BACKUP_ENABLED=${ROLLBACK_BACKUP_ENABLED:-true}"
             - "LAN_IP=${LAN_IP}"
             - "WG_HOST=${LAN_IP}"
             - "DESEC_DOMAIN=${DESEC_DOMAIN}"

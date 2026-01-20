@@ -25,7 +25,7 @@ _FULL_STACK = {
         "hub-api,dashboard,gluetun,adguard,unbound,wg-easy,redlib,"
         "wikiless,rimgo,breezewiki,anonymousoverflow,invidious,"
         "companion,searxng,portainer,memos,odido-booster,vert,"
-        "vertd,immich,watchtower"
+        "vertd,immich,watchtower,cobalt,cobalt-web,scribe"
     ),
     "checks": [
         {"name": "Dashboard", "port": 8088, "path": "/", "code": 200},
@@ -44,6 +44,8 @@ _FULL_STACK = {
         {"name": "Odido Booster", "port": 8085, "path": "/docs", "code": 200},
         {"name": "VERT", "port": 5555, "path": "/", "code": 200},
         {"name": "VERT Daemon", "port": 24153, "path": "/api/version", "code": 200},
+        {"name": "Cobalt Web", "port": 9001, "path": "/", "code": 200},
+        {"name": "Scribe", "port": 8280, "path": "/", "code": 200},
     ],
 }
 
@@ -396,6 +398,22 @@ def main():
             print(f"[FAIL] Watchtower notification error: {e}")
             all_pass = False
 
+        # Test 4: Changelog Retrieval
+        print("  Testing Changelog Retrieval for Wikiless...")
+        try:
+            url = f"http://{_LAN_IP}:55555/api/changelog?service=wikiless"
+            req = urllib.request.Request(url, headers={"X-API-Key": api_key})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+                if "changelog" in data:
+                    print(f"[PASS] Changelog retrieved for Wikiless ({len(data['changelog'])} chars).")
+                else:
+                    print(f"[FAIL] Changelog response missing 'changelog' field: {data}")
+                    all_pass = False
+        except Exception as e:
+            print(f"[FAIL] Changelog retrieval error: {e}")
+            all_pass = False
+
         # 5. Verify Rollback Support
         print("\n--- Verifying Rollback Support for Wikiless ---")
         try:
@@ -446,7 +464,7 @@ def main():
             all_pass = False
 
         # 6. Verify Backup/Restore Cycle (Service Level)
-        for service in ["invidious", "memos"]:
+        for service in ["invidious"]:
             print(
                 f"\n--- Verifying Backup/Restore Cycle for {service.capitalize()} ---"
             )

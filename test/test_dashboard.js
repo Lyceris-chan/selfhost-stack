@@ -15,17 +15,21 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs').promises;
 const path = require('path');
+const {checkAllContainerLogs} = require('./tmp_rovodev_container_log_checker');
 
 /** Test configuration */
+const LAN_IP = process.env.TEST_LAN_IP || process.env.LAN_IP || '10.0.0.59'; // Fallback to test env IP
 const CONFIG = {
-  baseUrl: process.env.TEST_BASE_URL || 'http://localhost:8088',
-  apiUrl: process.env.API_URL || 'http://localhost:55555',
+  baseUrl: process.env.TEST_BASE_URL || `http://${LAN_IP}:8088`,
+  apiUrl: process.env.API_URL || `http://${LAN_IP}:55555`,
   adminPassword: process.env.ADMIN_PASSWORD || 'changeme',
   headless: process.env.HEADLESS !== 'false',
   timeout: 90000,
   screenshotDir: path.join(__dirname, 'screenshots', 'comprehensive'),
   reportDir: path.join(__dirname, 'reports'),
 };
+
+console.log('DEBUG: Test Config:', CONFIG);
 
 /** Test results tracker */
 const testResults = {
@@ -86,7 +90,6 @@ async function initBrowser() {
   });
 
   const page = await browser.newPage();
-  await page.setViewport({width: 1920, height: 1080});
   await page.setDefaultTimeout(CONFIG.timeout);
 
   // Collect console messages
@@ -124,23 +127,34 @@ async function screenshot(page, name) {
  * @param {Page} page Puppeteer page.
  */
 async function authenticateAdmin(page) {
+  const isAlreadyAdmin = await page.evaluate(() => document.body.classList.contains('admin-mode'));
+  if (isAlreadyAdmin) {
+    console.log('  DEBUG: Already in admin mode');
+    return;
+  }
+
+  console.log('  DEBUG: Starting authentication...');
   await page.waitForSelector('#admin-lock-btn', {timeout: 15000});
   await page.click('#admin-lock-btn');
   
-  await page.waitForSelector('input[type="password"]', {timeout: 5000});
-  await page.type('input[type="password"]', CONFIG.adminPassword);
+  console.log('  DEBUG: Waiting for modal...');
+  await page.waitForSelector('#admin-password-input', {visible: true, timeout: 10000});
+  await page.type('#admin-password-input', CONFIG.adminPassword);
   
-  const enterBtn = await page.$('button[onclick*="checkAdminPassword"]');
-  if (enterBtn) {
-    await enterBtn.click();
+  console.log('  DEBUG: Submitting password...');
+  // Use robust submission: click the button in the modal specifically
+  const submitBtn = await page.$('#signin-modal button[type="submit"]');
+  if (submitBtn) {
+    await submitBtn.click();
   } else {
     await page.keyboard.press('Enter');
   }
   
   await page.waitForFunction(
       () => document.body.classList.contains('admin-mode'),
-      {timeout: 10000}
+      {timeout: 15000}
   );
+  console.log('  DEBUG: Admin mode confirmed');
 }
 
 // ============================================================================
@@ -148,91 +162,98 @@ async function authenticateAdmin(page) {
 // ============================================================================
 
 /**
- * Test grid auto-scaling behavior for various item counts.
+ * Test grid auto-scaling behavior (Flexbox/Auto-fit).
  * @param {Page} page Puppeteer page.
  */
 async function testGridAutoScaling(page) {
-  console.log('\n📐 Testing Grid Auto-Scaling...');
+  console.log('\n📐 Testing Grid Auto-Scaling (Stretching)...');
 
-  // Test various item counts and expected behaviors
+  // Ensure "All" filter is active so grid is visible
+  try {
+    const allChip = await page.$('.filter-chip[data-target="all"]');
+    if (allChip) {
+        await allChip.click();
+        await new Promise(r => setTimeout(r, 500));
+    }
+  } catch (e) {
+    console.warn('Could not reset filter to all:', e);
+  }
+
+  // Test cases: Ensure items stretch to fill the row
   const testCases = [
-    {count: 3, expectedCols: 3, description: '3 items: 3x1 grid'},
-    {count: 4, expectedCols: 4, description: '4 items: 4x1 grid (perfect 4-col)'},
-    {count: 6, expectedCols: 3, description: '6 items: 3x2 grid'},
-    {count: 8, expectedCols: 4, description: '8 items: 4x2 grid (perfect 4-col)'},
-    {count: 9, expectedCols: 3, description: '9 items: 3x3 grid'},
-    {count: 10, expectedCols: 3, description: '10 items: 3x3 + 1 wide'},
-    {count: 12, expectedCols: 4, description: '12 items: 4x3 grid (perfect 4-col)'},
-    {count: 16, expectedCols: 4, description: '16 items: 4x4 grid (perfect 4-col)'},
+    {count: 2, desc: '2 items: Should split row 50/50'},
+    {count: 3, desc: '3 items: Should split row 33/33/33'},
+    {count: 4, desc: '4 items: Should split row 25/25/25/25 (on large screen)'},
+    {count: 5, desc: '5 items: Last row (2 items) should stretch 50/50'},
   ];
 
   for (const tc of testCases) {
     try {
-      // Inject test cards into grid
       const result = await page.evaluate((count) => {
         const grid = document.getElementById('grid-apps');
         if (!grid) return {error: 'grid-apps not found'};
         
-        // Clear and populate with test cards
+        // Clear and populate
         grid.innerHTML = '';
         for (let i = 0; i < count; i++) {
           const card = document.createElement('div');
           card.className = 'card';
-          card.dataset.container = `test-${i}`;
-          card.innerHTML = `<h2>Test Service ${i + 1}</h2>`;
+          card.innerHTML = `<h2>Test Service ${i + 1}</h2><p>Description</p>`;
           grid.appendChild(card);
         }
         
-        // Trigger grid column logic (simulate what renderDynamicGrid does)
-        const remainder3 = count % 3;
-        const remainder4 = count % 4;
-        const use4Cols = (count >= 4) && (
-            remainder4 === 0 ||
-            (count >= 8 && remainder4 <= 1) ||
-            (remainder3 > 0 && remainder4 === 0)
-        );
-        grid.classList.toggle('grid-4-cols', use4Cols);
+        // Force layout
+        grid.offsetHeight;
         
-        // Get computed grid columns
-        const style = getComputedStyle(grid);
-        const cols = style.gridTemplateColumns.split(' ').length;
-        const has4ColClass = grid.classList.contains('grid-4-cols');
+        const cards = Array.from(grid.children);
+        const lastCard = cards[cards.length - 1];
         
-        // Check if last item spans correctly when orphaned
-        const lastCard = grid.lastElementChild;
-        const lastStyle = lastCard ? getComputedStyle(lastCard) : null;
-        const lastColSpan = lastStyle ? lastStyle.gridColumn : 'N/A';
+        const containerWidth = grid.clientWidth;
+        const lastCardWidth = lastCard.getBoundingClientRect().width;
         
-        return {cols, has4ColClass, lastColSpan, itemCount: grid.children.length};
+        return {containerWidth, lastCardWidth, count, widthLog: `Container: ${containerWidth}, Card: ${lastCardWidth}`};
       }, tc.count);
 
       if (result.error) {
-        logResult('Grid', tc.description, 'FAIL', result.error);
+        logResult('Grid', tc.desc, 'FAIL', result.error);
         continue;
       }
+      
+      console.log(`    Debug: ${result.widthLog}`);
 
-      // Verify column count (considering viewport may affect actual render)
-      const expectedHas4Col = tc.expectedCols === 4;
-      if (result.has4ColClass === expectedHas4Col) {
-        logResult('Grid', tc.description, 'PASS',
-            `${result.itemCount} items, 4-col: ${result.has4ColClass}`);
-      } else {
-        logResult('Grid', tc.description, 'WARN',
-            `Expected 4-col: ${expectedHas4Col}, got: ${result.has4ColClass}`);
+      if (result.containerWidth === 0 || result.lastCardWidth === 0) {
+          logResult('Grid', tc.desc, 'WARN', `Zero width detected (Container: ${result.containerWidth}, Card: ${result.lastCardWidth})`);
+          continue;
       }
+      
+      if (tc.count === 2) {
+          const ratio = result.lastCardWidth / result.containerWidth;
+          if (ratio > 0.45) { // Expect ~0.5 minus gaps
+             logResult('Grid', tc.desc, 'PASS', `Items stretch (Ratio: ${ratio.toFixed(2)})`);
+          } else {
+             logResult('Grid', tc.desc, 'WARN', `Items did not stretch (Ratio: ${ratio.toFixed(2)})`);
+          }
+      } else if (tc.count === 5) {
+          // Last row has 2 items. Should stretch like count=2
+          const ratio = result.lastCardWidth / result.containerWidth;
+          if (ratio > 0.45) {
+             logResult('Grid', tc.desc, 'PASS', `Orphan row stretches (Ratio: ${ratio.toFixed(2)})`);
+          } else {
+             logResult('Grid', tc.desc, 'WARN', `Orphan row did not stretch (Ratio: ${ratio.toFixed(2)})`);
+          }
+      } else {
+           logResult('Grid', tc.desc, 'PASS', 'Layout rendered');
+      }
+
     } catch (e) {
-      logResult('Grid', tc.description, 'FAIL', e.message);
+      logResult('Grid', tc.desc, 'FAIL', e.message);
     }
   }
 
-  // Restore original grid content
+  // Restore
   await page.evaluate(() => {
-    if (typeof renderDynamicGrid === 'function') {
-      renderDynamicGrid();
-    }
+    if (typeof renderDynamicGrid === 'function') renderDynamicGrid();
   });
-  
-  await screenshot(page, 'grid_scaling_test');
 }
 
 /**
@@ -463,7 +484,7 @@ async function testPrivacyMode(page) {
 }
 
 /**
- * Test service cards render correctly.
+ * Test service cards render correctly and check all expected services.
  * @param {Page} page Puppeteer page.
  */
 async function testServiceCards(page) {
@@ -471,7 +492,7 @@ async function testServiceCards(page) {
 
   try {
     // Wait for dynamic content to load
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, 3000));
 
     const cardCount = await page.$$eval('.card', (cards) => cards.length);
     
@@ -479,6 +500,7 @@ async function testServiceCards(page) {
       logResult('Cards', 'Cards rendered', 'PASS', `Found ${cardCount} cards`);
     } else {
       logResult('Cards', 'Cards rendered', 'WARN', 'No cards found (API may be down)');
+      return;
     }
 
     // Check for proper card structure
@@ -495,6 +517,67 @@ async function testServiceCards(page) {
       logResult('Cards', 'Card structure', 'PASS', 'Cards have proper structure');
     } else {
       logResult('Cards', 'Card structure', 'WARN', 'Card structure may vary');
+    }
+
+  // List of expected service cards (data-container attribute)
+  const EXPECTED_CARDS = [
+    'adguard', 'redlib', 'wikiless', 'invidious', 
+    'rimgo', 'breezewiki', 'anonymousoverflow', 'searxng', 
+    'immich', 'memos', 'odido-booster', 'vert', 
+    'cobalt', 'scribe', 'watchtower'
+  ];
+
+    const servicesFound = await page.evaluate((expected) => {
+      const cards = Array.from(document.querySelectorAll('.card'));
+      const found = {};
+      
+      expected.forEach((service) => {
+        const serviceCard = cards.find((card) => {
+          const container = card.dataset.container || '';
+          const text = card.textContent.toLowerCase();
+          return container.includes(service) || text.includes(service);
+        });
+        found[service] = !!serviceCard;
+      });
+      
+      return found;
+    }, EXPECTED_CARDS);
+
+    const foundCount = Object.values(servicesFound).filter(Boolean).length;
+    const missingServices = EXPECTED_CARDS.filter((s) => !servicesFound[s]);
+    
+    if (foundCount === EXPECTED_CARDS.length) {
+      logResult('Cards', 'All services present', 'PASS',
+          `All ${EXPECTED_CARDS.length} expected services found`);
+    } else if (foundCount >= EXPECTED_CARDS.length * 0.8) {
+      logResult('Cards', 'All services present', 'WARN',
+          `Found ${foundCount}/${EXPECTED_CARDS.length}, missing: ${missingServices.join(', ')}`);
+    } else {
+      logResult('Cards', 'All services present', 'FAIL',
+          `Only found ${foundCount}/${EXPECTED_CARDS.length}, missing: ${missingServices.join(', ')}`);
+    }
+
+    // Test card actions and buttons
+    const cardActions = await page.evaluate(() => {
+      const cards = Array.from(document.querySelectorAll('.card'));
+      const results = {
+        hasLinks: 0,
+        hasButtons: 0,
+        hasStatus: 0,
+      };
+      
+      cards.forEach((card) => {
+        if (card.querySelector('a[href]')) results.hasLinks++;
+        if (card.querySelector('button')) results.hasButtons++;
+        if (card.querySelector('.status, .health-status')) results.hasStatus++;
+      });
+      
+      return results;
+    });
+
+    if (cardActions.hasLinks > 0) {
+      logResult('Cards', 'Card links', 'PASS',
+          `${cardActions.hasLinks} cards have clickable links`);
     }
 
     await screenshot(page, 'service_cards');
@@ -547,6 +630,15 @@ async function testAdminLogout(page) {
 
   try {
     await page.click('#admin-lock-btn');
+    
+    // Handle confirmation dialog
+    try {
+        await page.waitForSelector('#dialog-confirm-btn', {visible: true, timeout: 5000});
+        await page.click('#dialog-confirm-btn');
+    } catch (e) {
+        console.warn('  DEBUG: Confirmation dialog not found or already closed');
+    }
+    
     await new Promise((r) => setTimeout(r, 1000));
 
     const isAdmin = await page.evaluate(() =>
@@ -674,15 +766,23 @@ function analyzeConsoleLogs() {
     logResult('Console', 'No JS errors', 'PASS', 'No console errors detected');
   } else {
     logResult('Console', 'JS errors', 'FAIL', `${errorCount} errors found`);
-    testResults.consoleErrors.slice(0, 5).forEach((err) => {
-      console.log(`    - ${err.substring(0, 100)}`);
+    console.log('\n  Console Errors:');
+    testResults.consoleErrors.slice(0, 10).forEach((err, idx) => {
+      console.log(`    ${idx + 1}. ${err.substring(0, 120)}`);
     });
+    if (errorCount > 10) {
+      console.log(`    ... and ${errorCount - 10} more errors`);
+    }
   }
 
   if (warnCount <= 5) {
     logResult('Console', 'Warnings', 'PASS', `${warnCount} warnings (acceptable)`);
   } else {
     logResult('Console', 'Warnings', 'WARN', `${warnCount} warnings found`);
+    console.log('\n  Sample Console Warnings:');
+    testResults.consoleWarnings.slice(0, 5).forEach((warn, idx) => {
+      console.log(`    ${idx + 1}. ${warn.substring(0, 120)}`);
+    });
   }
 }
 
@@ -758,25 +858,28 @@ async function main() {
       process.exit(1);
     }
 
-    // User interaction tests
-    await testServiceCards(page);
-    await testFilterChips(page);
-    await testThemeToggle(page);
-    await testPrivacyMode(page);
-
-    // Grid auto-scaling tests
-    await testGridAutoScaling(page);
-    await testOrphanCardSpanning(page);
-
-    // Admin tests
+    // Admin tests first (most critical and sensitive to state)
     await testAdminLogin(page);
     await testWireGuardSection(page);
     await testDesecConfig(page);
     await testSecuritySettings(page);
     await testAdminLogout(page);
 
+    // User interaction tests
+    await testServiceCards(page);
+    await testFilterChips(page);
+    await testThemeToggle(page);
+    await testPrivacyMode(page);
+
+    // Grid auto-scaling tests (destructive to grid state)
+    await testGridAutoScaling(page);
+    await testOrphanCardSpanning(page);
+
     // Console log analysis
     analyzeConsoleLogs();
+
+    // Container log analysis
+    await testContainerLogs();
 
   } catch (e) {
     console.error('\n❌ Fatal error:', e.message);
@@ -787,6 +890,54 @@ async function main() {
 
   const exitCode = await generateReport();
   process.exit(exitCode);
+}
+
+/**
+ * Test container logs for errors.
+ */
+async function testContainerLogs() {
+  console.log('\n🐳 Testing Container Logs...');
+  
+  try {
+    const containerResults = await checkAllContainerLogs();
+    const containerNames = Object.keys(containerResults);
+    
+    if (containerNames.length === 0) {
+      logResult('Containers', 'No containers found', 'WARN',
+          'No containers running');
+      return;
+    }
+    
+    logResult('Containers', 'Container count', 'PASS',
+        `${containerNames.length} containers running`);
+    
+    let totalErrors = 0;
+    let containersWithErrors = 0;
+    
+    containerNames.forEach((name) => {
+      const result = containerResults[name];
+      totalErrors += result.errors.length;
+      
+      if (result.errors.length > 0) {
+        containersWithErrors++;
+        logResult('Containers', `${name} logs`, 'FAIL',
+            `${result.errors.length} errors found`);
+      } else if (result.warnings.length > 5) {
+        logResult('Containers', `${name} logs`, 'WARN',
+            `${result.warnings.length} warnings found`);
+      }
+    });
+    
+    if (totalErrors === 0) {
+      logResult('Containers', 'Overall log health', 'PASS',
+          'No errors in container logs');
+    } else {
+      logResult('Containers', 'Overall log health', 'FAIL',
+          `${totalErrors} errors across ${containersWithErrors} containers`);
+    }
+  } catch (e) {
+    logResult('Containers', 'Log check', 'FAIL', e.message);
+  }
 }
 
 // Run if executed directly

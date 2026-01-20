@@ -132,7 +132,6 @@ main() {
 
 	setup_static_assets
 
-	log_info "Pre-pulling core infrastructure images sequentially..."
 	resolve_service_tags
 	pull_critical_images
 

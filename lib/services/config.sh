@@ -12,8 +12,8 @@ generate_scripts() {
 	if [[ -f "${SCRIPT_DIR}/lib/templates/migrate.sh" ]]; then
 		safe_replace "${SCRIPT_DIR}/lib/templates/migrate.sh" "${MIGRATE_SCRIPT}" \
 			"__CONTAINER_PREFIX__" "${CONTAINER_PREFIX}" \
-			"__INVIDIOUS_DB_PASSWORD__" "${INVIDIOUS_DB_PASSWORD}" \
-			"__IMMICH_DB_PASSWORD__" "${IMMICH_DB_PASSWORD}"
+			"__INVIDIOUS_DB_PASSWORD__" "${INVIDIOUS_DB_PASSWORD:-}" \
+			"__IMMICH_DB_PASSWORD__" "${IMMICH_DB_PASSWORD:-}"
 		chmod +x "${MIGRATE_SCRIPT}"
 	else
 		log_warn "templates/migrate.sh not found at ${SCRIPT_DIR}/lib/templates/migrate.sh"

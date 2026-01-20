@@ -48,7 +48,6 @@ resolve_service_tags() {
 #   0 on success, 1 on failure.
 #######################################
 pull_critical_images() {
-	log_info "Pre-pulling core infrastructure images sequentially..."
 	local img
 	for img in ${CRITICAL_IMAGES}; do
 		if ! pull_with_retry "${img}"; then

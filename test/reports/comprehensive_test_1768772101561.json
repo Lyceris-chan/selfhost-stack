@@ -1,0 +1,147 @@
+{
+  "timestamp": "2026-01-18T21:35:01.561Z",
+  "duration": "38.83s",
+  "summary": {
+    "total": 33,
+    "passed": 28,
+    "failed": 2,
+    "warnings": 3,
+    "passRate": "84.8%"
+  },
+  "tests": {
+    "Load: Dashboard accessible": {
+      "status": "PASS",
+      "message": "Status: 200"
+    },
+    "Load: Core elements present": {
+      "status": "PASS",
+      "message": "Container and filter bar found"
+    },
+    "Cards: Cards rendered": {
+      "status": "PASS",
+      "message": "Found 16 cards"
+    },
+    "Cards: Card structure": {
+      "status": "PASS",
+      "message": "Cards have proper structure"
+    },
+    "Filters: all chip": {
+      "status": "PASS",
+      "message": "Filter works correctly"
+    },
+    "Filters: apps chip": {
+      "status": "PASS",
+      "message": "Filter works correctly"
+    },
+    "Filters: system chip": {
+      "status": "PASS",
+      "message": "Filter works correctly"
+    },
+    "Filters: dns chip": {
+      "status": "PASS",
+      "message": "Filter works correctly"
+    },
+    "Filters: tools chip": {
+      "status": "PASS",
+      "message": "Filter works correctly"
+    },
+    "Theme: Toggle works": {
+      "status": "WARN",
+      "message": "Theme did not change"
+    },
+    "Privacy: Mode enabled": {
+      "status": "WARN",
+      "message": "Privacy class not applied"
+    },
+    "Grid: 3 items: 3x1 grid": {
+      "status": "PASS",
+      "message": "3 items, 4-col: false"
+    },
+    "Grid: 4 items: 4x1 grid (perfect 4-col)": {
+      "status": "PASS",
+      "message": "4 items, 4-col: true"
+    },
+    "Grid: 6 items: 3x2 grid": {
+      "status": "PASS",
+      "message": "6 items, 4-col: false"
+    },
+    "Grid: 8 items: 4x2 grid (perfect 4-col)": {
+      "status": "PASS",
+      "message": "8 items, 4-col: true"
+    },
+    "Grid: 9 items: 3x3 grid": {
+      "status": "WARN",
+      "message": "Expected 4-col: false, got: true"
+    },
+    "Grid: 10 items: 3x3 + 1 wide": {
+      "status": "PASS",
+      "message": "10 items, 4-col: false"
+    },
+    "Grid: 12 items: 4x3 grid (perfect 4-col)": {
+      "status": "PASS",
+      "message": "12 items, 4-col: true"
+    },
+    "Grid: 16 items: 4x4 grid (perfect 4-col)": {
+      "status": "PASS",
+      "message": "16 items, 4-col: true"
+    },
+    "Orphan: 4 in 3-col: last orphan spans": {
+      "status": "PASS",
+      "message": "Last card spans: 1 / -1"
+    },
+    "Orphan: 7 in 3-col: last orphan spans": {
+      "status": "PASS",
+      "message": "Last card spans: 1 / -1"
+    },
+    "Orphan: 10 in 3-col: last orphan spans": {
+      "status": "PASS",
+      "message": "Last card spans: 1 / -1"
+    },
+    "Orphan: 5 in 4-col: last orphan spans": {
+      "status": "PASS",
+      "message": "Last card spans: 1 / -1"
+    },
+    "Orphan: 9 in 4-col: last orphan spans": {
+      "status": "PASS",
+      "message": "Last card spans: 1 / -1"
+    },
+    "Admin: Login successful": {
+      "status": "FAIL",
+      "message": "Waiting failed: 10000ms exceeded"
+    },
+    "WireGuard: Section access": {
+      "status": "FAIL",
+      "message": "Waiting failed: 10000ms exceeded"
+    },
+    "deSEC: Config form": {
+      "status": "PASS",
+      "message": "Domain and token inputs found"
+    },
+    "Security: Session cleanup switch": {
+      "status": "PASS",
+      "message": "Switch found"
+    },
+    "Security: Rollback backup switch": {
+      "status": "PASS",
+      "message": "Switch found"
+    },
+    "Security: Update strategy": {
+      "status": "PASS",
+      "message": "Selector found"
+    },
+    "Admin: Logout successful": {
+      "status": "PASS",
+      "message": "Admin mode deactivated"
+    },
+    "Console: No JS errors": {
+      "status": "PASS",
+      "message": "No console errors detected"
+    },
+    "Console: Warnings": {
+      "status": "PASS",
+      "message": "0 warnings (acceptable)"
+    }
+  },
+  "consoleErrors": [],
+  "consoleWarnings": []
+}

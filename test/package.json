@@ -11,9 +11,8 @@
     "test:all": "npm run test:integration && npm run test:dashboard && npm run test:comprehensive && npm run test:wireguard"
   },
   "dependencies": {
-    "puppeteer": "^21.0.0"
+    "puppeteer": "^21.11.0"
   },
-  "devDependencies": {},
   "author": "Privacy Hub Team",
   "license": "MIT"
 }

@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
 # Configuration
-TEST_BASE_DIR="${TEST_BASE_DIR:-/tmp/privacy-hub-integration-test}"
+TEST_BASE_DIR="${TEST_BASE_DIR:-$(pwd)/test/temp_deploy}"
 LOG_DIR="${TEST_BASE_DIR}/logs"
 REPORT_DIR="${TEST_BASE_DIR}/reports"
 TIMEOUT=1800 # 30 minutes max
@@ -93,7 +93,7 @@ deploy_stack() {
 		exit 1
 	fi
 
-	export BASE_DIR="$TEST_BASE_DIR"
+	export PROJECT_ROOT="$TEST_BASE_DIR"
 	export WG_CONF_B64
 	export VPN_SERVICE_PROVIDER="custom"
 	export VPN_TYPE="wireguard"
@@ -105,7 +105,7 @@ deploy_stack() {
 	export PH_DOCKER_AUTH_DIR="$HOME/.docker"
 
 	log "Deployment configuration:"
-	log "  BASE_DIR: $BASE_DIR"
+	log "  PROJECT_ROOT: $PROJECT_ROOT"
 	log "  WG_CONF_B64: ${#WG_CONF_B64} characters"
 
 	# Run deployment
@@ -224,8 +224,24 @@ run_integration_tests() {
 
 	# Use detected LAN_IP or default to localhost
 	local LAN_IP=$(hostname -I | awk '{print $1}')
-	export TEST_BASE_URL="${TEST_BASE_URL:-http://$LAN_IP}"
+	export TEST_BASE_URL="${TEST_BASE_URL:-http://$LAN_IP:8088}"
 	export HEADLESS="${HEADLESS:-true}"
+
+	# Extract Admin Password from secrets if not set
+	if [ -z "${ADMIN_PASSWORD:-}" ]; then
+		local secrets_file="$TEST_BASE_DIR/data/AppData/privacy-hub/.secrets"
+		if [ -f "$secrets_file" ]; then
+			log "Extracting admin password from .secrets..."
+			export ADMIN_PASSWORD=$(grep "^ADMIN_PASS_RAW" "$secrets_file" | cut -d'"' -f2)
+			if [ -n "$ADMIN_PASSWORD" ]; then
+				log_success "Admin password found and exported"
+			else
+				log_warn "Could not parse ADMIN_PASS_RAW from .secrets"
+			fi
+		else
+			log_warn "Secrets file not found at $secrets_file"
+		fi
+	fi
 
 	log "Test configuration:"
 	log "  TEST_BASE_URL: $TEST_BASE_URL"
@@ -311,7 +327,7 @@ analyze_logs() {
 		echo "----------------------------------------"
 
 		if [ -f "$LOG_DIR/deployment.log" ]; then
-			local deploy_errors=$(grep -ci "error\|failed\|critical" "$LOG_DIR/deployment.log" || echo "0")
+			local deploy_errors=$(grep -ci "error\|failed\|critical" "$LOG_DIR/deployment.log" || true)
 			echo "Errors/Failures in deployment: $deploy_errors"
 
 			if [ "$deploy_errors" -gt 0 ]; then

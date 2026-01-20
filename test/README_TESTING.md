@@ -1,108 +1,135 @@
-# Privacy Hub - Master Testing Suite
+# Testing Guide
 
-Comprehensive automated testing framework for the Privacy Hub project. This suite ensures system integrity, service functionality, and privacy compliance.
+This directory contains comprehensive test suites for the ZimaOS Privacy Hub dashboard and infrastructure.
 
-## 📋 Test Coverage Structure
+## Test Files
 
-The testing pipeline consists of 6 sequential stages:
+### Core Test Suites
 
-### 1. Integrity Audit
-**File**: `test/verify_integrity.py`
-- Verifies project directory structure (lib, config, data).
-- Checks file permissions and existence of critical assets.
-- Validates configuration file syntax.
+1. **test_dashboard.js**
+   - Comprehensive dashboard interaction tests
+   - Tests all user and admin interactions
+   - Verifies all services show up on dashboard
+   - Monitors browser console for errors
+   - Checks container logs for issues
 
-### 2. Functional & API Suite
-**File**: `test/test_runner.py`
-- Python-based health check for all 30+ services.
-- Validates HTTP response codes (200 OK) for service endpoints.
-- Checks API health endpoints (e.g., `/api/health`, `/api/server/ping`).
+2. **test_integration.js**
+   - Integration tests for the full stack
+   - Tests API endpoints
+   - Validates service interactions
 
-### 3. Integration Tests (User Simulation)
-**File**: `test/test_integration.js`
-- **Technology**: Puppeteer (Headless Chrome).
-- **Scope**: Simulates real user interactions with privacy frontends.
-- **Key Tests**:
-    - **Invidious**: Search for "privacy" and verify video player loads.
-    - **SearXNG**: Execute search queries and verify result rendering.
-    - **Breezewiki/Redlib**: Navigate to articles/subreddits and check content.
-    - **DNS**: Verifies internal DNS resolution for containers.
+### Temporary Test Utilities (auto-created during testing)
 
-### 4. UI/UX Audit
-**File**: `test/test_dashboard.js`
-- Validates the Management Dashboard.
-- Checks **Material Design 3** compliance (grid layout, spacing).
-- Tests responsive behavior (mobile vs desktop).
-- Verifies theme toggling (Light/Dark mode) and admin login flows.
+3. **tmp_rovodev_container_log_checker.js**
+   - Analyzes Docker container logs for errors
+   - Filters out benign messages
+   - Provides detailed error reporting
 
-### 5. Specialized Interaction Tests
-**File**: `test/test_extended_interactions.js`
-- Deep-dive tests for complex workflows.
-- Verifies WireGuard client creation and config download.
-- Checks specific application logic beyond basic loading.
+4. **tmp_rovodev_visual_layout_test.js**
+   - Tests dashboard visual layout
+   - Verifies category button visibility and outlines
+   - Checks card stretching behavior
+   - Validates responsive design
 
-### 6. Functional Operations (Admin)
-**File**: `test/test_functional_ops.js`
-- Tests backend administrative endpoints.
-- Verifies:
-    - **Updates**: Triggering service updates.
-    - **Migrations**: Database migration logic.
-    - **Rollbacks**: Reverting to previous versions.
-    - **Authentication**: Admin session validation.
+5. **tmp_rovodev_comprehensive_verification.sh**
+   - Static verification of code changes
+   - Validates CSS, shell scripts, and README
+   - Checks Docker environment
 
-## 🚀 Running Tests
+### Test Runners
 
-### Option 1: Full Deployment Test (Recommended)
-This script simulates a fresh install, deploys the stack, and runs all test suites in order.
+- **run_comprehensive_tests.sh** - Runs all test suites in sequence
+- **run_tests.sh** - Original test runner
+
+## Running Tests
+
+### Quick Start
 
 ```bash
-# Export your WireGuard config (base64 encoded)
-export WG_CONF_B64=$(cat your-wg-config.conf | base64 -w0)
+# Run all tests
+./run_comprehensive_tests.sh
 
-# Run the master test runner
-./test/full_deployment_test.sh
+# Or use the original runner
+./run_tests.sh
 ```
 
-### Option 2: Run Individual Suites
-You can run specific test layers against an already running deployment.
+### Individual Test Suites
 
 ```bash
-# 1. Integrity
-python3 test/verify_integrity.py
+# Static verification only
+bash tmp_rovodev_comprehensive_verification.sh
 
-# 2. Integration (Frontends)
-node test/test_integration.js
+# Visual layout tests (requires dashboard to be running)
+node tmp_rovodev_visual_layout_test.js
 
-# 3. Dashboard UI
-node test/test_dashboard.js
+# Container log analysis
+node tmp_rovodev_container_log_checker.js
 
-# 4. Functional Ops (Admin)
-node test/test_functional_ops.js
+# Full dashboard tests
+node test_dashboard.js
 ```
 
-## 📊 Test Results & Reports
+## Configuration
 
-After a full run, reports are generated in `test/reports/`:
+Tests use environment variables for configuration:
 
-*   **`integration_test_report_*.json`**: Detailed pass/fail status for every service.
-*   **`container_logs_*.json`**: Captured logs from all containers for debugging.
-*   **`FINAL_TEST_REPORT.md`**: Summary of the entire deployment and test cycle.
+```bash
+export TEST_BASE_URL="http://localhost:8088"  # Dashboard URL
+export API_URL="http://localhost:55555"        # Hub API URL
+export ADMIN_PASSWORD="your-password"          # Admin password
+export HEADLESS="true"                         # Run browser tests headless
+```
 
-### Common Failure Scenarios
+## Test Results
 
-*   **Gluetun Unhealthy**: Often due to missing or invalid WireGuard configuration. Check `wg.conf`.
-*   **DNS Resolution Failed**: If Invidious/Redlib fail to load, the VPN tunnel might be blocking UDP.
-*   **Timeout**: Services like Immich take longer to start on slow hardware.
+- **Screenshots**: Saved to `test/screenshots/`
+- **Reports**: Saved to `test/reports/`
+- **Logs**: Output to console and log files
 
-## 🛠️ Development
+## Cleanup
 
-### Adding a New Test
-1.  Open `test/test_integration.js`.
-2.  Add your service to the `SERVICES` object.
-3.  Define a new test function (e.g., `testMyService`).
-4.  Add the test function name to your service's `tests` array.
+Temporary test files (prefixed with `tmp_rovodev_`) can be safely deleted after testing:
 
----
+```bash
+rm -f tmp_rovodev_*
+```
 
-**Test Suite Version**: 3.0.0
-**Last Updated**: 2026-01-17
+These files are automatically created during testing and are not committed to version control.
+
+## Requirements
+
+- **Node.js**: For JavaScript tests
+- **Puppeteer**: Browser automation (installed via npm)
+- **Docker**: For container tests
+- **curl**: For HTTP checks
+- **bash**: For shell scripts
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+## Style Guide Compliance
+
+All test code follows:
+- **Google JavaScript Style Guide** for .js files
+- **Google Shell Style Guide** for .sh files
+- Proper JSDoc comments
+- Error handling best practices
+- No hardcoded secrets
+
+## Verification Checklist
+
+The test suite verifies:
+
+- ✅ All expected services appear on dashboard
+- ✅ Category buttons have proper outlines (2px borders)
+- ✅ Card layout stretches to fill rows
+- ✅ No duplicate log messages
+- ✅ Browser console has no errors
+- ✅ Container logs are healthy
+- ✅ Dashboard is accessible
+- ✅ API endpoints respond correctly
+- ✅ Responsive design works at multiple viewports
+- ✅ Visual consistency across components

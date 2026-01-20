@@ -1,0 +1,191 @@
+{
+  "timestamp": "2026-01-19T01:35:06.715Z",
+  "duration": "33.95s",
+  "summary": {
+    "total": 44,
+    "passed": 21,
+    "failed": 13,
+    "warnings": 10,
+    "passRate": "47.7%"
+  },
+  "tests": {
+    "Load: Dashboard accessible": {
+      "status": "PASS",
+      "message": "Status: 200"
+    },
+    "Load: Core elements present": {
+      "status": "PASS",
+      "message": "Container and filter bar found"
+    },
+    "Cards: Cards rendered": {
+      "status": "PASS",
+      "message": "Found 32 cards"
+    },
+    "Cards: Card structure": {
+      "status": "PASS",
+      "message": "Cards have proper structure"
+    },
+    "Cards: All services present": {
+      "status": "FAIL",
+      "message": "Only found 4/15, missing: nginx, hub-api, pihole, jellyfin, radarr, sonarr, prowlarr, qbittorrent, libreddit, nitter, wger"
+    },
+    "Cards: Card links": {
+      "status": "PASS",
+      "message": "3 cards have clickable links"
+    },
+    "Filters: all chip": {
+      "status": "PASS",
+      "message": "Filter works correctly"
+    },
+    "Filters: apps chip": {
+      "status": "WARN",
+      "message": "State unclear"
+    },
+    "Filters: system chip": {
+      "status": "WARN",
+      "message": "State unclear"
+    },
+    "Filters: dns chip": {
+      "status": "WARN",
+      "message": "State unclear"
+    },
+    "Filters: tools chip": {
+      "status": "PASS",
+      "message": "Filter works correctly"
+    },
+    "Theme: Toggle works": {
+      "status": "PASS",
+      "message": "Changed from light to dark"
+    },
+    "Privacy: Mode enabled": {
+      "status": "PASS",
+      "message": "Privacy mode activated"
+    },
+    "Privacy: Sensitive elements": {
+      "status": "PASS",
+      "message": "Elements marked as sensitive"
+    },
+    "Grid: 2 items: Should split row 50/50": {
+      "status": "PASS",
+      "message": "Items stretch (Ratio: 0.49)"
+    },
+    "Grid: 3 items: Should split row 33/33/33": {
+      "status": "PASS",
+      "message": "Layout rendered"
+    },
+    "Grid: 4 items: Should split row 25/25/25/25 (on large screen)": {
+      "status": "PASS",
+      "message": "Layout rendered"
+    },
+    "Grid: 5 items: Last row (2 items) should stretch 50/50": {
+      "status": "WARN",
+      "message": "Orphan row did not stretch (Ratio: 0.19)"
+    },
+    "Orphan: 4 in 3-col: last orphan spans": {
+      "status": "WARN",
+      "message": "Grid-column: auto (may need CSS :has() support)"
+    },
+    "Orphan: 7 in 3-col: last orphan spans": {
+      "status": "WARN",
+      "message": "Grid-column: auto (may need CSS :has() support)"
+    },
+    "Orphan: 10 in 3-col: last orphan spans": {
+      "status": "WARN",
+      "message": "Grid-column: auto (may need CSS :has() support)"
+    },
+    "Orphan: 5 in 4-col: last orphan spans": {
+      "status": "WARN",
+      "message": "Grid-column: auto (may need CSS :has() support)"
+    },
+    "Orphan: 9 in 4-col: last orphan spans": {
+      "status": "WARN",
+      "message": "Grid-column: auto (may need CSS :has() support)"
+    },
+    "Admin: Login successful": {
+      "status": "FAIL",
+      "message": "Waiting failed: 10000ms exceeded"
+    },
+    "WireGuard: Section access": {
+      "status": "FAIL",
+      "message": "Waiting failed: 10000ms exceeded"
+    },
+    "deSEC: Config form": {
+      "status": "PASS",
+      "message": "Domain and token inputs found"
+    },
+    "Security: Session cleanup switch": {
+      "status": "PASS",
+      "message": "Switch found"
+    },
+    "Security: Rollback backup switch": {
+      "status": "PASS",
+      "message": "Switch found"
+    },
+    "Security: Update strategy": {
+      "status": "PASS",
+      "message": "Selector found"
+    },
+    "Admin: Logout successful": {
+      "status": "PASS",
+      "message": "Admin mode deactivated"
+    },
+    "Console: No JS errors": {
+      "status": "PASS",
+      "message": "No console errors detected"
+    },
+    "Console: Warnings": {
+      "status": "PASS",
+      "message": "0 warnings (acceptable)"
+    },
+    "Containers: Container count": {
+      "status": "PASS",
+      "message": "28 containers running"
+    },
+    "Containers: hub-searxng logs": {
+      "status": "FAIL",
+      "message": "3 errors found"
+    },
+    "Containers: hub-api logs": {
+      "status": "FAIL",
+      "message": "4 errors found"
+    },
+    "Containers: hub-redlib logs": {
+      "status": "FAIL",
+      "message": "2 errors found"
+    },
+    "Containers: hub-odido-booster logs": {
+      "status": "FAIL",
+      "message": "4 errors found"
+    },
+    "Containers: hub-companion logs": {
+      "status": "FAIL",
+      "message": "4 errors found"
+    },
+    "Containers: hub-immich-db logs": {
+      "status": "FAIL",
+      "message": "1 errors found"
+    },
+    "Containers: hub-gluetun logs": {
+      "status": "FAIL",
+      "message": "1 errors found"
+    },
+    "Containers: hub-invidious-db logs": {
+      "status": "FAIL",
+      "message": "17 errors found"
+    },
+    "Containers: hub-memos logs": {
+      "status": "FAIL",
+      "message": "1 errors found"
+    },
+    "Containers: hub-vertd logs": {
+      "status": "WARN",
+      "message": "17 warnings found"
+    },
+    "Containers: Overall log health": {
+      "status": "FAIL",
+      "message": "37 errors across 9 containers"
+    }
+  },
+  "consoleErrors": [],
+  "consoleWarnings": []
+}

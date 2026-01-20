@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ACTION=$1
-PROFILE_NAME=$2
+PROFILE_NAME=${2:-}
 CONTAINER_PREFIX="__CONTAINER_PREFIX__"
 PROFILES_DIR="/profiles"
 ACTIVE_CONF="/active-wg.conf"

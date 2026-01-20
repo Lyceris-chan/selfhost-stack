@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     LAN_IP: str = os.environ.get("LAN_IP", "127.0.0.1")
     WG_HOST: str = os.environ.get("WG_HOST", "")
     DESEC_DOMAIN: str = os.environ.get("DESEC_DOMAIN", "")
-    CORS_ORIGINS: List[str] = ["http://localhost", "http://127.0.0.1"]
+    CORS_ORIGINS: List[str] = ["http://localhost", "http://127.0.0.1", "*"]
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

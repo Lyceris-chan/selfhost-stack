@@ -14,10 +14,14 @@ deploy_stack() {
 		if ! check_port_availability 53 "tcp" || ! check_port_availability 53 "udp"; then
 			log_warn "Port 53 is already in use on this host."
 			log_warn "This will likely cause AdGuard Home to fail."
-			log_warn "Please disable systemd-resolved (systemctl disable --now systemd-resolved) or other DNS services."
-			if ! ask_confirm "Attempt deployment anyway?"; then
-				log_crit "Deployment aborted due to port conflict."
-				exit 1
+			if [[ "${AUTO_CONFIRM}" == "true" ]]; then
+				log_warn "AUTO_CONFIRM mode: Continuing deployment anyway."
+			else
+				log_warn "Please disable systemd-resolved (systemctl disable --now systemd-resolved) or other DNS services."
+				if ! ask_confirm "Attempt deployment anyway?"; then
+					log_crit "Deployment aborted due to port conflict."
+					exit 1
+				fi
 			fi
 		fi
 	fi

@@ -36,7 +36,6 @@ main() {
 	echo " 🛡️  PRIVACY HUB: MASTER TEST SUITE"
 	echo "=========================================================="
 	echo " Started at: $(date)"
-	echo "=========================================================="
 	echo ""
 
 	# 1. Integrity Audit
@@ -172,6 +171,17 @@ main() {
 			echo -e "\e[33m⚠️  Some containers have errors - review logs above\e[0m"
 		else
 			echo -e "\e[32m✅ All container logs clean\e[0m"
+		fi
+	fi
+	echo ""
+
+	# 8. Service Screenshots
+	echo -e "\e[34m--- Step 8: Visual Evidence Collection ---\e[0m"
+	if [ -f test/test_service_screenshots.js ]; then
+		if node test/test_service_screenshots.js; then
+			echo -e "\e[32m✅ Screenshots Captured\e[0m"
+		else
+			echo -e "\e[33m⚠️  Some screenshots failed\e[0m"
 		fi
 	fi
 	echo ""

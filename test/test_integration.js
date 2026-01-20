@@ -14,8 +14,18 @@ const path = require('path');
 const execAsync = promisify(exec);
 
 /** Test configuration */
+const getBaseUrl = () => {
+  const envUrl = process.env.TEST_BASE_URL || 'http://10.0.10.225';
+  try {
+    const url = new URL(envUrl);
+    return `${url.protocol}//${url.hostname}`;
+  } catch (e) {
+    return envUrl;
+  }
+};
+
 const CONFIG = {
-  baseUrl: process.env.TEST_BASE_URL || 'http://10.0.10.225',
+  baseUrl: getBaseUrl(),
   headless: process.env.HEADLESS !== 'false',
   timeout: 60000,
   screenshotDir: path.join(__dirname, 'screenshots'),
@@ -171,7 +181,7 @@ const SERVICES = {
   companion: {
     port: 8283,
     container: 'hub-companion',
-    healthEndpoint: '',
+    healthEndpoint: '/companion',
     tests: ['loads'],
   },
   vertd: {
