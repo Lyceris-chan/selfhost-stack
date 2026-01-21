@@ -255,60 +255,70 @@
       <div class="card">
         <h3 class="title-medium">Endpoint provisioning</h3>
         <div id="dns-setup-trusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
-          <p class="body-medium description">Globally trusted SSL is active through Let's Encrypt and deSEC. This enables zero-trust encrypted DNS on mobile devices without requiring you to install a certificate.</p>
-          <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
-            <li data-tooltip="For legacy devices within your home network."><b>Local LAN:</b> Configure your devices to use <code class="sensitive">$LAN_IP</code>.</li>
-            <li data-tooltip="Requires establishing the WireGuard VPN tunnel when away from home."><b>VPN Tunnel:</b> Route all traffic through the Privacy Hub.</li>
-            <li data-tooltip="Android 9+ native feature. Encrypts all DNS queries automatically."><b>Mobile Private DNS:</b> Use the hostname below for native encryption.</li>
-          </ol>
-          <div class="code-label" style="margin-top:12px;" data-tooltip="Use this hostname in your Android 'Private DNS' settings.">Mobile private DNS hostname</div>
+          <p class="body-medium description">Globally trusted SSL is active. This enables zero-trust encrypted DNS on all devices.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 12px; margin: 12px 0; flex-grow: 1;">
+            <div class="list-item" style="padding: 8px 0; border: none;">
+              <span class="material-symbols-rounded" style="color: var(--md-sys-color-primary); margin-right: 12px;">home_iot_device</span>
+              <div>
+                <span class="label-large">Local Network</span>
+                <div class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Point devices to <code class="sensitive">$LAN_IP</code></div>
+              </div>
+            </div>
+            <div class="list-item" style="padding: 8px 0; border: none;">
+              <span class="material-symbols-rounded" style="color: var(--md-sys-color-primary); margin-right: 12px;">vpn_lock</span>
+              <div>
+                <span class="label-large">Remote Access</span>
+                <div class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Use WireGuard to route traffic home</div>
+              </div>
+            </div>
+            <div class="list-item" style="padding: 8px 0; border: none;">
+              <span class="material-symbols-rounded" style="color: var(--md-sys-color-primary); margin-right: 12px;">smartphone</span>
+              <div>
+                <span class="label-large">Private DNS</span>
+                <div class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Android native encryption support</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="code-label" style="margin-top:12px;" data-tooltip="Use this hostname in your Android 'Private DNS' settings.">Mobile Private DNS Hostname</div>
           <div class="code-block sensitive" style="margin-top:4px;" onclick="copyToClipboard('$DESEC_DOMAIN', this)">$DESEC_DOMAIN</div>
+          
           <div style="margin-top: auto; padding-top: 16px;">
-            <div class="chip vpn" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
-              <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-primary-container);">verified_user</span>
-              <div style="display: flex; flex-direction: column; gap: 2px;">
-                <span style="font-weight: 600;">Verified certificate authority</span>
-                <span class="body-small" style="opacity: 0.8; white-space: normal;">Trust chain established with Let's Encrypt. Fully compatible with native Private DNS.</span>
+            <div class="chip vpn" style="width: 100%; justify-content: center; gap: 8px; height: auto; padding: 12px; border-radius: 12px;">
+              <span class="material-symbols-rounded">verified_user</span>
+              <div style="display: flex; flex-direction: column;">
+                <span style="font-weight: 600; font-size: 13px;">Trusted SSL Active</span>
+                <span class="body-small" style="opacity: 0.9; font-size: 11px;">Let's Encrypt / Private DNS Ready</span>
               </div>
             </div>
           </div>
         </div>
         <div id="dns-setup-untrusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
           <p class="body-medium description" style="color:var(--md-sys-color-error);">Limited encrypted DNS coverage</p>
-          <p class="body-small description">
-            Android 'Private DNS' requires a domain name. Because no domain is configured, your mobile devices cannot use native encrypted DNS without the VPN.
-            <br><br>
-            After you acquire a valid SSL certificate, the configured deSEC domain will automatically be used as the domain name for this dashboard.
-          </p>
           <div style="flex-grow: 1;">
-            <div class="code-label" data-tooltip="The local IP address of your privacy hub.">Primary gateway</div>
+            <div class="code-label" data-tooltip="The local IP address of your privacy hub.">Primary Gateway IP</div>
             <div class="code-block sensitive" onclick="copyToClipboard('$LAN_IP', this)">$LAN_IP</div>
           </div>
           <div style="margin-top: auto; padding-top: 16px;">
-            <div class="chip admin" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium);">
+            <div class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: 12px;">
               <span class="material-symbols-rounded" style="color: var(--md-sys-color-error);">warning</span>
               <div style="display: flex; flex-direction: column; gap: 2px;">
-                <span style="font-weight: 600;">Self-signed (local)</span>
-                <span class="body-small" style="opacity: 0.8; white-space: normal;">Security warnings will appear. Configure deSEC for trusted SSL and Private DNS.</span>
+                <span style="font-weight: 600;">Self-signed (Local Only)</span>
+                <span class="body-small" style="opacity: 0.8; white-space: normal;">Configure deSEC for trusted SSL support.</span>
               </div>
             </div>
           </div>
         </div>
         <div id="dns-setup-local" style="display:none; height: 100%; display: flex; flex-direction: column;">
-          <p class="body-medium description">The system is running in local-only mode. To maintain your privacy, route all external traffic through the local infrastructure:</p>
-          <ol style="margin:12px 0; padding-left:20px; font-size:14px; color:var(--md-sys-color-on-surface); line-height:1.8; flex-grow: 1;">
-            <li>Configure your router's WAN or LAN DNS to: <b class="sensitive">$LAN_IP</b></li>
-            <li>Remote Access: Establish a WireGuard tunnel before you access services.</li>
-            <li>Legacy Support: Standard Port 53 resolution for older hardware.</li>
-          </ol>
-          <div class="code-block sensitive" style="margin-top:12px;" onclick="copyToClipboard('$LAN_IP', this)">$LAN_IP</div>
-            <div class="warning-box" style="margin-top: 16px; display: flex; align-items: flex-start; gap: 12px; padding: 16px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); border-radius: var(--md-sys-shape-corner-medium);">
-              <span class="material-symbols-rounded" style="color: inherit;">warning</span>
-              <div style="display: flex; flex-direction: column; gap: 4px;">
-                <span style="font-weight: 600; font-size: 14px;">Self-Signed (Local)</span>
-                <span class="body-small" style="opacity: 0.9; line-height: 1.4;">Security warnings will appear. Configure deSEC for trusted SSL and full mobile support.</span>
-              </div>
+          <p class="body-medium description">Local-only mode active. Route external traffic through this gateway to filter trackers.</p>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin: 12px 0;">
+             <div class="list-item" style="padding: 8px 0; border: none;">
+              <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-surface-variant); margin-right: 12px;">router</span>
+              <span class="body-medium">Set Router DNS to <b class="sensitive">$LAN_IP</b></span>
             </div>
+          </div>
+          <div class="code-block sensitive" style="margin-top:auto;" onclick="copyToClipboard('$LAN_IP', this)">$LAN_IP</div>
         </div>
       </div>
     </div>

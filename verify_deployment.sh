@@ -1,32 +1,17 @@
 #!/bin/bash
-echo "=========================================="
-echo "DEPLOYMENT VERIFICATION SCRIPT"
-echo "=========================================="
-echo ""
+#
+# Deployment Verification Wrapper.
+# Delegates to the comprehensive verification suite in test/bin.
+#
 
-# Verify script structure
-echo "✓ Checking script components..."
-grep -q "setup_secrets\|setup_configs\|setup_static_assets" zima.sh && echo "  ✓ Environment setup found" || echo "  ✗ Missing environment setup"
-grep -q "deploy_stack" lib/services/deploy.sh && echo "  ✓ Service deployment found" || echo "  ✗ Missing service deployment"
-grep -q "generate_compose" lib/services/compose.sh && echo "  ✓ Compose generation found" || echo "  ✗ Missing compose generation"
+set -euo pipefail
 
-echo ""
-echo "✓ Checking configuration files..."
-test -f lib/templates/dashboard.html && echo "  ✓ Dashboard template exists" || echo "  ✗ Missing dashboard template"
-test -f lib/templates/wg_control.sh && echo "  ✓ WireGuard control script exists" || echo "  ✗ Missing WG control"
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SUITE_PATH="${SCRIPT_DIR}/test/bin/verify_suite.sh"
 
-echo ""
-echo "✓ Syntax validation..."
-for script in lib/core/*.sh lib/services/*.sh; do
-	if bash -n "$script" 2>/dev/null; then
-		echo "  ✓ $(basename $script)"
-	else
-		echo "  ✗ $(basename $script) has syntax errors"
-		bash -n "$script"
-	fi
-done
-
-echo ""
-echo "=========================================="
-echo "VERIFICATION COMPLETE"
-echo "=========================================="
+if [[ -f "${SUITE_PATH}" ]]; then
+  exec "${SUITE_PATH}" "$@"
+else
+  echo "Error: Verification suite not found at ${SUITE_PATH}" >&2
+  exit 1
+fi

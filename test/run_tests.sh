@@ -109,6 +109,14 @@ main() {
 	export TEST_LAN_IP=$(python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(('9.9.9.9', 80)); print(s.getsockname()[0]); s.close()")
 	export TEST_BASE_URL="http://${TEST_LAN_IP}:8088"
 	export API_URL="http://${TEST_LAN_IP}:55555"
+	
+	# Extract Admin Password from secrets if available
+	SECRETS_FILE="${TEST_DATA_DIR}/data/AppData/privacy-hub-test/.secrets"
+	if [ -f "$SECRETS_FILE" ]; then
+		export ADMIN_PASSWORD=$(grep "ADMIN_PASS_RAW=" "$SECRETS_FILE" | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+		echo "Extracted admin password from secrets"
+	fi
+
 	if node test/test_dashboard.js; then
 		echo -e "\e[32m✅ UI/UX Audit Passed\e[0m"
 	else

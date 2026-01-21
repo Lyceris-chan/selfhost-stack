@@ -303,6 +303,7 @@ def main():
             _TEST_DATA_DIR, "data/AppData/privacy-hub-test/.secrets"
         )
         api_key = "dummy"
+        admin_pass = "dummy"
 
         if os.path.exists(secrets_path):
             if os.path.isdir(secrets_path):
@@ -314,13 +315,20 @@ def main():
                     out = subprocess.check_output(cmd, shell=True).decode().strip()
                     if out:
                         api_key = out.split("=", 1)[1].strip().strip('"').strip("'")
+                    
+                    cmd_pass = "docker exec hub-api env | grep ADMIN_PASS_RAW"
+                    out_pass = subprocess.check_output(cmd_pass, shell=True).decode().strip()
+                    if out_pass:
+                        admin_pass = out_pass.split("=", 1)[1].strip().strip('"').strip("'")
                 except Exception as e:
-                    print(f"[WARN] Failed to fetch key from container: {e}")
+                    print(f"[WARN] Failed to fetch secrets from container: {e}")
             else:
                 with open(secrets_path, "r") as f:
                     for line in f:
                         if "HUB_API_KEY=" in line:
                             api_key = line.split("=")[1].strip().strip('"').strip("'")
+                        if "ADMIN_PASS_RAW=" in line:
+                            admin_pass = line.split("=")[1].strip().strip('"').strip("'")
 
         # Test 1: Downgrade and Update
         print("  Testing Downgrade and Update for Wikiless...")
@@ -532,7 +540,7 @@ def main():
 
             # Allow time for backup process
             print("    Waiting for system backup to complete...")
-            time.sleep(15)
+            time.sleep(30)
 
             # Check for system backup file
             sys_backup_dir = os.path.join(
@@ -741,7 +749,7 @@ def main():
         try:
             # We use the existing test_dashboard.js script which uses Puppeteer
             # Ensure LAN_IP and ADMIN_PASSWORD are set for the node process
-            ui_env = f"LAN_IP={_LAN_IP} ADMIN_PASSWORD={api_key}"
+            ui_env = f"LAN_IP={_LAN_IP} ADMIN_PASSWORD={admin_pass}"
             if (
                 run_command(
                     f"{ui_env} node test/test_dashboard.js",

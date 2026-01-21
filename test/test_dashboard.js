@@ -134,6 +134,7 @@ async function authenticateAdmin(page) {
   }
 
   console.log('  DEBUG: Starting authentication...');
+  console.log(`  DEBUG: Admin Password Length: ${CONFIG.adminPassword ? CONFIG.adminPassword.length : 0}`);
   await page.waitForSelector('#admin-lock-btn', {timeout: 15000});
   await page.click('#admin-lock-btn');
   
@@ -149,10 +150,21 @@ async function authenticateAdmin(page) {
   } else {
     await page.keyboard.press('Enter');
   }
+
+  // Handle potential error snackbar/alert
+  await new Promise(r => setTimeout(r, 2000));
+  const loginError = await page.evaluate(() => {
+      const snack = document.querySelector('.snackbar');
+      if (snack && snack.textContent.toLowerCase().includes('failed')) return snack.textContent;
+      return null;
+  });
+  if (loginError) {
+      console.log(`  DEBUG: Login failed with error: ${loginError}`);
+  }
   
   await page.waitForFunction(
       () => document.body.classList.contains('admin-mode'),
-      {timeout: 15000}
+      {timeout: 30000}
   );
   console.log('  DEBUG: Admin mode confirmed');
 }

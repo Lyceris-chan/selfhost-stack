@@ -92,6 +92,7 @@ except Exception:
             - "APP_NAME=${APP_NAME}"
             - "BASE_DIR=/app"
             - "PROJECT_ROOT=/app"
+            - "BACKUP_DIR=/app/backups"
             - "UPDATE_STRATEGY=${UPDATE_STRATEGY}"
             - "ROLLBACK_BACKUP_ENABLED=${ROLLBACK_BACKUP_ENABLED:-true}"
             - "LAN_IP=${LAN_IP}"

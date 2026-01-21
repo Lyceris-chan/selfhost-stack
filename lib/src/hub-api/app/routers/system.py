@@ -555,6 +555,7 @@ def trigger_backup(
 		env = os.environ.copy()
 		env["PROJECT_ROOT"] = "/app"
 		env["BASE_DIR"] = "/app"
+		env["SKIP_SUDO_CHECK"] = "true"
 		subprocess.run(["bash", "/app/zima.sh", "-b"], env=env, cwd="/app", check=False)
 
 	background_tasks.add_task(_backup)
@@ -576,9 +577,11 @@ def trigger_restore(
         log_structured(
             "INFO", f"System restore initiated from {filename}", "MAINTENANCE"
         )
+        env = os.environ.copy()
+        env["SKIP_SUDO_CHECK"] = "true"
         # Restoring might disrupt the API itself, but zima.sh -r just extracts files.
         subprocess.run(
-            ["bash", "/app/zima.sh", "-r", backup_path], cwd="/app", check=False
+            ["bash", "/app/zima.sh", "-r", backup_path], env=env, cwd="/app", check=False
         )
         # After restore, we should probably restart everything
         subprocess.run(
@@ -597,7 +600,9 @@ def uninstall(background_tasks: BackgroundTasks, user: str = Depends(get_admin_u
     def _uninstall():
         log_structured("INFO", "Uninstall sequence started", "MAINTENANCE")
         time.sleep(5)
-        subprocess.run(["bash", "/app/zima.sh", "-x"], cwd="/app", check=False)
+        env = os.environ.copy()
+        env["SKIP_SUDO_CHECK"] = "true"
+        subprocess.run(["bash", "/app/zima.sh", "-x"], env=env, cwd="/app", check=False)
 
     background_tasks.add_task(_uninstall)
     return {"success": True, "message": "Uninstall sequence started"}

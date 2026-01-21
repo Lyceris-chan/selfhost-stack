@@ -160,6 +160,10 @@ ask_confirm() {
 ################################################################################
 pull_with_retry() {
 	local img="$1"
+    if "${DOCKER_CMD}" image inspect "${img}" >/dev/null 2>&1; then
+        log_info "Image ${img} exists locally. Skipping pull."
+        return 0
+    fi
 	if "${DOCKER_CMD}" pull "${img}"; then
 		log_info "Successfully pulled ${img}"
 		return 0
@@ -325,7 +329,7 @@ usage() {
 ################################################################################
 parse_args() {
 	local opt
-	while getopts "cxpyas:j hE:Gob:r:" opt; do
+	while getopts "cxpyas:j hE:Gobr:" opt; do
 		case ${opt} in
 		c)
 			RESET_ENV=true
@@ -395,8 +399,10 @@ export GIT_CONFIG_PARAMETERS="'advice.detachedHead=false'"
 # Verify core dependencies before proceeding.
 REQUIRED_COMMANDS="docker curl git crontab iptables flock jq awk sed grep find tar ip"
 if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
-	echo "[CRIT] sudo is required for non-root users. Please install it."
-	exit 1
+	if [[ "${SKIP_SUDO_CHECK:-false}" != "true" ]]; then
+		echo "[CRIT] sudo is required for non-root users. Please install it."
+		exit 1
+	fi
 fi
 for cmd in $REQUIRED_COMMANDS; do
 	if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -455,7 +461,8 @@ export DATA_DIR
 readonly COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
 readonly DASHBOARD_FILE="$BASE_DIR/dashboard.html"
 readonly SECRETS_FILE="$BASE_DIR/.secrets"
-readonly BACKUP_DIR="$BASE_DIR/backups"
+BACKUP_DIR="${BACKUP_DIR:-$BASE_DIR/backups}"
+export BACKUP_DIR
 readonly ASSETS_DIR="$BASE_DIR/assets"
 readonly HISTORY_LOG="$BASE_DIR/deployment.log"
 readonly CERT_BACKUP_DIR="$PROJECT_ROOT/data/AppData/.cert-backups/$APP_NAME"

@@ -218,13 +218,11 @@
  gap: 8px;
  margin-bottom: 32px;
  overflow-x: auto;
- padding: 0;
+ padding: 8px; /* Added padding to prevent clipping */
  position: relative;
  z-index: 100;
- background: transparent;
- box-shadow: none;
- border-bottom: none;
- border-radius: 0;
+ background: var(--md-sys-color-surface-container); /* Added background */
+ border-radius: 16px; /* Rounded corners */
  width: 100%;
  margin-left: 0;
  margin-right: 0;
@@ -232,6 +230,37 @@
  flex-wrap: wrap;
  }
  .filter-bar::-webkit-scrollbar { display: none; }
+
+ /* Fix for Odido and other inline Spinners */
+ #odido-loading,
+ #cert-loading,
+ #profile-list,
+ #update-list-container,
+ #backup-list-container,
+ #log-container {
+   display: flex !important;
+   align-items: center !important;
+   justify-content: center !important;
+ }
+
+ #odido-loading > div,
+ #cert-loading > div,
+ #profile-list > div > div,
+ #update-list-container > div > div,
+ #backup-list-container > div > div,
+ #log-container > div > div {
+   display: block !important;
+   box-sizing: border-box !important;
+   width: 24px !important;
+   height: 24px !important;
+   min-width: 24px !important;
+   min-height: 24px !important;
+   border-radius: 50% !important;
+   border: 3px solid var(--md-sys-color-surface-variant) !important;
+   border-top-color: var(--md-sys-color-primary) !important;
+   animation: spin 1s linear infinite !important;
+   flex-shrink: 0 !important;
+ }
 
 
         
@@ -242,8 +271,8 @@
  padding: 0 16px;
  justify-content: center;
  border-radius: 8px; /* M3 small shape */
- border: 1px solid var(--md-sys-color-outline);
- background-color: var(--md-sys-color-surface-container-low); /* Distinct background */
+ border: 1px solid var(--md-sys-color-outline-variant); /* Stronger border */
+ background-color: var(--md-sys-color-surface-container-high); /* Higher contrast background */
  color: var(--md-sys-color-on-surface);
  white-space: nowrap;
  height: 32px;
@@ -485,10 +514,18 @@
  */
 .section-hint {
 margin: 0 0 24px 0;
-display: flex;
-flex-wrap: wrap;
+display: grid;
 gap: 8px;
+grid-auto-rows: minmax(48px, auto);
+grid-auto-flow: dense;
+grid-template-columns: repeat(4, 1fr);
 align-items: center;
+}
+
+@media (max-width: 1200px) {
+  .section-hint {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 /* Ensure chips fill available space proportionally */
@@ -854,7 +891,7 @@ text-align: center;
  }
         
  .btn-filled { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); box-shadow: var(--md-sys-elevation-1); }
- .btn-tonal { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+ .btn-tonal { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border: 1px solid var(--md-sys-color-outline-variant); }
  .btn-outlined { background: transparent; color: var(--md-sys-color-primary); border: 1px solid var(--md-sys-color-outline); }
  .btn-icon { width: 40px; height: 40px; padding: 0; border-radius: 20px; flex-shrink: 0; }
             
