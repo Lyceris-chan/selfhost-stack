@@ -13,7 +13,7 @@
     // HTTPS Auto-Switch & Default Logic
     const isLocalHost = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '[::1]');
     const isIpHost = window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/) || window.location.hostname.includes(':');
-    
+
     // Storage reset logic for -c cleanup
     if (window.location.search.includes('reset=true')) {
       localStorage.clear();
@@ -25,7 +25,7 @@
     if (window.location.protocol === 'http:' && !isLocalHost && !isIpHost) {
       const httpsPort = '8443';
       const httpsUrl = 'https://' + window.location.hostname + ':' + httpsPort + window.location.pathname + window.location.search;
-      
+
       // Check if HTTPS is available before redirecting
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 2000);
@@ -40,7 +40,7 @@
           console.log("HTTPS port not reachable or timed out, staying on HTTP");
         });
     }
-    
+
     // Prevent extension injection errors - defined early
     globalThis.configureInjection = globalThis.configureInjection || (() => {});
   </script>
@@ -154,7 +154,7 @@
     <div class="section-hint body-medium" style="margin-bottom: 8px;">
       <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);"><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
     </div>
-    
+
     <div class="section-hint mb-16 card-outline" style="padding: 16px; border-radius: var(--md-sys-shape-corner-large);">
       <div class="w-full flex-row align-center gap-8 mb-8" style="color: var(--md-sys-color-primary);">
         <span class="material-symbols-rounded" style="font-size: 20px;">vpn_lock</span>
@@ -255,14 +255,14 @@
       <div class="card">
         <h3 class="title-medium">Endpoint provisioning</h3>
         <div id="dns-setup-trusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
-          <p class="body-medium description">Globally trusted SSL is active. This enables zero-trust encrypted DNS on all devices.</p>
-          
+          <p class="body-medium description">Globally trusted SSL enables zero-trust encrypted DNS on all devices.</p>
+
           <div style="display: flex; flex-direction: column; gap: 12px; margin: 12px 0; flex-grow: 1;">
             <div class="list-item" style="padding: 8px 0; border: none;">
               <span class="material-symbols-rounded" style="color: var(--md-sys-color-primary); margin-right: 12px;">home_iot_device</span>
               <div>
                 <span class="label-large">Local Network</span>
-                <div class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Point devices to <code class="sensitive">$LAN_IP</code></div>
+                <div class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Configure devices with DNS endpoints above</div>
               </div>
             </div>
             <div class="list-item" style="padding: 8px 0; border: none;">
@@ -275,15 +275,12 @@
             <div class="list-item" style="padding: 8px 0; border: none;">
               <span class="material-symbols-rounded" style="color: var(--md-sys-color-primary); margin-right: 12px;">smartphone</span>
               <div>
-                <span class="label-large">Private DNS</span>
-                <div class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Android native encryption support</div>
+                <span class="label-large">Android Private DNS</span>
+                <div class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Use DOT hostname from endpoints above</div>
               </div>
             </div>
           </div>
 
-          <div class="code-label" style="margin-top:12px;" data-tooltip="Use this hostname in your Android 'Private DNS' settings.">Mobile Private DNS Hostname</div>
-          <div class="code-block sensitive" style="margin-top:4px;" onclick="copyToClipboard('$DESEC_DOMAIN', this)">$DESEC_DOMAIN</div>
-          
           <div style="margin-top: auto; padding-top: 16px;">
             <div class="chip vpn" style="width: 100%; justify-content: center; gap: 8px; height: auto; padding: 12px; border-radius: 12px;">
               <span class="material-symbols-rounded">verified_user</span>
@@ -297,8 +294,7 @@
         <div id="dns-setup-untrusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
           <p class="body-medium description" style="color:var(--md-sys-color-error);">Limited encrypted DNS coverage</p>
           <div style="flex-grow: 1;">
-            <div class="code-label" data-tooltip="The local IP address of your privacy hub.">Primary Gateway IP</div>
-            <div class="code-block sensitive" onclick="copyToClipboard('$LAN_IP', this)">$LAN_IP</div>
+            <p class="body-medium" style="margin: 12px 0;">Self-signed certificates restrict DNS encryption to local network only. Use endpoints above for local access.</p>
           </div>
           <div style="margin-top: auto; padding-top: 16px;">
             <div class="chip admin" style="width: 100%; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: 12px;">
@@ -312,13 +308,12 @@
         </div>
         <div id="dns-setup-local" style="display:none; height: 100%; display: flex; flex-direction: column;">
           <p class="body-medium description">Local-only mode active. Route external traffic through this gateway to filter trackers.</p>
-          <div style="display: flex; flex-direction: column; gap: 8px; margin: 12px 0;">
+          <div style="display: flex; flex-direction: column; gap: 8px; margin: 12px 0; flex-grow: 1;">
              <div class="list-item" style="padding: 8px 0; border: none;">
               <span class="material-symbols-rounded" style="color: var(--md-sys-color-on-surface-variant); margin-right: 12px;">router</span>
-              <span class="body-medium">Set Router DNS to <b class="sensitive">$LAN_IP</b></span>
+              <span class="body-medium">Configure router DNS to gateway IP above</span>
             </div>
           </div>
-          <div class="code-block sensitive" style="margin-top:auto;" onclick="copyToClipboard('$LAN_IP', this)">$LAN_IP</div>
         </div>
       </div>
     </div>
@@ -353,7 +348,7 @@
                 <div class="stat-row"><span class="stat-label label-medium">Auto-Renew</span><span class="stat-value title-small" id="odido-auto-renew">--</span></div>
               </div>
             </div>
-            
+
             <div style="margin-top: 24px; flex-grow: 1; min-height: 120px; position: relative; background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 12px;">
               <div style="position: absolute; top: 8px; left: 12px; font-size: 10px; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Consumption Rate (MB/min)</div>
               <svg id="odido-graph" width="100%" height="100%" viewBox="0 0 400 120" preserveAspectRatio="none" style="overflow: visible;">
@@ -426,7 +421,7 @@
           <input type="text" id="odido-bundle-code-input" class="text-field" placeholder="Bundle Code (default: A0DAY01)" style="margin-bottom:12px;" data-tooltip="The product code for your data bundle.">
           <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;" data-tooltip="Automatic renewal triggers when data falls below this level.">
           <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;" data-tooltip="Lead time before expiration to trigger renewal.">
-          
+
           <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 16px;">
             <div style="flex: 1;">
               <span class="label-large">Secure API routing (VPN)</span>
@@ -438,7 +433,7 @@
               </div>
             </div>
           </div>
-          
+
           <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
             <div id="odido-config-status" class="body-small" style="font-weight: 500;"></div>
             <button type="submit" class="btn btn-tonal">Save configuration</button>
@@ -447,7 +442,7 @@
       </div>
     </div>
 
-    
+
     <div class="section-label admin-only">VPN client access (inbound)</div>
     <div class="grid admin-only">
       <div class="card" style="grid-column: span 2;">
@@ -460,7 +455,7 @@
           </div>
         </div>
         <p class="body-medium description">Manage devices that can connect to this network via WireGuard.</p>
-        
+
         <div id="wg-client-list" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
           <div style="padding: 24px; text-align: center; opacity: 0.6;">
             <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
@@ -562,7 +557,7 @@
                 <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Upload image to generate palettes</p>
               </div>
             </div>
-            
+
             <!-- Extracted Palette -->
             <div id="extracted-palette" style="display: flex; gap: 12px; flex-wrap: wrap; min-height: 48px; align-items: center;">
               <span class="body-small" style="opacity: 0.5; font-style: italic;">Extracted palettes will appear here...</span>
@@ -682,7 +677,7 @@
         <div class="flex-column gap-12 flex-1">
           <div class="stat-row m-0"><span class="stat-label label-medium">System CPU</span><span class="stat-value title-small" id="sys-cpu">0%</span></div>
           <div class="metric-bar"><div id="sys-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
-          
+
           <div class="stat-row m-0 mt-8"><span class="stat-label label-medium">System RAM</span><span class="stat-value title-small" id="sys-ram">0 MB / 0 MB</span></div>
           <div class="metric-bar"><div id="sys-ram-fill" class="metric-fill" style="width: 0%"></div></div>
 
@@ -789,7 +784,7 @@
         <button onclick="closeDialog()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
       </div>
       <p id="dialog-message" class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant); white-space: pre-wrap;"></p>
-      
+
       <div id="dialog-input-container" style="display:none; margin-bottom: 24px;">
         <input type="text" id="dialog-input" class="text-field" style="width: 100%;">
       </div>
@@ -814,7 +809,7 @@
           <span class="stat-value title-small" id="modal-cpu-text">0%</span>
         </div>
         <div class="metric-bar"><div id="modal-cpu-fill" class="metric-fill" style="width: 0%"></div></div>
-        
+
         <div class="stat-row row-layout m-0" style="margin-top:12px;">
           <span class="stat-label label-medium">Memory usage</span>
           <span class="stat-value title-small" id="modal-mem-text">0 MB / 0 MB</span>
@@ -899,7 +894,7 @@
         <p class="body-medium mb-16" style="color: var(--md-sys-color-on-surface-variant);">Select a backup to restore the system configuration and secrets. <strong>Warning: This will overwrite current settings and restart the stack.</strong></p>
         <div id="backup-list-container" style="background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 8px; max-height: 300px; overflow-y: auto;">
           <div style="padding: 24px; text-align: center; opacity: 0.6;">
-            <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px auto;"></div>
+            <div class="loading-spinner" style="width: 24px; height: 24px; border-width: 3px; margin: 0 auto 12px auto;"></div>
             <span class="body-medium">Scanning for backups...</span>
           </div>
         </div>

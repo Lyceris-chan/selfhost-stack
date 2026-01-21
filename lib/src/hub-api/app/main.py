@@ -93,19 +93,27 @@ async def watchtower_notification(
 
 
 @app.middleware("http")
-async def update_activity_middleware(request: Request, call_next):
-    """Middleware to track active monitoring for metrics collection.
+async def security_headers_middleware(request: Request, call_next):
+    """Middleware to add security headers and track active monitoring.
 
     Args:
         request: The incoming request.
         call_next: The next middleware or endpoint.
 
     Returns:
-        The response from the next middleware.
+        The response from the next middleware with security headers.
     """
     if request.url.path == "/metrics":
         update_metrics_activity()
     response = await call_next(request)
+
+    # Add security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
     return response
 
 

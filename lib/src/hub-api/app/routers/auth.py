@@ -51,8 +51,8 @@ def verify_admin(request: VerifyAdminRequest):
         if not is_match:
             log_structured("WARN", f"Admin login failed. Stored len: {len(stored_pass)}, Received len: {len(request.password)}", "AUTH")
             log_structured("WARN", f"Stored (first 3): {stored_pass[:3]}, Received (first 3): {request.password[:3]}", "AUTH")
-    
-    if not is_match:
+
+    if is_match:
         # Determine timeout
         timeout_seconds = 1800
         theme_file = os.path.join(settings.CONFIG_DIR, "theme.json")
