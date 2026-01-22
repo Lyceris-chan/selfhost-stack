@@ -185,10 +185,15 @@
  text-align: inherit;
  appearance: none;
  -webkit-appearance: none;
+ flex-shrink: 0; /* Prevent squishing */
  }
  button.switch-container { display: inline-flex; }
  button.theme-toggle { display: flex; }
  button.filter-chip { display: inline-flex; }
+
+ #admin-lock-btn {
+   display: flex !important;
+ }
 
  /* Admin Mode Controls */
  .admin-only {
@@ -839,6 +844,8 @@ text-align: center;
  padding: 6px 12px;
  border-radius: var(--md-sys-shape-corner-full);
  font-size: 12px;
+ min-width: 100px;
+ justify-content: center;
  }
 
  .status-dot {
@@ -918,6 +925,7 @@ text-align: center;
  border-radius: 16px;
  transition: all 200ms ease;
  box-sizing: border-box;
+ flex-shrink: 0;
  }
 
  .switch-thumb {
