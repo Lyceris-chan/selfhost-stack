@@ -80,6 +80,8 @@ except Exception:
             - "${DOCKER_AUTH_DIR}:/root/.docker:ro"
             - "${ASSETS_DIR}:/assets"
             - "${SRC_DIR}:/app/sources"
+            - "${CONFIG_DIR}:/app/config"
+            - "${ENV_DIR}:/app/env"
             - "${CONFIG_DIR}/theme.json:/app/theme.json"
             - "${CONFIG_DIR}/services.json:/app/services.json"
             - "${DATA_DIR}/hub-api:/app/data"

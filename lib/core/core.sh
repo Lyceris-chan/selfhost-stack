@@ -491,15 +491,17 @@ init_directories() {
 	log_info "Initializing project directories..."
 	$SUDO mkdir -p "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$DATA_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api" "$WG_PROFILES_DIR"
 	$SUDO chown "$(whoami)" "$BASE_DIR" "$SRC_DIR" "$ENV_DIR" "$CONFIG_DIR" "$BACKUP_DIR" "$ASSETS_DIR" "$WG_PROFILES_DIR"
+	$SUDO chown -R 1000:1000 "$BASE_DIR"
+}
 
-	# Initialize metadata files with correct ownership
-	[ ! -f "$DOTENV_FILE" ] && $SUDO touch "$DOTENV_FILE"
-	[ ! -f "$ACTIVE_WG_CONF" ] && $SUDO touch "$ACTIVE_WG_CONF"
-
-	$SUDO chown "$(whoami)" "$DOTENV_FILE" "$ACTIVE_WG_CONF"
-	$SUDO chmod 600 "$DOTENV_FILE" "$ACTIVE_WG_CONF"
-
-	$SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$DATA_DIR/hub-api"
+################################################################################
+# finalize_permissions - Ensure consistent ownership of all project files
+# Globals:
+#   SUDO, BASE_DIR
+################################################################################
+finalize_permissions() {
+	log_info "Finalizing file permissions..."
+	$SUDO chown -R 1000:1000 "$BASE_DIR"
 }
 
 # Container naming and persistence
@@ -1069,8 +1071,8 @@ ANONYMOUS_SECRET='${ANONYMOUS_SECRET}'
 IV_HMAC='${IV_HMAC}'
 IV_COMPANION='${IV_COMPANION}'
 EOF
-		"${SUDO}" chmod 600 "${BASE_DIR}/.secrets"
 		"${SUDO}" chown 1000:1000 "${BASE_DIR}/.secrets"
+		"${SUDO}" chmod 600 "${BASE_DIR}/.secrets"
 	else
 		source "${BASE_DIR}/.secrets"
 		local updated_secrets=false

@@ -243,7 +243,8 @@ perform_backup() {
 	done
 
 	if [[ -n "${targets}" ]]; then
-		if tar -czf "${BACKUP_DIR}/${backup_name}" -C "${BASE_DIR}" ${targets} 2>/dev/null; then
+		log_info "Targets for backup: ${targets}"
+		if tar -czf "${BACKUP_DIR}/${backup_name}" -C "${BASE_DIR}" ${targets} > "${BACKUP_DIR}/tar.log" 2>&1; then
 			log_info "Backup created at ${BACKUP_DIR}/${backup_name}"
 		else
 			log_warn "Backup partially failed."

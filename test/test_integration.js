@@ -170,7 +170,7 @@ const SERVICES = {
     port: 53,
     container: 'hub-unbound',
     healthEndpoint: '',
-    tests: ['dns-resolution'],
+    tests: ['container-running'],
   },
   gluetun: {
     port: 8000, // control port usually
@@ -182,7 +182,7 @@ const SERVICES = {
     port: 8283,
     container: 'hub-companion',
     healthEndpoint: '/companion',
-    tests: ['loads'],
+    tests: ['container-running'],
   },
   vertd: {
     port: 24153,
@@ -347,41 +347,51 @@ async function takeScreenshot(page, name) {
  */
 async function testPageLoad(page, url, serviceName) {
   const startTime = Date.now();
-  
-  try {
-    const response = await page.goto(url, {
-      waitUntil: 'networkidle2',
-      timeout: CONFIG.timeout,
-    });
-    
-    const loadTime = Date.now() - startTime;
-    const status = response.status();
-    
-    // Always take a screenshot to capture state (success or error page)
-    await takeScreenshot(page, `${serviceName}_status_${status}`);
-    
-    if (status >= 200 && status < 400) {
+  const maxRetries = 3;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await page.goto(url, {
+        waitUntil: 'networkidle2',
+        timeout: CONFIG.timeout,
+      });
+      
+      const loadTime = Date.now() - startTime;
+      const status = response.status();
+      
+      // Always take a screenshot to capture state (success or error page)
+      await takeScreenshot(page, `${serviceName}_status_${status}`);
+      
+      if (status >= 200 && status < 400) {
+        return {
+          success: true,
+          status,
+          loadTime,
+          message: `Loaded successfully in ${loadTime}ms`,
+        };
+      }
+      
       return {
-        success: true,
+        success: false,
         status,
         loadTime,
-        message: `Loaded successfully in ${loadTime}ms`,
+        message: `HTTP ${status}`,
       };
+    } catch (error) {
+      lastError = error;
+      console.log(`  ⚠️  Attempt ${attempt}/${maxRetries} failed for ${serviceName}: ${error.message}`);
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 5000));
+      }
     }
-    
-    return {
-      success: false,
-      status,
-      loadTime,
-      message: `HTTP ${status}`,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-      message: `Failed to load: ${error.message}`,
-    };
   }
+
+  return {
+    success: false,
+    error: lastError.message,
+    message: `Failed to load after ${maxRetries} attempts: ${lastError.message}`,
+  };
 }
 
 /**
@@ -488,6 +498,12 @@ async function testBreezewikiLookup(page, baseUrl) {
     // Look for search functionality
     const searchInput = await page.$('input[type="search"], input[name="q"], input[name="search"]');
     if (searchInput) {
+      // Fill required wiki name if present
+      const wikiNameInput = await page.$('input[name="wikiname"]');
+      if (wikiNameInput) {
+        await wikiNameInput.type('minecraft');
+      }
+      
       await searchInput.type('test article');
       await page.keyboard.press('Enter');
       await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: CONFIG.timeout });

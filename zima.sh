@@ -88,6 +88,7 @@ main() {
 		if [[ -n "${WG_CONF_B64:-}" ]]; then
 			log_info "System detected WireGuard configuration in environment. Decoding..."
 			echo "${WG_CONF_B64}" | base64 -d | ${SUDO} tee "${ACTIVE_WG_CONF}" >/dev/null
+			${SUDO} chown "$(id -u):$(id -g)" "${ACTIVE_WG_CONF}"
 
 			if [[ ! -s "${ACTIVE_WG_CONF}" ]]; then
 				log_crit "Failed to decode WireGuard config from environment variables. File is empty."
@@ -107,6 +108,7 @@ main() {
 			echo "----------------------------------------------------------"
 			cat | ${SUDO} tee "${ACTIVE_WG_CONF}" >/dev/null
 			echo "" | ${SUDO} tee -a "${ACTIVE_WG_CONF}" >/dev/null
+			${SUDO} chown "$(id -u):$(id -g)" "${ACTIVE_WG_CONF}"
 			echo "----------------------------------------------------------"
 		fi
 
@@ -164,6 +166,8 @@ main() {
 	# Setup Exports
 	generate_protonpass_export
 	generate_libredirect_export
+
+	finalize_permissions
 
 	if [[ "${GENERATE_ONLY}" == "true" ]]; then
 		log_info "Generation complete. Skipping deployment (-G flag active)."
