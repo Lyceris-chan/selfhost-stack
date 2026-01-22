@@ -309,6 +309,7 @@ usage() {
 	echo ""
 	echo "Options:"
 	echo "  -x          Factory Reset (wipes all data)"
+	echo "  -a          Allow ProtonVPN domains (whitelist for browser extensions)"
 	echo "  -p          Auto-Generate Passwords (skip prompts)"
 	echo "  -y          Auto-Confirm (Reserved for automated testing)"
 	echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
