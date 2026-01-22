@@ -825,11 +825,11 @@ $(if [[ -n "${VERTD_NVIDIA:-}" ]]; then echo "        reservations:
             - "PUB_ENV=production"
             - "PUB_DISABLE_ALL_EXTERNAL_REQUESTS=true"
             - "PUB_DISABLE_FAILURE_BLOCKS=true"
-            - "PUB_VERTD_URL=http://${CONTAINER_PREFIX}vertd:${PORT_INT_VERTD}"
+            - "PUB_VERTD_URL=http://${LAN_IP}:${PORT_VERTD}"
             - "PUB_DONATION_URL="
             - "PUB_STRIPE_KEY="
             - "PUB_DISABLE_DONATIONS=true"
-        networks: [frontend]
+        networks: [isolated]
         ports: ["${LAN_IP}:${PORT_VERT}:${PORT_INT_VERT}"]
         healthcheck:
             test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:80/"]
@@ -1122,6 +1122,9 @@ networks:
             config:
                 - subnet: ${DOCKER_SUBNET}
     mgmt:
+        internal: true
+        driver: bridge
+    isolated:
         internal: true
         driver: bridge
 
