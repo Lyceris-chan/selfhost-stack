@@ -236,9 +236,17 @@
 
  body.admin-mode .admin-only.section-label,
  body.admin-mode .admin-only.section-hint,
- body.admin-mode .admin-only.full-bleed {
+ body.admin-mode .admin-only.full-bleed,
+ body.admin-mode section.admin-only {
    display: block !important;
  }
+
+ .card > h3 {
+   margin-top: 0;
+   margin-bottom: 16px;
+ }
+
+ .btn-tertiary { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); border: none; }
 
  #update-banner.hidden-banner, #mac-advisory.hidden-banner {
  display: none !important;

@@ -46,9 +46,9 @@ fi
 
 echo "Starting certificate renewal check for \${DESEC_DOMAIN}..."
 
-\${DOCKER_CMD} run --rm \
-    -v "\${AGH_CONF_DIR}:/acme" \
-    -e "DESEC_Token=\${DESEC_TOKEN}" \
+\${DOCKER_CMD} run --rm --dns 9.9.9.9 \\
+    -v "\${AGH_CONF_DIR}:/acme" \\
+    -e "DESEC_Token=\${DESEC_TOKEN}" \\
     neilpang/acme.sh:latest --cron --home /acme --config-home /acme --cert-home /acme/certs
 
 if [[ \$? -eq 0 ]]; then
@@ -232,8 +232,8 @@ EOF
         "vert": {
             "name": "Vert",
             "description": "High-performance media playback.",
-            "category": "tools",
-            "order": 10,
+            "category": "apps",
+            "order": 41,
             "url": "http://${LAN_IP}:${PORT_VERT}",
             "source_url": "https://github.com/Lyceris-chan/vert"
         },
@@ -424,12 +424,15 @@ schema_version: 29
 http: {address: 0.0.0.0:${PORT_ADGUARD_WEB}}
 users: [{name: "${AGH_USER}", password: "${AGH_PASS_HASH}"}]
 dns:
-  bind_hosts: ["0.0.0.0"]
+  bind_hosts:
+    - 0.0.0.0
   port: 53
   dot_port: 853
   quic_port: 853
-  upstream_dns: ["${unbound_static_ip}"]
-  bootstrap_dns: ["${unbound_static_ip}"]
+  upstream_dns:
+    - "${unbound_static_ip}"
+  bootstrap_dns:
+    - "${unbound_static_ip}"
 ${user_rules_block}
 filters:
   - enabled: true

@@ -142,8 +142,7 @@
             <span class="material-symbols-rounded" id="theme-icon">light_mode</span>
           </button>
           <button class="theme-toggle" id="admin-lock-btn" onclick="toggleAdminMode()" data-tooltip="Enter Admin Mode to manage services">
-            <span class="material-symbols-rounded" id="admin-icon" style="margin-right: 8px;">lock_person</span>
-            <span class="label-large">Sign in</span>
+            <span class="material-symbols-rounded" id="admin-icon">lock_person</span>
           </button>
         </div>
       </div>
@@ -400,7 +399,7 @@
       <!-- Dynamic Cards Injected Here -->
     </div>
     <div class="grid">
-      <div class="card">
+      <div class="card admin-only">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
           <h3 class="title-medium">Odido Status</h3>
           <div id="odido-speed-indicator" class="body-small" style="color: var(--md-sys-color-primary); font-weight: 500; display:none;">0 Mb/s</div>
@@ -577,7 +576,7 @@
         <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile. The VPN service will automatically restart to apply the new configuration (~15 seconds).">Upload & activate</button></div>
       </div>
       <div class="card profile-card admin-only">
-        <h3 data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available Profiles</h3>
+        <h3 class="title-medium" data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available Profiles</h3>
         <div id="profile-list" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; min-height: 100px;">
           <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
             <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
