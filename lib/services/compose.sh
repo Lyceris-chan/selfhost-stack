@@ -829,7 +829,7 @@ $(if [[ -n "${VERTD_NVIDIA:-}" ]]; then echo "        reservations:
             - "PUB_DONATION_URL="
             - "PUB_STRIPE_KEY="
             - "PUB_DISABLE_DONATIONS=true"
-        networks: [isolated]
+        networks: [frontend]
         ports: ["${LAN_IP}:${PORT_VERT}:${PORT_INT_VERT}"]
         healthcheck:
             test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:80/"]

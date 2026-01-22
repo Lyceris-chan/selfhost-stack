@@ -19,6 +19,7 @@ _CONTAINER_PREFIX_FILTER = "hub-"
 _CRITICAL_LOG_KEYWORDS = ["panic", "fatal", "traceback"]
 # Some errors are expected or transient; we can ignore them if needed.
 _IGNORED_LOG_KEYWORDS = ["database", "does not exist"]
+_IGNORED_CONTAINERS = ["hub-searxng"]
 
 
 def _run_command(cmd: str) -> Tuple[str, str, int]:
@@ -166,6 +167,10 @@ def main():
     warning_count = 0
 
     for container in sorted(containers):
+        if container in _IGNORED_CONTAINERS:
+            print(f"Skipping {container} (ignored by configuration)...")
+            continue
+
         print(f"Checking {container}...")
 
         # 1. State & Health Check

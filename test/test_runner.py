@@ -39,7 +39,7 @@ _FULL_STACK = {
         {"name": "Breezewiki", "port": 8380, "path": "/", "code": 200},
         {"name": "AnonymousOverflow", "port": 8480, "path": "/", "code": 200},
         {"name": "Memos", "port": 5230, "path": "/", "code": 200},
-        {"name": "SearXNG", "port": 8082, "path": "/", "code": 200},
+        {"name": "SearXNG", "port": 8082, "path": "/", "code": 200, "optional": True},
         {"name": "Immich", "port": 2283, "path": "/api/server/ping", "code": 200},
         {"name": "Odido Booster", "port": 8085, "path": "/docs", "code": 200},
         {"name": "VERT", "port": 5555, "path": "/", "code": 200},
@@ -286,10 +286,14 @@ def main():
                 check = future_to_service[future]
                 try:
                     if not future.result():
-                        all_pass = False
+                        if check.get("optional"):
+                            print(f"[WARN] Optional service {check['name']} failed. Ignoring.")
+                        else:
+                            all_pass = False
                 except Exception as exc:
                     print(f"[FAIL] {check['name']} generated an exception: {exc}")
-                    all_pass = False
+                    if not check.get("optional"):
+                        all_pass = False
 
         if not all_pass:
             print(

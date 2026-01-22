@@ -141,7 +141,7 @@ class IntegrityChecker:
 
         self.check_pattern(
             css,
-            r"\.section-label\s*\{[^}]*margin:\s*48px 0 16px 0",
+            r"\.section-label\s*\{[^}]*margin:\s*48px 0 24px 0",
             "Section labels follow 8dp grid",
         )
         self.check_pattern(
