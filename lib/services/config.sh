@@ -463,7 +463,11 @@ EOF
 				if ossl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | grep -q "${DESEC_DOMAIN}"; then
 					log_info "Existing valid certificate for ${DESEC_DOMAIN} detected. Skipping issuance."
 					cert_valid=true
+				else
+					log_warn "Existing certificate subject does not match ${DESEC_DOMAIN}. Re-issuing..."
 				fi
+			else
+				log_warn "Existing certificate for ${DESEC_DOMAIN} has expired or is invalid. Re-issuing..."
 			fi
 		fi
 
