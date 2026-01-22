@@ -412,11 +412,11 @@ setup_configs() {
 	if [[ "${ALLOW_PROTON_VPN:-false}" == "true" ]]; then
 		user_rules_block="user_rules:
   - @@||getproton.me^
-  - @@||vpn-api.proton.me^
   - @@||protonstatus.com^
   - @@||protonvpn.ch^
   - @@||protonvpn.com^
-  - @@||protonvpn.net^"
+  - @@||protonvpn.net^
+  - @@||vpn-api.proton.me^"
 	fi
 
 	cat >"${AGH_YAML}" <<EOF
