@@ -122,15 +122,11 @@ EOF
 
 append_odido_booster() {
 	local dockerfile=""
-	local vpn_mode="true"
 
 	if ! should_deploy "odido-booster"; then
 		return 0
 	fi
 	dockerfile=$(detect_dockerfile "${SRC_DIR}/odido-bundle-booster" || echo "Dockerfile")
-	if [[ -f "${CONFIG_DIR}/theme.json" ]]; then
-		vpn_mode=$(grep -o '"odido_use_vpn"[[:space:]]*:[[:space:]]*\(true\|false\)' "${CONFIG_DIR}/theme.json" 2>/dev/null | grep -o 'true\|false' || echo "true")
-	fi
 
 	cat >>"${COMPOSE_FILE}" <<EOF
     odido-booster:
@@ -140,22 +136,8 @@ append_odido_booster() {
             dockerfile: ${dockerfile}
         image: selfhost/odido-booster:${ODIDO_BOOSTER_IMAGE_TAG:-latest}
         container_name: ${CONTAINER_PREFIX}odido-booster
-EOF
-
-	if [[ "${vpn_mode}" == "true" ]]; then
-		cat >>"${COMPOSE_FILE}" <<EOF
-        network_mode: "container:${CONTAINER_PREFIX}gluetun"
-        depends_on:
-            gluetun: {condition: service_healthy}
-EOF
-	else
-		cat >>"${COMPOSE_FILE}" <<EOF
         networks: [frontend]
         ports: ["${LAN_IP}:${PORT_ODIDO}:8085"]
-EOF
-	fi
-
-	cat >>"${COMPOSE_FILE}" <<EOF
         environment:
             - "API_KEY=${HUB_API_KEY_COMPOSE}"
             - "ODIDO_USER_ID=${ODIDO_USER_ID}"

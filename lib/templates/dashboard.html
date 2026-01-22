@@ -496,18 +496,6 @@
           <input type="number" id="odido-threshold-input" class="text-field" placeholder="Min Threshold MB (default: 100)" style="margin-bottom:12px;" data-tooltip="Automatic renewal triggers when data falls below this level.">
           <input type="number" id="odido-lead-time-input" class="text-field" placeholder="Lead Time Minutes (default: 30)" style="margin-bottom:12px;" data-tooltip="Lead time before expiration to trigger renewal.">
 
-          <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 16px;">
-            <div style="flex: 1;">
-              <span class="label-large">Secure API routing (VPN)</span>
-              <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Routes requests through VPN by default to hide your home IP. Disable only if the Odido API blocks VPN traffic or you experience connectivity issues.</p>
-            </div>
-            <div class="switch-container" id="odido-vpn-switch" onclick="toggleOdidoVpn()" data-tooltip="Toggle between VPN and Home IP for Odido requests">
-              <div class="switch-track">
-                <div class="switch-thumb"></div>
-              </div>
-            </div>
-          </div>
-
           <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
             <div id="odido-config-status" class="body-small" style="font-weight: 500;"></div>
             <button type="submit" class="btn btn-tonal">Save configuration</button>
