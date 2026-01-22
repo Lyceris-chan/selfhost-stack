@@ -205,10 +205,24 @@ ask_confirm() {
 ################################################################################
 pull_with_retry() {
 	local img="$1"
-    if "${DOCKER_CMD}" image inspect "${img}" >/dev/null 2>&1; then
-        log_info "Image ${img} exists locally. Skipping pull."
-        return 0
-    fi
+	# Always attempt to pull if tag is :latest or FORCE_UPDATE is enabled
+	if [[ "${img}" == *":latest" ]] || [[ "${FORCE_UPDATE:-false}" == "true" ]]; then
+		log_info "Attempting to pull newest version of ${img}..."
+		if "${DOCKER_CMD}" pull "${img}"; then
+			return 0
+		fi
+		# Fallback to local if pull fails (e.g. offline)
+		if "${DOCKER_CMD}" image inspect "${img}" >/dev/null 2>&1; then
+			log_warn "Pull failed for ${img}. Using existing local version."
+			return 0
+		fi
+	else
+		if "${DOCKER_CMD}" image inspect "${img}" >/dev/null 2>&1; then
+			log_info "Image ${img} exists locally. Skipping pull."
+			return 0
+		fi
+	fi
+
 	if "${DOCKER_CMD}" pull "${img}"; then
 		log_info "Successfully pulled ${img}"
 		return 0

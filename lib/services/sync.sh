@@ -160,10 +160,11 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 ARG WEB_DEFAULT_API
 ENV WEB_DEFAULT_API=$WEB_DEFAULT_API
-RUN pnpm --filter=@imput/cobalt-web build
+RUN pnpm --filter=@imput/cobalt-web build && \
+    if [ -d "web/dist" ]; then mv web/dist web/build_output; else mv web/build web/build_output; fi
 
 FROM nginx:alpine
-COPY --from=build /app/web/build /usr/share/nginx/html
+COPY --from=build /app/web/build_output /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
 EOF

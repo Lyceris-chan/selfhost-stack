@@ -79,7 +79,7 @@ deploy_stack() {
 	# Retry wrapper for Docker Compose
 	run_compose_up() {
 		local args="$*"
-		if "${DOCKER_COMPOSE_FINAL_CMD}" -f "${COMPOSE_FILE}" up -d ${args}; then
+		if "${DOCKER_COMPOSE_FINAL_CMD}" -f "${COMPOSE_FILE}" up -d --build ${args}; then
 			return 0
 		fi
 
