@@ -1,5 +1,5 @@
 # Verification Report
-Date: Wed Jan 21 06:43:46 UTC 2026
+Date: Thu Jan 22 01:48:03 UTC 2026
 
 ## Static Verification
 - Status: **PASSED**
@@ -8,7 +8,7 @@ Date: Wed Jan 21 06:43:46 UTC 2026
 - Status: **PASSED**
 
 ## Targeted Functional Tests
-- Status: **PASSED**
+- Status: **FAILED**
 
 ## Admin API Verification
 - Status: **PASSED**
@@ -20,5 +20,5 @@ Date: Wed Jan 21 06:43:46 UTC 2026
 - Status: **FAILED**
 
 ## Summary
-Passed: 5
-Failed: 1
+Passed: 4
+Failed: 2

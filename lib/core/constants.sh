@@ -1,9 +1,48 @@
 #!/usr/bin/env bash
+################################################################################
+# PRIVACY HUB - CONSTANTS DEFINITION
+################################################################################
 #
-# Centralized constants and port definitions for the Privacy Hub stack.
+# Centralized constants, service definitions, and port mappings for the
+# entire Privacy Hub stack. This file serves as the single source of truth
+# for all service configurations and is sourced by all other modules.
 #
-# This file contains service definitions, port mappings, and repository URLs
-# used throughout the orchestration scripts.
+# Contents:
+#   - Service lists (all services, source-built, containers)
+#   - Port definitions (external and internal)
+#   - Critical Docker images for pre-pulling
+#   - Service repository URLs for tag resolution
+#   - Default version tags
+#
+# Architecture:
+#   All variables are exported as readonly to prevent modification and
+#   ensure consistency across all shell scripts in the project.
+#
+# Port Allocation Strategy:
+#   - 8080-8499: User-facing services (dashboard, apps)
+#   - 9000-9999: Admin services (Portainer, API)
+#   - 51821+: VPN/network services (WireGuard)
+#   - Internal ports: Service-specific (documented inline)
+#
+# Usage:
+#   source "${SCRIPT_DIR}/lib/core/constants.sh"
+#   References: $PORT_DASHBOARD_WEB, $STACK_SERVICES, etc.
+#
+# Maintenance:
+#   - Add new services to STACK_SERVICES
+#   - Define port variables following naming convention: PORT_<SERVICE>_<TYPE>
+#   - Update SERVICE_REPOS for services that need tag resolution
+#   - Keep ALL_CONTAINERS in sync with actual container names
+#
+# Style Guide:
+#   Adheres to Google Shell Style Guide
+#   - Readonly exports for immutability
+#   - UPPER_CASE for constants
+#   - Inline comments for complex mappings
+#
+# Author: ZimaOS Privacy Hub Team
+# Version: 2.0.0
+################################################################################
 
 readonly STACK_SERVICES="hub-api dashboard gluetun adguard unbound wg-easy redlib wikiless rimgo breezewiki anonymousoverflow scribe invidious companion searxng portainer memos odido-booster cobalt cobalt-web vert vertd immich watchtower"
 export STACK_SERVICES

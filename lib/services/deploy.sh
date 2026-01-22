@@ -1,7 +1,57 @@
 #!/usr/bin/env bash
-set -euo pipefail
+################################################################################
+# PRIVACY HUB - DEPLOYMENT MODULE
+################################################################################
+#
+# Orchestrates the deployment of the entire Privacy Hub stack using Docker
+# Compose. Handles pre-flight checks, service ordering, and deployment
+# verification.
+#
+# Key Features:
+#   - Port conflict detection (especially port 53 for AdGuard)
+#   - Parallel vs sequential deployment strategies
+#   - Core infrastructure prioritization
+#   - Retry logic for transient failures
+#   - Health check verification
+#   - Deployment rollback on failure
+#
+# Deployment Strategies:
+#   Sequential (default):
+#     1. Core services first (hub-api, adguard, unbound, gluetun, wg-easy)
+#     2. Applications in dependency order
+#     3. Health checks between stages
+#   
+#   Parallel (--parallel flag):
+#     - All services launched simultaneously
+#     - Faster but requires sufficient resources
+#     - Dependency conflicts handled by Docker Compose
+#
+# Pre-flight Checks:
+#   - Port 53 availability (for AdGuard Home)
+#   - TUN kernel module loading (for VPN)
+#   - Docker daemon accessibility
+#   - Compose file validity
+#
+# Error Handling:
+#   - Comprehensive logging of failures
+#   - Automatic rollback on critical errors
+#   - User confirmation for known conflicts
+#
+# Usage:
+#   Called by zima.sh deploy command
+#   Requires: COMPOSE_FILE, DOCKER_COMPOSE_FINAL_CMD environment variables
+#
+# Style Guide:
+#   Adheres to Google Shell Style Guide
+#   - Function-based organization
+#   - Clear error messages
+#   - Defensive programming (set -euo pipefail)
+#
+# Author: ZimaOS Privacy Hub Team
+# Version: 2.0.0
+################################################################################
 
-# Execute system deployment and verify global infrastructure integrity.
+set -euo pipefail
 
 deploy_stack() {
 	if command -v modprobe >/dev/null 2>&1; then

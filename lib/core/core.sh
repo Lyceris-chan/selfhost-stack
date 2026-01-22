@@ -1,6 +1,51 @@
 #!/usr/bin/env bash
-# Core logic for Privacy Hub deployment.
-# Provides utility functions, logging, and environment setup.
+################################################################################
+# PRIVACY HUB - CORE LIBRARY
+################################################################################
+#
+# Core utility functions for Privacy Hub deployment and management.
+# Provides foundational functionality including logging, Docker operations,
+# service detection, and error handling.
+#
+# Architecture:
+#   - Utility functions for common operations
+#   - Docker and Docker Compose wrappers
+#   - Service lifecycle management
+#   - Logging system with severity levels
+#   - Error handling and validation
+#
+# Key Components:
+#   - Dockerfile detection and validation
+#   - Service dependency resolution
+#   - Port availability checking
+#   - Version comparison utilities
+#   - Tag resolution for container images
+#
+# Dependencies:
+#   - bash 4.0+
+#   - docker / docker-compose
+#   - constants.sh (port and service definitions)
+#
+# Usage:
+#   Source this file from main orchestration script (zima.sh)
+#   Functions are called by service-specific modules
+#
+# Style Guide:
+#   Adheres to Google Shell Style Guide
+#   - Function documentation using header blocks
+#   - Error handling with set -euo pipefail
+#   - Readonly variables for constants
+#   - Local variables in functions
+#
+# References:
+#   - Google Shell Style Guide
+#   - Docker Compose specification
+#   - Bash best practices
+#
+# Author: ZimaOS Privacy Hub Team
+# Version: 2.0.0
+################################################################################
+
 set -euo pipefail
 
 # Source Consolidated Constants

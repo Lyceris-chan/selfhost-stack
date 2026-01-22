@@ -195,48 +195,133 @@
    display: flex !important;
  }
 
- /* Admin Mode Controls */
+ /* ============================================
+  * ADMIN MODE VISIBILITY CONTROLS
+  * ============================================
+  * Manages visibility of admin-only content based on authentication state.
+  * 
+  * Behavior:
+  *   - .admin-only elements hidden by default for security
+  *   - body.admin-mode class added when user authenticates
+  *   - Admin login button hidden when already in admin mode
+  * 
+  * Security Consideration:
+  *   All sensitive controls use .admin-only class for consistent security
+  *   CSS-based hiding is supplemented by server-side access control
+  * ============================================ */
+
+ /* Hide admin login button when already authenticated */
+ body.admin-mode #admin-lock-btn {
+   display: none !important;
+ }
+
+ /* Default state: Hide all admin-only elements */
  .admin-only {
- display: none !important;
+   display: none !important;
  }
+
+ /* Admin authenticated state: Show admin controls */
  body.admin-mode .admin-only {
- display: flex !important;
+   display: flex !important;
  }
+
+ /* Display variants for different element types */
  body.admin-mode .admin-only.btn-icon {
- display: inline-flex !important;
+   display: inline-flex !important;
  }
+
  body.admin-mode .admin-only.chip {
- display: inline-flex !important;
+   display: inline-flex !important;
  }
+
  body.admin-mode .admin-only.section-label,
  body.admin-mode .admin-only.section-hint,
  body.admin-mode .admin-only.full-bleed {
- display: block !important;
+   display: block !important;
  }
 
  #update-banner.hidden-banner, #mac-advisory.hidden-banner {
  display: none !important;
  }
 
+ /* ============================================
+  * CATEGORY FILTER BAR
+  * ============================================
+  * Horizontal scrollable bar with category filter chips.
+  * Implements MD3 chip container pattern with responsive wrapping.
+  * 
+  * Behavior:
+  *   - Desktop: Chips wrap to multiple rows if needed
+  *   - Mobile: Single row with horizontal scroll
+  *   - Active chip highlighted with primary color
+  * 
+  * Layout Strategy:
+  *   - Flexbox with justify-content: center for balanced layout
+  *   - 8px gap between chips (MD3 spacing grid)
+  *   - 8px padding prevents chip clipping on edges
+  * 
+  * Visual Design:
+  *   - Surface container background for subtle elevation
+  *   - 16px border radius (MD3 shape system)
+  *   - Hidden scrollbar for cleaner appearance
+  * 
+  * Accessibility:
+  *   - Keyboard navigation supported
+  *   - Active state clearly indicated
+  *   - Sufficient touch target size (48dp minimum)
+  * 
+  * Reference: https://m3.material.io/components/chips/overview
+  * ============================================ */
  .filter-bar {
- display: flex;
- gap: 8px;
- margin-bottom: 32px;
- overflow-x: auto;
- padding: 8px; /* Added padding to prevent clipping */
- position: relative;
- z-index: 100;
- background: var(--md-sys-color-surface-container); /* Added background */
- border-radius: 16px; /* Rounded corners */
- width: 100%;
- margin-left: 0;
- margin-right: 0;
- justify-content: center;
- flex-wrap: wrap;
+   display: flex;
+   gap: 8px;
+   margin-bottom: 32px;
+   overflow-x: auto;
+   padding: 8px;
+   position: relative;
+   z-index: 100;
+   background: var(--md-sys-color-surface-container);
+   border-radius: 16px;
+   width: 100%;
+   margin-left: 0;
+   margin-right: 0;
+   justify-content: center;
+   flex-wrap: wrap;
  }
- .filter-bar::-webkit-scrollbar { display: none; }
+ 
+ /* Hide scrollbar while maintaining scroll functionality */
+ .filter-bar::-webkit-scrollbar { 
+   display: none; 
+ }
 
- /* Fix for Odido and other inline Spinners */
+ /* ============================================
+  * LOADING SPINNER CONSTRAINTS
+  * ============================================
+  * Ensures loading spinners maintain proper circular dimensions across
+  * all contexts and prevent flex layout compression.
+  * 
+  * Problem Solved:
+  *   Spinners were being squished by flex containers, appearing elliptical
+  *   instead of circular. This fix enforces exact 24x24px dimensions.
+  * 
+  * Implementation:
+  *   - Parent containers use flexbox for centering
+  *   - Child spinners use :first-child selector for specificity
+  *   - Both min/max constraints prevent any dimension changes
+  *   - flex-shrink: 0 prevents flex compression
+  * 
+  * Affected Components:
+  *   - Odido bundle status indicator
+  *   - Certificate verification loader
+  *   - Profile list loading state
+  *   - Update/backup list loading states
+  *   - Log container loading state
+  * 
+  * Reference: Material Design 3 Progress Indicators
+  * https://m3.material.io/components/progress-indicators
+  * ============================================ */
+
+ /* Parent containers: Center the spinner */
  #odido-loading,
  #cert-loading,
  #profile-list,
@@ -248,22 +333,33 @@
    justify-content: center !important;
  }
 
- #odido-loading > div,
- #cert-loading > div,
- #profile-list > div > div,
- #update-list-container > div > div,
- #backup-list-container > div > div,
- #log-container > div > div {
+ /* Spinner elements: Enforce circular 24x24px dimensions */
+ #odido-loading > div:first-child,
+ #cert-loading > div:first-child,
+ #profile-list > div > div:first-child,
+ #update-list-container > div > div:first-child,
+ #backup-list-container > div > div:first-child,
+ #log-container > div > div:first-child {
    display: block !important;
    box-sizing: border-box !important;
+   
+   /* Exact dimensions: Prevent any distortion */
    width: 24px !important;
    height: 24px !important;
    min-width: 24px !important;
    min-height: 24px !important;
+   max-width: 24px !important;
+   max-height: 24px !important;
+   
+   /* Appearance: Circular with rotating border */
    border-radius: 50% !important;
    border: 3px solid var(--md-sys-color-surface-variant) !important;
    border-top-color: var(--md-sys-color-primary) !important;
+   
+   /* Animation: Infinite rotation */
    animation: spin 1s linear infinite !important;
+   
+   /* Layout: Prevent flex compression */
    flex-shrink: 0 !important;
  }
 
@@ -459,21 +555,50 @@
  justify-content: flex-end;
  }
 
+ /* ============================================
+  * ICON BUTTON (THEME TOGGLE)
+  * ============================================
+  * Circular icon buttons following MD3 specifications.
+  * Used for theme switching and admin login controls.
+  * 
+  * Dimensions:
+  *   - 48x48px touch target (MD3 minimum)
+  *   - 24x24px icon size (Material Symbols Rounded)
+  *   - Circular shape with border-radius: 50%
+  * 
+  * States:
+  *   Default: Transparent background, muted color
+  *   Hover: Surface container background, primary color
+  *   Active: State layer overlay (handled by ::after pseudo-element)
+  * 
+  * Interaction:
+  *   - Smooth color transitions (200ms standard easing)
+  *   - Visual feedback on hover
+  *   - Maintains accessibility contrast ratios
+  * 
+  * Usage:
+  *   - Light/Dark mode toggle
+  *   - Admin panel access
+  *   - Settings buttons
+  * 
+  * Reference: https://m3.material.io/components/icon-buttons/overview
+  * ============================================ */
  .theme-toggle {
- display: flex;
- align-items: center;
- justify-content: center;
- width: 48px;
- height: 48px;
- border-radius: 50%;
- cursor: pointer;
- color: var(--md-sys-color-on-surface-variant);
- transition: all 0.2s var(--md-sys-motion-easing-standard);
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   width: 48px;
+   height: 48px;
+   border-radius: 50%;
+   cursor: pointer;
+   color: var(--md-sys-color-on-surface-variant);
+   transition: all 0.2s var(--md-sys-motion-easing-standard);
  }
 
+ /* Hover state: Elevated appearance */
  .theme-toggle:hover {
- background-color: var(--md-sys-color-surface-container-highest);
- color: var(--md-sys-color-on-surface);
+   background-color: var(--md-sys-color-surface-container-highest);
+   color: var(--md-sys-color-on-surface);
  }
  @media (max-width: 900px) {
  .header-actions {
@@ -511,49 +636,8 @@
  .section-label:first-of-type {
  margin-top: 8px;
  }
-/* MD3 Chip Grid Container
- * Responsive grid layout that adapts from 2x2 on mobile to full width on large screens
- * Chips automatically fill available space to prevent gaps and wrapping
- * Reference: https://m3.material.io/components/chips
- * Following Material 3 spacing guidelines: 8dp grid system
- */
-.section-hint {
-margin: 0 0 24px 0;
-display: grid;
-gap: 8px;
-grid-auto-rows: minmax(48px, auto);
-grid-auto-flow: dense;
-grid-template-columns: repeat(4, 1fr);
-align-items: center;
-}
 
-@media (max-width: 1200px) {
-  .section-hint {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-/* Ensure chips fill available space proportionally */
-.section-hint .category-badge {
-flex: 1 1 auto;
-min-width: fit-content;
-max-width: 100%;
-justify-content: center;
-text-align: center;
-}
-
-/* Responsive behavior for smaller screens */
-@media (max-width: 599px) {
-  .section-hint {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  .section-hint .category-badge {
-    flex: 0 1 calc(50% - 4px);
-    min-width: 0;
-  }
-}
+/* MD3 Chip Grid Container - Using flex layout below (line ~792) */
 
  /* Grid Layouts - Material 3 Responsive Grid (Refactored to Flexbox) */
  .grid {
@@ -782,7 +866,31 @@ text-align: center;
    width: 100%;
  }
 
- /* Chips in grid containers (section-hint) should be centered and wrap properly */
+ /* ============================================
+  * SECTION HINT CHIP CONTAINER
+  * ============================================
+  * Flexible container for displaying status chips and category badges
+  * in a centered, wrapped layout. Used for VPN status, system metrics,
+  * and other informational displays.
+  * 
+  * Layout Behavior:
+  *   - Flexbox with wrapping enabled
+  *   - Centered alignment (horizontal and vertical)
+  *   - 8px gap between chips (MD3 spacing grid)
+  *   - Full width container
+  * 
+  * Chip Sizing:
+  *   - Chips size to content (fit-content)
+  *   - No artificial stretching or compression
+  *   - Maximum width of 100% prevents overflow
+  * 
+  * Note:
+  *   This replaces an earlier grid-based implementation that caused
+  *   layout conflicts. Flexbox provides better control for dynamic
+  *   content that varies in quantity and size.
+  * 
+  * Reference: https://m3.material.io/components/chips/guidelines
+  * ============================================ */
  .section-hint {
    display: flex;
    flex-wrap: wrap;
@@ -792,11 +900,13 @@ text-align: center;
    width: 100%;
  }
 
- .section-hint .chip, .section-hint .category-badge {
-    flex: 0 1 auto;
-    min-width: fit-content;
-    max-width: 100%;
-    margin: 0;
+ /* Chips within section hints: Natural sizing */
+ .section-hint .chip, 
+ .section-hint .category-badge {
+   flex: 0 1 auto;
+   min-width: fit-content;
+   max-width: 100%;
+   margin: 0;
  }
 
  /* Icon sizing in chips - follows MD3 18px icon spec */
@@ -909,39 +1019,86 @@ text-align: center;
  }
 
  /* MD3 Switch */
+ /* ============================================
+  * MATERIAL DESIGN 3 SWITCH COMPONENT
+  * ============================================
+  * Toggle switch following MD3 specifications for on/off states.
+  * 
+  * Structure:
+  *   .switch-container - Wrapper with label and switch
+  *   .switch-track - The track background (inactive/active states)
+  *   .switch-thumb - The circular thumb that slides
+  * 
+  * States:
+  *   Default (Off):
+  *     - Track: 52x32px with outline border
+  *     - Thumb: 16x16px circle at left (6px from edge)
+  *   Active (On):
+  *     - Track: Primary color background
+  *     - Thumb: 24x24px circle at right (24px from left)
+  * 
+  * Interaction:
+  *   - Smooth transition using MD3 emphasized easing
+  *   - Thumb grows and moves simultaneously
+  *   - Track color and border change on activation
+  * 
+  * Accessibility:
+  *   - Full keyboard support via parent button
+  *   - Clear visual distinction between states
+  *   - Sufficient contrast in both light and dark modes
+  * 
+  * Fix Applied:
+  *   Added position: relative to .switch-track to establish
+  *   positioning context for absolute-positioned thumb.
+  * 
+  * Reference: https://m3.material.io/components/switch/overview
+  * ============================================ */
  .switch-container {
- display: inline-flex;
- align-items: center;
- gap: 16px;
- cursor: pointer;
- padding: 8px 0;
+   display: inline-flex;
+   align-items: center;
+   gap: 16px;
+   cursor: pointer;
+   padding: 8px 0;
  }
 
+ /* Switch track: Background rail for the thumb */
  .switch-track {
- width: 52px;
- height: 32px;
- background: var(--md-sys-color-surface-container-highest);
- border: 2px solid var(--md-sys-color-outline);
- border-radius: 16px;
- transition: all 200ms ease;
- box-sizing: border-box;
- flex-shrink: 0;
+   width: 52px;
+   height: 32px;
+   background: var(--md-sys-color-surface-container-highest);
+   border: 2px solid var(--md-sys-color-outline);
+   border-radius: 16px;
+   transition: all 200ms ease;
+   box-sizing: border-box;
+   flex-shrink: 0;
+   position: relative; /* Positioning context for thumb */
  }
 
+ /* Switch thumb: Sliding circular indicator */
  .switch-thumb {
- width: 16px;
- height: 16px;
- background: var(--md-sys-color-outline);
- border-radius: 50%;
- position: absolute;
- top: 50%;
- left: 6px;
- transform: translateY(-50%);
- transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
+   width: 16px;
+   height: 16px;
+   background: var(--md-sys-color-outline);
+   border-radius: 50%;
+   position: absolute;
+   top: 50%;
+   left: 6px;
+   transform: translateY(-50%);
+   transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
  }
 
- .switch-container.active .switch-track { background: var(--md-sys-color-primary); border-color: var(--md-sys-color-primary); }
- .switch-container.active .switch-thumb { width: 24px; height: 24px; left: 24px; background: var(--md-sys-color-on-primary); }
+ /* Active state: Switch is ON */
+ .switch-container.active .switch-track { 
+   background: var(--md-sys-color-primary); 
+   border-color: var(--md-sys-color-primary); 
+ }
+ 
+ .switch-container.active .switch-thumb { 
+   width: 24px; 
+   height: 24px; 
+   left: 24px; 
+   background: var(--md-sys-color-on-primary); 
+ }
 
  /* Tooltips */
  .tooltip-box {

@@ -1,8 +1,60 @@
 """Privacy Hub API Gateway.
 
-This module initializes the FastAPI application, configures middleware (CORS),
-includes all service routers, and manages background worker threads for
-telemetry and log synchronization.
+This module serves as the main entry point for the Privacy Hub FastAPI
+application. It orchestrates all API endpoints, manages background workers,
+and configures middleware for security and CORS.
+
+Architecture:
+    - FastAPI application with lifespan management
+    - Router-based modular endpoint organization
+    - Background worker threads for continuous tasks
+    - CORS middleware for cross-origin requests
+    - Security headers middleware for XSS protection
+
+Key Components:
+    - Authentication & Session Management (auth router)
+    - System Health & Metrics (system router)
+    - Service Management (services router)
+    - WireGuard VPN Configuration (wireguard router)
+    - Gluetun VPN Status (gluetun router)
+    - Log Streaming (logs router)
+    - Odido Bundle Management (odido router)
+
+Background Workers:
+    - metrics_collector_thread: Collects Docker container metrics
+    - log_sync_thread: Synchronizes deployment logs to database
+    - odido_retrieval_thread: Polls Odido API for bundle status
+
+Security Features:
+    - API key authentication for service-to-service communication
+    - Admin session tokens with configurable timeout
+    - Security headers (X-Content-Type-Options, X-Frame-Options, etc.)
+    - CORS with configurable origins
+    - Input sanitization and validation via Pydantic
+
+API Prefix:
+    All routers are mounted under /api prefix to match dashboard expectations.
+    Example: POST /api/verify-admin, GET /api/status
+
+External Webhooks:
+    - POST /watchtower: Receives update notifications from Watchtower
+
+Lifecycle:
+    1. Startup: Initialize database, ensure assets, start background threads
+    2. Runtime: Handle API requests, background tasks run continuously
+    3. Shutdown: Graceful termination (if configured)
+
+Configuration:
+    Environment variables managed via app.core.config.Settings
+    See config.py for full configuration options
+
+References:
+    - FastAPI: https://fastapi.tiangolo.com/
+    - Google Python Style Guide
+    - Privacy Hub Documentation
+
+Author: ZimaOS Privacy Hub Team
+Version: 2.0.0
 """
 
 import json

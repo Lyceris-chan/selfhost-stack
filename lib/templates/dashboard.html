@@ -1,11 +1,56 @@
 <!DOCTYPE html>
+<!--
+  ============================================
+  ZIMAOS PRIVACY HUB - MAIN DASHBOARD
+  ============================================
+  
+  Web interface for managing privacy-focused services and VPN infrastructure.
+  Built with Material Design 3 principles and optimized for both desktop and mobile.
+  
+  Architecture:
+    - Server-side rendering with template variables ($APP_NAME, $LAN_IP, etc.)
+    - Client-side hydration via dashboard.js
+    - Material Design 3 component library
+    - Responsive layout with progressive enhancement
+  
+  Key Features:
+    - Service status monitoring and management
+    - Admin authentication with session management
+    - WireGuard VPN client/server configuration
+    - SSL certificate status and renewal
+    - Dynamic theming with Material Color Utilities
+    - Privacy mode for sensitive data redaction
+  
+  Security:
+    - Admin-only sections hidden by default (.admin-only class)
+    - Server-side access control for all sensitive operations
+    - Session tokens stored in sessionStorage (not localStorage)
+    - HTTPS enforcement with automatic redirect
+  
+  Template Variables:
+    $APP_NAME - Application title
+    $LAN_IP - Server LAN IP address
+    $DESEC_DOMAIN - deSEC domain if configured
+    HUB_CSS - Inline critical CSS
+    HUB_JS - Inline JavaScript bundle
+  
+  References:
+    - Material Design 3: https://m3.material.io/
+    - Google HTML/CSS Style Guide
+    - WCAG 2.1 Accessibility Guidelines
+  
+  Author: ZimaOS Privacy Hub Team
+  Version: 2.0.0
+  ============================================
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZimaOS $APP_NAME</title>
   <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
-  <!-- Local privacy friendly assets (Hosted Locally) -->
+  
+  <!-- Local privacy-friendly assets (Hosted Locally) -->
   <link href="assets/gs.css" rel="stylesheet">
   <link href="assets/cc.css" rel="stylesheet">
   <link href="assets/ms.css" rel="stylesheet">
@@ -56,6 +101,16 @@
 <body style="opacity: 0; transition: opacity 0.3s ease;">
   <script>window.addEventListener('DOMContentLoaded', () => document.body.style.opacity = '1');</script>
   <div class="container">
+    <!-- ============================================
+         HEADER SECTION
+         ============================================
+         Main navigation and control panel with:
+         - Branding (logo + title)
+         - Privacy controls (Safe Display Mode)
+         - Admin authentication toggle
+         - Theme switcher (light/dark mode)
+         - API connection status indicator
+         ============================================ -->
     <header>
       <div class="header-row">
         <div>
@@ -93,6 +148,24 @@
       </div>
     </header>
 
+    <!-- ============================================
+         CATEGORY FILTER BAR
+         ============================================
+         Horizontal chip bar for filtering services by category.
+         
+         Categories:
+         - All services: Shows everything (default)
+         - Applications: User-facing apps (Invidious, SearXNG, etc.)
+         - Infrastructure: Core services (Portainer, Docker)
+         - DNS & Security: AdGuard, Unbound
+         - Utilities: Helper tools
+         - System & Logs: Admin-only monitoring (requires authentication)
+         
+         Behavior:
+         - Active filter highlighted with primary color
+         - Filters persist in localStorage
+         - Smooth transitions between states
+         ============================================ -->
     <div class="filter-bar" id="category-filters">
       <button class="chip filter-chip active" data-target="all" onclick="filterCategory('all')">All services</button>
       <button class="chip filter-chip" data-target="apps" onclick="filterCategory('apps')">Applications</button>
@@ -151,7 +224,7 @@
     </section>
 
     <section data-category="system">
-    <div class="section-label title-medium">System Management</div>
+    <div class="section-label title-medium admin-only">System Management</div>
     <div class="section-hint body-medium" style="margin-bottom: 8px;">
       <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);"><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
     </div>
@@ -185,7 +258,7 @@
     </section>
 
     <section data-category="dns">
-    <div class="section-label title-medium">DNS Configuration</div>
+    <div class="section-label title-medium admin-only">DNS Configuration</div>
     <div class="grid smart-grid">
       <div class="card">
         <h3 class="title-medium">Certificate status</h3>
@@ -514,7 +587,7 @@
       </div>
     </div>
 
-    <div class="section-label">Customization & Info</div>
+    <div class="section-label admin-only">Customization & Info</div>
     <div class="grid">
       <div class="card admin-only">
         <div class="card-header">

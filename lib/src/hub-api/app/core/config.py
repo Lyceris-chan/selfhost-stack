@@ -1,7 +1,51 @@
 """Configuration settings for the Privacy Hub API.
 
-This module defines the Settings class which handles environment variables
-and application configuration using Pydantic.
+This module centralizes all application configuration using Pydantic settings
+management. Environment variables are loaded from .env files and system
+environment, with validation and type conversion handled automatically.
+
+Configuration Categories:
+    - Application: APP_NAME, CONTAINER_PREFIX, PORT
+    - File Paths: CONFIG_DIR, PROFILES_DIR, LOG_FILE, etc.
+    - Network: LAN_IP, WG_HOST, DESEC_DOMAIN, CORS_ORIGINS
+    - Authentication: HUB_API_KEY, ADMIN_PASS_RAW, VPN_PASS_RAW
+
+Key Features:
+    - Pydantic-based validation and type coercion
+    - Support for .env file loading
+    - Flexible CORS origin parsing (JSON array or comma-separated)
+    - Environment variable overrides
+    - Immutable configuration after initialization
+
+Path Strategy:
+    - /app: Main configuration directory (CONFIG_DIR)
+    - /profiles: WireGuard profile storage
+    - /app/data: Database and persistent data
+    - /assets: Static assets (icons, templates)
+
+Network Configuration:
+    - LAN_IP: Server's local network IP address
+    - WG_HOST: Public hostname for WireGuard clients
+    - DESEC_DOMAIN: Optional deSEC domain for SSL
+
+Security Considerations:
+    - Secrets loaded from environment (not committed to repo)
+    - API keys validated and sanitized before use
+    - CORS origins configurable per deployment
+    - File permissions enforced on secrets file (0o600)
+
+Usage:
+    from app.core.config import settings
+    
+    print(settings.LAN_IP)
+    print(settings.ADMIN_PASS_RAW)
+
+References:
+    - Pydantic Settings: https://docs.pydantic.dev/latest/usage/settings/
+    - Google Python Style Guide
+
+Author: ZimaOS Privacy Hub Team
+Version: 2.0.0
 """
 
 import json
