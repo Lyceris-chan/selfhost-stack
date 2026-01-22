@@ -308,6 +308,8 @@ usage() {
 	echo "Usage: $0 [options]"
 	echo ""
 	echo "Options:"
+	echo "  -x          Factory Reset (wipes all data)"
+	echo "  -p          Auto-Generate Passwords (skip prompts)"
 	echo "  -y          Auto-Confirm (Reserved for automated testing)"
 	echo "  -j          Parallel Deploy (faster builds, high CPU usage)"
 	echo "  -s <list>   Selective deployment (comma-separated list, e.g., -s invidious,memos)"
