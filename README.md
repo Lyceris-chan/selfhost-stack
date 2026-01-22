@@ -397,7 +397,7 @@ flags:
 | `-c` | **Maintenance**: Recreates containers and networks to fix glitches while **preserving** your persistent data. |
 | `-x` | **Factory Reset**: ⚠️ **Deletes everything**. Wipes all containers, volumes, and application data.            |
 | `-p` | **Auto-Generate Passwords**: Generates secure passwords automatically without prompting.                      |
-| `-a` | **Allow ProtonVPN**: Whitelists ProtonVPN domains in AdGuard Home to ensure browser extensions work correctly. <br> <details><summary>View whitelisted domains</summary><ul><li>protonvpn.com</li><li>proton.me</li><li>protonmail.com</li><li>api.protonvpn.ch</li><li>protonvpn.ch</li><li>protonvpn.net</li><li>getproton.me</li><li>vpn-api.proton.me</li><li>protonstatus.com</li><li>api.protonmail.ch</li></ul></details> |
+| `-a` | **Allow ProtonVPN**: Whitelists ProtonVPN domains in AdGuard Home to ensure browser extensions work correctly. <br> <details><summary>View whitelisted domains</summary><ul><li>getproton.me</li><li>vpn-api.proton.me</li><li>protonstatus.com</li><li>protonvpn.ch</li><li>protonvpn.com</li><li>protonvpn.net</li></ul></details> |
 | `-h` | **Help**: Displays usage information and available flags.                                                     |
 
 **Example usage:**
