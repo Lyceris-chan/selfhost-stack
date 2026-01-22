@@ -297,29 +297,32 @@ generate_secret() {
 generate_hash() {
 	local user="$1"
 	local pass="$2"
+	local hash=""
 
 	# Method 1: Try host Python (if crypt/bcrypt supported)
 	if command -v "${PYTHON_CMD}" >/dev/null 2>&1; then
-		local py_hash
 		# Try to use crypt module with bcrypt salt
-		py_hash=$("${PYTHON_CMD}" -c "import crypt, random, string, sys; salt = '\$2b\$12\$' + ''.join(random.choices(string.ascii_letters + string.digits, k=22)); print(crypt.crypt(sys.argv[1], salt))" "${pass}" 2>/dev/null || true)
-		if [[ -n "${py_hash}" ]] && [[ "${py_hash}" == \$2b\$* ]]; then
-			echo "${py_hash}"
-			return 0
-		fi
+		hash=$("${PYTHON_CMD}" -c "import crypt, random, string, sys; salt = '\$2b\$12\$' + ''.join(random.choices(string.ascii_letters + string.digits, k=22)); print(crypt.crypt(sys.argv[1], salt))" "${pass}" 2>/dev/null || true)
 	fi
 
-	# Method 2: Try host OpenSSL (if it supports -5/-6, though not bcrypt, some services might accept it?
-	# Actually, AdGuard/Portainer prefer bcrypt. Sticking to Docker if Python fails is safer for compatibility unless we have htpasswd.)
+	# Method 2: Try host htpasswd
+	if [[ -z "${hash}" ]] && command -v htpasswd >/dev/null 2>&1; then
+		hash=$(htpasswd -B -n -b "${user}" "${pass}" | cut -d: -f2 || true)
+	fi
 
-	# Method 3: Try host htpasswd
-	if command -v htpasswd >/dev/null 2>&1; then
-		htpasswd -B -n -b "${user}" "${pass}" | cut -d: -f2
+	# Method 3: Docker Fallback (Alpine)
+	if [[ -z "${hash}" ]]; then
+		hash=$("${DOCKER_CMD}" run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "${user}" "${pass}" 2>/dev/null | cut -d: -f2 || echo "FAILED")
+	fi
+
+	if [[ -n "${hash}" ]] && [[ "${hash}" != "FAILED" ]]; then
+		# Portainer compatibility: Normalize $2y$ (Apache variant) to $2b$ (standard)
+		echo "${hash//\$2y\$/\$2b\$}"
 		return 0
 	fi
 
-	# Method 4: Docker Fallback (Alpine)
-	"${DOCKER_CMD}" run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "${user}" "${pass}" 2>/dev/null | cut -d: -f2 || echo "FAILED"
+	echo "FAILED"
+	return 1
 }
 
 # Initialize globals
