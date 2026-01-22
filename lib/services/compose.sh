@@ -220,7 +220,6 @@ EOF
             - "${LAN_IP}:${PORT_IMMICH}:${PORT_INT_IMMICH}/tcp"
             - "${LAN_IP}:${PORT_COBALT}:${PORT_INT_COBALT}/tcp"
             - "${LAN_IP}:${PORT_COBALT_API}:${PORT_INT_COBALT_API}/tcp"
-            - "${LAN_IP}:8085:8085/tcp"
 EOF
 
 	cat >>"${COMPOSE_FILE}" <<EOF
