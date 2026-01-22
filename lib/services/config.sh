@@ -408,6 +408,15 @@ setup_configs() {
 	"${SUDO}" chown -R "$(whoami)" "${AGH_CONF_DIR}"
 	"${SUDO}" chown -R 1000:1000 "${DATA_DIR}/hub-api"
 
+	local user_rules_block=""
+	if [[ "${ALLOW_PROTON_VPN:-false}" == "true" ]]; then
+		user_rules_block="user_rules:
+  - @@||protonvpn.com^
+  - @@||proton.me^
+  - @@||protonmail.com^
+  - @@||api.protonvpn.ch^"
+	fi
+
 	cat >"${AGH_YAML}" <<EOF
 schema_version: 29
 http: {address: 0.0.0.0:${PORT_ADGUARD_WEB}}
@@ -419,6 +428,7 @@ dns:
   quic_port: 853
   upstream_dns: ["${unbound_static_ip}"]
   bootstrap_dns: ["${unbound_static_ip}"]
+${user_rules_block}
 filters:
   - enabled: true
     url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/main/blocklist.txt
