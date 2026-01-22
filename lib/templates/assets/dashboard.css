@@ -287,6 +287,7 @@
    margin-right: 0;
    justify-content: center;
    flex-wrap: wrap;
+   min-height: 48px;
  }
  
  /* Hide scrollbar while maintaining scroll functionality */
@@ -462,6 +463,7 @@
  color: var(--md-sys-color-on-surface);
  margin: 0;
  padding: 24px;
+ padding-bottom: 48px;
  display: flex;
  flex-direction: column;
  align-items: center;
@@ -631,7 +633,7 @@
  font-size: 14px;
  font-weight: 500;
  letter-spacing: 0.1px;
- margin: 48px 0 16px 0;
+ margin: 48px 0 24px 0;
  }
  .section-label:first-of-type {
  margin-top: 8px;
@@ -1023,42 +1025,16 @@
   * MATERIAL DESIGN 3 SWITCH COMPONENT
   * ============================================
   * Toggle switch following MD3 specifications for on/off states.
-  * 
-  * Structure:
-  *   .switch-container - Wrapper with label and switch
-  *   .switch-track - The track background (inactive/active states)
-  *   .switch-thumb - The circular thumb that slides
-  * 
-  * States:
-  *   Default (Off):
-  *     - Track: 52x32px with outline border
-  *     - Thumb: 16x16px circle at left (6px from edge)
-  *   Active (On):
-  *     - Track: Primary color background
-  *     - Thumb: 24x24px circle at right (24px from left)
-  * 
-  * Interaction:
-  *   - Smooth transition using MD3 emphasized easing
-  *   - Thumb grows and moves simultaneously
-  *   - Track color and border change on activation
-  * 
-  * Accessibility:
-  *   - Full keyboard support via parent button
-  *   - Clear visual distinction between states
-  *   - Sufficient contrast in both light and dark modes
-  * 
-  * Fix Applied:
-  *   Added position: relative to .switch-track to establish
-  *   positioning context for absolute-positioned thumb.
-  * 
-  * Reference: https://m3.material.io/components/switch/overview
-  * ============================================ */
+  */
  .switch-container {
    display: inline-flex;
    align-items: center;
    gap: 16px;
    cursor: pointer;
    padding: 8px 0;
+   flex-shrink: 0; /* Prevent compression */
+   position: relative;
+   z-index: 1;
  }
 
  /* Switch track: Background rail for the thumb */
@@ -1071,7 +1047,7 @@
    transition: all 200ms ease;
    box-sizing: border-box;
    flex-shrink: 0;
-   position: relative; /* Positioning context for thumb */
+   position: relative;
  }
 
  /* Switch thumb: Sliding circular indicator */
@@ -1085,6 +1061,7 @@
    left: 6px;
    transform: translateY(-50%);
    transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-emphasized);
+   z-index: 2;
  }
 
  /* Active state: Switch is ON */
@@ -1098,6 +1075,13 @@
    height: 24px; 
    left: 24px; 
    background: var(--md-sys-color-on-primary); 
+ }
+
+ /* Ensure admin button is visible by default */
+ #admin-lock-btn {
+   display: flex !important;
+   visibility: visible;
+   opacity: 1;
  }
 
  /* Tooltips */
