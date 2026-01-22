@@ -182,6 +182,14 @@ clean_environment() {
 		fi
 	fi
 
+	# Cleanup networks
+	if "${DOCKER_CMD}" network ls --format '{{.Name}}' | grep -q "${APP_NAME}_frontend"; then
+		log_info "Removing existing project network..."
+		safe_remove_network "${APP_NAME}_frontend"
+		safe_remove_network "${APP_NAME}-frontend"
+		safe_remove_network "privacy-hub_frontend"
+	fi
+
 	if [[ -d "${BASE_DIR}" ]]; then
 		if ask_confirm "Wipe ALL application data? This action is irreversible."; then
 			check_cert_risk

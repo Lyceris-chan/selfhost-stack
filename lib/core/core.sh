@@ -708,6 +708,23 @@ $SUDO chown -R 1000:1000 "$DATA_DIR" "$MEMOS_HOST_DIR" "$ASSETS_DIR" 2>/dev/null
 allocate_subnet() {
 	log_info "Allocating private virtual subnet for container isolation."
 
+	# Try to reuse existing subnet to prevent bridge conflicts
+	# The default project name is APP_NAME (privacy-hub), so network is privacy-hub_frontend
+	# Docker Compose v2 might use hyphens or underscores depending on version/config
+	local existing_subnet=""
+	local net_name
+	for net_name in "${APP_NAME}_frontend" "${APP_NAME}-frontend" "privacy-hub_frontend"; do
+		existing_subnet=$("${DOCKER_CMD}" network inspect "${net_name}" --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null || true)
+		if [[ -n "${existing_subnet}" ]]; then
+			log_info "Reusing existing network subnet: ${existing_subnet}"
+			DOCKER_SUBNET="${existing_subnet}"
+			# Extract octet (e.g., 172.20.0.0/16 -> 20)
+			FOUND_OCTET=$(echo "${existing_subnet}" | cut -d. -f2)
+			export DOCKER_SUBNET FOUND_OCTET
+			return 0
+		fi
+	done
+
 	local found_subnet=""
 	local found_octet=""
 	local test_subnet
