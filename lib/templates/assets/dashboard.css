@@ -767,7 +767,8 @@
    height: 24px;
  }
 
- .status-indicator {
+ /* Scoped status indicator for cards */
+ .card .status-indicator {
    position: absolute;
    right: 0;
    transition: opacity 0.2s ease, transform 0.2s ease;
@@ -900,6 +901,7 @@
    justify-content: center;
    align-items: center;
    width: 100%;
+   margin-bottom: 24px; /* Added spacing */
  }
 
  /* Chips within section hints: Natural sizing */
@@ -958,6 +960,8 @@
  font-size: 12px;
  min-width: 100px;
  justify-content: center;
+ flex-shrink: 0;
+ white-space: nowrap;
  }
 
  .status-dot {
@@ -1300,6 +1304,11 @@
  text-align: center;
  padding: 32px;
  background: transparent !important;
+ }
+
+ #odido-loading {
+   flex-direction: column;
+   gap: 16px;
  }
 
  .loading-spinner {

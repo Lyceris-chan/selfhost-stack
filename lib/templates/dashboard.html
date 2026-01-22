@@ -142,7 +142,8 @@
             <span class="material-symbols-rounded" id="theme-icon">light_mode</span>
           </button>
           <button class="theme-toggle" id="admin-lock-btn" onclick="toggleAdminMode()" data-tooltip="Enter Admin Mode to manage services">
-            <span class="material-symbols-rounded" id="admin-icon">admin_panel_settings</span>
+            <span class="material-symbols-rounded" id="admin-icon" style="margin-right: 8px;">lock_person</span>
+            <span class="label-large">Sign in</span>
           </button>
         </div>
       </div>
@@ -224,7 +225,7 @@
     </section>
 
     <section data-category="system">
-    <div class="section-label title-medium admin-only">System Management</div>
+    <div class="section-label title-medium admin-only">System management</div>
     <div class="section-hint body-medium" style="margin-bottom: 8px;">
       <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);"><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
     </div>
@@ -258,10 +259,10 @@
     </section>
 
     <section data-category="dns" class="admin-only">
-    <div class="section-label title-medium">DNS Configuration</div>
+    <div class="section-label title-medium">DNS configuration</div>
     <div class="grid smart-grid">
       <div class="card">
-        <h3 class="title-medium">Certificate status</h3>
+        <h3 class="title-medium">Certificate Status</h3>
         <div id="cert-status-content" style="padding-top: 12px; flex-grow: 1;">
           <div class="stat-row" data-tooltip="Type of SSL certificate currently installed"><span class="stat-label label-medium">Type</span><span class="stat-value title-small" id="cert-type">Checking...</span></div>
           <div class="stat-row" data-tooltip="The domain name this certificate protects"><span class="stat-label label-medium">Domain</span><span class="stat-value title-small sensitive" id="cert-subject">Checking...</span></div>
@@ -290,7 +291,7 @@
         </div>
       </div>
       <div class="card admin-only">
-        <h3 class="title-medium">deSEC configuration</h3>
+        <h3 class="title-medium">deSEC Configuration</h3>
         <p class="body-medium description">Manage your dynamic DNS and SSL certificate parameters:</p>
         <form onsubmit="saveDesecConfig(); return false;">
           <input type="text" id="desec-domain-input" class="text-field" placeholder="Domain (e.g. yourname.dedyn.io)" style="margin-bottom:12px;" autocomplete="username" data-tooltip="Enter your registered deSEC domain (e.g. yourname.dedyn.io). You can create one for free at desec.io.">
@@ -304,7 +305,7 @@
         </form>
       </div>
       <div class="card">
-        <h3 class="title-medium">Device DNS settings</h3>
+        <h3 class="title-medium">Device DNS Settings</h3>
         <p class="body-medium description">Use these standard encrypted endpoints to maintain digital independence:</p>
         <div class="code-label" data-tooltip="Standard unencrypted DNS (Port 53). Recommended only for use within your local LAN.">Standard IPv4 (local LAN only)</div>
         <div class="code-block sensitive" onclick="copyToClipboard('$LAN_IP:53', this)">$LAN_IP:53</div>
@@ -327,7 +328,7 @@
         </p>
       </div>
       <div class="card">
-        <h3 class="title-medium">Endpoint provisioning</h3>
+        <h3 class="title-medium">Endpoint Provisioning</h3>
         <div id="dns-setup-trusted" style="display:none; height: 100%; display: flex; flex-direction: column;">
           <p class="body-medium description">Globally trusted SSL enables zero-trust encrypted DNS on all devices.</p>
 
@@ -394,14 +395,14 @@
     </section>
 
     <section data-category="tools">
-    <div class="section-label title-medium">Service Utilities</div>
+    <div class="section-label title-medium">Service utilities</div>
     <div id="grid-tools" class="grid">
       <!-- Dynamic Cards Injected Here -->
     </div>
     <div class="grid">
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-          <h3 class="title-medium">Odido status</h3>
+          <h3 class="title-medium">Odido Status</h3>
           <div id="odido-speed-indicator" class="body-small" style="color: var(--md-sys-color-primary); font-weight: 500; display:none;">0 Mb/s</div>
         </div>
         <div id="odido-status-container" style="display: flex; flex-direction: column; height: 100%;">
@@ -423,7 +424,7 @@
               </div>
             </div>
 
-            <div style="margin-top: 24px; flex-grow: 1; min-height: 120px; position: relative; background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 12px;">
+            <div class="admin-only" style="margin-top: 24px; flex-grow: 1; min-height: 120px; position: relative; background: var(--md-sys-color-surface-container-low); border-radius: 12px; padding: 12px;">
               <div style="position: absolute; top: 8px; left: 12px; font-size: 10px; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Consumption Rate (MB/min)</div>
               <svg id="odido-graph" width="100%" height="100%" viewBox="0 0 400 120" preserveAspectRatio="none" style="overflow: visible;">
                 <defs>
@@ -446,13 +447,13 @@
             <div id="odido-buy-status" class="body-small" style="text-align: center; margin-top: 8px; font-weight: 500;"></div>
             <div class="btn-group" style="justify-content:center; margin-top: 16px;">
               <button onclick="buyOdidoBundle()" class="btn btn-tertiary admin-only" id="odido-buy-btn">Buy bundle</button>
-              <button onclick="refreshOdidoRemaining()" class="btn btn-tonal">Refresh status</button>
-              <a href="http://$LAN_IP:$PORT_ODIDO/docs" target="_blank" class="btn btn-outlined">API</a>
+              <button onclick="refreshOdidoRemaining()" class="btn btn-tonal admin-only">Refresh status</button>
+              <a href="http://$LAN_IP:$PORT_ODIDO/docs" target="_blank" class="btn btn-outlined admin-only">API</a>
             </div>
           </div>
           <div id="odido-loading" class="chip admin" style="width: auto; justify-content: flex-start; gap: 12px; height: auto; padding: 12px; border-radius: var(--md-sys-shape-corner-medium); border: none; margin-top: 8px;">
             <div style="flex-shrink: 0; width: 24px; height: 24px; border: 3px solid var(--md-sys-color-on-secondary-container); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-            <span style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
+            <span style="display: flex; flex-direction: column; gap: 2px; flex: 1; align-items: center;">
               <span style="font-weight: 600;">Synchronizing Data</span>
               <span class="body-medium" style="opacity: 0.8; white-space: normal;">Connecting to Odido API to retrieve latest bundle status...</span>
             </span>
@@ -567,7 +568,7 @@
       </div>
     </div>
 
-    <div class="section-label admin-only">WireGuard Profiles</div>
+    <div class="section-label admin-only">WireGuard profiles</div>
     <div class="grid admin-only">
       <div class="card admin-only">
         <h3 class="title-medium">Upload profile</h3>
@@ -588,7 +589,7 @@
     </div>
 
     <section data-category="customization" class="admin-only">
-    <div class="section-label">Customization & Info</div>
+    <div class="section-label">Customization & info</div>
     <div class="grid">
       <div class="card admin-only">
         <div class="card-header">
@@ -663,7 +664,7 @@
           </div>
           <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
             <div style="flex: 1;">
-              <span class="label-large">Update Strategy</span>
+              <span class="label-large">Update strategy</span>
               <p class="body-small" id="strategy-desc" style="color: var(--md-sys-color-on-surface-variant);">Stable: Use official release tags (Recommended).</p>
             </div>
             <select id="update-strategy-select" class="btn btn-tonal" style="height: 40px; padding: 0 12px;" onchange="updateStrategyChange()">
@@ -673,7 +674,7 @@
           </div>
           <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
             <div style="flex: 1;">
-              <span class="label-large">Rollback Support</span>
+              <span class="label-large">Rollback support</span>
               <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Keep source-code snapshots before updates to allow reverting versions.</p>
             </div>
             <div class="switch-container" id="rollback-backup-switch" onclick="toggleRollbackBackup()" data-tooltip="Toggle automated backup before service updates">
@@ -684,7 +685,7 @@
           </div>
           <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
             <div style="flex: 1;">
-              <span class="label-large">Session Auto-Cleanup</span>
+              <span class="label-large">Session auto-cleanup</span>
               <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Automatically expire admin sessions after inactivity.</p>
             </div>
             <div class="switch-container" id="session-cleanup-switch" onclick="toggleSessionCleanup()" data-tooltip="Toggle automatic session expiration">
@@ -695,7 +696,7 @@
           </div>
           <div style="background: var(--md-sys-color-surface-container-high); padding: 16px; border-radius: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid var(--md-sys-color-outline-variant);">
             <div style="flex: 1;">
-              <span class="label-large">Session Timeout (Minutes)</span>
+              <span class="label-large">Session timeout (minutes)</span>
               <p class="body-small" style="color: var(--md-sys-color-on-surface-variant);">Duration of inactivity before auto-logout (Default: 30 Minutes).</p>
             </div>
             <input type="number" id="session-timeout-input" class="text-field" style="width: 80px;" value="30" onchange="syncSettings()">
@@ -738,11 +739,11 @@
     </section>
 
     <section data-category="logs">
-    <div class="section-label">System & Logs</div>
+    <div class="section-label">System & logs</div>
     <div class="grid">
       <div class="card">
         <div class="card-header">
-          <h3 class="title-medium">System health</h3>
+          <h3 class="title-medium">System Health</h3>
           <div class="card-header-actions">
             <div class="chip" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 0 12px; height: 28px; font-weight: 500; gap: 6px; box-shadow: var(--md-sys-elevation-1);">
               <span class="material-symbols-rounded" id="health-icon" style="font-size: 16px;">check_circle</span>
@@ -785,7 +786,7 @@
       </div>
       <div class="card">
         <div class="card-header">
-          <h3 class="title-medium">System & deployment logs</h3>
+          <h3 class="title-medium">System & Deployment Logs</h3>
           <div class="card-header-actions">
             <select id="log-filter-level" onchange="filterLogs()" class="btn btn-tonal" style="height: 32px; padding: 0 16px 0 8px; font-size: 12px; border-radius: 8px;">
               <option value="ALL">All Levels</option>
@@ -902,7 +903,7 @@
   <div id="signin-modal" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <h2 class="headline-small">Admin Sign in</h2>
+        <h2 class="headline-small">Admin sign in</h2>
         <button onclick="closeSignInModal()" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
       </div>
       <p class="body-medium" style="margin-bottom: 24px; color: var(--md-sys-color-on-surface-variant);">Enter your administrator password to unlock management features.</p>
