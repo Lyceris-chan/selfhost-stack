@@ -100,11 +100,11 @@ def get_certificate_status():
 
         # Determine type
         cert_type = "Self-Signed"
-        trusted_issuers = ["Let's Encrypt", "R3", "R10", "R11", "E1", "E2"]
+        trusted_issuers = ["Let's Encrypt", "R3", "R10", "R11", "E1", "E2", "ZeroSSL", "Sectigo", "DigiCert", "GTS"]
         if any(ti in issuer for ti in trusted_issuers):
-            cert_type = "Let's Encrypt (Trusted)"
+            cert_type = "Trusted"
         elif issuer and issuer != subject:
-            cert_type = f"Issued by {issuer}"
+            cert_type = f"Trusted (via {issuer})"
 
         log_structured(
             "INFO", f"Certificate check successful: {cert_type} for {subject}"
@@ -116,6 +116,7 @@ def get_certificate_status():
             "issuer": issuer,
             "expires": not_after,
             "type": cert_type,
+            "status": cert_type,
             "path": cert_path,
         }
     except subprocess.TimeoutExpired:

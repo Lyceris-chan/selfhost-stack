@@ -59,9 +59,6 @@ except Exception:
             - frontend
             - mgmt
         ports: ["${PORT_API}:55555"]
-        dns:
-            - 9.9.9.9
-            - 149.112.112.112
         extra_hosts:
             - "host.docker.internal:host-gateway"
         volumes:

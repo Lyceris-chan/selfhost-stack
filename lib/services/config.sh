@@ -46,9 +46,9 @@ fi
 
 echo "Starting certificate renewal check for \${DESEC_DOMAIN}..."
 
-\${DOCKER_CMD} run --rm --dns 9.9.9.9 \\
-    -v "\${AGH_CONF_DIR}:/acme" \\
-    -e "DESEC_Token=\${DESEC_TOKEN}" \\
+\${DOCKER_CMD} run --rm \
+    -v "\${AGH_CONF_DIR}:/acme" \
+    -e "DESEC_Token=\${DESEC_TOKEN}" \
     neilpang/acme.sh:latest --cron --home /acme --config-home /acme --cert-home /acme/certs
 
 if [[ \$? -eq 0 ]]; then
