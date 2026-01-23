@@ -232,7 +232,7 @@
     <div class="section-hint mb-16 card-outline" style="padding: 16px; border-radius: var(--md-sys-shape-corner-large);">
       <div class="w-full flex-row align-center gap-8 mb-8" style="color: var(--md-sys-color-primary);">
         <span class="material-symbols-rounded" style="font-size: 20px;">vpn_lock</span>
-        <span class="label-large" style="font-weight: 600;">Outbound VPN Gateway (Gluetun)</span>
+        <span class="label-large" style="font-weight: 600;">Gluetun</span>
       </div>
       <div class="section-hint">
         <span class="chip category-badge" id="hint-vpn-status" data-tooltip="Gluetun Outbound VPN Tunnel Status">VPN: Checking...</span>
@@ -661,7 +661,7 @@
               <span class="label-large" data-tooltip="Stable: Verified release tags. Latest: Bleeding-edge branch commits.">Update strategy</span>
               <p class="body-small" id="strategy-desc" style="color: var(--md-sys-color-on-surface-variant);">Stable: Use official release tags (Recommended).</p>
             </div>
-            <select id="update-strategy-select" class="btn btn-tonal" style="height: 40px; padding: 0 12px;" onchange="updateStrategyChange()">
+            <select id="update-strategy-select" class="btn btn-tonal" style="height: 40px; padding: 0 12px;" onchange="updateStrategyChange()" data-tooltip="Stable: Verified release tags. Latest: Bleeding-edge branch commits.">
               <option value="stable">Stable (Tags)</option>
               <option value="latest">Latest (Branch)</option>
             </select>

@@ -838,6 +838,7 @@ append_cobalt() {
     cobalt:
         image: ghcr.io/imputnet/cobalt:${COBALT_IMAGE_TAG:-latest}
         container_name: ${CONTAINER_PREFIX}cobalt
+        pull_policy: always
         init: true
         read_only: true
 EOF
@@ -866,7 +867,6 @@ append_cobalt_web() {
 	local dockerfile="web/Dockerfile"
 	cat >>"${COMPOSE_FILE}" <<EOF
     cobalt-web:
-        pull_policy: build
         build:
             context: ${SRC_DIR}/cobalt
             dockerfile: ${dockerfile}
@@ -874,9 +874,6 @@ append_cobalt_web() {
                 - WEB_DEFAULT_API=http://${LAN_IP}:${PORT_COBALT_API}
         image: selfhost/cobalt-web:${COBALT_WEB_IMAGE_TAG:-latest}
         container_name: ${CONTAINER_PREFIX}cobalt-web
-EOF
-
-	cat >>"${COMPOSE_FILE}" <<EOF
         network_mode: "container:${CONTAINER_PREFIX}gluetun"
 EOF
 

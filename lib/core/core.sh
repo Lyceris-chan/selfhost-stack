@@ -1200,7 +1200,7 @@ Name,URL,Username,Password,Note
 Privacy Hub Admin,http://${LAN_IP}:${PORT_DASHBOARD_WEB},admin,${ADMIN_PASS_RAW},Primary management portal.
 AdGuard Home,http://${LAN_IP}:${PORT_ADGUARD_WEB},adguard,${AGH_PASS_RAW},DNS filtration.
 WireGuard VPN UI,http://${LAN_IP}:${PORT_WG_WEB},admin,${VPN_PASS_RAW},WireGuard management.
-Portainer UI,http://${LAN_IP}:${PORT_PORTAINER},admin,${PORTAINER_PASS_RAW},Container management.
+Portainer UI,http://${LAN_IP}:${PORT_PORTAINER},portainer,${PORTAINER_PASS_RAW},Container management.
 EOF
 	chmod 600 "${export_file}"
 	log_info "Credential export file created: ${export_file}"

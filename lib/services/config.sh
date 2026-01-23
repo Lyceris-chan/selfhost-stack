@@ -422,6 +422,10 @@ setup_configs() {
 schema_version: 29
 http: {address: 0.0.0.0:${PORT_ADGUARD_WEB}}
 users: [{name: "${AGH_USER}", password: "${AGH_PASS_HASH}"}]
+statistics:
+  interval: 30
+querylog:
+  interval: 30
 dns:
   bind_hosts:
     - 0.0.0.0
@@ -470,8 +474,19 @@ EOF
 			if ossl x509 -checkend 86400 -noout -in "${AGH_CONF_DIR}/ssl.crt" >/dev/null 2>&1; then
 				# Check if the cert matches the domain
 				if ossl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | grep -q "${DESEC_DOMAIN}"; then
-					log_info "Existing valid certificate for ${DESEC_DOMAIN} detected. Skipping issuance."
-					cert_valid=true
+					# Check for self-signed (Issuer == Subject)
+					local issuer
+					local subject
+					issuer=$(ossl x509 -noout -issuer -in "${AGH_CONF_DIR}/ssl.crt" | sed 's/^issuer= //')
+					subject=$(ossl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | sed 's/^subject= //')
+					
+					if [[ "${issuer}" == "${subject}" ]]; then
+						log_warn "Existing certificate is self-signed. Re-issuing with ACME."
+						cert_valid=false
+					else
+						log_info "Existing valid certificate for ${DESEC_DOMAIN} detected. Skipping issuance."
+						cert_valid=true
+					fi
 				else
 					log_warn "Existing certificate subject does not match ${DESEC_DOMAIN}. Re-issuing..."
 				fi
@@ -509,6 +524,7 @@ EOF
 		  interface: 0.0.0.0
 		  port: 53
 		  access-control: 0.0.0.0/0 refuse
+		  access-control: 127.0.0.0/8 allow
 		  access-control: 172.16.0.0/12 allow
 		  access-control: 192.168.0.0/16 allow
 		  access-control: 10.0.0.0/8 allow

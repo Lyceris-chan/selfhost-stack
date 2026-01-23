@@ -228,6 +228,11 @@ def get_status(user: str = Depends(get_optional_user)):
                     "healthy": status_data["gluetun"].get("healthy"),
                     "public_ip": "[REDACTED]",
                     "active_profile": "[REDACTED]",
+                    "session_rx": status_data["gluetun"].get("session_rx", "0"),
+                    "session_tx": status_data["gluetun"].get("session_tx", "0"),
+                    "total_rx": status_data["gluetun"].get("total_rx", "0"),
+                    "total_tx": status_data["gluetun"].get("total_tx", "0"),
+                    "handshake_ago": status_data["gluetun"].get("handshake_ago", "N/A"),
                 }
             if "wgeasy" in status_data:
                 status_data["wgeasy"] = {
@@ -485,8 +490,8 @@ def get_project_details(user: str = Depends(get_admin_user)):
     except Exception:
         pass
 
-    # Only show reclaimable if it's significant (> 100 MB)
-    if reclaimable < 100:
+    # Only show reclaimable if it's significant (> 500 MB)
+    if reclaimable < 500:
         reclaimable = 0
 
     return {"breakdown": breakdown, "total": total_size, "reclaimable": reclaimable}
