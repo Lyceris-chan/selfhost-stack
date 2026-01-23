@@ -62,7 +62,7 @@ export CRITICAL_IMAGES
 # Default tags for specific services
 readonly IMMICH_DEFAULT_TAG="release"
 export IMMICH_DEFAULT_TAG
-readonly COBALT_DEFAULT_TAG="11"
+readonly COBALT_DEFAULT_TAG="latest"
 export COBALT_DEFAULT_TAG
 
 # Port Definitions
