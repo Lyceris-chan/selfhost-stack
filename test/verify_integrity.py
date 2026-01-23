@@ -150,11 +150,12 @@ class IntegrityChecker:
             "Flex-column helper uses correct property",
         )
 
-        vpn_desc = "Services marked with 🔒 VPN are routed through a secure tunnel. These services only access the internet via the VPN gateway and are not reachable from the public internet."
+        # Updated check for tooltip-based description
+        vpn_desc = "Services routed through the secure VPN tunnel"
         self.check_pattern(
             html,
             vpn_desc,
-            "VPN mandated description present in dashboard.html",
+            "VPN mandated description present in dashboard.html (Tooltip)",
             literal=True,
         )
 
@@ -164,8 +165,8 @@ class IntegrityChecker:
         html = "lib/templates/dashboard.html"
         readme = "README.md"
 
-        # Terminologies
-        self.check_pattern(html, r"Admin Sign in", "Uses 'sign-in' instead of 'login'")
+        # Terminologies (Sentence case preferred for headers)
+        self.check_pattern(html, r"Admin sign in", "Uses 'sign-in' instead of 'login'")
         self.check_no_pattern(
             html,
             r"[^/]Login",

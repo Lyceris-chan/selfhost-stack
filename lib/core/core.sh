@@ -319,14 +319,14 @@ generate_hash() {
 		hash=$("${PYTHON_CMD}" -c "import crypt, random, string, sys; salt = '\$2b\$12\$' + ''.join(random.choices(string.ascii_letters + string.digits, k=22)); print(crypt.crypt(sys.argv[1], salt))" "${pass}" 2>/dev/null || true)
 	fi
 
-	# Method 2: Try host htpasswd
+	# Method 2: Try host htpasswd (Ensure cost 10 for compatibility)
 	if [[ -z "${hash}" ]] && command -v htpasswd >/dev/null 2>&1; then
-		hash=$(htpasswd -B -n -b "${user}" "${pass}" | cut -d: -f2 || true)
+		hash=$(htpasswd -B -C 10 -n -b "${user}" "${pass}" | cut -d: -f2 || true)
 	fi
 
 	# Method 3: Docker Fallback (Alpine)
 	if [[ -z "${hash}" ]]; then
-		hash=$("${DOCKER_CMD}" run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -n -b "$1" "$2"' -- "${user}" "${pass}" 2>/dev/null | cut -d: -f2 || echo "FAILED")
+		hash=$("${DOCKER_CMD}" run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -C 10 -n -b "$1" "$2"' -- "${user}" "${pass}" 2>/dev/null | cut -d: -f2 || echo "FAILED")
 	fi
 
 	if [[ -n "${hash}" ]] && [[ "${hash}" != "FAILED" ]]; then
@@ -1200,7 +1200,7 @@ Name,URL,Username,Password,Note
 Privacy Hub Admin,http://${LAN_IP}:${PORT_DASHBOARD_WEB},admin,${ADMIN_PASS_RAW},Primary management portal.
 AdGuard Home,http://${LAN_IP}:${PORT_ADGUARD_WEB},adguard,${AGH_PASS_RAW},DNS filtration.
 WireGuard VPN UI,http://${LAN_IP}:${PORT_WG_WEB},admin,${VPN_PASS_RAW},WireGuard management.
-Portainer UI,http://${LAN_IP}:${PORT_PORTAINER},portainer,${PORTAINER_PASS_RAW},Container management.
+Portainer UI,http://${LAN_IP}:${PORT_PORTAINER},admin,${PORTAINER_PASS_RAW},Container management.
 EOF
 	chmod 600 "${export_file}"
 	log_info "Credential export file created: ${export_file}"
