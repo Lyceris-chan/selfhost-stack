@@ -1,0 +1,119 @@
+- cleanup the code and ensure it adheres to the style guides defined under the docs folder
+- remove the globe icon for immich and have it use the same kinda indicator as Vert has for its Local Only chip and modify its text and hover tip for immich's use case
+- data usage tracking appears to be broken for gluetun again cant tell for wg-easy as I didnt try it yet
+- admin UI components are still showing during a reload and they take a bit to hide 
+- Service utilities still shows with no chips under it under user mode
+- its saying updates are available right after a deployment
+- the updates available banner doesnt stretch across the width properly (and it auto disappears after a couple seconds automatically without user interaction)
+- the manage in Portainer chip is grayed out for immich
+- storage overview shows there is reclaimable storage after deployment 
+- trying to generate a QR code for the wg-easy profile results in (index):6024 TypeError: window.QRCode is not a constructor
+    at showClientQr ((index):6010:21)
+- the profile name doesnt appear properly centered in the qr code view for the wg-easy profile
+- make it so Available profiles isnt permanently scanning and allow admins to initiate a scan with a button as having it be scanning all the time looks ugly
+- the themes section disappears
+- the Available profiles screen has the key icon next to the profile name spin with the spinner 
+- ensure there arent any other UI problems 
+- System & deployment logs is stuck on Connecting to log stream
+- its also still not recognizing my desec domain properly on the nginx dasboard saying its self signed
+----------------------------------------------------------
+   🔍 EXISTING SSL CERTIFICATE DETECTED
+----------------------------------------------------------
+   • Common Name: sleepybunny.dedyn.io
+   • Issuer:      sleepybunny.dedyn.io
+   • Expires:     Jan 14 20:47:29 2027 GMT
+   • Status:      ✅ Valid (Active)
+   • Setup Domain: sleepybunny.dedyn.io
+   ✅ Certificate MATCHES the configured domain.
+   Do you want to DELETE this certificate? (Default: No) [y/N]: n
+
+
+use the attached wg.conf to test
+
+[Interface]
+# Key for banana
+# Bouncing = 6
+# NAT-PMP (Port Forwarding) = off
+# VPN Accelerator = on
+PrivateKey = AMG2TN78uthcscVYlTp0eKk2VR4QpM4Ljm3j91l0rVA=
+Address = 10.2.0.2/32
+DNS = 10.2.0.1
+
+[Peer]
+# NL-FREE#229
+PublicKey = f+4yCs1s7oTFV0MDsFGmOdBYkxSg7K8/KyIA4cnOwzg=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = 80.79.7.101:51820
+
+
+
+
+
+- adguard is still broken
+sleepy@ZimaOS:~/AppData/selfhost-stack ➜ $ sudo docker logs hub-adguard
+Password:
+2026/01/22 05:16:41 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:41 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:41.235351 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:16:41.235707 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:16:41 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:41 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:41.673648 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:16:41.674663 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:16:42 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:42 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:42.139774 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:16:42.140172 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:16:42 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:42 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:42.780775 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:16:42.780935 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:16:43 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:43 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:43.809611 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:16:43.809782 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:16:45 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:45 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:45.638115 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:16:45.638286 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:16:49 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:49 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:49.073940 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:16:49.074163 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:16:55 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:55 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:16:55.713587 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:16:55.713749 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:17:08 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:17:08 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:17:08.799821 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:17:08.800031 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:17:34 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:17:34 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:17:34.660968 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:17:34.661258 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:18:26 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:18:26 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:18:26.092903 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:18:26.093093 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:19:26 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:19:26 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:19:26.321309 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:19:26.321511 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:20:26 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:20:26 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:20:26.553796 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:20:26.553962 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:21:26 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:21:26 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:21:26.780028 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:21:26.780188 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:22:27 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:22:27 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:22:27.013767 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:22:27.013938 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+2026/01/22 05:23:27 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:23:27 [error] Couldn't get logging settings from the configuration: yaml: line 15: found character that cannot start any token
+2026/01/22 05:23:27.240754 [info] starting adguard home version="AdGuard Home, version v0.107.71"
+2026/01/22 05:23:27.240926 [error] failed to parse configuration file err="parsing config file for upgrade: yaml: line 15: found character that cannot start any token"
+sleepy@ZimaOS:~/AppData/selfhost-stack ➜ $

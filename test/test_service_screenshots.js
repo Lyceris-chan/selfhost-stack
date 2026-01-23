@@ -10,7 +10,7 @@ const fs = require('fs').promises;
 const path = require('path');
 
 const CONFIG = {
-  lanIp: process.env.TEST_LAN_IP || 'localhost',
+  lanIp: process.env.TEST_LAN_IP || '10.0.1.206',
   timeout: 30000,
   screenshotDir: path.join(__dirname, 'screenshots', 'services'),
 };

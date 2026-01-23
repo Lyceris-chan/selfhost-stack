@@ -254,6 +254,11 @@
 
  #update-banner, #mac-advisory {
    width: 100%;
+   max-width: 100%;
+ }
+
+ #update-banner .card, #mac-advisory .card {
+   width: 100%;
  }
 
  /* ============================================
@@ -337,7 +342,6 @@
  /* Parent containers: Center the spinner */
  #odido-loading,
  #cert-loading,
- #profile-list,
  #update-list-container,
  #backup-list-container,
  #log-container {
@@ -349,7 +353,6 @@
  /* Spinner elements: Enforce circular 24x24px dimensions */
  #odido-loading > div:first-child,
  #cert-loading > div:first-child,
- #profile-list > div > div:first-child,
  #update-list-container > div > div:first-child,
  #backup-list-container > div > div:first-child,
  #log-container > div > div:first-child {

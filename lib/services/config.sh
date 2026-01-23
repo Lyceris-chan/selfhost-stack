@@ -129,7 +129,7 @@ EOF
             "name": "Wikiless",
             "description": "A private Wikipedia interface.",
             "category": "apps",
-            "order": 40,
+            "order": 990,
             "url": "http://${LAN_IP}:${PORT_WIKILESS}",
             "source_url": "https://github.com/Wikiless/Wikiless"
         },
@@ -233,7 +233,7 @@ EOF
             "name": "Vert",
             "description": "High-performance media playback.",
             "category": "apps",
-            "order": 41,
+            "order": 991,
             "url": "http://${LAN_IP}:${PORT_VERT}",
             "source_url": "https://github.com/Lyceris-chan/vert"
         },
@@ -410,13 +410,12 @@ setup_configs() {
 
 	local user_rules_block=""
 	if [[ "${ALLOW_PROTON_VPN:-false}" == "true" ]]; then
-		user_rules_block="user_rules:
-  - @@||getproton.me^
-  - @@||protonstatus.com^
-  - @@||protonvpn.ch^
-  - @@||protonvpn.com^
-  - @@||protonvpn.net^
-  - @@||vpn-api.proton.me^"
+		user_rules_block="  - '@@||getproton.me^'
+  - '@@||protonstatus.com^'
+  - '@@||protonvpn.ch^'
+  - '@@||protonvpn.com^'
+  - '@@||protonvpn.net^'
+  - '@@||vpn-api.proton.me^'"
 	fi
 
 	cat >"${AGH_YAML}" <<EOF
@@ -433,7 +432,14 @@ dns:
     - "${unbound_static_ip}"
   bootstrap_dns:
     - "${unbound_static_ip}"
+EOF
+	if [[ -n "${user_rules_block}" ]]; then
+		cat >>"${AGH_YAML}" <<EOF
+user_rules:
 ${user_rules_block}
+EOF
+	fi
+	cat >>"${AGH_YAML}" <<EOF
 filters:
   - enabled: true
     url: https://raw.githubusercontent.com/Lyceris-chan/dns-blocklist-generator/main/blocklist.txt

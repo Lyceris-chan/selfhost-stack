@@ -962,7 +962,6 @@ EOF
 	cat >>"${COMPOSE_FILE}" <<EOF
         volumes:
             - ${DATA_DIR}/immich:/data
-            - /etc/localtime:/etc/localtime:ro
         environment:
             - "IMMICH_HOST=0.0.0.0"
             - "IMMICH_PORT=2283"

@@ -100,10 +100,16 @@ def get_certificate_status():
 
         # Determine type
         cert_type = "Self-Signed"
-        trusted_issuers = ["Let's Encrypt", "R3", "R10", "R11", "E1", "E2", "ZeroSSL", "Sectigo", "DigiCert", "GTS"]
-        if any(ti in issuer for ti in trusted_issuers):
+        trusted_issuers = [
+            "Let's Encrypt", "R3", "R10", "R11", "E1", "E2", "E5", "E6",
+            "ZeroSSL", "Sectigo", "DigiCert", "GTS", "ISRG", "DST Root"
+        ]
+        # Check if issuer matches any trusted CA (case-insensitive)
+        issuer_lower = issuer.lower() if issuer else ""
+        if any(ti.lower() in issuer_lower for ti in trusted_issuers):
             cert_type = "Trusted"
         elif issuer and issuer != subject:
+            # Check if it's not a self-signed cert (issuer != subject)
             cert_type = f"Trusted (via {issuer})"
 
         log_structured(
@@ -478,6 +484,10 @@ def get_project_details(user: str = Depends(get_admin_user)):
                     pass
     except Exception:
         pass
+
+    # Only show reclaimable if it's significant (> 100 MB)
+    if reclaimable < 100:
+        reclaimable = 0
 
     return {"breakdown": breakdown, "total": total_size, "reclaimable": reclaimable}
 

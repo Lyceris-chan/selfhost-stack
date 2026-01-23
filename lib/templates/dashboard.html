@@ -394,7 +394,7 @@
     </section>
 
     <section data-category="tools">
-    <div class="section-label title-medium">Service utilities</div>
+    <div class="section-label title-medium admin-only" id="service-utilities-label">Service utilities</div>
     <div id="grid-tools" class="grid">
       <!-- Dynamic Cards Injected Here -->
     </div>
@@ -548,7 +548,7 @@
           <h2 class="headline-small" id="qr-client-name">Client Config</h2>
           <button onclick="document.getElementById('client-qr-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
         </div>
-        <div id="qrcode-container" style="background: white; padding: 16px; border-radius: 16px; display: inline-block; margin: 16px 0;"></div>
+        <div id="qrcode-container" style="background: white; padding: 16px; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; flex-direction: column; margin: 16px 0;"></div>
         <div style="margin-top: 16px;">
           <a id="client-download-link" class="btn btn-tonal" download="wg.conf">Download .conf</a>
         </div>
@@ -564,19 +564,26 @@
         <div style="text-align:right;"><button onclick="uploadProfile()" class="btn btn-filled" data-tooltip="Save this profile. The VPN service will automatically restart to apply the new configuration (~15 seconds).">Upload & activate</button></div>
       </div>
       <div class="card profile-card admin-only">
-        <h3 class="title-medium" data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available profiles</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 class="title-medium" style="margin: 0;" data-tooltip="Select a profile to activate it. The dashboard will automatically restart dependent services to route their traffic through the new tunnel.">Available profiles</h3>
+          <button onclick="scanProfiles()" class="btn btn-icon" id="scan-profiles-btn" data-tooltip="Scan for available profiles">
+            <span class="material-symbols-rounded">refresh</span>
+          </button>
+        </div>
         <div id="profile-list" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; min-height: 100px;">
           <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
-            <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-            <span class="body-medium">Scanning Profiles...</span>
+            <span class="material-symbols-rounded" style="font-size: 48px;">vpn_key</span>
+            <span class="body-medium">Click refresh to scan profiles</span>
           </div>
         </div>
         <p class="body-small profile-hint" style="margin-top: auto; padding-top: 12px;">Click name to activate.</p>
       </div>
     </div>
 
-    <section data-category="customization" class="admin-only">
-    <div class="section-label">Customization & info</div>
+    </section>
+
+    <section data-category="tools">
+    <div class="section-label admin-only">Customization & info</div>
     <div class="grid">
       <div class="card admin-only">
         <div class="card-header">

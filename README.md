@@ -1451,6 +1451,16 @@ HTTPS to connect securely with its daemon API.
 <details>
 <summary>🔧 <strong>Troubleshooting</strong> (Click to expand)</summary>
 
+## Adding New Services
+
+To add a new service to the Privacy Hub stack, you need to modify the following files:
+
+1.  **Service Definition:** Update `lib/services/compose.sh` to include the new service in the `generate_compose` function. You'll need to define the service configuration (image, ports, volumes, etc.) and append it to the `docker-compose.yml` file.
+2.  **Dashboard Metadata:** Update `lib/services/config.sh` to add the service's metadata (name, description, icon, URL, etc.) to the `SERVICES_JSON` object. This ensures the service appears on the dashboard.
+3.  **Custom Build (Optional):** If the service requires a custom Docker image, create a directory in `lib/src/<service-name>` and add a `Dockerfile`. The deployment script will detect and build it automatically.
+
+After making these changes, run `./zima.sh` to redeploy the stack with the new service.
+
 ## 🔧 Troubleshooting
 
 | Issue                          | Potential Solution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
