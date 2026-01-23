@@ -29,19 +29,28 @@ curl_api() {
 
 check_dns() {
     echo "  Checking DNS Resolution (AdGuard)..."
-    if docker ps | grep -q "hub-adguard"; then
-        AG_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' hub-adguard)
+    if docker ps --format '{{.Names}}' | grep -q "hub-adguard"; then
+        # Get IP on the frontend network
+        AG_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' hub-adguard | head -n1)
+        
         if [[ -n "$AG_IP" ]]; then
-            # Try to resolve google.com using the AdGuard container
-            if command -v nslookup >/dev/null; then
-                if nslookup google.com "$AG_IP" >/dev/null 2>&1; then
-                    echo "    ✓ AdGuard ($AG_IP) is resolving queries"
-                else
-                    echo "    ⚠️  AdGuard ($AG_IP) failed to resolve google.com"
-                fi
+            # Try to resolve using a temporary container to ensure network access
+            if docker run --rm --dns "$AG_IP" --net privacy-hub_frontend alpine nslookup google.com >/dev/null 2>&1; then
+                 echo "    ✓ AdGuard ($AG_IP) is resolving queries (via container)"
             else
-                echo "    ℹ️  nslookup not installed, skipping active DNS check"
+                 # Fallback to host check if docker run fails
+                 if command -v nslookup >/dev/null; then
+                    if nslookup google.com "$AG_IP" >/dev/null 2>&1; then
+                        echo "    ✓ AdGuard ($AG_IP) is resolving queries (via host)"
+                    else
+                        echo "    ⚠️  AdGuard ($AG_IP) failed to resolve google.com"
+                    fi
+                 else
+                    echo "    ⚠️  Resolution check failed (container run failed & nslookup missing)"
+                 fi
             fi
+        else
+            echo "    ⚠️  Could not retrieve AdGuard IP"
         fi
     else
         echo "    ℹ️  AdGuard container not running"
