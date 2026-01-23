@@ -225,7 +225,7 @@ WGEDATAEOF
 	SERVICES_JSON="{"
 	HEALTH_DETAILS_JSON="{"
 	FIRST_SRV=1
-	for srv in "invidious:3000" "redlib:8081" "wikiless:8180" "memos:5230" "rimgo:3002" "scribe:8280" "breezewiki:10416" "anonymousoverflow:8480" "vert:80" "vertd:24153" "adguard:8083" "portainer:9000" "wg-easy:51821" "cobalt:9000" "searxng:8080" "immich:2283" "odido-booster:8085"; do
+	for srv in "invidious:3000" "redlib:8081" "wikiless:8180" "memos:5230" "rimgo:3002" "scribe:8280" "breezewiki:10416" "anonymousoverflow:8480" "vert:80" "vertd:24153" "adguard:8083" "portainer:9000" "wg-easy:51821" "cobalt:9000" "searxng:8080" "immich:2283" "odido-booster:8085" "unbound:53" "watchtower:8080"; do
 		s_key=${srv%:*}
 		s_port=${srv#*:}
 		s_name_real="${CONTAINER_PREFIX}${s_key}"

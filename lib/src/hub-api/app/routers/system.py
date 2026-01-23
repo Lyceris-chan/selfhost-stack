@@ -132,6 +132,20 @@ def get_certificate_status():
         return {"error": str(err), "installed": False}
 
 
+@router.get("/request-ssl-check")
+def request_ssl_check(
+    background_tasks: BackgroundTasks, user: str = Depends(get_admin_user)
+):
+    """Triggers a background SSL certificate renewal check."""
+
+    def _check():
+        log_structured("INFO", "Manual SSL certificate check triggered", "SECURITY")
+        run_command(["/usr/local/bin/cert-monitor.sh"], check=False)
+
+    background_tasks.add_task(_check)
+    return {"success": True, "message": "SSL check initiated in background"}
+
+
 def get_total_usage(path):
     """Retrieves accumulated data usage from a JSON file.
 
@@ -424,10 +438,11 @@ def get_project_details(user: str = Depends(get_admin_user)):
                 )
                 if res.returncode == 0:
                     size_mb = int(res.stdout.split()[0]) / 1024
-                    breakdown.append(
-                        {"category": p["category"], "size": size_mb, "icon": p["icon"]}
-                    )
-                    total_size += size_mb
+                    if size_mb > 0:
+                        breakdown.append(
+                            {"category": p["category"], "size": size_mb, "icon": p["icon"]}
+                        )
+                        total_size += size_mb
             except Exception:
                 pass
 

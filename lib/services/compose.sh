@@ -113,6 +113,7 @@ except Exception:
         depends_on:
             docker-proxy: {condition: service_started}
             gluetun: {condition: service_healthy}
+            unbound: {condition: service_started}
         restart: unless-stopped
         deploy:
             resources:
@@ -150,6 +151,8 @@ append_odido_booster() {
             interval: 30s
             timeout: 5s
             retries: 3
+        depends_on:
+            unbound: {condition: service_started}
         volumes:
             - ${DATA_DIR}/odido:/data
         restart: unless-stopped

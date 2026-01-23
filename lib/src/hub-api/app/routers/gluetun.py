@@ -45,12 +45,12 @@ def sanitize_profile_name(name: str) -> str:
     Returns:
         Sanitized profile name safe for filesystem operations.
     """
-    # Remove any path separators and only allow alphanumeric, dash, underscore
-    sanitized = re.sub(r"[^a-zA-Z0-9_-]", "", name)
+    # Remove any path separators and only allow alphanumeric, dash, underscore, dots, parens, spaces, and hash
+    sanitized = re.sub(r"[^a-zA-Z0-9_\-\.\(\)\ \#]", "", name)
     if not sanitized or sanitized != name:
         raise HTTPException(
             status_code=400,
-            detail="Invalid profile name. Use only letters, numbers, dash, underscore.",
+            detail="Invalid profile name. Allowed characters: letters, numbers, -, _, ., (), #, space",
         )
     return sanitized
 

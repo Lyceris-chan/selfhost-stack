@@ -222,7 +222,7 @@ EOF
             "source_url": "https://github.com/NLnetLabs/unbound"
         },
         "gluetun": {
-            "name": "VPN Gateway",
+            "name": "Gluetun",
             "description": "Traffic routing via external VPN.",
             "category": "system",
             "order": 50,
