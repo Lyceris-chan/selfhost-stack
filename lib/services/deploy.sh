@@ -102,8 +102,11 @@ deploy_stack() {
 		done
 
 		if [[ -n "${core_services}" ]]; then
-			log_info "Launching core infrastructure services:${core_services}..."
-			run_compose_up ${core_services}
+			log_info "Launching core infrastructure services sequentially (to minimize iptables contention)..."
+			for srv in ${core_services}; do
+				log_info "  Starting ${srv}..."
+				run_compose_up "${srv}"
+			done
 		fi
 
 		# Wait for critical backends to stabilize
