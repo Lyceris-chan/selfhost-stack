@@ -138,6 +138,8 @@ append_odido_booster() {
         container_name: ${CONTAINER_PREFIX}odido-booster
         networks: [frontend]
         ports: ["${LAN_IP}:${PORT_ODIDO}:8085"]
+        dns:
+            - 172.${FOUND_OCTET}.0.250
         environment:
             - "API_KEY=${HUB_API_KEY_COMPOSE}"
             - "ODIDO_USER_ID=${ODIDO_USER_ID}"

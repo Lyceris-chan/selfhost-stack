@@ -85,14 +85,14 @@ def get_certificate_status():
 
         # More flexible CN extraction
         sub_match = re.search(
-            r"Subject:.*?CN\s*=\s*([^\s,/\n]+)", output, re.IGNORECASE
+            r"Subject:.*?CN\s*=\s*([^,/\n]+)", output, re.IGNORECASE
         )
         if sub_match:
-            subject = sub_match.group(1)
+            subject = sub_match.group(1).strip()
 
-        iss_match = re.search(r"Issuer:.*?CN\s*=\s*([^\s,/\n]+)", output, re.IGNORECASE)
+        iss_match = re.search(r"Issuer:.*?CN\s*=\s*([^,/\n]+)", output, re.IGNORECASE)
         if iss_match:
-            issuer = iss_match.group(1)
+            issuer = iss_match.group(1).strip()
 
         exp_match = re.search(r"Not After\s*:\s*(.*?)(?:\n|$)", output)
         if exp_match:
