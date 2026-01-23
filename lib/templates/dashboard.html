@@ -213,9 +213,9 @@
 
     <section data-category="apps">
     <div class="section-label">Applications</div>
-    <div class="section-hint">
-      <span class="chip category-badge" data-tooltip="Services marked with 🔒 VPN are routed through a secure tunnel. These services only access the internet via the VPN gateway and are not reachable from the public internet."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
-      <span class="chip category-badge" data-tooltip="Local services accessed directly through the internal network interface."><span class="material-symbols-rounded">lan</span> Direct Access</span>
+    <div class="section-hint body-medium" style="margin-bottom: 8px;">
+      <span class="chip category-badge" data-tooltip="Services routed through the secure VPN tunnel. Traffic is encrypted and hidden from your ISP."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
+      <span class="chip category-badge" data-tooltip="Services connecting directly to the internet (bypassing VPN)."><span class="material-symbols-rounded">lan</span> Direct Access</span>
       <span class="chip category-badge" data-tooltip="Manage advanced infrastructure and container telemetry with Portainer."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
     </div>
     <div id="grid-apps" class="grid">
@@ -226,7 +226,7 @@
     <section data-category="system">
     <div class="section-label title-medium admin-only">System management</div>
     <div class="section-hint body-medium" style="margin-bottom: 8px;">
-      <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);"><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
+      <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);" data-tooltip="Essential infrastructure services required for the stack to function."><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
     </div>
 
     <div class="section-hint mb-16 card-outline" style="padding: 16px; border-radius: var(--md-sys-shape-corner-large);">
@@ -945,7 +945,7 @@
           <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; flex-direction: column; gap: 12px;">
             <button onclick="purgeUnusedImages(event)" class="btn btn-filled" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
               <span class="material-symbols-rounded">delete_sweep</span>
-              <span>Prune unused images</span>
+              <span>Prune unused assets</span>
             </button>
             <p class="body-small" style="opacity: 0.7; text-align: center;">Safe removal of dangling images and unused build cache.</p>
           </div>

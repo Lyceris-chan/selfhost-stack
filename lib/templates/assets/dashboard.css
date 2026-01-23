@@ -211,13 +211,23 @@
   * ============================================ */
 
  /* Hide admin login button when already authenticated */
- body.admin-mode #admin-lock-btn {
+ /* body.admin-mode #admin-lock-btn {
    display: none !important;
- }
+ } REMOVED to allow logout */
 
  /* Default state: Hide all admin-only elements */
  .admin-only {
    display: none !important;
+ }
+
+ .code-label {
+   font-size: 12px;
+   font-weight: 500;
+   color: var(--md-sys-color-on-surface-variant);
+   margin-bottom: 4px;
+   margin-top: 12px;
+   white-space: normal;
+   word-wrap: break-word;
  }
 
  /* Admin authenticated state: Show admin controls */
