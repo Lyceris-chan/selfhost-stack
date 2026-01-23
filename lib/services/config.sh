@@ -473,7 +473,7 @@ EOF
 			# Use ossl helper which handles host/docker transparently
 			if ossl x509 -checkend 86400 -noout -in "${AGH_CONF_DIR}/ssl.crt" >/dev/null 2>&1; then
 				# Check if the cert matches the domain
-				if ossl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | grep -q "${DESEC_DOMAIN}"; then
+				if ossl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | grep -qE "CN\s*=\s*${DESEC_DOMAIN}\s*$"; then
 					# Check for self-signed (Issuer == Subject)
 					local issuer
 					local subject
