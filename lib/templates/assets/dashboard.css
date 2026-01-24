@@ -1351,3 +1351,10 @@
  100% { transform: rotate(360deg); }
  }
 
+
+/* Force logs section to be single column */
+section[data-category="logs"] .grid {
+  grid-template-columns: 1fr !important;
+  display: flex;
+  flex-direction: column;
+}

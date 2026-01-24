@@ -1,36 +1,105 @@
-shield shouldnt be in its own chip within the service chip as its increasing the height of the services chips make it a small icon on the service card that wont do that
-admin UI elements still show during reload this should be made to be impossible
-Update the hover descriptions on these System Core VPN Protected Direct Access 
+toggling all services should toggle all category cards on so users can disable them afterwards while all services stays on until a user untoggles one of the categories
 
-cobalt is showing to be version 11.2 which isnt the latest version
+admin elements are visible without logging in
 
-its showing updates are available right after deployment
+Improve the cloud_sync tooltip description for immich to mention how everything is done locally and how internet access is only used to download the resources to do those things locally ensuring no one gets access to your data and make it like the shield icon for VERT instead of how it looks now 
 
-Unbound and VPN Gateway and Watchtower and showing connecting... on the dashboard
+Update these UI elements to actually mean something as currently they dont add much vpn_lock
+VPN Protected
+lan
+Direct Access
+hub
+Infrastructure
 
-the dashboard is still saying im using a self signed certificate which isnt the case
+settings_input_component
+System Core
 
-immich is still saying container ID unavailable for the manage in portainer button
 
-the logs section is still saying 
-Connecting to Log Stream...
 
-the storage breakdown ui has 2 lines (divs?) due to the hidden reclaimable storage and make it so the Prune unused images button text says Prune unused assets instead 
+Updates are available banner is visible right after deployment even though there arent updates available
 
-ensure text isnt cut off for things like e.g Secure DOH (browsers)
+console logs do say System startup period: Update check deferred.
 
-updates available banner is visible upon reload even after dismissing it 
 
-mac address banner doesnt show / dismiss reliably
 
-the admin login button disappears in admin mode making it so the admin cant logout / destroy that session
+after saving the theme or attempting to change it saving it doesnt work and after reloading its still the default theme with the broken categories layout after resetting the theme 
 
-icons / UI elements are still broken e.g devices, vpn_key etc
 
-wg-easy profile name doesnt appear properly centered in the QR screen
 
-odido integration results in the following error checkout this repo for reference and clone it and properly investigate what our problem is 
-https://github.com/GuusBackup/Odido.Authenticator
+all of the manage in portainer buttons are saying Container ID unavailable for a short bit before updating then only immich is left with a greyed out button saying container ID unvailable
 
-Failed: HTTPSConnectionPool(host='login.odido.nl', port=443): Max retries exceeded with url: /connect/token (Caused by NameResolutionError("HTTPSConnection(host='login.odido.nl', port=443): Failed to resolve 'login.odido.nl' ([Errno -5] Name has no usable address)")) 
 
+
+logs are still saying Connecting to Log Stream...
+
+
+
+password generated for portainer doesnt appear to work even though the script reports changing telemtry settings was successful
+
+
+
+clicking reset on the themes button changes the category bar to only show System & Logs and if you change them and reload the category changes wont stick
+
+
+
+its not detecting my desec certificate properly and it also doesnt appear to be doing the desec acme setup properly the dashboard logs say Certificate check successful: Self-Signed for sleepybunny.dedyn.io
+
+
+
+the Available profiles chip is still broken until I reset the themes button that also appears to fix the logs section
+
+
+
+the storage breakdown overview has two lines (divs?) showing above the purse unused assets button which looks bad
+
+
+
+ensure watchtower can also be updated as I currently dont know if its setup to auto-update itself and if we have rollback setup properly incase an update breaks something the script should allow users to rollback a service to a previous state (with the option to include / exclude the snapshot of the database as well from that backup) 
+
+
+
+
+
+the registered clients chip has an issue where its shows a broken smartphone icon when no clients are configured 
+
+
+
+the profile name shown in the QR code overview when creating a wg-easy profile isnt centered properly
+
+
+
+The system and deployment logs are showing next to eachother instead of being a vertical scrolling list as it should be 
+
+
+
+when adding a gluetun profile from the nginx dashboard it creates two profiles one with the custom profile and one called active 
+
+
+
+ensure the project adheres to the style guides contained under the docs folder
+
+
+
+ensure the nginx dashboard works properly on mobile as well 
+
+
+
+ensure that the documentation and readme especially the section regarding adding your own services is updated and accurate
+
+
+
+improve the test and verification suite to properly verify and test the layout for issues and overlapping / broken components attempt to validate all behavior / UI / functionality etc to ensure the user only has to really test desec and odido as those are things we cant test here without exposing tokens
+
+cobalt still isnt using the latest version its using version 11.2 instead of 11.5 
+
+attempting to configure desec from the dashboard results in 
+
+:55555/api/config-desec:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+
+
+
+when setting up the odido booster I run into this issue look at this source to fix it https://github.com/GuusBackup/Odido.Authenticator
+
+
+
+Failed: HTTPSConnectionPool(host='login.odido.nl', port=443): Max retries exceeded with url: /connect/token (Caused by NameResolutionError("HTTPSConnection(host='login.odido.nl', port=443): Failed to resolve 'login.odido.nl' ([Errno -5] Name has no usable address)"))

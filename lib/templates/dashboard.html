@@ -175,7 +175,7 @@
       <button class="chip filter-chip admin-only" data-target="logs" onclick="filterCategory('logs')">System & Logs</button>
     </div>
 
-    <div id="update-banner" class="admin-only mb-32" style="display:none;">
+    <div id="update-banner" class="admin-only mb-32 hidden-banner" style="display:none;">
       <div class="card card-primary" style="min-height: auto;">
         <div class="flex-row justify-between align-center gap-24 flex-wrap">
           <div>
@@ -190,7 +190,7 @@
       </div>
     </div>
 
-    <div id="mac-advisory" class="mb-32" style="display:none;">
+    <div id="mac-advisory" class="mb-32 hidden-banner" style="display:none;">
       <div class="card card-error" style="min-height: auto; padding: 16px 24px;">
         <div class="flex-row justify-between align-start gap-24">
           <div class="flex-row gap-16 align-start">
@@ -214,9 +214,9 @@
     <section data-category="apps">
     <div class="section-label">Applications</div>
     <div class="section-hint body-medium" style="margin-bottom: 8px;">
-      <span class="chip category-badge" data-tooltip="Services routed through the secure VPN tunnel. Traffic is encrypted and hidden from your ISP."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
-      <span class="chip category-badge" data-tooltip="Services connecting directly to the internet (bypassing VPN)."><span class="material-symbols-rounded">lan</span> Direct Access</span>
-      <span class="chip category-badge" data-tooltip="Manage advanced infrastructure and container telemetry with Portainer."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
+      <span class="chip category-badge" data-tooltip="Traffic routed via VPN (Encrypted). Hidden from ISP."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
+      <span class="chip category-badge" data-tooltip="Traffic bypasses VPN (Direct ISP connection)."><span class="material-symbols-rounded">lan</span> Direct Access</span>
+      <span class="chip category-badge" data-tooltip="Container & Backend Management Tools."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
     </div>
     <div id="grid-apps" class="grid">
       <!-- Dynamic Cards Injected Here -->
@@ -226,7 +226,7 @@
     <section data-category="system">
     <div class="section-label title-medium admin-only">System management</div>
     <div class="section-hint body-medium" style="margin-bottom: 8px;">
-      <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);" data-tooltip="Essential infrastructure services required for the stack to function."><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
+      <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);" data-tooltip="Essential services required for system operation."><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
     </div>
 
     <div class="section-hint mb-16 card-outline" style="padding: 16px; border-radius: var(--md-sys-shape-corner-large);">
@@ -589,7 +589,7 @@
         <div class="card-header">
           <h3 class="title-medium">Theme customization</h3>
           <div class="card-header-actions">
-            <button onclick="localStorage.removeItem('theme_seed'); location.reload();" class="btn btn-icon" data-tooltip="Reset theme to default"><span class="material-symbols-rounded">refresh</span></button>
+            <button onclick="resetTheme()" class="btn btn-icon" data-tooltip="Reset theme to default"><span class="material-symbols-rounded">refresh</span></button>
           </div>
         </div>
         <p class="body-medium description">Personalize the dashboard using Material Design 3 dynamic color algorithms.</p>

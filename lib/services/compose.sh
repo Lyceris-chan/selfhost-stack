@@ -61,6 +61,7 @@ except Exception:
         ports: ["${PORT_API}:55555"]
         dns:
             - 172.${FOUND_OCTET}.0.250
+            - 9.9.9.9
         extra_hosts:
             - "host.docker.internal:host-gateway"
         volumes:
@@ -141,6 +142,7 @@ append_odido_booster() {
         ports: ["${LAN_IP}:${PORT_ODIDO}:8085"]
         dns:
             - 172.${FOUND_OCTET}.0.250
+            - 9.9.9.9
         environment:
             - "API_KEY=${HUB_API_KEY_COMPOSE}"
             - "ODIDO_USER_ID=${ODIDO_USER_ID}"
@@ -1060,6 +1062,10 @@ append_watchtower() {
             - /var/run/docker.sock:/var/run/docker.sock
         networks:
             - mgmt
+            - frontend
+        dns:
+            - 172.${FOUND_OCTET}.0.250
+            - 9.9.9.9
         depends_on:
             hub-api: {condition: service_healthy}
         environment:

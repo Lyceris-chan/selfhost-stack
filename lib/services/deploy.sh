@@ -183,10 +183,14 @@ deploy_stack() {
 			# Give Portainer another moment to ensure the admin user is created from the CLI flag
 			sleep 5
 			# Authenticate to get JWT (user was initialized via --admin-password CLI flag)
+			# Use Python to safely escape the password in JSON
+			local auth_payload
+			auth_payload=$(PORTAINER_PASS="${PORTAINER_PASS_RAW}" "${PYTHON_CMD}" -c "import json, os; print(json.dumps({'Username': 'admin', 'Password': os.environ['PORTAINER_PASS']}))")
+
 			local auth_response
 			auth_response=$(curl -s --max-time 5 -X POST "http://${LAN_IP}:${PORT_PORTAINER}/api/auth" \
 				-H "Content-Type: application/json" \
-				-d "{\"Username\":\"admin\",\"Password\":\"${PORTAINER_PASS_RAW}\"}" 2>&1 || echo "CURL_ERROR")
+				-d "${auth_payload}" 2>&1 || echo "CURL_ERROR")
 
 			if ! echo "${auth_response}" | grep -q "jwt"; then
 				sleep 2

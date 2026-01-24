@@ -153,7 +153,7 @@ def list_profiles(user: str = Depends(get_admin_user)):
         files = [
             f.replace(".conf", "")
             for f in os.listdir(settings.PROFILES_DIR)
-            if f.endswith(".conf")
+            if f.endswith(".conf") and f != "active.conf"
         ]
         return {"profiles": files}
     except Exception:
