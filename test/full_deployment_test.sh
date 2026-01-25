@@ -63,7 +63,7 @@ setup_environment() {
 	# Install npm dependencies if needed
 	if [ ! -d "test/node_modules" ]; then
 		log "Installing test dependencies..."
-		cd test && npm install puppeteer 2>&1 | tee "$LOG_DIR/npm_install.log"
+		cd test && npm install puppeteer >/dev/null 2>&1 | tee "$LOG_DIR/npm_install.log"
 		cd ..
 	fi
 
@@ -91,6 +91,10 @@ cleanup_previous() {
 		log "  Removing test directory $TEST_BASE_DIR..."
 		sudo rm -rf "$TEST_BASE_DIR" || true
 	fi
+
+	# Prune docker system to free space
+	log "  Pruning docker system..."
+	docker system prune -f >/dev/null 2>&1 || true
 
 	log_success "Cleanup complete"
 }
