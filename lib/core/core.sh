@@ -311,33 +311,16 @@ generate_secret() {
 generate_hash() {
 	local user="$1"
 	local pass="$2"
-	local hash=""
-
-	# Method 1: Try host Python (if crypt/bcrypt supported)
-	if command -v "${PYTHON_CMD}" >/dev/null 2>&1; then
-		# Try to use crypt module with bcrypt salt
-		hash=$("${PYTHON_CMD}" -c "import crypt, random, string, sys; salt = '\$2b\$12\$' + ''.join(random.choices(string.ascii_letters + string.digits, k=22)); print(crypt.crypt(sys.argv[1], salt))" "${pass}" 2>/dev/null || true)
+	# Use Python with bcrypt library (standard in Hub API container) or htpasswd as fallback
+	if command -v python3 &>/dev/null; then
+		python3 -c "import bcrypt; print(bcrypt.hashpw('${pass}'.encode(), bcrypt.gensalt()).decode())" 2>/dev/null || \
+		htpasswd -B -n -b "${user}" "${pass}" | cut -d: -f2
+	else
+		htpasswd -B -n -b "${user}" "${pass}" | cut -d: -f2
 	fi
-
-	# Method 2: Try host htpasswd (Ensure cost 10 for compatibility)
-	if [[ -z "${hash}" ]] && command -v htpasswd >/dev/null 2>&1; then
-		hash=$(htpasswd -B -C 10 -n -b "${user}" "${pass}" | cut -d: -f2 || true)
-	fi
-
-	# Method 3: Docker Fallback (Alpine)
-	if [[ -z "${hash}" ]]; then
-		hash=$("${DOCKER_CMD}" run --rm alpine:3.21 sh -c 'apk add --no-cache apache2-utils >/dev/null 2>&1 && htpasswd -B -C 10 -n -b "$1" "$2"' -- "${user}" "${pass}" 2>/dev/null | cut -d: -f2 || echo "FAILED")
-	fi
-
-	if [[ -n "${hash}" ]] && [[ "${hash}" != "FAILED" ]]; then
-		# Portainer compatibility: Normalize $2y$ (Apache variant) to $2b$ (standard)
-		echo "${hash//\$2y\$/\$2b\$}"
-		return 0
-	fi
-
-	echo "FAILED"
-	return 1
 }
+
+
 
 # Initialize globals
 FORCE_CLEAN=false

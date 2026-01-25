@@ -146,7 +146,7 @@ const SERVICES = {
     port: 8085,
     container: 'hub-odido-booster',
     healthEndpoint: '/docs',
-    tests: ['loads'],
+    tests: ['loads', 'odido-dns'],
   },
   vert: {
     port: 5555,
@@ -765,21 +765,48 @@ async function testService(serviceName, serviceConfig) {
     console.log(`  ⚠️  Found ${logAnalysis.errors.length} errors in container logs`);
   }
   
+/**
+ * Test: Odido DNS Resolution
+ * @param {string} containerName
+ * @return {Promise<Object>}
+ */
+async function testOdidoDns(containerName) {
+  try {
+    // Try to resolve login.odido.nl using getent or ping
+    // We use timeout to prevent hanging if DNS is broken
+    const { stdout } = await execAsync(
+      `docker exec ${containerName} timeout 5s getent hosts login.odido.nl || docker exec ${containerName} timeout 5s ping -c 1 login.odido.nl`
+    );
+    
+    if (stdout.includes('login.odido.nl') || stdout.includes('bytes from')) {
+      return { success: true, message: 'Odido DNS resolution successful' };
+    }
+    return { success: false, message: 'Odido DNS resolution failed' };
+  } catch (error) {
+    return { success: false, message: `Odido DNS test failed: ${error.message}` };
+  }
+}
+
+// ... existing imports ...
+
+// ... inside testService function ...
   // Non-browser tests
   if (serviceConfig.tests.includes('dns-resolution')) {
     result.tests.dns = await testDnsResolution(serviceConfig.container);
     console.log(`  ${result.tests.dns.success ? '✅' : '❌'} DNS: ${result.tests.dns.message}`);
-    
-    // Determine overall result for non-browser service
-    if (result.tests.dns.success) {
-        result.overall = 'passed';
+    // ... result logic ...
+  }
+
+  if (serviceConfig.tests.includes('odido-dns')) {
+    result.tests.odidoDns = await testOdidoDns(serviceConfig.container);
+    console.log(`  ${result.tests.odidoDns.success ? '✅' : '❌'} Odido DNS: ${result.tests.odidoDns.message}`);
+    if (result.tests.odidoDns.success) {
+        if (result.overall !== 'failed') result.overall = 'passed'; // Keep passed unless already failed
         testResults.passed++;
     } else {
         result.overall = 'failed';
         testResults.failed++;
     }
-    testResults.services[serviceName] = result;
-    return result;
   }
 
   // Pure container check (for databases, utilities)

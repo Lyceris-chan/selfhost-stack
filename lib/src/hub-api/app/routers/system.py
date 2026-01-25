@@ -814,3 +814,69 @@ def fetch_odido_userid(request: dict, user: str = Depends(get_admin_user)):
     except Exception as err:
         log_structured("ERROR", f"Odido User ID fetch error: {err}", "ODIDO")
         return {"error": str(err)}
+
+
+@router.post("/config-desec")
+def config_desec(request: dict, user: str = Depends(get_admin_user)):
+    """Configures DeSec domain and API token for dynamic DNS and SSL.
+
+    This endpoint updates the DeSec configuration in the secrets file to enable
+    automatic Let's Encrypt SSL certificate provisioning via DNS-01 challenge.
+
+    Args:
+        request: Dictionary containing 'domain' and 'token'.
+        user: Authenticated admin user.
+
+    Returns:
+        Dictionary with success status or error message.
+    """
+    domain = request.get("domain", "").strip()
+    token = request.get("token", "").strip()
+
+    if not domain and not token:
+        return {"error": "Domain or token required"}
+
+    try:
+        # Read existing secrets
+        secrets = {}
+        secrets_file = settings.SECRETS_FILE
+        if os.path.exists(secrets_file):
+            with open(secrets_file, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if "=" in line and not line.startswith("#"):
+                        key, value = line.split("=", 1)
+                        # Remove quotes
+                        value = value.strip("'").strip('"')
+                        secrets[key] = value
+
+        # Update DeSec settings
+        if domain:
+            secrets["DESEC_DOMAIN"] = domain
+        if token:
+            secrets["DESEC_TOKEN"] = token
+
+        # Write back atomically
+        temp_file = secrets_file + ".tmp"
+        with open(temp_file, "w") as f:
+            for key, value in secrets.items():
+                f.write(f"{key}='{value}'\n")
+
+        # Set restrictive permissions and replace
+        os.chmod(temp_file, 0o600)
+        os.replace(temp_file, secrets_file)
+
+        log_structured(
+            "CONFIG",
+            f"DeSec configuration updated: domain={domain if domain else '[unchanged]'}",
+            "SECURITY",
+        )
+
+        return {
+            "success": True,
+            "message": "DeSec configuration saved. Restart stack to apply changes.",
+        }
+
+    except Exception as err:
+        log_structured("ERROR", f"Failed to update DeSec config: {err}", "CONFIG")
+        return {"error": str(err)}

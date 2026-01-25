@@ -95,7 +95,7 @@ async def events_stream(request: Request, user: str = Depends(get_current_user))
         try:
             with open(settings.LOG_FILE, "r") as f:
                 f.seek(0, 2)  # Tail
-                yield ": keepalive\n\n"
+                yield ": connected\n\n"
 
                 keepalive_counter = 0
                 while True:

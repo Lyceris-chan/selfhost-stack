@@ -153,8 +153,8 @@ def list_profiles(user: str = Depends(get_admin_user)):
         files = [
             f.replace(".conf", "")
             for f in os.listdir(settings.PROFILES_DIR)
-            if f.endswith(".conf") and f != "active.conf"
+            if f.endswith(".conf") and f != "active.conf" and f != "active"
         ]
-        return {"profiles": files}
+        return {"profiles": sorted(files)}
     except Exception:
         return {"profiles": [], "error": "Failed to list profiles"}

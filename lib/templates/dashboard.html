@@ -213,11 +213,6 @@
 
     <section data-category="apps">
     <div class="section-label">Applications</div>
-    <div class="section-hint body-medium" style="margin-bottom: 8px;">
-      <span class="chip category-badge" data-tooltip="Traffic routed via VPN (Encrypted). Hidden from ISP."><span class="material-symbols-rounded">vpn_lock</span> VPN Protected</span>
-      <span class="chip category-badge" data-tooltip="Traffic bypasses VPN (Direct ISP connection)."><span class="material-symbols-rounded">lan</span> Direct Access</span>
-      <span class="chip category-badge" data-tooltip="Container & Backend Management Tools."><span class="material-symbols-rounded">hub</span> Infrastructure</span>
-    </div>
     <div id="grid-apps" class="grid">
       <!-- Dynamic Cards Injected Here -->
     </div>
@@ -225,9 +220,6 @@
 
     <section data-category="system">
     <div class="section-label title-medium admin-only">System management</div>
-    <div class="section-hint body-medium" style="margin-bottom: 8px;">
-      <span class="chip category-badge" style="background: var(--md-sys-color-surface-container-highest);" data-tooltip="Essential services required for system operation."><span class="material-symbols-rounded">settings_input_component</span> System Core</span>
-    </div>
 
     <div class="section-hint mb-16 card-outline" style="padding: 16px; border-radius: var(--md-sys-shape-corner-large);">
       <div class="w-full flex-row align-center gap-8 mb-8" style="color: var(--md-sys-color-primary);">
@@ -398,6 +390,10 @@
     <div id="grid-tools" class="grid">
       <!-- Dynamic Cards Injected Here -->
     </div>
+
+
+    <section data-category="tools">
+    <div class="section-label title-medium admin-only">Odido configuration</div>
     <div class="grid">
       <div class="card admin-only">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
@@ -503,7 +499,7 @@
         </form>
       </div>
     </div>
-
+    </section>
 
     <div class="section-label admin-only">VPN client access (inbound)</div>
     <div class="grid admin-only">
@@ -544,9 +540,9 @@
     <!-- Client QR Modal -->
     <div id="client-qr-modal" class="modal-overlay">
       <div class="modal-card" style="text-align: center;">
-        <div class="modal-header">
-          <h2 class="headline-small" id="qr-client-name">Client Config</h2>
-          <button onclick="document.getElementById('client-qr-modal').style.display='none'" class="btn btn-icon"><span class="material-symbols-rounded">close</span></button>
+        <div class="modal-header" style="justify-content: center;">
+          <h2 class="headline-small" id="qr-client-name" style="margin: 0; text-align: center; width: 100%;">Client Config</h2>
+          <button onclick="document.getElementById('client-qr-modal').style.display='none'" class="btn btn-icon" style="position: absolute; right: 16px;"><span class="material-symbols-rounded">close</span></button>
         </div>
         <div id="qrcode-container" style="background: white; padding: 16px; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; flex-direction: column; margin: 16px 0;"></div>
         <div style="margin-top: 16px;">
@@ -734,12 +730,12 @@
 
     <section data-category="logs">
     <div class="section-label">System & logs</div>
-    <div class="grid">
+    <div class="grid" style="grid-template-columns: 1fr;">
       <div class="card">
         <div class="card-header">
           <h3 class="title-medium">System health</h3>
           <div class="card-header-actions">
-            <div class="chip" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 0 12px; height: 28px; font-weight: 500; gap: 6px; box-shadow: var(--md-sys-elevation-1);">
+            <div class="chip" id="health-status-indicator" style="background: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); border: none; padding: 0 12px; height: 28px; min-height: 28px !important; font-weight: 500; gap: 6px; box-shadow: var(--md-sys-elevation-1);">
               <span class="material-symbols-rounded" id="health-icon" style="font-size: 16px;">check_circle</span>
               <span id="health-text" style="font-size: 13px; letter-spacing: 0.3px;">Optimal</span>
             </div>
@@ -797,7 +793,7 @@
             </select>
           </div>
         </div>
-        <div id="log-container" class="log-container sensitive" style="display: flex; align-items: center; justify-content: center;">
+        <div id="log-container" class="log-container sensitive" style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
           <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; opacity: 0.7;">
             <div style="width: 24px; height: 24px; border: 3px solid var(--md-sys-color-primary); border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
             <span class="body-medium">Connecting to Log Stream...</span>
@@ -939,10 +935,7 @@
       <div id="project-size-details" style="display: flex; flex-direction: column; gap: 16px;">
         <div class="loading-spinner" id="project-size-loading" style="margin: 20px auto;"></div>
         <div id="project-size-content" style="display: none;">
-          <div style="display: flex; flex-direction: column; gap: 12px;" id="project-size-list">
-            <!-- Dynamic content -->
-          </div>
-          <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 12px; padding-top: 16px;">
             <button onclick="purgeUnusedImages(event)" class="btn btn-filled" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
               <span class="material-symbols-rounded">delete_sweep</span>
               <span>Prune unused assets</span>

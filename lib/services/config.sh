@@ -423,9 +423,9 @@ schema_version: 29
 http: {address: 0.0.0.0:${PORT_ADGUARD_WEB}}
 users: [{name: "${AGH_USER}", password: "${AGH_PASS_HASH}"}]
 statistics:
-  interval: 30
+  interval: 30d
 querylog:
-  interval: 30
+  interval: 30d
 dns:
   bind_hosts:
     - 0.0.0.0
@@ -575,6 +575,8 @@ EOF
 		        }
 		        location /api/ {
 		                proxy_pass http://hub-api:55555;
+		                proxy_http_version 1.1;
+		                proxy_set_header Connection "";
 		                proxy_buffering off;
 		                proxy_read_timeout 300s;
 		                proxy_connect_timeout 75s;

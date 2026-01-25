@@ -8,7 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
 # Configuration
-TEST_BASE_DIR="${TEST_BASE_DIR:-$(pwd)/test/temp_deploy}"
+TEST_ID="ph_test_$(date +%s)"
+TEST_BASE_DIR="${TEST_BASE_DIR:-/tmp/${TEST_ID}}"
 LOG_DIR="${TEST_BASE_DIR}/logs"
 REPORT_DIR="${TEST_BASE_DIR}/reports"
 TIMEOUT=1800 # 30 minutes max
@@ -53,6 +54,12 @@ setup_environment() {
 		exit 1
 	fi
 
+	# Install Python dependencies for deployment script
+	if command -v python3 &>/dev/null; then
+		log "Installing python dependencies..."
+		pip install bcrypt >/dev/null 2>&1 || true
+	fi
+
 	# Install npm dependencies if needed
 	if [ ! -d "test/node_modules" ]; then
 		log "Installing test dependencies..."
@@ -79,6 +86,12 @@ cleanup_previous() {
 		docker network rm "$network" 2>&1 | tee -a "$LOG_DIR/cleanup.log" || true
 	done
 
+	# Clean filesystem with sudo to handle docker-created root files
+	if [ -d "$TEST_BASE_DIR" ]; then
+		log "  Removing test directory $TEST_BASE_DIR..."
+		sudo rm -rf "$TEST_BASE_DIR" || true
+	fi
+
 	log_success "Cleanup complete"
 }
 
@@ -92,6 +105,11 @@ deploy_stack() {
 		log_error "Example: WG_CONF_B64=\$(cat wg.conf | base64 -w0)"
 		exit 1
 	fi
+
+	# Pre-create directory structure with correct ownership to avoid permission issues
+	# zima.sh uses: $PROJECT_ROOT/data/AppData/$APP_NAME
+	mkdir -p "$TEST_BASE_DIR/data/AppData/privacy-hub"
+	mkdir -p "$LOG_DIR" # Re-create logs dir after cleanup
 
 	export PROJECT_ROOT="$TEST_BASE_DIR"
 	export WG_CONF_B64
@@ -225,7 +243,15 @@ run_integration_tests() {
 	# Use detected LAN_IP or default to localhost
 	local LAN_IP=$(hostname -I | awk '{print $1}')
 	export TEST_BASE_URL="${TEST_BASE_URL:-http://$LAN_IP:8088}"
+	export API_URL="${API_URL:-http://$LAN_IP:55555}"
 	export HEADLESS="${HEADLESS:-true}"
+	export TEST_BASE_DIR
+
+	# Ensure dependencies are installed
+	if [ ! -d "node_modules" ]; then
+		log "Installing node modules..."
+		npm install puppeteer >/dev/null 2>&1
+	fi
 
 	# Extract Admin Password from secrets if not set
 	if [ -z "${ADMIN_PASSWORD:-}" ]; then

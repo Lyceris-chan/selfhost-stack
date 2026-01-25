@@ -55,13 +55,13 @@ except Exception:
         container_name: ${CONTAINER_PREFIX}api
         labels:
             - "casaos.skip=true"
+            - "com.centurylinklabs.watchtower.enable=false"
         networks:
             - frontend
             - mgmt
         ports: ["${PORT_API}:55555"]
         dns:
             - 172.${FOUND_OCTET}.0.250
-            - 9.9.9.9
         extra_hosts:
             - "host.docker.internal:host-gateway"
         volumes:
@@ -114,7 +114,7 @@ except Exception:
         depends_on:
             docker-proxy: {condition: service_started}
             gluetun: {condition: service_healthy}
-            unbound: {condition: service_started}
+            unbound: {condition: service_healthy}
         restart: unless-stopped
         deploy:
             resources:
@@ -142,7 +142,6 @@ append_odido_booster() {
         ports: ["${LAN_IP}:${PORT_ODIDO}:8085"]
         dns:
             - 172.${FOUND_OCTET}.0.250
-            - 9.9.9.9
         environment:
             - "API_KEY=${HUB_API_KEY_COMPOSE}"
             - "ODIDO_USER_ID=${ODIDO_USER_ID}"
@@ -230,6 +229,8 @@ EOF
 EOF
 
 	cat >>"${COMPOSE_FILE}" <<EOF
+        depends_on:
+            unbound: {condition: service_healthy}
         volumes:
             - "${ACTIVE_WG_CONF}:/gluetun/wireguard/wg0.conf:ro"
         environment:
@@ -242,9 +243,8 @@ EOF
             - "DNS_ADDRESS=${GLUETUN_DNS_ADDRESS:-127.0.0.1}"
             - "DOT=${GLUETUN_DOT:-on}"
             - "DNS_KEEP_NAMESERVERS=off"
-            - "DNS_UPSTREAM_RESOLVERS=quad9"
+            - "DNS_PLAINTEXT_ADDRESS=172.${FOUND_OCTET}.0.250"
             - "HEALTH_TARGET_ADDRESSES=github.com:443"
-            - "HEALTH_ICMP_TARGET_IPS=9.9.9.9"
             - "RESTART_VPN_ON_HEALTHCHECK_FAILURE=${RESTART_VPN_ON_HEALTHCHECK_FAILURE:-yes}"
             - "PUBLICIP_API_BACKUPS=ifconfigco,ip2location"
         healthcheck:
@@ -293,6 +293,7 @@ append_dashboard() {
             - "${NGINX_CONF}:/etc/nginx/conf.d/default.conf:ro"
             - "${AGH_CONF_DIR}:/etc/adguard/conf:ro"
         labels:
+            - "com.centurylinklabs.watchtower.enable=false"
             - "dev.casaos.app.ui.protocol=http"
             - "dev.casaos.app.ui.port=${PORT_DASHBOARD_WEB}"
             - "dev.casaos.app.ui.hostname=${LAN_IP}"
@@ -1065,13 +1066,15 @@ append_watchtower() {
             - frontend
         dns:
             - 172.${FOUND_OCTET}.0.250
-            - 9.9.9.9
         depends_on:
             hub-api: {condition: service_healthy}
+        labels:
+            - "com.centurylinklabs.watchtower.enable=true"
         environment:
             - "WATCHTOWER_CLEANUP=true"
             - "WATCHTOWER_POLL_INTERVAL=3600"
             - "WATCHTOWER_NOTIFICATIONS=shoutrrr"
+            - "WATCHTOWER_INCLUDE_SELF=true"
             - "WATCHTOWER_NOTIFICATION_URL=generic+http://hub-api:55555/watchtower?token=${HUB_API_KEY_COMPOSE}"
         restart: unless-stopped
         deploy:
