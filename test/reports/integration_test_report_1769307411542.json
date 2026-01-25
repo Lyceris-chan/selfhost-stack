@@ -1,0 +1,959 @@
+{
+  "summary": {
+    "total": 27,
+    "passed": 22,
+    "failed": 5,
+    "skipped": 0,
+    "duration": "77.55s",
+    "passRate": "81.5%"
+  },
+  "services": {
+    "dashboard": {
+      "name": "dashboard",
+      "container": "hub-dashboard",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 815,
+          "message": "Loaded successfully in 815ms"
+        },
+        "ui": {
+          "success": true,
+          "message": "UI verification passed"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 44
+      },
+      "overall": "passed",
+      "consoleErrors": 5,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1769307334381
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1769307334382
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1769307334382
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1769307334385
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1769307334395
+        }
+      ]
+    },
+    "api": {
+      "name": "api",
+      "container": "hub-api",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 39
+      },
+      "overall": "skipped",
+      "consoleErrors": 0
+    },
+    "invidious": {
+      "name": "invidious",
+      "container": "hub-invidious",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 795,
+          "message": "Loaded successfully in 795ms"
+        },
+        "videoPlayback": {
+          "success": false,
+          "message": "No video results found"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 3,
+            "content": "Unhandled exception in spawn: Hostname lookup for api.invidious.io failed: Try again (Socket::Addrinfo::Error)"
+          }
+        ],
+        "warnings": [],
+        "totalLines": 26
+      },
+      "overall": "failed",
+      "consoleErrors": 1,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307343389
+        }
+      ]
+    },
+    "breezewiki": {
+      "name": "breezewiki",
+      "container": "hub-breezewiki",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 836,
+          "message": "Loaded successfully in 836ms"
+        },
+        "wikiLookup": {
+          "success": true,
+          "message": "Search results loaded"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 5
+      },
+      "overall": "passed",
+      "consoleErrors": 2,
+      "consoleLogs": [
+        {
+          "type": "pageerror",
+          "text": "Unexpected token '<'",
+          "stack": "SyntaxError: Unexpected token '<'",
+          "timestamp": 1769307348943
+        },
+        {
+          "type": "pageerror",
+          "text": "Unexpected token '<'",
+          "stack": "SyntaxError: Unexpected token '<'",
+          "timestamp": 1769307348977
+        }
+      ]
+    },
+    "redlib": {
+      "name": "redlib",
+      "container": "hub-redlib",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 5520,
+          "message": "Loaded successfully in 5520ms"
+        },
+        "subreddit": {
+          "success": true,
+          "message": "Subreddit loaded"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 1,
+            "content": " ERROR redlib::client > Got an invalid response from reddit expected value at line 1 column 1. Status code: 403 Forbidden"
+          },
+          {
+            "line": 4,
+            "content": "Please report this error with the above information."
+          }
+        ],
+        "warnings": [],
+        "totalLines": 8
+      },
+      "overall": "passed",
+      "consoleErrors": 30,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307352588
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307352592
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307352593
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307352622
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307352625
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307352649
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307353589
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307353593
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307353594
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307353624
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307353627
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307353651
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307354591
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307354595
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307354596
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307354627
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307354629
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307354654
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307355593
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307355596
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307355597
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307358374
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307358385
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307358387
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307358389
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307358389
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307358390
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307359375
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307359385
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307359387
+        }
+      ]
+    },
+    "scribe": {
+      "name": "scribe",
+      "container": "hub-scribe",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 831,
+          "message": "Loaded successfully in 831ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 13
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "anonymousoverflow": {
+      "name": "anonymousoverflow",
+      "container": "hub-anonymousoverflow",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 832,
+          "message": "Loaded successfully in 832ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 1
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "searxng": {
+      "name": "searxng",
+      "container": "hub-searxng",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 885,
+          "message": "Loaded successfully in 885ms"
+        },
+        "search": {
+          "success": false,
+          "message": "No search results"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 49,
+            "content": "httpx.ConnectError: [Errno -3] Temporary failure in name resolution"
+          },
+          {
+            "line": 50,
+            "content": "2026-01-25 02:09:48,628 ERROR:searx.search.processors: can't register engine processor: wikidata (init failed)"
+          }
+        ],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "rimgo": {
+      "name": "rimgo",
+      "container": "hub-rimgo",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 811,
+          "message": "Loaded successfully in 811ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 11
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "cobalt": {
+      "name": "cobalt",
+      "container": "hub-cobalt-web",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 2002,
+          "message": "Loaded successfully in 2002ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 20
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "portainer": {
+      "name": "portainer",
+      "container": "hub-portainer",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1693,
+          "message": "Loaded successfully in 1693ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 14
+      },
+      "overall": "passed",
+      "consoleErrors": 3,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "The Content-Security-Policy directive name 'https://www.gstatic.com/recaptcha/' contains one or more invalid characters. Only ASCII alphanumeric characters or dashes '-' are allowed in directive names.",
+          "timestamp": 1769307378437
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1769307379453
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "timestamp": 1769307379472
+        }
+      ]
+    },
+    "wg-easy": {
+      "name": "wg-easy",
+      "container": "hub-wg-easy",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 728,
+          "message": "Loaded successfully in 728ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 13
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "odido-booster": {
+      "name": "odido-booster",
+      "container": "hub-odido-booster",
+      "tests": {
+        "odidoDns": {
+          "success": false,
+          "message": "Odido DNS test failed: Command failed: docker exec hub-odido-booster timeout 5s getent hosts login.odido.nl || docker exec hub-odido-booster timeout 5s ping -c 1 login.odido.nl\nping: bad address 'login.odido.nl'\n"
+        },
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1009,
+          "message": "Loaded successfully in 1009ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 17,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 22,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 23,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 24,
+            "content": "ERROR:odido.service:All renewal attempts failed - check Odido API credentials and network connectivity"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 2,
+            "content": "/app/app/main.py:43: DeprecationWarning: "
+          },
+          {
+            "line": 9,
+            "content": "/app/app/main.py:48: DeprecationWarning: "
+          }
+        ],
+        "totalLines": 40
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "vert": {
+      "name": "vert",
+      "container": "hub-vert",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1704,
+          "message": "Loaded successfully in 1704ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 35
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "immich": {
+      "name": "immich",
+      "container": "hub-immich-server",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 845,
+          "message": "Loaded successfully in 845ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "wikiless": {
+      "name": "wikiless",
+      "container": "hub-wikiless",
+      "tests": {
+        "load": {
+          "success": false,
+          "status": 500,
+          "loadTime": 4095,
+          "message": "HTTP 500"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 3,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 5,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 7,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 9,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 11,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 13,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 15,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 17,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 19,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 21,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 24,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          },
+          {
+            "line": 25,
+            "content": "Download error for https://en.wikipedia.org/?useskin=vector: EAI_AGAIN"
+          }
+        ],
+        "warnings": [],
+        "totalLines": 27
+      },
+      "overall": "failed",
+      "consoleErrors": 2,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+          "timestamp": 1769307398024
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1769307398038
+        }
+      ]
+    },
+    "unbound": {
+      "name": "unbound",
+      "container": "hub-unbound",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "[1769306915] unbound[1:0] warning: so-sndbuf 4194304 was not granted. Got 425984. To fix: start with root permissions(linux) or sysctl bigger net.core.wmem_max(linux) or kern.ipc.maxsockbuf(bsd) value"
+          }
+        ],
+        "totalLines": 2
+      },
+      "overall": "passed"
+    },
+    "gluetun": {
+      "name": "gluetun",
+      "container": "hub-gluetun",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 29,
+            "content": "2026-01-25T02:14:21Z INFO [wireguard] Wireguard setup is complete. Note Wireguard is a silent protocol and it may or may not work, without giving any error message. Typically i/o timeout errors indica"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 7,
+            "content": "2026-01-25T02:14:21Z WARN [vpn] restarting VPN because it failed to pass the healthcheck: startup check: all check tries failed: parallel attempt 1/1 failed: dialing: dial tcp4: lookup github.com on 1"
+          },
+          {
+            "line": 47,
+            "content": "2026-01-25T02:15:34Z WARN [http server] route GET /v1/vpn/status is unprotected by default, please set up authentication following the documentation at https://github.com/qdm12/gluetun-wiki/blob/main/"
+          },
+          {
+            "line": 49,
+            "content": "2026-01-25T02:15:34Z WARN [http server] route GET /v1/publicip/ip is unprotected by default, please set up authentication following the documentation at https://github.com/qdm12/gluetun-wiki/blob/main"
+          }
+        ],
+        "totalLines": 51
+      },
+      "overall": "passed"
+    },
+    "companion": {
+      "name": "companion",
+      "container": "hub-companion",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 4,
+            "content": "  errorFromWorker: TypeError: error sending request for url (https://www.youtube.com/youtubei/v1/att/get?prettyPrint=false&alt=json): client error (Connect): dns error: failed to lookup address inform"
+          },
+          {
+            "line": 12,
+            "content": "Exception in cron handler regenerate youtube session TypeError: error sending request for url (https://www.youtube.com/youtubei/v1/att/get?prettyPrint=false&alt=json): client error (Connect): dns erro"
+          },
+          {
+            "line": 20,
+            "content": "  errorFromWorker: TypeError: error sending request for url (https://www.youtube.com/youtubei/v1/att/get?prettyPrint=false&alt=json): client error (Connect): dns error: failed to lookup address inform"
+          },
+          {
+            "line": 24,
+            "content": "Exception in cron handler regenerate youtube session TypeError: error sending request for url (https://www.youtube.com/youtubei/v1/att/get?prettyPrint=false&alt=json): client error (Connect): dns erro"
+          },
+          {
+            "line": 36,
+            "content": "  errorFromWorker: TypeError: error sending request for url (https://www.youtube.com/youtubei/v1/att/get?prettyPrint=false&alt=json): client error (Connect): dns error: failed to lookup address inform"
+          },
+          {
+            "line": 42,
+            "content": "Exception in cron handler regenerate youtube session TypeError: error sending request for url (https://www.youtube.com/youtubei/v1/att/get?prettyPrint=false&alt=json): client error (Connect): dns erro"
+          }
+        ],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "passed"
+    },
+    "vertd": {
+      "name": "vertd",
+      "container": "hub-vertd",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 3,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] *******"
+          },
+          {
+            "line": 4,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] you're running vertd on a docker container, but no GPU was detected."
+          },
+          {
+            "line": 5,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] this usually is because you're running Docker under WSL or because"
+          },
+          {
+            "line": 6,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] you are not passing the GPU device correctly."
+          },
+          {
+            "line": 7,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] "
+          },
+          {
+            "line": 8,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] if this doesn't seem right, make sure to provide the following info when"
+          },
+          {
+            "line": 9,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] asking for help:"
+          },
+          {
+            "line": 10,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] - adapter name: llvmpipe (LLVM 20.1.2, 256 bits)"
+          },
+          {
+            "line": 11,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] - adapter vendor: 0x10005"
+          },
+          {
+            "line": 12,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] - backend: vulkan"
+          },
+          {
+            "line": 13,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] - device ID: 0"
+          },
+          {
+            "line": 14,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] - device type: Cpu"
+          },
+          {
+            "line": 15,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] - driver: llvmpipe"
+          },
+          {
+            "line": 16,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] - driver info: Mesa 25.0.7-0ubuntu0.24.04.2 (LLVM 20.1.2)"
+          },
+          {
+            "line": 17,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] "
+          },
+          {
+            "line": 18,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] vertd will fall back to CPU rendering to ensure conversions can still proceed."
+          },
+          {
+            "line": 19,
+            "content": "[2026-01-25T02:08:40Z WARN  vertd::converter::gpu] *******"
+          }
+        ],
+        "totalLines": 22
+      },
+      "overall": "passed"
+    },
+    "watchtower": {
+      "name": "watchtower",
+      "container": "hub-watchtower",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 6
+      },
+      "overall": "passed"
+    },
+    "invidious-db": {
+      "name": "invidious-db",
+      "container": "hub-invidious-db",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "passed"
+    },
+    "wikiless-redis": {
+      "name": "wikiless-redis",
+      "container": "hub-wikiless_redis",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "1:C 25 Jan 2026 02:09:12.506 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures w"
+          },
+          {
+            "line": 4,
+            "content": "1:C 25 Jan 2026 02:09:12.506 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf"
+          }
+        ],
+        "totalLines": 10
+      },
+      "overall": "passed"
+    },
+    "searxng-redis": {
+      "name": "searxng-redis",
+      "container": "hub-searxng-redis",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "1:C 25 Jan 2026 02:08:35.384 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures w"
+          }
+        ],
+        "totalLines": 10
+      },
+      "overall": "passed"
+    },
+    "immich-db": {
+      "name": "immich-db",
+      "container": "hub-immich-db",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 49,
+            "content": "2026-01-25 02:09:54.419 UTC [144] ERROR:  relation \"system_metadata\" does not exist at character 21"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 13,
+            "content": "initdb: warning: enabling \"trust\" authentication for local connections"
+          }
+        ],
+        "totalLines": 51
+      },
+      "overall": "passed"
+    },
+    "immich-redis": {
+      "name": "immich-redis",
+      "container": "hub-immich-redis",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "1:M 25 Jan 2026 02:08:35.270 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures w"
+          },
+          {
+            "line": 4,
+            "content": "1:M 25 Jan 2026 02:08:35.271 # Warning: no config file specified, using the default config. In order to specify a config file use valkey-server /path/to/valkey.conf"
+          }
+        ],
+        "totalLines": 15
+      },
+      "overall": "passed"
+    },
+    "immich-ml": {
+      "name": "immich-ml",
+      "container": "hub-immich-ml",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 11
+      },
+      "overall": "passed"
+    }
+  },
+  "timestamp": "2026-01-25T02:16:51.541Z"
+}

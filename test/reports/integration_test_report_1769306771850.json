@@ -1,0 +1,318 @@
+{
+  "summary": {
+    "total": 11,
+    "passed": 9,
+    "failed": 2,
+    "skipped": 0,
+    "duration": "41.60s",
+    "passRate": "81.8%"
+  },
+  "services": {
+    "portainer": {
+      "name": "portainer",
+      "container": "hub-portainer",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 2779,
+          "message": "Loaded successfully in 2779ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 14
+      },
+      "overall": "passed",
+      "consoleErrors": 3,
+      "consoleLogs": [
+        {
+          "type": "error",
+          "text": "The Content-Security-Policy directive name 'https://www.gstatic.com/recaptcha/' contains one or more invalid characters. Only ASCII alphanumeric characters or dashes '-' are allowed in directive names.",
+          "timestamp": 1769306742981
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          "timestamp": 1769306744940
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "timestamp": 1769306744964
+        }
+      ]
+    },
+    "wg-easy": {
+      "name": "wg-easy",
+      "container": "hub-wg-easy",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 798,
+          "message": "Loaded successfully in 798ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 10,
+            "content": "Error: Command failed: wg-quick up wg0"
+          },
+          {
+            "line": 20,
+            "content": "    at genericNodeError (node:internal/errors:983:15)"
+          },
+          {
+            "line": 21,
+            "content": "    at wrappedFn (node:internal/errors:537:14)"
+          }
+        ],
+        "warnings": [],
+        "totalLines": 43
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "odido-booster": {
+      "name": "odido-booster",
+      "container": "hub-odido-booster",
+      "tests": {
+        "odidoDns": {
+          "success": false,
+          "message": "Odido DNS test failed: Command failed: docker exec hub-odido-booster timeout 5s getent hosts login.odido.nl || docker exec hub-odido-booster timeout 5s ping -c 1 login.odido.nl\nping: bad address 'login.odido.nl'\n"
+        },
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 2398,
+          "message": "Loaded successfully in 2398ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [
+          {
+            "line": 17,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 22,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 23,
+            "content": "ERROR:odido.service:Odido API not configured - auto-renewal disabled. Set ODIDO_USER_ID and ODIDO_TOKEN environment variables"
+          },
+          {
+            "line": 24,
+            "content": "ERROR:odido.service:All renewal attempts failed - check Odido API credentials and network connectivity"
+          }
+        ],
+        "warnings": [
+          {
+            "line": 2,
+            "content": "/app/app/main.py:43: DeprecationWarning: "
+          },
+          {
+            "line": 9,
+            "content": "/app/app/main.py:48: DeprecationWarning: "
+          }
+        ],
+        "totalLines": 36
+      },
+      "overall": "failed",
+      "consoleErrors": 0
+    },
+    "vert": {
+      "name": "vert",
+      "container": "hub-vert",
+      "tests": {
+        "load": {
+          "success": true,
+          "status": 200,
+          "loadTime": 1761,
+          "message": "Loaded successfully in 1761ms"
+        }
+      },
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 32
+      },
+      "overall": "passed",
+      "consoleErrors": 0
+    },
+    "unbound": {
+      "name": "unbound",
+      "container": "hub-unbound",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "[1769306395] unbound[1:0] warning: so-sndbuf 4194304 was not granted. Got 425984. To fix: start with root permissions(linux) or sysctl bigger net.core.wmem_max(linux) or kern.ipc.maxsockbuf(bsd) value"
+          }
+        ],
+        "totalLines": 2
+      },
+      "overall": "passed"
+    },
+    "vertd": {
+      "name": "vertd",
+      "container": "hub-vertd",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 3,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] *******"
+          },
+          {
+            "line": 4,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] you're running vertd on a docker container, but no GPU was detected."
+          },
+          {
+            "line": 5,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] this usually is because you're running Docker under WSL or because"
+          },
+          {
+            "line": 6,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] you are not passing the GPU device correctly."
+          },
+          {
+            "line": 7,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] "
+          },
+          {
+            "line": 8,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] if this doesn't seem right, make sure to provide the following info when"
+          },
+          {
+            "line": 9,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] asking for help:"
+          },
+          {
+            "line": 10,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] - adapter name: llvmpipe (LLVM 20.1.2, 256 bits)"
+          },
+          {
+            "line": 11,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] - adapter vendor: 0x10005"
+          },
+          {
+            "line": 12,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] - backend: vulkan"
+          },
+          {
+            "line": 13,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] - device ID: 0"
+          },
+          {
+            "line": 14,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] - device type: Cpu"
+          },
+          {
+            "line": 15,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] - driver: llvmpipe"
+          },
+          {
+            "line": 16,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] - driver info: Mesa 25.0.7-0ubuntu0.24.04.2 (LLVM 20.1.2)"
+          },
+          {
+            "line": 17,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] "
+          },
+          {
+            "line": 18,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] vertd will fall back to CPU rendering to ensure conversions can still proceed."
+          },
+          {
+            "line": 19,
+            "content": "[2026-01-25T01:59:57Z WARN  vertd::converter::gpu] *******"
+          }
+        ],
+        "totalLines": 22
+      },
+      "overall": "passed"
+    },
+    "invidious-db": {
+      "name": "invidious-db",
+      "container": "hub-invidious-db",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [],
+        "totalLines": 51
+      },
+      "overall": "passed"
+    },
+    "searxng-redis": {
+      "name": "searxng-redis",
+      "container": "hub-searxng-redis",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "1:C 25 Jan 2026 01:59:55.742 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures w"
+          }
+        ],
+        "totalLines": 10
+      },
+      "overall": "passed"
+    },
+    "immich-db": {
+      "name": "immich-db",
+      "container": "hub-immich-db",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 15,
+            "content": "initdb: warning: enabling \"trust\" authentication for local connections"
+          }
+        ],
+        "totalLines": 51
+      },
+      "overall": "passed"
+    },
+    "immich-redis": {
+      "name": "immich-redis",
+      "container": "hub-immich-redis",
+      "tests": {},
+      "containerRunning": true,
+      "logs": {
+        "errors": [],
+        "warnings": [
+          {
+            "line": 1,
+            "content": "1:M 25 Jan 2026 01:59:55.229 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures w"
+          },
+          {
+            "line": 4,
+            "content": "1:M 25 Jan 2026 01:59:55.229 # Warning: no config file specified, using the default config. In order to specify a config file use valkey-server /path/to/valkey.conf"
+          }
+        ],
+        "totalLines": 10
+      },
+      "overall": "passed"
+    }
+  },
+  "timestamp": "2026-01-25T02:06:11.850Z"
+}

@@ -726,21 +726,27 @@ def exchange_odido_token(request: dict, user: str = Depends(get_admin_user)):
             return {"error": "Could not extract refresh token"}
 
         # Exchange refresh token for access token via Odido token endpoint
-        token_url = "https://login.odido.nl/connect/token"
+        token_url = "https://capi.odido.nl/createtoken"
         token_data = {
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-            "client_id": "OdidoMobileApp",
+            "AuthorizationCode": refresh_token
         }
+
+        # Base64 encode client key for Basic Auth
+        import base64
+        auth_header = base64.b64encode(f"{ODIDO_CLIENT_KEY}:".encode()).decode()
 
         headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
+            "Content-Type": "application/vnd.capi.tmobile.nl.createtoken.v1+json",
+            "Accept": "application/json,application/vnd.capi.tmobile.nl.createtoken.v1+json",
+            "Authorization": f"Basic {auth_header}",
             "User-Agent": "T-Mobile 5.3.28 (Android 10; 10)",
+            "grant_type": "authorization_code"
         }
 
-        resp = requests.post(token_url, data=token_data, headers=headers, timeout=10)
+        # Use json parameter for body to ensure correct serialization
+        resp = requests.post(token_url, json=token_data, headers=headers, timeout=10)
 
-        if resp.status_code != 200:
+        if resp.status_code not in (200, 201, 204):
             log_structured(
                 "ERROR",
                 f"Odido token exchange failed: {resp.status_code} - {resp.text}",
@@ -748,11 +754,19 @@ def exchange_odido_token(request: dict, user: str = Depends(get_admin_user)):
             )
             return {"error": f"Token exchange failed: {resp.status_code}"}
 
-        result = resp.json()
-        access_token = result.get("access_token")
+        # The C# code reads the token from the 'Accesstoken' header, not the body
+        access_token = resp.headers.get("Accesstoken")
+
+        # Fallback to body just in case API behavior differs slightly
+        if not access_token:
+            try:
+                result = resp.json()
+                access_token = result.get("access_token")
+            except Exception:
+                pass
 
         if not access_token:
-            return {"error": "No access token in response"}
+            return {"error": "No access token in response headers or body"}
 
         log_structured("SUCCESS", "Odido OAuth token exchanged successfully", "ODIDO")
         return {"oauth_token": access_token}

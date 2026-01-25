@@ -730,7 +730,7 @@
 
     <section data-category="logs">
     <div class="section-label">System & logs</div>
-    <div class="grid" style="grid-template-columns: 1fr;">
+    <div class="grid">
       <div class="card">
         <div class="card-header">
           <h3 class="title-medium">System health</h3>
@@ -910,9 +910,6 @@
   </div>
 
   <script>
-{{HUB_JS}}
-  </script>
-  <script>
     // DNS setup visibility logic
     (function() {
       const hasDesec = "$DESEC_DOMAIN" !== "";
@@ -935,6 +932,7 @@
       <div id="project-size-details" style="display: flex; flex-direction: column; gap: 16px;">
         <div class="loading-spinner" id="project-size-loading" style="margin: 20px auto;"></div>
         <div id="project-size-content" style="display: none;">
+          <!-- Content injected here -->
           <div style="display: flex; flex-direction: column; gap: 12px; padding-top: 16px;">
             <button onclick="purgeUnusedImages(event)" class="btn btn-filled" style="width: 100%; justify-content: center; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);">
               <span class="material-symbols-rounded">delete_sweep</span>
@@ -966,5 +964,8 @@
     </div>
   </div>
 
+  <script>
+{{HUB_JS}}
+  </script>
 </body>
 </html>

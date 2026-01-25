@@ -430,6 +430,7 @@
  flex-wrap: nowrap;
  overflow-x: auto;
  justify-content: flex-start;
+ -webkit-overflow-scrolling: touch;
  }
  .filter-chip {
  flex: 0 0 auto;
@@ -1352,9 +1353,26 @@
  }
 
 
-/* Force logs section to be single column */
-section[data-category="logs"] .grid {
-  grid-template-columns: 1fr !important;
-  display: flex;
-  flex-direction: column;
+/* Force logs section to be single column on mobile, responsive grid on desktop */
+@media (min-width: 900px) {
+  section[data-category="logs"] .grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    align-items: stretch;
+  }
+  section[data-category="logs"] .grid > .card {
+    height: 100%;
+  }
 }
+
+#qr-client-name {
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+ .filter-bar {
+   flex-wrap: nowrap;
+   overflow-x: auto;
+   justify-content: flex-start;
+   -webkit-overflow-scrolling: touch;
+ }
