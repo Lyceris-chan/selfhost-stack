@@ -329,7 +329,6 @@ The script will ask you a few questions:
 2.  **Enter your deSEC domain and token** (from Step 2)
 3.  **Choose your password preferences** (auto-generate or set your own)
 4.  **Optional: GitHub credentials for Scribe** (see below)
-5.  **Optional: Odido Booster integration** (for Dutch mobile users - see below)
 
 > 📝 **About GitHub credentials (Optional)**: Scribe is a privacy-respecting
 > Medium frontend that proxies GitHub gists. These credentials are **optional**
@@ -354,7 +353,9 @@ The script will ask you a few questions:
 
 > 📱 **About Odido Booster (Optional - Dutch Mobile Users)**: Odido Booster
 > automates mobile data bundle renewals for Odido/T-Mobile NL customers with
-> **zero external tools required**:
+> **zero external tools required**.
+>
+> **Configuration is done entirely in the Dashboard after deployment.**
 >
 > **How it works (all in the dashboard):**
 >
