@@ -45,7 +45,7 @@ check_cert_risk() {
 	local ssl_crt="${BASE_DIR}/config/adguard/ssl.crt"
 	local ssl_key="${BASE_DIR}/config/adguard/ssl.key"
 
-	if [[ -f "${ssl_crt}" ]]; then
+	if [[ -s "${ssl_crt}" ]]; then
 		echo "----------------------------------------------------------"
 		echo "   🔍 EXISTING SSL CERTIFICATE DETECTED"
 		echo "----------------------------------------------------------"
@@ -97,6 +97,13 @@ check_cert_risk() {
 		if echo "${cert_issuer_cn}" | grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL"; then
 			is_acme=true
 			log_warn "This appears to be a valid ACME-signed certificate."
+		fi
+
+		# If certificate is unreadable/invalid, preservation is pointless.
+		# Skip prompt and allow deletion if we are already in a wipe flow.
+		if [[ -z "${cert_cn}" ]] && [[ -z "${cert_issuer_cn}" ]]; then
+			log_warn "Certificate is invalid or unreadable. Skipping preservation."
+			return 0
 		fi
 
 		local cert_response="n"
