@@ -89,7 +89,34 @@ check_port_availability() { return 0; }
 init_directories() {
     mkdir -p "$BASE_DIR" "$CONFIG_DIR" "$ENV_DIR" "$DATA_DIR" "$ASSETS_DIR" "$WG_PROFILES_DIR" "$SRC_DIR" "$BACKUP_DIR"
 }
-allocate_subnet() { :; }
+allocate_subnet() {
+    log_info "Allocating conflict-free Docker subnet..."
+    local octet=20
+    while true; do
+        if [[ $octet -gt 31 ]]; then
+            log_crit "No available 172.x.0.0/16 subnets found (checked 20-31)."
+            exit 1
+        fi
+        local candidate="172.${octet}.0.0/16"
+        # Check Docker networks
+        if docker network inspect $(docker network ls -q) 2>/dev/null | grep -q "${candidate}"; then
+            log_warn "Subnet ${candidate} is in use by Docker. Trying next..."
+            ((octet++))
+            continue
+        fi
+        # Check Host Routes
+        if ip route | grep -q "172.${octet}."; then
+            log_warn "Subnet ${candidate} overlaps with host routes. Trying next..."
+            ((octet++))
+            continue
+        fi
+        
+        export FOUND_OCTET="${octet}"
+        export DOCKER_SUBNET="${candidate}"
+        log_info "Selected subnet: ${DOCKER_SUBNET}"
+        break
+    done
+}
 detect_network() { :; }
 validate_wg_config() {
     [[ -s "${ACTIVE_WG_CONF}" ]] && grep -q "PrivateKey" "${ACTIVE_WG_CONF}"

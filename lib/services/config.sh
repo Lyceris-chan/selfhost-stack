@@ -495,8 +495,8 @@ EOF
 
 		if [[ "${cert_valid}" == "false" ]]; then
 			log_info "Issuing SSL certificate via acme.sh (deSEC DNS challenge)..."
-			"${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/acme" -e "DESEC_Token=${DESEC_TOKEN}" -e "DESEC_DOMAIN=${DESEC_DOMAIN}" \
-				neilpang/acme.sh:latest --issue --dns dns_desec --dnssleep 15 -d "${DESEC_DOMAIN}" -d "*.${DESEC_DOMAIN}" \
+			"${DOCKER_CMD}" run --rm --net=host -v "${AGH_CONF_DIR}:/acme" -e "DESEC_Token=${DESEC_TOKEN}" -e "DESEC_DOMAIN=${DESEC_DOMAIN}" \
+				neilpang/acme.sh:latest --issue --dns dns_desec --dnssleep 60 -d "${DESEC_DOMAIN}" -d "*.${DESEC_DOMAIN}" \
 				--keylength ec-256 --server letsencrypt --home /acme --config-home /acme --cert-home /acme/certs >/dev/null 2>&1 || log_warn "acme.sh issuance failed. Falling back to self-signed."
 
 			if [[ -f "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]]; then
