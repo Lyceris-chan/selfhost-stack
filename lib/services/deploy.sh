@@ -294,6 +294,26 @@ deploy_stack() {
 }
 
 setup_secrets() {
+	# 1. deSEC Configuration Prompt
+	if [[ -z "${DESEC_DOMAIN:-}" ]] && [[ "${AUTO_CONFIRM}" != "true" ]]; then
+		echo ""
+		echo "==========================================================="
+		echo " 🔐  SSL CONFIGURATION (deSEC.io)"
+		echo "==========================================================="
+		echo " To enable HTTPS and private DNS, enter your deSEC details."
+		echo " Leave empty to skip (not recommended)."
+		echo ""
+		read -r -p "   Domain (e.g. myhub.dedyn.io): " input_domain
+		if [[ -n "${input_domain}" ]]; then
+			export DESEC_DOMAIN="${input_domain}"
+			echo ""
+			read -r -p "   Token (from deSEC token management): " input_token
+			export DESEC_TOKEN="${input_token}"
+		else
+			log_warn "Skipping deSEC configuration. HTTPS will be disabled or self-signed."
+		fi
+	fi
+
 	if [[ "${AUTO_PASSWORD}" == "true" ]]; then
 		log_info "Auto-password mode enabled. Generating secure random credentials..."
 		
@@ -332,6 +352,22 @@ setup_secrets() {
 		export WG_HASH_CLEAN="$(hash_pass "${VPN_PASS_RAW}")"
 		export PORTAINER_PASS_HASH="$(hash_pass "${PORTAINER_PASS_RAW}")"
 	else
+		if [[ "${AUTO_CONFIRM}" != "true" ]]; then
+			echo ""
+			echo "==========================================================="
+			echo " 🔑  CREDENTIAL CONFIGURATION"
+			echo "==========================================================="
+			echo " You have chosen manual password configuration."
+			echo " Press Enter to keep the default values shown in brackets."
+			echo ""
+			
+			read -r -p "   Admin Password [password]: " input_pass
+			if [[ -n "${input_pass}" ]]; then export ADMIN_PASS_RAW="${input_pass}"; fi
+			
+			read -r -p "   WireGuard/VPN Password [password]: " input_vpn
+			if [[ -n "${input_vpn}" ]]; then export VPN_PASS_RAW="${input_vpn}"; fi
+		fi
+
 		log_info "Setting up secrets (Using defaults or environment)..."
 		export AGH_USER="${AGH_USER:-adguard}"
 		export AGH_PASS_RAW="${AGH_PASS_RAW:-password}"

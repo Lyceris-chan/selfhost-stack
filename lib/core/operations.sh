@@ -79,14 +79,14 @@ check_cert_risk() {
 			cert_validity="❌ EXPIRED"
 		fi
 
-		echo "   • Common Name: ${cert_cn}"
-		echo "   • Issuer:      ${cert_issuer_cn}"
-		echo "   • Expires:     ${cert_not_after}"
+		echo "   • Common Name: ${cert_cn:-Unknown/Invalid}"
+		echo "   • Issuer:      ${cert_issuer_cn:-Unknown/Invalid}"
+		echo "   • Expires:     ${cert_not_after:-Unknown}"
 		echo "   • Status:      ${cert_validity}"
 
 		if [[ -n "${existing_domain}" ]]; then
 			echo "   • Setup Domain: ${existing_domain}"
-			if echo "${cert_cn}" | grep -q "${existing_domain}"; then
+			if [[ -n "${cert_cn}" ]] && echo "${cert_cn}" | grep -q "${existing_domain}"; then
 				echo "   ✅ Certificate MATCHES the configured domain."
 			else
 				echo "   ⚠️  Certificate DOES NOT MATCH the configured domain (${existing_domain})."
