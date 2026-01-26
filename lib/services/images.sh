@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # Image management utilities.
 # Handles image tag resolution and pre-pulling of critical images.
 set -euo pipefail

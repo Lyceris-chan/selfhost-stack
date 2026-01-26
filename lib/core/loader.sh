@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 #
 # Orchestrates the loading of service logic modules.
 #

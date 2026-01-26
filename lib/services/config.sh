@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 set -euo pipefail
 
 generate_scripts() {
@@ -316,8 +315,8 @@ download_remote_assets() {
 	done
 
 	if [[ "${proxy_ready}" == "false" ]]; then
-		log_crit "Proxy not responding. Asset download aborted."
-		return 1
+		log_warn "Proxy not responding. Asset download skipped (Dashboard will use remote fallbacks)."
+		return 0
 	fi
 
 	download_asset() {
@@ -423,9 +422,9 @@ schema_version: 29
 http: {address: 0.0.0.0:${PORT_ADGUARD_WEB}}
 users: [{name: "${AGH_USER}", password: "${AGH_PASS_HASH}"}]
 statistics:
-  interval: 30d
+  interval: 720h
 querylog:
-  interval: 30d
+  interval: 720h
 dns:
   bind_hosts:
     - 0.0.0.0

@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 #
 # Synchronization logic for external source repositories.
 

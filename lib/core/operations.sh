@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 set -euo pipefail
 
 # Functions to clear out existing garbage for a clean start.
@@ -54,7 +53,7 @@ check_cert_risk() {
 		# Try to load existing domain configuration
 		local existing_domain=""
 		if [[ -f "${BASE_DIR}/.secrets" ]]; then
-			existing_domain=$(grep "DESEC_DOMAIN=" "${BASE_DIR}/.secrets" | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+			existing_domain=$(grep "DESEC_DOMAIN=" "${BASE_DIR}/.secrets" 2>/dev/null | cut -d'=' -f2 | tr -d '"' | tr -d "'" || true)
 		fi
 
 		# Extract Certificate Details
@@ -302,9 +301,15 @@ perform_restore() {
 setup_cron() {
 	log_info "Configuring scheduled tasks..."
 	local cron_jobs=""
-	cron_jobs="*/5 * * * * ${MONITOR_SCRIPT} >> ${IP_LOG_FILE} 2>&1
-0 3 * * * ${CERT_MONITOR_SCRIPT} >> ${BASE_DIR}/cert-monitor.log 2>&1
+	[[ -f "${MONITOR_SCRIPT}" ]] && cron_jobs="${cron_jobs}*/5 * * * * ${MONITOR_SCRIPT} >> ${IP_LOG_FILE} 2>&1
 "
+	[[ -f "${CERT_MONITOR_SCRIPT}" ]] && cron_jobs="${cron_jobs}0 3 * * * ${CERT_MONITOR_SCRIPT} >> ${BASE_DIR}/cert-monitor.log 2>&1
+"
+	
+	if [[ -z "${cron_jobs}" ]]; then
+		log_info "No maintenance scripts found. Skipping cron configuration."
+		return 0
+	fi
 	(
 		crontab -l 2>/dev/null | grep -vE "wg-ip-monitor|cert-monitor|${APP_NAME}" || true
 		echo "${cron_jobs}"

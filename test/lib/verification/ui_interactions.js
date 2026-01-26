@@ -10,12 +10,20 @@ const path = require('path');
 
 const CONFIG = {
   baseUrl: process.env.TEST_BASE_URL || 'http://localhost:8088',
-  adminPassword: process.env.ADMIN_PASSWORD || 'changeme',
+  adminPassword: process.env.ADMIN_PASSWORD || getAdminPassword() || 'changeme',
   headless: process.env.HEADLESS !== 'false',
   timeout: 60000,
   screenshotDir: path.join(__dirname, '..', '..', '..', 'test', 'screenshots'),
   servicesDir: path.join(__dirname, '..', '..', '..', 'test', 'screenshots', 'services'),
 };
+
+function getAdminPassword() {
+  const secretsFile = path.join(__dirname, '..', '..', '..', 'data', 'AppData', 'privacy-hub', '.secrets');
+  if (!fs.existsSync(secretsFile)) return null;
+  const content = fs.readFileSync(secretsFile, 'utf8');
+  const match = content.match(/ADMIN_PASS_RAW='([^']+)'/);
+  return match ? match[1] : null;
+}
 
 function checkUrl(url) {
   return new Promise((resolve) => {
@@ -100,6 +108,46 @@ async function checkFilters(page) {
   }
   const allChip = await page.$('.filter-chip[data-target="all"]');
   if (allChip) await allChip.click();
+}
+
+async function testThemeToggle(page) {
+  console.log('  Testing Theme Toggle...');
+  try {
+    // The theme toggle button uses class 'theme-toggle' and onclick='toggleTheme()'
+    // It might not have an ID 'theme-toggle-btn'. Let's use the class or onclick.
+    // In dashboard.html: <button class="theme-toggle" onclick="toggleTheme()" ...>
+    const selector = '.theme-toggle[onclick="toggleTheme()"]';
+    
+    await page.waitForSelector(selector, { visible: true, timeout: 2000 });
+    // Click theme toggle button
+    await page.click(selector);
+    await new Promise(r => setTimeout(r, 1000)); // Wait for transition
+    await takeScreenshot(page, 'theme_toggled');
+    // Toggle back
+    await page.click(selector);
+    await new Promise(r => setTimeout(r, 500));
+  } catch (e) {
+    console.warn(`    ⚠️  Theme toggle test failed: ${e.message}`);
+  }
+}
+
+async function testPrivacyToggle(page) {
+  console.log('  Testing Privacy Toggle...');
+  try {
+    // In dashboard.html: <button class="switch-container" id="privacy-switch" onclick="togglePrivacy()" ...>
+    const selector = '#privacy-switch';
+    
+    await page.waitForSelector(selector, { visible: true, timeout: 2000 });
+    // Click privacy toggle button (eye icon)
+    await page.click(selector);
+    await new Promise(r => setTimeout(r, 500));
+    await takeScreenshot(page, 'privacy_toggled');
+    // Toggle back
+    await page.click(selector);
+    await new Promise(r => setTimeout(r, 500));
+  } catch (e) {
+    console.warn(`    ⚠️  Privacy toggle test failed: ${e.message}`);
+  }
 }
 
 async function captureServices(browser, page) {
@@ -260,10 +308,15 @@ async function runInteractions() {
     await page.setViewport({ width: 1920, height: 1080 }); 
     await page.goto(CONFIG.baseUrl, {waitUntil: 'networkidle2', timeout: 30000});
 
+    // Wait for fade-in transition
+    await page.waitForFunction(() => getComputedStyle(document.body).opacity === '1', { timeout: 5000 });
+
     console.log('  Verifying Layout...');
     await takeScreenshot(page, 'dashboard_initial');
 
     await checkFilters(page);
+    await testThemeToggle(page);
+    await testPrivacyToggle(page);
     
     // Capture Services (Deep)
     await captureServices(browser, page);

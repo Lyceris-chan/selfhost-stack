@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # Docker Compose generation logic.
 # Defines service configurations and appends them to the compose file.
 set -euo pipefail

@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # RESTORED CORE.SH
 
 # Source constants
@@ -25,6 +24,8 @@ export MIGRATE_SCRIPT="${BASE_DIR}/migrate.sh"
 export WG_CONTROL_SCRIPT="${BASE_DIR}/wg-control.sh"
 export PATCHES_SCRIPT="${BASE_DIR}/patches.sh"
 export CERT_MONITOR_SCRIPT="${BASE_DIR}/cert-monitor.sh"
+export MONITOR_SCRIPT="${BASE_DIR}/wg-ip-monitor.sh"
+export IP_LOG_FILE="${BASE_DIR}/ip-monitor.log"
 export DOTENV_FILE="${BASE_DIR}/.env"
 export DOCKER_AUTH_DIR="${BASE_DIR}/.docker"
 export COMPOSE_FILE="${BASE_DIR}/docker-compose.yml"
@@ -51,8 +52,9 @@ docker_compose_wrapper() {
     docker compose "$@"
 }
 export DOCKER_COMPOSE_FINAL_CMD="docker_compose_wrapper"
-export PYTHON_CMD="python3"
-export SUDO="sudo"
+export PYTHON_CMD="${PYTHON_CMD:-python3}"
+export SUDO="${SUDO:-sudo}"
+export CURL_CMD="${CURL_CMD:-curl}"
 export SELECTED_SERVICES=""
 
 log_info() { echo -e "[INFO] $1"; }
@@ -85,7 +87,17 @@ extract_wg_profile_name() {
     echo "Initial-Setup"
 }
 pull_with_retry() {
-    docker pull "$1"
+	local img="$1"
+	local max_retries=3
+	local i=0
+	for ((i = 1; i <= max_retries; i++)); do
+		if docker pull "${img}"; then
+			return 0
+		fi
+		log_warn "Failed to pull ${img} (Attempt $i/${max_retries}). Retrying in 5s..."
+		sleep 5
+	done
+	return 1
 }
 setup_secrets() {
     :

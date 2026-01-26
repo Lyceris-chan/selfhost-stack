@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # shellcheck disable=SC1091,SC2001,SC2015,SC2016,SC2034,SC2024,SC2086
 set -euo pipefail
 
@@ -13,6 +13,19 @@ set -euo pipefail
 # Source Consolidated Libraries
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SCRIPT_DIR
+
+# Default flag values
+: "${CLEAN_ONLY:=false}"
+: "${DO_BACKUP:=false}"
+: "${RESTORE_FILE:=}"
+: "${AUTO_CONFIRM:=false}"
+: "${GENERATE_ONLY:=false}"
+: "${WG_CONF_B64:=}"
+: "${PARALLEL_DEPLOY:=false}"
+: "${AUTO_PASSWORD:=false}"
+: "${SELECTED_SERVICES:=}"
+: "${DESEC_DOMAIN:=}"
+: "${ODIDO_TOKEN:=}"
 
 # Core Logic
 source "${SCRIPT_DIR}/lib/core/core.sh"

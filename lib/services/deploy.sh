@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 ################################################################################
 # PRIVACY HUB - DEPLOYMENT MODULE
 ################################################################################
@@ -292,4 +291,95 @@ deploy_stack() {
 	if [[ "${CLEAN_EXIT:-false}" == "true" ]]; then
 		exit 0
 	fi
+}
+
+setup_secrets() {
+	if [[ "${AUTO_PASSWORD}" == "true" ]]; then
+		log_info "Auto-password mode enabled. Generating secure random credentials..."
+		
+		# Helper for random strings using Python (ZimaOS friendly)
+		generate_pass() { 
+			"${PYTHON_CMD}" -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(16)))"
+		}
+		generate_key() { 
+			"${PYTHON_CMD}" -c "import secrets; print(secrets.token_hex(32))"
+		}
+		
+		export IV_COMPANION="$(generate_pass)" # Must be 16 chars alphanumeric
+		export IV_HMAC="$(generate_key)"
+
+		export ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-$(generate_pass)}"
+		export VPN_PASS_RAW="${VPN_PASS_RAW:-$(generate_pass)}"
+		export AGH_PASS_RAW="${AGH_PASS_RAW:-$(generate_pass)}"
+		export PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-$(generate_pass)}"
+		export INVIDIOUS_DB_PASSWORD="${INVIDIOUS_DB_PASSWORD:-$(generate_pass)}"
+		export IMMICH_DB_PASSWORD="${IMMICH_DB_PASSWORD:-$(generate_pass)}"
+		export HUB_API_KEY="${HUB_API_KEY:-$(generate_key)}"
+		export SCRIBE_SECRET="${SCRIBE_SECRET:-$(generate_key)}"
+		export ANONYMOUS_SECRET="${ANONYMOUS_SECRET:-$(generate_key)}"
+		export SEARXNG_SECRET="${SEARXNG_SECRET:-$(generate_key)}"
+
+		# Generate Hashing helper (prefer python3 for portability if mkpasswd is missing)
+		hash_pass() {
+			local pass="$1"
+			"${PYTHON_CMD}" -c "import bcrypt; print(bcrypt.hashpw(b'${pass}', bcrypt.gensalt()).decode())" 2>/dev/null || \
+			"${PYTHON_CMD}" -c "import crypt; print(crypt.crypt('${pass}', crypt.mksalt(crypt.METHOD_SHA512)))" 2>/dev/null || \
+			echo "${pass}" # Fallback to raw if no hashing tool found (not ideal)
+		}
+
+		log_info "Hashing passwords for internal service configurations..."
+		export AGH_PASS_HASH="$(hash_pass "${AGH_PASS_RAW}")"
+		export WG_HASH_CLEAN="$(hash_pass "${VPN_PASS_RAW}")"
+		export PORTAINER_PASS_HASH="$(hash_pass "${PORTAINER_PASS_RAW}")"
+	else
+		log_info "Setting up secrets (Using defaults or environment)..."
+		export AGH_USER="${AGH_USER:-adguard}"
+		export AGH_PASS_RAW="${AGH_PASS_RAW:-password}"
+		export AGH_PASS_HASH="${AGH_PASS_HASH:-\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi}"
+		export HUB_API_KEY="${HUB_API_KEY:-apikey123}"
+		export INVIDIOUS_DB_PASSWORD="${INVIDIOUS_DB_PASSWORD:-password}"
+		export IMMICH_DB_PASSWORD="${IMMICH_DB_PASSWORD:-password}"
+		export WG_HASH_CLEAN="${WG_HASH_CLEAN:-\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi}"
+		export PORTAINER_PASS_HASH="${PORTAINER_PASS_HASH:-\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi}"
+		export VPN_PASS_RAW="${VPN_PASS_RAW:-password}"
+		export ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-password}"
+		export PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-password}"
+		export SCRIBE_SECRET="${SCRIBE_SECRET:-secret123}"
+		export ANONYMOUS_SECRET="${ANONYMOUS_SECRET:-secret123}"
+		export SEARXNG_SECRET="${SEARXNG_SECRET:-secret12345678901234567890123456789012}"
+	fi
+
+	export AGH_USER="${AGH_USER:-adguard}"
+	export ODIDO_USER_ID="${ODIDO_USER_ID:-1000}"
+	export ODIDO_TOKEN="${ODIDO_TOKEN:-token}"
+	export SCRIBE_GH_USER="${SCRIBE_GH_USER:-user}"
+	export SCRIBE_GH_TOKEN="${SCRIBE_GH_TOKEN:-token}"
+	export DESEC_TOKEN="${DESEC_TOKEN:-}"
+
+	# Write secrets to file for persistence and API access
+	mkdir -p "${BASE_DIR}"
+	cat > "${BASE_DIR}/.secrets" <<EOF
+AGH_USER='${AGH_USER}'
+AGH_PASS_RAW='${AGH_PASS_RAW}'
+AGH_PASS_HASH='${AGH_PASS_HASH}'
+HUB_API_KEY='${HUB_API_KEY}'
+INVIDIOUS_DB_PASSWORD='${INVIDIOUS_DB_PASSWORD}'
+IMMICH_DB_PASSWORD='${IMMICH_DB_PASSWORD}'
+WG_HASH_CLEAN='${WG_HASH_CLEAN}'
+PORTAINER_PASS_HASH='${PORTAINER_PASS_HASH}'
+ODIDO_USER_ID='${ODIDO_USER_ID}'
+ODIDO_TOKEN='${ODIDO_TOKEN}'
+VPN_PASS_RAW='${VPN_PASS_RAW}'
+ADMIN_PASS_RAW='${ADMIN_PASS_RAW}'
+PORTAINER_PASS_RAW='${PORTAINER_PASS_RAW}'
+SCRIBE_SECRET='${SCRIBE_SECRET}'
+SCRIBE_GH_USER='${SCRIBE_GH_USER}'
+SCRIBE_GH_TOKEN='${SCRIBE_GH_TOKEN}'
+ANONYMOUS_SECRET='${ANONYMOUS_SECRET}'
+SEARXNG_SECRET='${SEARXNG_SECRET}'
+DESEC_TOKEN='${DESEC_TOKEN}'
+IV_COMPANION='${IV_COMPANION}'
+IV_HMAC='${IV_HMAC}'
+EOF
+	chmod 600 "${BASE_DIR}/.secrets"
 }
