@@ -59,18 +59,18 @@ check_cert_risk() {
 		# Extract Certificate Details
 		local cert_cn
 		local cert_issuer_cn
-		cert_cn=$(ossl x509 -noout -subject -nameopt RFC2253 -in "${ssl_crt}" 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
-		cert_issuer_cn=$(ossl x509 -noout -issuer -nameopt RFC2253 -in "${ssl_crt}" 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p')
-		[[ -z "${cert_issuer_cn}" ]] && cert_issuer_cn=$(ossl x509 -noout -issuer -in "${ssl_crt}" 2>/dev/null | sed 's/issuer=//')
+		cert_cn=$(ossl x509 -noout -subject -nameopt RFC2253 -in "${ssl_crt}" 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p' || true)
+		cert_issuer_cn=$(ossl x509 -noout -issuer -nameopt RFC2253 -in "${ssl_crt}" 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p' || true)
+		[[ -z "${cert_issuer_cn}" ]] && cert_issuer_cn=$(ossl x509 -noout -issuer -in "${ssl_crt}" 2>/dev/null | sed 's/issuer=//' || true)
 
 		local cert_dates
 		local cert_not_after
 		local cert_serial
 		local cert_fingerprint
-		cert_dates=$(ossl x509 -noout -dates -in "${ssl_crt}" 2>/dev/null)
-		cert_not_after=$(echo "${cert_dates}" | grep "notAfter=" | cut -d= -f2)
-		cert_serial=$(ossl x509 -noout -serial -in "${ssl_crt}" 2>/dev/null | cut -d= -f2)
-		cert_fingerprint=$(ossl x509 -noout -fingerprint -sha256 -in "${ssl_crt}" 2>/dev/null | cut -d= -f2)
+		cert_dates=$(ossl x509 -noout -dates -in "${ssl_crt}" 2>/dev/null || true)
+		cert_not_after=$(echo "${cert_dates}" | grep "notAfter=" | cut -d= -f2 || true)
+		cert_serial=$(ossl x509 -noout -serial -in "${ssl_crt}" 2>/dev/null | cut -d= -f2 || true)
+		cert_fingerprint=$(ossl x509 -noout -fingerprint -sha256 -in "${ssl_crt}" 2>/dev/null | cut -d= -f2 || true)
 
 		local cert_validity
 		if ossl x509 -checkend 0 -noout -in "${ssl_crt}" >/dev/null 2>&1; then

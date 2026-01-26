@@ -474,11 +474,10 @@ EOF
 				# Check if the cert matches the domain
 				if ossl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | grep -qE "CN\s*=\s*${DESEC_DOMAIN}\s*$"; then
 					# Check for self-signed (Issuer == Subject)
-					local issuer
-					local subject
-					issuer=$(ossl x509 -noout -issuer -in "${AGH_CONF_DIR}/ssl.crt" | sed 's/^issuer= //')
-					subject=$(ossl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | sed 's/^subject= //')
-					
+					                                        local issuer
+					                                        local subject
+					                                        issuer=$(ossl x509 -noout -issuer -in "${AGH_CONF_DIR}/ssl.crt" | sed 's/^issuer= //' || true)
+					                                        subject=$(ossl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | sed 's/^subject= //' || true)					
 					if [[ "${issuer}" == "${subject}" ]]; then
 						log_warn "Existing certificate is self-signed. Re-issuing with ACME."
 						cert_valid=false

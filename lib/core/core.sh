@@ -60,7 +60,18 @@ export SELECTED_SERVICES=""
 log_info() { echo -e "[INFO] $1"; }
 log_warn() { echo -e "[WARN] $1"; }
 log_crit() { echo -e "[CRIT] $1"; }
-ask_confirm() { return 0; } 
+ask_confirm() {
+    local prompt="$1"
+    if [[ "${AUTO_CONFIRM:-false}" == "true" ]]; then
+        return 0
+    fi
+    local response
+    read -r -p "${prompt} [y/N]: " response
+    case "${response}" in
+        [yY][eE][sS]|[yY]) return 0 ;;
+        *) return 1 ;;
+    esac
+} 
 safe_replace() {
     local file="$1"; local dest="$2"; shift 2
     sudo cp "$file" "$dest"

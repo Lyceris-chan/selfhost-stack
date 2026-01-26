@@ -58,6 +58,59 @@ trap 'failure_handler ${LINENO} "$BASH_COMMAND"' ERR
 # --- Main Execution Flow ---
 
 main() {
+	# Parse command line arguments
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			-c|--clean) CLEAN_ONLY=true ;;
+			-x|--reset) CLEAN_ONLY=true ;;
+			-b|--backup) DO_BACKUP=true ;;
+			-r|--restore)
+				if [[ -z "${2:-}" ]]; then
+					echo "Error: Argument for $1 is missing" >&2
+					exit 1
+				fi
+				RESTORE_FILE="$2"
+				shift
+				;;
+			-a|--allow-proton) ALLOW_PROTON_VPN=true ;;
+			-G|--generate) GENERATE_ONLY=true ;;
+			-p|--password) AUTO_PASSWORD=true ;;
+			-j|--parallel) PARALLEL_DEPLOY=true ;;
+			-s|--services)
+				if [[ -z "${2:-}" ]]; then
+					echo "Error: Argument for $1 is missing" >&2
+					exit 1
+				fi
+				SELECTED_SERVICES="$2"
+				shift
+				;;
+			-y|--yes) AUTO_CONFIRM=true ;;
+			-h|--help)
+				echo "Usage: $0 [options]"
+				echo "Options:"
+				echo "  -j, --parallel       Parallel deploy"
+				echo "  -s <list>            Selective install (comma-separated)"
+				echo "  -c, --clean          Maintenance (recreate containers)"
+				echo "  -x, --reset          Factory reset (wipe data)"
+				echo "  -p, --password       Auto-generate passwords"
+				echo "  -a, --allow-proton   Allow ProtonVPN domains"
+				echo "  -G, --generate       Generate only"
+				echo "  -b, --backup         Backup system"
+				echo "  -r <file>            Restore from backup"
+				echo "  -y, --yes            Auto-confirm prompts"
+				exit 0
+				;;
+			*)
+				if command -v log_warn >/dev/null; then
+					log_warn "Unknown option: $1"
+				else
+					echo "Unknown option: $1"
+				fi
+				;;
+		esac
+		shift
+	done
+
 	# Cleanup & Reset (Immediate Exit)
 	if [[ "${CLEAN_ONLY}" == "true" ]]; then
 		clean_environment
