@@ -294,6 +294,36 @@ deploy_stack() {
 }
 
 setup_secrets() {
+	# Helper functions for secret generation (Available to all modes)
+	# Prefer python3 for portability if system tools are missing
+	generate_pass() { 
+		"${PYTHON_CMD}" -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(16)))"
+	}
+	generate_key() { 
+		"${PYTHON_CMD}" -c "import secrets; print(secrets.token_hex(32))"
+	}
+	hash_pass() {
+		local pass="$1"
+		# Pass password as argument to avoid shell injection/quoting issues in python string
+		"${PYTHON_CMD}" -c "
+import sys, bcrypt
+try:
+    p = sys.argv[1].encode('utf-8')
+    print(bcrypt.hashpw(p, bcrypt.gensalt()).decode())
+except Exception:
+    sys.exit(1)
+" "$pass" 2>/dev/null || \
+		"${PYTHON_CMD}" -c "
+import sys, crypt
+try:
+    p = sys.argv[1]
+    print(crypt.crypt(p, crypt.mksalt(crypt.METHOD_SHA512)))
+except Exception:
+    sys.exit(1)
+" "$pass" 2>/dev/null || \
+		echo "${pass}" # Fallback to raw if no hashing tool found
+	}
+
 	# 1. deSEC Configuration Prompt
 	if [[ -z "${DESEC_DOMAIN:-}" ]] && [[ "${AUTO_CONFIRM}" != "true" ]]; then
 		echo ""
@@ -317,14 +347,6 @@ setup_secrets() {
 	if [[ "${AUTO_PASSWORD}" == "true" ]]; then
 		log_info "Auto-password mode enabled. Generating secure random credentials..."
 		
-		# Helper for random strings using Python (ZimaOS friendly)
-		generate_pass() { 
-			"${PYTHON_CMD}" -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(16)))"
-		}
-		generate_key() { 
-			"${PYTHON_CMD}" -c "import secrets; print(secrets.token_hex(32))"
-		}
-		
 		export IV_COMPANION="$(generate_pass)" # Must be 16 chars alphanumeric
 		export IV_HMAC="$(generate_key)"
 
@@ -338,14 +360,6 @@ setup_secrets() {
 		export SCRIBE_SECRET="${SCRIBE_SECRET:-$(generate_key)}"
 		export ANONYMOUS_SECRET="${ANONYMOUS_SECRET:-$(generate_key)}"
 		export SEARXNG_SECRET="${SEARXNG_SECRET:-$(generate_key)}"
-
-		# Generate Hashing helper (prefer python3 for portability if mkpasswd is missing)
-		hash_pass() {
-			local pass="$1"
-			"${PYTHON_CMD}" -c "import bcrypt; print(bcrypt.hashpw(b'${pass}', bcrypt.gensalt()).decode())" 2>/dev/null || \
-			"${PYTHON_CMD}" -c "import crypt; print(crypt.crypt('${pass}', crypt.mksalt(crypt.METHOD_SHA512)))" 2>/dev/null || \
-			echo "${pass}" # Fallback to raw if no hashing tool found (not ideal)
-		}
 
 		log_info "Hashing passwords for internal service configurations..."
 		export AGH_PASS_HASH="$(hash_pass "${AGH_PASS_RAW}")"
@@ -361,28 +375,44 @@ setup_secrets() {
 			echo " Press Enter to keep the default values shown in brackets."
 			echo ""
 			
-			read -r -p "   Admin Password [password]: " input_pass
+			read -r -p "   Admin Password [random]: " input_pass
 			if [[ -n "${input_pass}" ]]; then export ADMIN_PASS_RAW="${input_pass}"; fi
 			
-			read -r -p "   WireGuard/VPN Password [password]: " input_vpn
+			read -r -p "   WireGuard/VPN Password [random]: " input_vpn
 			if [[ -n "${input_vpn}" ]]; then export VPN_PASS_RAW="${input_vpn}"; fi
 		fi
 
 		log_info "Setting up secrets (Using defaults or environment)..."
+		# Generate random defaults if not provided
+		local default_pass
+		default_pass=$(generate_pass)
+		local default_key
+		default_key=$(generate_key)
+		
 		export AGH_USER="${AGH_USER:-adguard}"
-		export AGH_PASS_RAW="${AGH_PASS_RAW:-password}"
-		export AGH_PASS_HASH="${AGH_PASS_HASH:-\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi}"
-		export HUB_API_KEY="${HUB_API_KEY:-apikey123}"
-		export INVIDIOUS_DB_PASSWORD="${INVIDIOUS_DB_PASSWORD:-password}"
-		export IMMICH_DB_PASSWORD="${IMMICH_DB_PASSWORD:-password}"
-		export WG_HASH_CLEAN="${WG_HASH_CLEAN:-\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi}"
-		export PORTAINER_PASS_HASH="${PORTAINER_PASS_HASH:-\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi}"
-		export VPN_PASS_RAW="${VPN_PASS_RAW:-password}"
-		export ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-password}"
-		export PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-password}"
-		export SCRIBE_SECRET="${SCRIBE_SECRET:-secret123}"
-		export ANONYMOUS_SECRET="${ANONYMOUS_SECRET:-secret123}"
-		export SEARXNG_SECRET="${SEARXNG_SECRET:-secret12345678901234567890123456789012}"
+		export AGH_PASS_RAW="${AGH_PASS_RAW:-${default_pass}}"
+		# Calculate hash for whatever password we ended up with
+		export AGH_PASS_HASH="$(hash_pass "${AGH_PASS_RAW}")"
+		
+		export HUB_API_KEY="${HUB_API_KEY:-${default_key}}"
+		export INVIDIOUS_DB_PASSWORD="${INVIDIOUS_DB_PASSWORD:-$(generate_pass)}"
+		export IMMICH_DB_PASSWORD="${IMMICH_DB_PASSWORD:-$(generate_pass)}"
+		
+		export VPN_PASS_RAW="${VPN_PASS_RAW:-${default_pass}}"
+		export WG_HASH_CLEAN="$(hash_pass "${VPN_PASS_RAW}")"
+		
+		export ADMIN_PASS_RAW="${ADMIN_PASS_RAW:-${default_pass}}"
+		
+		export PORTAINER_PASS_RAW="${PORTAINER_PASS_RAW:-${default_pass}}"
+		export PORTAINER_PASS_HASH="$(hash_pass "${PORTAINER_PASS_RAW}")"
+		
+		export SCRIBE_SECRET="${SCRIBE_SECRET:-$(generate_key)}"
+		export ANONYMOUS_SECRET="${ANONYMOUS_SECRET:-$(generate_key)}"
+		export SEARXNG_SECRET="${SEARXNG_SECRET:-$(generate_key)}"
+		
+		# Ensure IV secrets are set
+		export IV_COMPANION="${IV_COMPANION:-$(generate_pass)}"
+		export IV_HMAC="${IV_HMAC:-$(generate_key)}"
 	fi
 
 	export AGH_USER="${AGH_USER:-adguard}"

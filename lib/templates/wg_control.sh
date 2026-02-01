@@ -31,13 +31,14 @@ if [ "$ACTION" = "activate" ]; then
 		echo "$PROFILE_NAME" >"$NAME_FILE"
 		DEPENDENTS="${CONTAINER_PREFIX}redlib ${CONTAINER_PREFIX}wikiless ${CONTAINER_PREFIX}wikiless_redis ${CONTAINER_PREFIX}invidious ${CONTAINER_PREFIX}invidious-db ${CONTAINER_PREFIX}invidious-companion ${CONTAINER_PREFIX}rimgo ${CONTAINER_PREFIX}breezewiki ${CONTAINER_PREFIX}anonymousoverflow ${CONTAINER_PREFIX}scribe"
 		# shellcheck disable=SC2086
+		# Intentionally unquoted to allow word splitting of multiple container names
 		docker stop $DEPENDENTS 2>/dev/null || true
 		docker compose -f /app/docker-compose.yml up -d --force-recreate gluetun 2>/dev/null || true
 
 		# Wait for gluetun to be healthy (max 30s)
 		i=0
 		while [ $i -lt 30 ]; do
-			HEALTH=$(docker inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}gluetun 2>/dev/null || echo "unknown")
+			HEALTH=$(docker inspect --format='{{.State.Health.Status}}' "${CONTAINER_PREFIX}gluetun" 2>/dev/null || echo "unknown")
 			if [ "$HEALTH" = "healthy" ]; then
 				break
 			fi
@@ -72,7 +73,7 @@ elif [ "$ACTION" = "status" ]; then
 
 	# Check if gluetun container is running
 	if docker ps --filter "name=^${CONTAINER_PREFIX}gluetun$" --filter "status=running" --format '{{.Names}}' 2>/dev/null | grep -q "gluetun"; then
-		HEALTH=$(docker inspect --format='{{.State.Health.Status}}' ${CONTAINER_PREFIX}gluetun 2>/dev/null || echo "unknown")
+		HEALTH=$(docker inspect --format='{{.State.Health.Status}}' "${CONTAINER_PREFIX}gluetun" 2>/dev/null || echo "unknown")
 		if [ "$HEALTH" = "healthy" ]; then
 			GLUETUN_HEALTHY="true"
 			GLUETUN_STATUS="up"
@@ -81,7 +82,7 @@ elif [ "$ACTION" = "status" ]; then
 		fi
 
 		if [ "$GLUETUN_HEALTHY" = "true" ]; then
-			VPN_STATUS_RESPONSE=$(docker exec ${CONTAINER_PREFIX}gluetun wget --user=gluetun --password="__ADMIN_PASS_RAW__" -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
+			VPN_STATUS_RESPONSE=$(docker exec "${CONTAINER_PREFIX}gluetun" wget --user=gluetun --password="__ADMIN_PASS_RAW__" -qO- --timeout=3 http://127.0.0.1:8000/v1/vpn/status 2>/dev/null || echo "")
 			if [ -n "$VPN_STATUS_RESPONSE" ]; then
 				if echo "$VPN_STATUS_RESPONSE" | grep -q '"status":"running"'; then
 					HANDSHAKE_AGO="Connected"
@@ -96,20 +97,20 @@ elif [ "$ACTION" = "status" ]; then
 			HANDSHAKE_AGO="Waiting for health check..."
 		fi
 
-		PUBLIC_IP_RESPONSE=$(docker exec ${CONTAINER_PREFIX}gluetun wget --user=gluetun --password="__ADMIN_PASS_RAW__" -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
+		PUBLIC_IP_RESPONSE=$(docker exec "${CONTAINER_PREFIX}gluetun" wget --user=gluetun --password="__ADMIN_PASS_RAW__" -qO- --timeout=3 http://127.0.0.1:8000/v1/publicip/ip 2>/dev/null || echo "")
 		if [ -n "$PUBLIC_IP_RESPONSE" ]; then
 			EXTRACTED_IP=$(echo "$PUBLIC_IP_RESPONSE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
 			[ -n "$EXTRACTED_IP" ] && PUBLIC_IP="$EXTRACTED_IP"
 		fi
 
 		if [ "$PUBLIC_IP" = "--" ]; then
-			PUBLIC_IP=$(docker exec ${CONTAINER_PREFIX}gluetun wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
+			PUBLIC_IP=$(docker exec "${CONTAINER_PREFIX}gluetun" wget -qO- --timeout=5 https://api.ipify.org 2>/dev/null || echo "--")
 		fi
 
-		WG_CONF_ENDPOINT=$(docker exec ${CONTAINER_PREFIX}gluetun cat /gluetun/wireguard/wg0.conf 2>/dev/null | grep -i '^Endpoint' | cut -d'=' -f2 | tr -d ' ' | head -1 || echo "")
+		WG_CONF_ENDPOINT=$(docker exec "${CONTAINER_PREFIX}gluetun" cat /gluetun/wireguard/wg0.conf 2>/dev/null | grep -i '^Endpoint' | cut -d'=' -f2 | tr -d ' ' | head -1 || echo "")
 		[ -n "$WG_CONF_ENDPOINT" ] && ENDPOINT="$WG_CONF_ENDPOINT"
 
-		NET_DEV=$(docker exec ${CONTAINER_PREFIX}gluetun cat /proc/net/dev 2>/dev/null || echo "")
+		NET_DEV=$(docker exec "${CONTAINER_PREFIX}gluetun" cat /proc/net/dev 2>/dev/null || echo "")
 		CURRENT_RX="0"
 		CURRENT_TX="0"
 		if [ -n "$NET_DEV" ]; then
@@ -175,9 +176,9 @@ DATAEOF
 
 	if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER_PREFIX}wg-easy$"; then
 		WGE_STATUS="up"
-		WGE_HOST=$(docker exec ${CONTAINER_PREFIX}wg-easy printenv WG_HOST 2>/dev/null | tr -d '\n\r' || echo "Unknown")
+		WGE_HOST=$(docker exec "${CONTAINER_PREFIX}wg-easy" printenv WG_HOST 2>/dev/null | tr -d '\n\r' || echo "Unknown")
 		[ -z "$WGE_HOST" ] && WGE_HOST="Unknown"
-		WG_PEER_DATA=$(docker exec ${CONTAINER_PREFIX}wg-easy wg show wg0 2>/dev/null || echo "")
+		WG_PEER_DATA=$(docker exec "${CONTAINER_PREFIX}wg-easy" wg show wg0 2>/dev/null || echo "")
 		if [ -n "$WG_PEER_DATA" ]; then
 			WGE_CLIENTS=$(echo "$WG_PEER_DATA" | grep -c '^peer:' 2>/dev/null || echo "0")
 			CONNECTED_COUNT=0
@@ -204,10 +205,10 @@ DATAEOF
 			WGE_TOTAL_RX=$((WGE_SAVED_TOTAL_RX + WGE_CURRENT_RX))
 			WGE_TOTAL_TX=$((WGE_SAVED_TOTAL_TX + WGE_CURRENT_TX))
 			cat >"$WGE_DATA_FILE" <<WGEDATAEOF
-WGE_LAST_RX=$WGE_CURRENT_RX
-WGE_LAST_TX=$WGE_CURRENT_TX
-WGE_SAVED_TOTAL_RX=$WGE_SAVED_TOTAL_RX
-WGE_SAVED_TOTAL_TX=$WGE_SAVED_TOTAL_TX
+ WGE_LAST_RX=$WGE_CURRENT_RX
+ WGE_LAST_TX=$WGE_CURRENT_TX
+ WGE_SAVED_TOTAL_RX=$WGE_SAVED_TOTAL_RX
+ WGE_SAVED_TOTAL_TX=$WGE_SAVED_TOTAL_TX
 WGEDATAEOF
 			for hs in $(echo "$WG_PEER_DATA" | grep "latest handshake:" | sed 's/.*latest handshake: //' | sed 's/ seconds.*//' | grep -E '^[0-9]+' 2>/dev/null || echo ""); do
 				if [ -n "$hs" ] && [ "$hs" -lt 180 ] 2>/dev/null; then CONNECTED_COUNT=$((CONNECTED_COUNT + 1)); fi
@@ -240,7 +241,7 @@ WGEDATAEOF
 		if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${s_name_real}$"; then
 			HEALTH=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$s_name_real" 2>/dev/null || echo "running")
 			if [ "$HEALTH" = "unhealthy" ]; then
-				DETAILS=$(docker inspect --format='{{range .State.Health.Log}}{{println .Output}}{{end}}' "$s_name_real" 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\\/\\\\/g; s/"/\\"/g' | cut -c1-100)
+				DETAILS=$(docker inspect --format='{{range .State.Health.Log}}{{println .Output}}{{end}}' "$s_name_real" 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\\/\\\\/g; s/"/\"/g' | cut -c1-100)
 			fi
 		fi
 		if [ "$HEALTH" = "healthy" ] || [ "$HEALTH" = "running" ]; then

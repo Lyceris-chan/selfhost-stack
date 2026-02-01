@@ -50,7 +50,6 @@ def verify_admin(request: VerifyAdminRequest):
         is_match = secrets.compare_digest(request.password, stored_pass)
         if not is_match:
             log_structured("WARN", f"Admin login failed. Stored len: {len(stored_pass)}, Received len: {len(request.password)}", "AUTH")
-            log_structured("WARN", f"Stored (first 3): {stored_pass[:3]}, Received (first 3): {request.password[:3]}", "AUTH")
 
     if is_match:
         # Determine timeout

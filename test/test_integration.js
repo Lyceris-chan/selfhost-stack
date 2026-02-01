@@ -455,7 +455,7 @@ async function testInvidiousVideoPlayback(page, baseUrl) {
     
     await videoLink.click();
     await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: CONFIG.timeout });
-    await page.waitForTimeout(2000); // Wait for video player
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for video player
     await takeScreenshot(page, 'invidious_video_page');
     
     // Check for video player

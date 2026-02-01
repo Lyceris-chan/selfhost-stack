@@ -110,6 +110,10 @@ class Settings(BaseSettings):
     ADMIN_PASS_RAW: Optional[str] = os.environ.get("ADMIN_PASS_RAW")
     VPN_PASS_RAW: Optional[str] = os.environ.get("VPN_PASS_RAW")
 
+    # Odido Secrets
+    ODIDO_FERNET_KEY: bytes = os.environ.get("ODIDO_FERNET_KEY", b"afIqRZm6iSev4zWysNGAjR6fCrOMf5GQqhKFfmXkgOU=")
+    ODIDO_CLIENT_KEY: str = os.environ.get("ODIDO_CLIENT_KEY", "9havvat6hm0b962i")
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )

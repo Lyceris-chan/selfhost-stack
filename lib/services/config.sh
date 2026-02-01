@@ -1,10 +1,10 @@
 set -euo pipefail
 
 generate_scripts() {
-	local vertd_devices=""
+	VERTD_DEVICES=""
 	local gpu_label="GPU Accelerated"
 	local gpu_tooltip="Utilizes local GPU (/dev/dri) for high-performance conversion"
-	local vertd_nvidia=""
+	VERTD_NVIDIA=""
 	local tmp_merged=""
 
 	# 1. Migrate Script
@@ -61,11 +61,11 @@ EOF
 
 	# 5. Hardware & Services Configuration
 	if [[ -d "/dev/dri" ]]; then
-		vertd_devices="    devices:
-      - /dev/dri"
+		VERTD_DEVICES="        devices:
+          - /dev/dri"
 		if [[ -d "/dev/vulkan" ]]; then
-			vertd_devices="${vertd_devices}
-      - /dev/vulkan"
+			VERTD_DEVICES="${VERTD_DEVICES}
+          - /dev/vulkan"
 		fi
 
 		if grep -iq "intel" /sys/class/drm/card*/device/vendor 2>/dev/null || (command -v lspci >/dev/null 2>&1 && lspci 2>/dev/null | grep -iq "intel.*graphics"); then
@@ -78,7 +78,7 @@ EOF
 	fi
 
 	if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
-		vertd_nvidia="    deploy:
+		VERTD_NVIDIA="    deploy:
       resources:
         reservations:
           devices:
@@ -397,6 +397,15 @@ setup_configs() {
 	local nginx_redirect=""
 
 	touch "${HISTORY_LOG}" "${ACTIVE_WG_CONF}" "${BASE_DIR}/.data_usage" "${BASE_DIR}/.wge_data_usage"
+	
+	# Extract DNS from WireGuard config to ensure Gluetun uses provider-recommended DNS
+	local provider_dns
+	provider_dns=$(grep -Ei "^\s*DNS\s*=" "${ACTIVE_WG_CONF}" | cut -d'=' -f2 | tr -d ' ' | cut -d',' -f1 || true)
+	if [[ -n "${provider_dns}" ]]; then
+		log_info "Detected provider DNS from config: ${provider_dns}"
+		export GLUETUN_DNS_PLAINTEXT_ADDRESS="${provider_dns}"
+	fi
+
 	if [[ ! -f "${ACTIVE_PROFILE_NAME_FILE}" ]]; then
 		echo "Initial-Setup" | "${SUDO}" tee "${ACTIVE_PROFILE_NAME_FILE}" >/dev/null
 	fi
@@ -468,36 +477,28 @@ EOF
 
 		# Check if we already have a valid, unexpired certificate for this domain
 		local cert_valid=false
-		if [[ -f "${AGH_CONF_DIR}/ssl.crt" ]]; then
-			# Use ossl helper which handles host/docker transparently
-			if ossl x509 -checkend 86400 -noout -in "${AGH_CONF_DIR}/ssl.crt" >/dev/null 2>&1; then
-				# Check if the cert matches the domain
-				if ossl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | grep -qE "CN\s*=\s*${DESEC_DOMAIN}\s*$"; then
-					# Check for self-signed (Issuer == Subject)
-					                                        local issuer
-					                                        local subject
-					                                        issuer=$(ossl x509 -noout -issuer -in "${AGH_CONF_DIR}/ssl.crt" | sed 's/^issuer= //' || true)
-					                                        subject=$(ossl x509 -noout -subject -in "${AGH_CONF_DIR}/ssl.crt" | sed 's/^subject= //' || true)					
-					if [[ "${issuer}" == "${subject}" ]]; then
-						log_warn "Existing certificate is self-signed. Re-issuing with ACME."
-						cert_valid=false
-					else
-						log_info "Existing valid certificate for ${DESEC_DOMAIN} detected. Skipping issuance."
-						cert_valid=true
-					fi
-				else
-					log_warn "Existing certificate subject does not match ${DESEC_DOMAIN}. Re-issuing..."
-				fi
+		if verify_cert "${AGH_CONF_DIR}/ssl.crt" "${DESEC_DOMAIN}"; then
+			log_info "Existing valid certificate for ${DESEC_DOMAIN} detected. Skipping issuance."
+			cert_valid=true
+		else
+			local ret=$?
+			if [[ $ret -eq 4 ]]; then
+				log_warn "Existing certificate is self-signed. Re-issuing with ACME."
+			elif [[ $ret -eq 3 ]]; then
+				log_warn "Existing certificate subject does not match ${DESEC_DOMAIN}. Re-issuing..."
+			elif [[ $ret -eq 2 ]]; then
+				log_warn "Existing certificate for ${DESEC_DOMAIN} has expired. Re-issuing..."
 			else
-				log_warn "Existing certificate for ${DESEC_DOMAIN} has expired or is invalid. Re-issuing..."
+				log_warn "Certificate invalid or missing. Issuing..."
 			fi
+			cert_valid=false
 		fi
 
 		if [[ "${cert_valid}" == "false" ]]; then
 			log_info "Issuing SSL certificate via acme.sh (deSEC DNS challenge)..."
 			"${DOCKER_CMD}" run --rm --net=host -v "${AGH_CONF_DIR}:/acme" -e "DESEC_Token=${DESEC_TOKEN}" -e "DESEC_DOMAIN=${DESEC_DOMAIN}" \
 				neilpang/acme.sh:latest --issue --dns dns_desec --dnssleep 60 -d "${DESEC_DOMAIN}" -d "*.${DESEC_DOMAIN}" \
-				--keylength ec-256 --server letsencrypt --home /acme --config-home /acme --cert-home /acme/certs >/dev/null 2>&1 || log_warn "acme.sh issuance failed. Falling back to self-signed."
+				--keylength ec-256 --server letsencrypt --home /acme --config-home /acme --cert-home /acme/certs || log_warn "acme.sh issuance failed. Falling back to self-signed."
 
 			if [[ -f "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" ]]; then
 				cp "${AGH_CONF_DIR}/certs/${DESEC_DOMAIN}_ecc/fullchain.cer" "${AGH_CONF_DIR}/ssl.crt"
@@ -505,12 +506,15 @@ EOF
 				log_info "ACME certificate successfully installed."
 			else
 				log_info "Generating fallback self-signed cert for ${DESEC_DOMAIN}..."
+				# Use containerized openssl (via acme.sh image) to generate cert. 
+				# Host does not have openssl installed.
 				"${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/certs" neilpang/acme.sh:latest /bin/sh -c "openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes -keyout /certs/ssl.key -out /certs/ssl.crt -subj '/CN=${DESEC_DOMAIN}'" >/dev/null 2>&1
 			fi
 		fi
 		dns_server_name="${DESEC_DOMAIN}"
 	else
 		log_info "Generating self-signed cert..."
+		# Use containerized openssl (via acme.sh image) to generate cert.
 		"${DOCKER_CMD}" run --rm -v "${AGH_CONF_DIR}:/certs" neilpang/acme.sh:latest /bin/sh -c "openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes -keyout /certs/ssl.key -out /certs/ssl.crt -subj '/CN=${LAN_IP}'" >/dev/null 2>&1
 	fi
 

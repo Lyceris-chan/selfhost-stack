@@ -138,13 +138,11 @@ append_odido_booster() {
         image: selfhost/odido-booster:${ODIDO_BOOSTER_IMAGE_TAG:-latest}
         container_name: ${CONTAINER_PREFIX}odido-booster
         networks: [frontend]
-        ports: ["${LAN_IP}:${PORT_ODIDO}:8085"]
         dns:
             - 172.${FOUND_OCTET}.0.250
+        ports: ["${LAN_IP}:${PORT_ODIDO}:8085"]
         environment:
-            - "API_KEY=${HUB_API_KEY_COMPOSE}"
             - "ODIDO_USER_ID=${ODIDO_USER_ID}"
-            - "ODIDO_TOKEN=${ODIDO_TOKEN}"
             - "PORT=8085"
         healthcheck:
             test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8085/docs"]
@@ -240,9 +238,9 @@ EOF
             - "FIREWALL_VPN_INPUT_PORTS=10416,8080,8081,8085,8180,3000,3002,8280,8480,80,24153,8282,9000,2283"
             - "HTTPPROXY=on"
             - "DNS_ADDRESS=${GLUETUN_DNS_ADDRESS:-127.0.0.1}"
-            - "DOT=${GLUETUN_DOT:-on}"
-            - "DNS_KEEP_NAMESERVERS=off"
-            - "DNS_PLAINTEXT_ADDRESS=172.${FOUND_OCTET}.0.250"
+            - "DOT=${GLUETUN_DOT:-off}"
+            - "DNS_KEEP_NAMESERVERS=${GLUETUN_KEEP_NAMESERVERS:-yes}"
+            - "DNS_PLAINTEXT_ADDRESS=${GLUETUN_DNS_PLAINTEXT_ADDRESS:-172.${FOUND_OCTET}.0.250}"
             - "HEALTH_TARGET_ADDRESSES=github.com:443"
             - "RESTART_VPN_ON_HEALTHCHECK_FAILURE=${RESTART_VPN_ON_HEALTHCHECK_FAILURE:-yes}"
             - "PUBLICIP_API_BACKUPS=ifconfigco,ip2location"
@@ -659,7 +657,7 @@ EOF
 
 	cat >>"${COMPOSE_FILE}" <<EOF
         environment:
-            - "IMGUR_CLIENT_ID=${RIMGO_IMGUR_CLIENT_ID:-546c25a59c58ad7}"
+            - "IMGUR_CLIENT_ID=${RIMGO_IMGUR_CLIENT_ID}"
             - "ADDRESS=0.0.0.0"
             - "PORT=${PORT_INT_RIMGO}"
             - "PRIVACY_NOT_COLLECTED=true"
@@ -798,7 +796,7 @@ ${VERTD_DEVICES}
         deploy:
             resources:
                 limits: {cpus: '2.0', memory: 1024M}
-$(if [[ -n "${VERTD_NVIDIA:-}" ]]; then echo "        reservations:
+$(if [[ -n "${VERTD_NVIDIA:-}" ]]; then echo "                reservations:
                     devices:
                         - driver: nvidia
                             count: all

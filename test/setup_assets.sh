@@ -44,7 +44,7 @@ download_js() {
 	local actual_sha
 
 	if curl -fsSL -A "$UA" "$url" -o "$dest"; then
-		actual_sha=$(openssl dgst -sha384 -binary "$dest" | openssl base64 -A)
+		actual_sha=$(python3 -c "import hashlib, base64; print(base64.b64encode(hashlib.sha384(open('$dest', 'rb').read()).digest()).decode().strip())")
 		if [[ "$actual_sha" == "$expected_sha" ]]; then
 			log "Verified checksum for $(basename "$dest")"
 			return 0

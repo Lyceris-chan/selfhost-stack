@@ -19,10 +19,7 @@ check_docker_rate_limit() {
 	local output
 	if ! output=$("${DOCKER_CMD}" pull hello-world 2>&1); then
 		if echo "${output}" | grep -iaE "toomanyrequests|rate.*limit|pull.*limit|reached.*limit" >/dev/null; then
-			log_crit "Docker Hub Rate Limit Reached! They want you to log in."
-			if ! authenticate_registries; then
-				exit 1
-			fi
+			log_warn "Docker Hub Rate Limit Detected. Proceeding with caution (cached images will be used if available)."
 		else
 			log_warn "Docker pull check failed. We'll proceed, but don't be surprised if image pulls fail later."
 		fi
@@ -56,37 +53,62 @@ check_cert_risk() {
 			existing_domain=$(grep "DESEC_DOMAIN=" "${BASE_DIR}/.secrets" 2>/dev/null | cut -d'=' -f2 | tr -d '"' | tr -d "'" || true)
 		fi
 
-		# Extract Certificate Details
-		local cert_cn
-		local cert_issuer_cn
-		cert_cn=$(ossl x509 -noout -subject -nameopt RFC2253 -in "${ssl_crt}" 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p' || true)
-		cert_issuer_cn=$(ossl x509 -noout -issuer -nameopt RFC2253 -in "${ssl_crt}" 2>/dev/null | sed -n 's/.*CN=\([^,]*\).*/\1/p' || true)
-		[[ -z "${cert_issuer_cn}" ]] && cert_issuer_cn=$(ossl x509 -noout -issuer -in "${ssl_crt}" 2>/dev/null | sed 's/issuer=//' || true)
+		# Extract Certificate Details using Containerized Python
+		# We use python:3.11-alpine to ensure consistent API behavior for _test_decode_cert
+		local cert_info
+		cert_info=$(docker run --rm -v "${ssl_crt}:/cert.pem" python:3.11-alpine python3 -c "
+import ssl, sys
+try:
+    cert = ssl._ssl._test_decode_cert('/cert.pem')
+    subject = dict(x[0] for x in cert['subject'])
+    issuer = dict(x[0] for x in cert['issuer'])
+    print(f\"CN:{subject.get('commonName', '')}\")
+    print(f\"ISSUER:{issuer.get('commonName', '')}\")
+    print(f\"EXPIRY:{cert['notAfter']}\")
+except Exception:
+    print(\"CN:\")
+    print(\"ISSUER:\")
+    print(\"EXPIRY:\")
+")
+		
+		# Safe parsing of certificate info (No eval)
+		local CERT_CN=""
+		local CERT_ISSUER=""
+		local CERT_EXPIRY=""
+		while IFS=':' read -r key value; do
+			# Trim whitespace
+			value=$(echo "$value" | sed 's/^[ \t]*//;s/[ \t]*$//') 
+			case "$key" in
+				CN) CERT_CN="$value" ;;
+				ISSUER) CERT_ISSUER="$value" ;;
+				EXPIRY) CERT_EXPIRY="$value" ;;
+			esac
+		done <<< "${cert_info}"
 
-		local cert_dates
-		local cert_not_after
-		local cert_serial
-		local cert_fingerprint
-		cert_dates=$(ossl x509 -noout -dates -in "${ssl_crt}" 2>/dev/null || true)
-		cert_not_after=$(echo "${cert_dates}" | grep "notAfter=" | cut -d= -f2 || true)
-		cert_serial=$(ossl x509 -noout -serial -in "${ssl_crt}" 2>/dev/null | cut -d= -f2 || true)
-		cert_fingerprint=$(ossl x509 -noout -fingerprint -sha256 -in "${ssl_crt}" 2>/dev/null | cut -d= -f2 || true)
-
-		local cert_validity
-		if ossl x509 -checkend 0 -noout -in "${ssl_crt}" >/dev/null 2>&1; then
+		local cert_validity="❌ EXPIRED / INVALID"
+		# Check validity (not expired) using containerized python
+		if docker run --rm -v "${ssl_crt}:/cert.pem" python:3.11-alpine python3 -c "
+import ssl, datetime, sys
+try:
+    cert = ssl._ssl._test_decode_cert('/cert.pem')
+    not_after = datetime.datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
+    if not_after > datetime.datetime.utcnow():
+        sys.exit(0)
+    sys.exit(1)
+except:
+    sys.exit(1)
+"; then
 			cert_validity="✅ Valid (Active)"
-		else
-			cert_validity="❌ EXPIRED"
 		fi
 
-		echo "   • Common Name: ${cert_cn:-Unknown/Invalid}"
-		echo "   • Issuer:      ${cert_issuer_cn:-Unknown/Invalid}"
-		echo "   • Expires:     ${cert_not_after:-Unknown}"
+		echo "   • Common Name: ${CERT_CN:-Unknown/Invalid}"
+		echo "   • Issuer:      ${CERT_ISSUER:-Unknown/Invalid}"
+		echo "   • Expires:     ${CERT_EXPIRY:-Unknown}"
 		echo "   • Status:      ${cert_validity}"
 
 		if [[ -n "${existing_domain}" ]]; then
 			echo "   • Setup Domain: ${existing_domain}"
-			if [[ -n "${cert_cn}" ]] && echo "${cert_cn}" | grep -q "${existing_domain}"; then
+			if [[ -n "${CERT_CN}" ]] && echo "${CERT_CN}" | grep -q "${existing_domain}"; then
 				echo "   ✅ Certificate MATCHES the configured domain."
 			else
 				echo "   ⚠️  Certificate DOES NOT MATCH the configured domain (${existing_domain})."
@@ -94,14 +116,14 @@ check_cert_risk() {
 		fi
 
 		local is_acme=false
-		if echo "${cert_issuer_cn}" | grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL"; then
+		if echo "${CERT_ISSUER}" | grep -qE "Let's Encrypt|R3|ISRG|ZeroSSL"; then
 			is_acme=true
 			log_warn "This appears to be a valid ACME-signed certificate."
 		fi
 
 		# If certificate is unreadable/invalid, preservation is pointless.
 		# Skip prompt and allow deletion if we are already in a wipe flow.
-		if [[ -z "${cert_cn}" ]] && [[ -z "${cert_issuer_cn}" ]]; then
+		if [[ -z "${CERT_CN}" ]] && [[ -z "${CERT_ISSUER}" ]]; then
 			log_warn "Certificate is invalid or unreadable. Skipping preservation."
 			return 0
 		fi
@@ -321,4 +343,75 @@ setup_cron() {
 		crontab -l 2>/dev/null | grep -vE "wg-ip-monitor|cert-monitor|${APP_NAME}" || true
 		echo "${cron_jobs}"
 	) | crontab -
+}
+
+################################################################################
+# pull_with_retry - Pull a Docker image with retries
+# Arguments:
+#   $1 - Image name/tag
+# Globals:
+#   DOCKER_CMD
+# Returns:
+#   0 on success, 1 on failure
+################################################################################
+pull_with_retry() {
+    local img="$1"
+    local max_retries=3
+    local delay=2
+    local attempt=1
+
+    while [[ $attempt -le $max_retries ]]; do
+        log_info "Pulling image: ${img} (Attempt $attempt/$max_retries)"
+        if "${DOCKER_CMD}" pull "${img}"; then
+            return 0
+        fi
+
+        # Check if we already have it (useful if rate limited but image is cached)
+        if "${DOCKER_CMD}" image inspect "${img}" >/dev/null 2>&1; then
+            log_warn "Pull failed for ${img}, but image exists locally. Continuing..."
+            return 0
+        fi
+
+        log_warn "Pull failed for ${img}. Retrying in ${delay}s..."
+        ((attempt++))
+        sleep $delay
+    done
+    return 1
+}
+
+################################################################################
+# safe_remove_network - Remove a Docker network if it exists
+# Arguments:
+#   $1 - Network name
+# Globals:
+#   DOCKER_CMD
+# Returns:
+#   None
+################################################################################
+safe_remove_network() {
+    local net="$1"
+    if "${DOCKER_CMD}" network inspect "${net}" >/dev/null 2>&1; then
+        "${DOCKER_CMD}" network rm "${net}" >/dev/null 2>&1 || true
+    fi
+}
+
+################################################################################
+# extract_wg_profile_name - Extract profile name from WG config
+# Arguments:
+#   $1 - Config file path
+# Returns:
+#   0 on success (prints name), 1 on failure
+################################################################################
+extract_wg_profile_name() {
+    local conf="$1"
+    if [[ -f "$conf" ]]; then
+        # Try to match "# Profile: Name"
+        local name
+        name=$(grep -m 1 "^# Profile:" "$conf" | cut -d':' -f2 | xargs)
+        if [[ -n "$name" ]]; then
+            echo "$name"
+            return 0
+        fi
+    fi
+    return 1
 }

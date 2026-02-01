@@ -50,9 +50,30 @@ pull_critical_images() {
 	local img
 	for img in ${CRITICAL_IMAGES}; do
 		if ! pull_with_retry "${img}"; then
-			log_crit "Failed to pull critical image ${img}. Aborting."
-			exit 1
+			log_warn "Failed to pre-pull critical image ${img}. Continuing anyway..."
 		fi
 	done
-	log_info "All critical images pulled successfully."
+	log_info "Critical image preparation complete."
+}
+
+#######################################
+# Detects the Dockerfile name in a directory.
+# Arguments:
+#   dir: The directory to search.
+# Outputs:
+#   The detected filename (Dockerfile, dockerfile, or Containerfile).
+# Returns:
+#   0 if found, 1 otherwise.
+#######################################
+detect_dockerfile() {
+	local dir="$1"
+	if [[ -f "${dir}/Dockerfile" ]]; then
+		echo "Dockerfile"
+	elif [[ -f "${dir}/dockerfile" ]]; then
+		echo "dockerfile"
+	elif [[ -f "${dir}/Containerfile" ]]; then
+		echo "Containerfile"
+	else
+		return 1
+	fi
 }

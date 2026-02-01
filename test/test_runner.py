@@ -257,8 +257,9 @@ def main():
 
             print("Deploying stack using zima.sh...")
             # Deploy with selective services and auto-confirm
+            # Source test_config.env to inject variables like WG_CONF_B64
             cmd_deploy = (
-                f"{env_vars} ./zima.sh -p -y -E test/test_config.env -s {services_list}"
+                f"{env_vars} set -a; . test/test_config.env; set +a; ./zima.sh -p -y -s {services_list}"
             )
             run_command(cmd_deploy, cwd=_PROJECT_ROOT)
         else:

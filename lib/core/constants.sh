@@ -55,7 +55,7 @@ readonly ALL_CONTAINERS="gluetun adguard dashboard portainer wg-easy api odido-b
 export ALL_CONTAINERS
 
 # Infrastructure images that should be pre-pulled
-readonly CRITICAL_IMAGES="nginx:alpine python:3.11-alpine alpine:latest redis:alpine postgres:14 searxng/searxng:latest ghcr.io/imputnet/cobalt:latest ghcr.io/usememos/memos:latest containrrr/watchtower:latest node:16-alpine node:24-alpine node:25.2-alpine3.21 84codes/crystal:1.11.2-alpine gcr.io/distroless/nodejs24-debian12:latest"
+readonly CRITICAL_IMAGES="nginx:alpine python:3.11-alpine alpine:latest redis:alpine postgres:14 searxng/searxng:latest ghcr.io/imputnet/cobalt:latest ghcr.io/usememos/memos:latest containrrr/watchtower:latest node:16-alpine node:24-alpine node:25.2-alpine3.21 84codes/crystal:1.11.2-alpine gcr.io/distroless/nodejs24-debian12:latest neilpang/acme.sh:latest"
 export CRITICAL_IMAGES
 
 # Default tags for specific services
@@ -63,6 +63,10 @@ readonly IMMICH_DEFAULT_TAG="release"
 export IMMICH_DEFAULT_TAG
 readonly COBALT_DEFAULT_TAG="latest"
 export COBALT_DEFAULT_TAG
+
+# API Defaults
+readonly RIMGO_IMGUR_CLIENT_ID="546c25a59c58ad7"
+export RIMGO_IMGUR_CLIENT_ID
 
 # Port Definitions
 readonly PORT_DASHBOARD_WEB=8088

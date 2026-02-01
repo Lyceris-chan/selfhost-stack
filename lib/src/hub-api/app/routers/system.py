@@ -18,6 +18,9 @@ import requests
 import urllib.parse
 from fastapi import APIRouter, BackgroundTasks, Depends
 from cryptography.fernet import Fernet
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.x509.oid import NameOID
 
 from ..core.config import settings
 from ..core.security import get_admin_user, get_optional_user
@@ -26,8 +29,6 @@ from ..utils.process import run_command
 
 router = APIRouter()
 
-ODIDO_FERNET_KEY = b"afIqRZm6iSev4zWysNGAjR6fCrOMf5GQqhKFfmXkgOU="
-ODIDO_CLIENT_KEY = "9havvat6hm0b962i"
 ODIDO_DOMAIN = "odido.nl"
 
 
@@ -65,38 +66,31 @@ def get_certificate_status():
         }
 
     try:
-        # Use openssl to parse cert info
-        cmd = ["openssl", "x509", "-in", cert_path, "-noout", "-text"]
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=5, check=False
-        )
-        if result.returncode != 0:
-            return {
-                "error": f"Failed to parse certificate at {cert_path}: {result.stderr}",
-                "installed": False,
-            }
+        with open(cert_path, "rb") as f:
+            cert_data = f.read()
+        
+        cert = x509.load_pem_x509_certificate(cert_data, default_backend())
 
-        output = result.stdout
+        # Extract Subject CN
+        try:
+            subject = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+        except IndexError:
+            subject = "Unknown"
 
-        # Extract fields with improved regex patterns
-        subject = ""
-        issuer = ""
-        not_after = ""
+        # Extract Issuer CN
+        try:
+            issuer = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+        except IndexError:
+            issuer = "Unknown"
 
-        # More flexible CN extraction
-        sub_match = re.search(
-            r"Subject:.*?CN\s*=\s*([^,/\n]+)", output, re.IGNORECASE
-        )
-        if sub_match:
-            subject = sub_match.group(1).strip()
-
-        iss_match = re.search(r"Issuer:.*?CN\s*=\s*([^,/\n]+)", output, re.IGNORECASE)
-        if iss_match:
-            issuer = iss_match.group(1).strip()
-
-        exp_match = re.search(r"Not After\s*:\s*(.*?)(?:\n|$)", output)
-        if exp_match:
-            not_after = exp_match.group(1).strip()
+        # Format Expiry (Match OpenSSL text output format roughly for UI consistency)
+        # e.g., "May  5 17:00:00 2025 GMT"
+        # Using not_valid_after (aware it's deprecated in newer crypto but strictly typed in 42.0.0)
+        # 42.0.0 supports not_valid_after_utc, let's use that if available, else fallback
+        if hasattr(cert, "not_valid_after_utc"):
+             not_after = cert.not_valid_after_utc.strftime("%b %d %H:%M:%S %Y GMT")
+        else:
+             not_after = cert.not_valid_after.strftime("%b %d %H:%M:%S %Y GMT")
 
         # Determine type
         cert_type = "Self-Signed"
@@ -104,12 +98,11 @@ def get_certificate_status():
             "Let's Encrypt", "R3", "R10", "R11", "E1", "E2", "E5", "E6",
             "ZeroSSL", "Sectigo", "DigiCert", "GTS", "ISRG", "DST Root"
         ]
-        # Check if issuer matches any trusted CA (case-insensitive)
-        issuer_lower = issuer.lower() if issuer else ""
+        
+        issuer_lower = issuer.lower()
         if any(ti.lower() in issuer_lower for ti in trusted_issuers):
             cert_type = "Trusted"
         elif issuer and issuer != subject:
-            # Check if it's not a self-signed cert (issuer != subject)
             cert_type = f"Trusted (via {issuer})"
 
         log_structured(
@@ -125,8 +118,6 @@ def get_certificate_status():
             "status": cert_type,
             "path": cert_path,
         }
-    except subprocess.TimeoutExpired:
-        return {"error": "Certificate parsing timed out", "installed": False}
     except Exception as err:
         log_structured("ERROR", f"Certificate status check failed: {err}")
         return {"error": str(err), "installed": False}
@@ -643,8 +634,8 @@ def uninstall(background_tasks: BackgroundTasks, user: str = Depends(get_admin_u
 def get_odido_login_url(user: str = Depends(get_admin_user)):
     """Generates the proprietary Odido login URL with encrypted token."""
     try:
-        f = Fernet(ODIDO_FERNET_KEY)
-        encrypted_client_key = f.encrypt(ODIDO_CLIENT_KEY.encode()).decode()
+        f = Fernet(settings.ODIDO_FERNET_KEY)
+        encrypted_client_key = f.encrypt(settings.ODIDO_CLIENT_KEY.encode()).decode()
         # Ensure URL safe encoding if needed, but C# just puts it in query.
         # However, Fernet output is URL safe base64.
         url = f"https://www.{ODIDO_DOMAIN}/login?returnSystem=app&nav=off&token={encrypted_client_key}"
@@ -683,7 +674,7 @@ def exchange_odido_token(request: dict, user: str = Depends(get_admin_user)):
 
         # New Flow: Decrypt using Fernet
         try:
-            f = Fernet(ODIDO_FERNET_KEY)
+            f = Fernet(settings.ODIDO_FERNET_KEY)
 
             # Extract token from URL if full URL is pasted
             token_to_decrypt = callback_token
@@ -733,7 +724,7 @@ def exchange_odido_token(request: dict, user: str = Depends(get_admin_user)):
 
         # Base64 encode client key for Basic Auth
         import base64
-        auth_header = base64.b64encode(f"{ODIDO_CLIENT_KEY}:".encode()).decode()
+        auth_header = base64.b64encode(f"{settings.ODIDO_CLIENT_KEY}:".encode()).decode()
 
         headers = {
             "Content-Type": "application/vnd.capi.tmobile.nl.createtoken.v1+json",

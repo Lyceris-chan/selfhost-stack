@@ -105,6 +105,10 @@ async function initBrowser() {
     }
   });
 
+  page.on('requestfailed', request => {
+    console.log(`  DEBUG: Request failed: ${request.url()} - ${request.failure().errorText}`);
+  });
+
   return {browser, page};
 }
 
@@ -538,8 +542,8 @@ async function testServiceCards(page) {
   console.log('\n📦 Testing Service Cards...');
 
   try {
-    // Wait for dynamic content to load
-    await new Promise((r) => setTimeout(r, 3000));
+    // Wait for dynamic content to load (increased to 10s)
+    await new Promise((r) => setTimeout(r, 10000));
 
     const cardCount = await page.$$eval('.card', (cards) => cards.length);
     
@@ -577,6 +581,10 @@ async function testServiceCards(page) {
     const servicesFound = await page.evaluate((expected) => {
       const cards = Array.from(document.querySelectorAll('.card'));
       const found = {};
+      const debugInfo = cards.map(c => ({
+          text: c.textContent.trim().substring(0, 30),
+          container: c.dataset.container || 'missing'
+      }));
       
       expected.forEach((service) => {
         const serviceCard = cards.find((card) => {
@@ -587,11 +595,13 @@ async function testServiceCards(page) {
         found[service] = !!serviceCard;
       });
       
-      return found;
+      return {found, debugInfo};
     }, EXPECTED_CARDS);
 
-    const foundCount = Object.values(servicesFound).filter(Boolean).length;
-    const missingServices = EXPECTED_CARDS.filter((s) => !servicesFound[s]);
+    console.log('    DEBUG: Found Cards:', JSON.stringify(servicesFound.debugInfo, null, 2));
+
+    const foundCount = Object.values(servicesFound.found).filter(Boolean).length;
+    const missingServices = EXPECTED_CARDS.filter((s) => !servicesFound.found[s]);
     
     if (foundCount === EXPECTED_CARDS.length) {
       logResult('Cards', 'All services present', 'PASS',
